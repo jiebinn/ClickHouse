@@ -4,6 +4,7 @@
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UTF8Helpers.h>
+#include <Common/TargetSpecific.h>
 #include <Core/Defines.h>
 #include <base/range.h>
 #include <Poco/Unicode.h>
@@ -18,6 +19,9 @@
     #include <smmintrin.h>
 #endif
 
+#if USE_MULTITARGET_CODE
+    #include <immintrin.h>
+#endif
 
 namespace DB
 {
@@ -556,6 +560,143 @@ public:
     }
 };
 
+DECLARE_AVX512BW_SPECIFIC_CODE(
+    template <typename CharT>
+    requires (sizeof(CharT) == 1)
+    const CharT * prefix2_search(const uint8_t * const needle, const uint8_t * const needle_end, const CharT * haystack, const CharT * const haystack_end)
+    {
+        uint8_t first_needle_character = 0;
+        uint8_t second_needle_character = 0;
+        __m512i first_needle_character_vec;
+        __m512i second_needle_character_vec;
+        __m512i needle_cache = _mm512_setzero_si512();
+        __m512i haystack_cache = _mm512_setzero_si512();
+        __m512i needle_cache_offset = _mm512_setzero_si512();
+        __m512i haystack_cache_offset = _mm512_setzero_si512();
+        __mmask64 needle_mask = 0;
+        __mmask64 haystack_mask = 0;
+        __mmask64 needle_mask_offset = 0;
+        __mmask64 haystack_mask_offset = 0;
+        __mmask64 mask_cache_offset = 0;
+        static constexpr auto m = sizeof(__m512i);
+
+        if (needle == needle_end)
+            return haystack;
+
+        first_needle_character = *needle;
+        first_needle_character_vec = _mm512_set1_epi8(first_needle_character);
+        second_needle_character  = *(needle + 1);
+        second_needle_character_vec = _mm512_set1_epi8(second_needle_character);
+
+        if (needle_end - needle >= 64)
+            needle_mask = -1ull;
+        else
+            needle_mask = -1ull >> (m - (needle_end - needle));
+        needle_cache = _mm512_maskz_loadu_epi8(needle_mask, needle);
+
+        /// find first and second characters
+        while (haystack + m + 1 <= haystack_end)
+        {
+            const __m512i haystack_characters_from_1st = _mm512_loadu_si512(reinterpret_cast<const __m512i *>(haystack));
+            const __m512i haystack_characters_from_2nd = _mm512_loadu_si512(reinterpret_cast<const __m512i *>(haystack + 1));
+            const __mmask64 comparison_result_1st = _mm512_cmpeq_epi8_mask(haystack_characters_from_1st, first_needle_character_vec);
+            const __mmask64 comparison_result_2nd = _mm512_cmpeq_epi8_mask(haystack_characters_from_2nd, second_needle_character_vec);
+            const __mmask64 comparison_result_mask = _kand_mask64(comparison_result_1st, comparison_result_2nd);
+            /// first and second characters not present in 64 octets starting at `haystack`
+            if (comparison_result_mask == 0)
+            {
+                haystack += m;
+                continue;
+            }
+
+            const auto offset = std::countr_zero(comparison_result_mask);
+            haystack += offset;
+
+            if (haystack_end - haystack >= 64)
+            {
+                haystack_cache = _mm512_loadu_si512(reinterpret_cast<const __m512i *>(haystack));
+                const auto mask_offset = _mm512_cmpeq_epi8_mask(haystack_cache, needle_cache);
+
+                if (-1ull == needle_mask)
+                {
+                    if (mask_offset == needle_mask)
+                    {
+                        const auto * haystack_pos = haystack + m;
+                        const auto * needle_pos = needle + m;
+
+                        while (haystack_pos < haystack_end && needle_pos < needle_end && (mask_cache_offset & needle_mask_offset) == needle_mask_offset)
+                        {
+                            if (needle_end - needle_pos >= 64)
+                            {
+                                needle_mask_offset = -1ull;
+                                needle_pos +=m;
+                            }
+                            else
+                            {
+                                needle_mask_offset = -1ull >> (m - (needle_end - needle_pos));
+                                needle_pos = needle_end;
+                            }
+                            needle_cache_offset = _mm512_maskz_loadu_epi8(needle_mask_offset, needle_pos);
+
+                            if (haystack_end - haystack_pos >= 64)
+                            {
+                                haystack_mask_offset = -1ull;
+                                haystack_pos +=m;
+                            }
+                            else
+                            {
+                                haystack_mask_offset = -1ull >> (m - (haystack_end - haystack_pos));
+                                haystack_pos = haystack_end;
+                            }
+                            haystack_cache_offset = _mm512_maskz_loadu_epi8(haystack_mask_offset, haystack_pos);
+
+                            mask_cache_offset = _mm512_cmpeq_epi8_mask(needle_cache_offset, haystack_cache_offset);
+                        }
+
+                        if (needle_pos == needle_end && (mask_cache_offset & needle_mask_offset) == needle_mask_offset)
+                            return haystack;
+                    }
+                }
+                else if ((mask_offset & needle_mask) == needle_mask)
+                    return haystack;
+            }
+            else
+                break;
+
+            ++haystack;
+        }
+
+        if (haystack + 1 < haystack_end)
+        {
+            haystack_mask = -1ull >> (m - (haystack_end - (haystack + 1)));
+            const __m512i haystack_characters_from_1st = _mm512_maskz_loadu_epi8(haystack_mask, haystack);
+            const __m512i haystack_characters_from_2nd = _mm512_maskz_loadu_epi8(haystack_mask, haystack + 1);
+            const __mmask64 comparison_result_1st = _mm512_cmpeq_epi8_mask(haystack_characters_from_1st, first_needle_character_vec);
+            const __mmask64 comparison_result_2nd = _mm512_cmpeq_epi8_mask(haystack_characters_from_2nd, second_needle_character_vec);
+            __mmask64 comparison_result_mask = _kand_mask64(comparison_result_1st, comparison_result_2nd);
+
+            if (comparison_result_mask == 0)
+                return haystack_end;
+
+            while(comparison_result_mask !=0)
+            {
+                auto offset = std::countr_zero(comparison_result_mask);
+                haystack += offset;
+
+                haystack_mask = haystack_mask >> offset;
+                haystack_cache = _mm512_maskz_loadu_epi8(haystack_mask, haystack);
+                const auto mask_tail = _mm512_cmpeq_epi8_mask(haystack_cache, needle_cache);
+
+                if ((mask_tail & needle_mask) == needle_mask)
+                    return haystack;
+
+                comparison_result_mask = comparison_result_mask >> (offset + 1);
+            }
+        }
+
+        return haystack_end;
+    }
+);
 
 /// Case-sensitive searcher (both ASCII and UTF-8)
 template <bool ASCII>
@@ -668,6 +809,11 @@ public:
 
         if (needle == needle_end)
             return haystack;
+
+#if USE_MULTITARGET_CODE
+        if (isArchSupported(TargetArch::AVX512BW) && needle + 1 < needle_end)
+            return TargetSpecific::AVX512BW::prefix2_search(needle, needle_end, haystack, haystack_end);
+#endif
 
 #ifdef __SSE4_1__
         /// Fast path for single-character needles. Compare 16 characters of the haystack against the needle character at once.
