@@ -2,6 +2,7 @@
 
 #include <IO/WriteHelpers.h>
 #include <Interpreters/TraceCollector.h>
+#include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/StackTrace.h>
 #include <Common/thread_local_rng.h>
@@ -138,19 +139,21 @@ QueryProfilerBase<ProfilerImpl>::QueryProfilerBase(UInt64 thread_id, int clock_t
 #else
         sev._sigev_un._tid = static_cast<pid_t>(thread_id);
 #endif
-        timer_t local_timer_id;
-        if (timer_create(clock_type, &sev, &local_timer_id))
+        if (current_thread->timer_id == std::nullopt)
         {
-            /// In Google Cloud Run, the function "timer_create" is implemented incorrectly as of 2020-01-25.
-            /// https://mybranch.dev/posts/clickhouse-on-cloud-run/
-            if (errno == 0)
-                throw Exception("Failed to create thread timer. The function 'timer_create' returned non-zero but didn't set errno. This is bug in your OS.",
-                    ErrorCodes::CANNOT_CREATE_TIMER);
+            timer_t local_timer_id;
+            if (timer_create(clock_type, &sev, &local_timer_id))
+            {
+                /// In Google Cloud Run, the function "timer_create" is implemented incorrectly as of 2020-01-25.
+                /// https://mybranch.dev/posts/clickhouse-on-cloud-run/
+                if (errno == 0)
+                    throw Exception("Failed to create thread timer. The function 'timer_create' returned non-zero but didn't set errno. This is bug in your OS.",
+                        ErrorCodes::CANNOT_CREATE_TIMER);
 
-            throwFromErrno("Failed to create thread timer", ErrorCodes::CANNOT_CREATE_TIMER);
+                throwFromErrno("Failed to create thread timer", ErrorCodes::CANNOT_CREATE_TIMER);
+            }
+            current_thread->timer_id.emplace(local_timer_id);
         }
-        timer_id.emplace(local_timer_id);
-
         /// Randomize offset as uniform random value from 0 to period - 1.
         /// It will allow to sample short queries even if timer period is large.
         /// (For example, with period of 1 second, query with 50 ms duration will be sampled with 1 / 20 probability).
@@ -161,7 +164,7 @@ QueryProfilerBase<ProfilerImpl>::QueryProfilerBase(UInt64 thread_id, int clock_t
         struct timespec offset{.tv_sec = period_rand / TIMER_PRECISION, .tv_nsec = period_rand % TIMER_PRECISION};
 
         struct itimerspec timer_spec = {.it_interval = interval, .it_value = offset};
-        if (timer_settime(*timer_id, 0, &timer_spec, nullptr))
+        if (timer_settime(*current_thread->timer_id, 0, &timer_spec, nullptr))
             throwFromErrno("Failed to set thread timer period", ErrorCodes::CANNOT_SET_TIMER_PERIOD);
 
         signal_handler_disarmed = false;
@@ -184,11 +187,11 @@ template <typename ProfilerImpl>
 void QueryProfilerBase<ProfilerImpl>::tryCleanup()
 {
 #if USE_UNWIND
-    if (timer_id.has_value())
+    if (current_thread->timer_id != std::nullopt)
     {
-        if (timer_delete(*timer_id))
-            LOG_ERROR(log, "Failed to delete query profiler timer {}", errnoToString());
-        timer_id.reset();
+        struct timespec cleanup{.tv_sec = 0, .tv_nsec = 0};
+        struct itimerspec timer_spec = {.it_interval = cleanup, .it_value = cleanup};
+        timer_settime(*current_thread->timer_id, 0, &timer_spec, nullptr);
     }
 
     signal_handler_disarmed = true;

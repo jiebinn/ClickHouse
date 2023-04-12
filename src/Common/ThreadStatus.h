@@ -141,6 +141,9 @@ public:
     using Deleter = std::function<void()>;
     Deleter deleter;
 
+    /// Timer id from timer_create(2)
+    std::optional<timer_t> timer_id;
+
 protected:
     ThreadGroupStatusPtr thread_group;
 

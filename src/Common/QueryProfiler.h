@@ -39,11 +39,6 @@ private:
 
     Poco::Logger * log;
 
-#if USE_UNWIND
-    /// Timer id from timer_create(2)
-    std::optional<timer_t> timer_id;
-#endif
-
     /// Pause signal to interrupt threads to get traces
     int pause_signal;
 };
