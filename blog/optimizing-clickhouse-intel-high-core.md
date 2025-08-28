@@ -6,9 +6,9 @@ The computing landscape is undergoing a fundamental shift. Intel's latest proces
 
 For analytical databases like ClickHouse, this presents both an enormous opportunity and a complex challenge. While more cores theoretically mean more parallel processing power, the reality is that most database systems hit severe scalability walls long before fully utilizing available hardware. Traditional bottlenecks - lock contention, cache coherence traffic, memory bandwidth saturation, and coordination overhead - become exponentially worse as core counts increase.
 
-## My Journey: Three Years of High Core Count Optimization
+## My Journey: High Core Count Optimization
 
-Over the past three years, I've dedicated a significant portion of my daily work to understanding and solving ClickHouse's scalability challenges on Intel's high core count processors. My work primarily focused on using various profiling and analysis tools - including perf, emon, pipeline visualization, and Intel VTune - to systematically analyze all 43 queries in ClickBench under high core count scenarios, identifying bottlenecks and optimizing the ClickHouse engine accordingly.
+Over the past three years, I've dedicated part of my daily work to understanding and solving ClickHouse's scalability challenges on Intel's high core count processors. My work primarily focused on using various profiling and analysis tools - including perf, emon, pipeline visualization, and Intel VTune - to systematically analyze all 43 queries in ClickBench under high core count scenarios, identifying bottlenecks and optimizing the ClickHouse engine accordingly.
 
 The results have been truly exciting: individual optimizations frequently deliver several times, or even 10x performance improvements for specific queries under high core count scenarios. Across the overall geometric mean of all 43 ClickBench queries, these optimizations consistently achieve improvements ranging from a few percentage points to over 10 percentage points. These optimization results demonstrate the tremendous potential for unlocking ClickHouse's scalability on modern high core count processors.
 
