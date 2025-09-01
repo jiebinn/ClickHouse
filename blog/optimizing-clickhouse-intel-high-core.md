@@ -25,6 +25,7 @@ Most database optimization focuses on algorithmic improvements or single-threade
 This post presents a systematic methodology for addressing these challenges, based on real optimizations that are now running in production ClickHouse deployments worldwide.
 
 **Test and Optimization Platforms**: The optimization work was conducted across Intel's latest generation platforms from recent years, including 2 x 80 vCPUs Ice Lake (ICX), 2 x 128 vCPUs Sapphire Rapids (SPR), 1 x 144 vCPUs Sierra Forest (SRF), and 2 x 240 vCPUs Granite Rapids (GNR), with SMT/Hyper-Threading enabled (except SRF which doesn't support SMT) and high memory bandwidth configurations.
+
 **Measurement Tools**: perf, Intel VTune, pipeline visualization, custom profiling infrastructure
 
 ---
