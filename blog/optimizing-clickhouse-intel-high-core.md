@@ -2,9 +2,9 @@
 
 ## The High Core Count Challenge: Why This Matters More Than Ever
 
-The computing landscape is undergoing a fundamental shift. Intel's latest processor generations are pushing core counts to unprecedented levels - from 128 cores in Granite Rapids to 144 E-cores in Sierra Forest, with future roadmaps targeting 200+ cores per socket. When you consider multi-socket systems, these numbers multiply dramatically: 2-socket systems can deliver 2x the core count, while 4-socket configurations can provide 4x the processing power, reaching 400-800+ cores in a single system. This trend toward "more cores, not faster cores" is driven by physical limitations: power density, heat dissipation, and the end of Dennard scaling make it increasingly difficult to boost single-thread performance.
+The computing landscape is undergoing a fundamental shift. Intel's latest processor generations are pushing core counts to unprecedented levels - from 128 P-cores per socket in Granite Rapids to 144 E-cores per socket in Sierra Forest, with future roadmaps targeting 200+ cores per socket. When you consider multi-socket systems, these numbers multiply dramatically: Customers can buy two or four socket systems with 2x or 4x the performance of a single socket system and 400 - 800 cores in a single server. This trend toward "more cores, not faster cores" is driven by physical limitations: power density, heat dissipation, and the end of Dennard scaling make it increasingly difficult to boost single-thread performance.
 
-For analytical databases like ClickHouse, this presents both an enormous opportunity and a complex challenge. While more cores theoretically mean more parallel processing power, the reality is that most database systems hit severe scalability walls long before fully utilizing available hardware. Traditional bottlenecks - lock contention, cache coherence traffic, memory bandwidth saturation, and coordination overhead - become exponentially worse as core counts increase.
+For analytical databases like ClickHouse, this presents both an enormous opportunity and a complex challenge. While more cores theoretically mean more parallel processing power, the reality is that most database systems hit severe scalability walls long before fully utilizing available hardware. Traditional bottlenecks - lock contention, cache coherence traffic, non-uniform memory access (NUMA), memory bandwidth saturation, and coordination overhead - become significantly worse as core counts increase.
 
 ## My Journey: High Core Count Optimization
 
@@ -16,11 +16,11 @@ The results have been truly exciting: individual optimizations frequently delive
 
 Most database optimization focuses on algorithmic improvements or single-threaded performance. While valuable, these approaches miss the fundamental challenges of high core count systems:
 
-1. **Cache Coherence Overhead**: With 100+ cores, cache line bouncing can consume more cycles than useful work
-2. **Lock Contention Explosion**: Amdahl's Law becomes brutal - even 1% serialized code kills scalability
-3. **Memory Bandwidth Challenges**: Memory bandwidth remains a persistent challenge for data-intensive databases that process large volumes of data, and efficient memory reuse and management become increasingly critical
-4. **Coordination Costs**: Thread synchronization overhead grows super-linearly with thread count
-5. **NUMA Effects**: Multi-socket systems introduce complex memory access patterns
+1. **Cache Coherence Overhead**: With 100+ cores, cache line bouncing can consume more cycles than useful work.
+2. **Lock Contention Explosion**: Amdahl's Law becomes brutal - even 1% serialized code kills scalability.
+3. **Memory Bandwidth Challenges**: Memory bandwidth remains a persistent challenge for data-intensive databases that process large volumes of data, and efficient memory reuse and management become increasingly critical.
+4. **Coordination Costs**: Thread synchronization overhead grows super-linearly with thread count.
+5. **NUMA Effects**: Multi-socket systems introduce different latency and bandwidth of main memory depending on how "remote" it is from a core.
 
 This post presents a systematic methodology for addressing these challenges, based on real optimizations that are now running in production ClickHouse deployments worldwide.
 
@@ -31,7 +31,7 @@ This post presents a systematic methodology for addressing these challenges, bas
 
 ## The Path Forward: Five Optimization Methodologies
 
-Through systematic analysis of ClickHouse's performance characteristics on high core count systems, I've identified five critical optimization methodologies. Each addresses a different aspect of the high core count scalability challenge, and together they form a comprehensive approach to unlocking the full potential of modern Intel processors.
+Through systematic analysis of ClickHouse's performance characteristics on high core count systems, I've identified five critical optimization methodologies. Each addresses a different aspect of the high core count scalability challenge, and together they form a comprehensive approach to unlocking the full potential of ultra-high core count systems.
 
 The journey begins with the most fundamental challenge: lock contention.
 
@@ -51,7 +51,7 @@ This optimization demonstrates a fundamental principle of lock contention elimin
 
 **Understanding QueryConditionCache's Role**:
 
-QueryConditionCache stores pre-computed conditions for table parts, enabling ClickHouse to skip reading irrelevant data. For each query, multiple threads check if cached conditions are still valid based on:
+The query condition cache stores the results of evaluating filter predicates (WHERE clause), enabling ClickHouse to skip reading irrelevant data. For each query, multiple threads check if cached conditions are still valid based on:
 - Mark ranges being read
 - Whether the part has a final mark  
 - Current query parameters and table state
@@ -63,16 +63,16 @@ The cache is predominantly read-heavy (with far more reads than writes) but the 
 With 240 threads processing a query simultaneously, the original code created a perfect storm:
 
 1. **Unnecessary Write Locks**: All threads acquired exclusive locks even for read-only checks
-2. **Long Critical Sections**: Cache rebuilding happened inside the lock
-3. **Redundant Work**: Multiple threads rebuilt identical cache entries
+2. **Long Critical Sections**: Cache entries were updated inside the lock
+3. **Redundant Work**: Multiple threads updated identical cache entries
 
 **Why Check-Before-Lock Works**:
 
-The solution uses a classic double-checked locking pattern with atomic operations:
+The solution uses a classic [double-checked locking pattern](https://en.wikipedia.org/wiki/Double-checked_locking) with atomic operations:
 
-1. **Fast Path**: Check if update is needed without locking (atomic reads)
-2. **Slow Path**: Only acquire lock if update is actually required  
-3. **Double-Check**: Verify update is still needed after acquiring lock
+1. **Fast Path**: Check with atomic reads (no locking) or under a shared lock if an update is needed at all.
+2. **Slow Path**: Only acquire exclusive lock if update is actually required.
+3. **Double-Check**: Acquire exclusive lock, then check if the update is still needed - another thread may have performed the update in the meantime.
 
 **Technical Solution**:
 
@@ -82,21 +82,39 @@ Based on the actual implementation in [PR #80247](https://github.com/ClickHouse/
 // Before: Always acquire exclusive lock - SERIALIZES ALL THREADS
 function updateCache(mark_ranges, has_final_mark):
     acquire_exclusive_lock(cache_mutex)  // 240 threads wait here!
-    
+
     // Always update marks, even if already in desired state
     for each range in mark_ranges:
         set_marks_to_false(range.begin, range.end)
-    
+
     if has_final_mark:
         set_final_mark_to_false()
-    
+
     release_lock(cache_mutex)
 
 // After: Fast path with shared lock check - AVOIDS EXPENSIVE LOCK  
 function updateCache(mark_ranges, has_final_mark):
     // Fast path: Check if update is needed using cheap shared lock
     acquire_shared_lock(cache_mutex)  // Multiple threads can read simultaneously
-    
+
+    need_update = false
+    for each range in mark_ranges:
+        if any_marks_are_true(range.begin, range.end):
+            need_update = true
+            break
+
+    if has_final_mark and final_mark_is_true():
+        need_update = true
+
+    release_shared_lock(cache_mutex)
+
+    if not need_update:
+        return  // Early exit - no expensive lock needed!
+
+    // Slow path: Actually need to update, acquire exclusive lock
+    acquire_exclusive_lock(cache_mutex)  // Only when update is needed
+
+    // Double-check: Verify update is still needed after acquiring lock
     need_update = false
     for each range in mark_ranges:
         if any_marks_are_true(range.begin, range.end):
@@ -105,22 +123,15 @@ function updateCache(mark_ranges, has_final_mark):
     
     if has_final_mark and final_mark_is_true():
         need_update = true
-    
-    release_shared_lock(cache_mutex)
-    
-    if not need_update:
-        return  // Early exit - no expensive lock needed!
-    
-    // Slow path: Actually need to update, acquire exclusive lock
-    acquire_exclusive_lock(cache_mutex)  // Only when update is needed
-    
-    // Perform the actual updates
-    for each range in mark_ranges:
-        set_marks_to_false(range.begin, range.end)
-    
-    if has_final_mark:
-        set_final_mark_to_false()
-    
+
+    if need_update:
+        // Perform the actual updates only if still needed
+        for each range in mark_ranges:
+            set_marks_to_false(range.begin, range.end)
+
+        if has_final_mark:
+            set_final_mark_to_false()
+
     release_lock(cache_mutex)
 ```
 
@@ -138,93 +149,21 @@ The improvement comes from three sources:
 
 **Key Insight**: In read-heavy workloads, the goal is to make reads lock-free and minimize write lock duration. Check-before-lock patterns are essential for high core count scalability.
 
-### Example 1.2: Memory Tracker Shared Mutex Optimization (PR #72375)
+### Example 1.2: Thread-Local Timer ID Optimization (PR #48778)
 
-**Problem Identified**: The `overcommit_m` mutex in OvercommitTracker caused excessive `native_queued_spin_lock_slowpath` in ClickBench Q8, Q42 on high core count systems.
-
-**Deep Dive: Reader/Writer Lock Patterns for Read-Heavy Workloads**
-
-This optimization demonstrates another fundamental lock contention pattern: replacing exclusive mutexes with reader/writer locks when the workload is predominantly read-heavy. Memory tracking is a perfect example - it's read constantly but updated infrequently.
-
-**Understanding Memory Tracker's Role**:
-
-OvercommitTracker monitors memory usage across all queries to prevent OOM conditions. It's accessed by:
-- Every memory allocation (read current usage)
-- Every memory deallocation (read current usage)  
-- Periodic limit updates (write new limits)
-- Query cancellation decisions (read current usage)
-
-The access pattern is predominantly read-heavy (with far more reads than writes), but the original implementation used exclusive locking for all operations.
-
-**The Reader/Writer Lock Solution**:
-
-Shared mutexes allow multiple concurrent readers while still providing exclusive access for writers:
-- Multiple threads can read simultaneously (parallel)
-- Writers get exclusive access when needed (safe)
-- Readers don't block other readers (scalable)
-
-**Technical Solution**:
-```
-// Before: Exclusive mutex for all operations - READERS BLOCK READERS
-class MemoryTracker:
-    exclusive_mutex overcommit_lock
-    
-    function getMemoryUsage():
-        acquire_exclusive_lock(overcommit_lock)  // Exclusive lock for read!
-        result = memory_usage
-        release_lock(overcommit_lock)
-        return result
-    
-    function updateMemoryUsage(delta):
-        acquire_exclusive_lock(overcommit_lock)  // Exclusive lock for write
-        memory_usage += delta
-        release_lock(overcommit_lock)
-
-// After: Reader/writer lock for optimal concurrency - READERS DON'T BLOCK READERS
-class MemoryTracker:
-    shared_mutex overcommit_lock
-    
-    function getMemoryUsage():
-        acquire_shared_lock(overcommit_lock)  // Shared lock for read
-        result = memory_usage  // Multiple threads can read simultaneously
-        release_shared_lock(overcommit_lock)
-        return result
-    
-    function updateMemoryUsage(delta):
-        acquire_exclusive_lock(overcommit_lock)  // Exclusive lock for write
-        memory_usage += delta  // Only writers are serialized
-        release_lock(overcommit_lock)
-```
-
-**Performance Impact Analysis**:
-
-The improvement comes from:
-1. **Parallel Reads**: Multiple threads can read memory usage simultaneously
-2. **Reduced Wait Times**: Readers don't wait for other readers
-3. **Better Cache Behavior**: Less lock bouncing improves cache performance
-
-**Results**:
-- Overall geometric mean: 6.8% improvement
-- Q8: 77% improvement, Q24: 19.5%, Q26: 19.5%, Q42: 11.4%
-- No regressions observed
-
-**Key Insight**: For read-heavy workloads, shared mutexes can provide dramatic scalability improvements with minimal code changes.
-
-### Example 1.3: Thread-Local Timer ID Optimization (PR #48778)
-
-**Problem Identified**: QueryProfiler was frequently creating/deleting timer_id globally, causing lock contention in timer management.
+**Problem Identified**: ClickHouse's query profiler was frequently creating/deleting timer_id globally, causing lock contention in timer management.
 
 **Deep Dive: Eliminating Global State with Thread-Local Storage**
 
 This optimization shows how thread-local storage can eliminate lock contention entirely by removing the need for shared state. Timer management is a classic example where global coordination creates unnecessary bottlenecks.
 
-**Understanding QueryProfiler's Timer Usage**:
+**Understanding query profiler's Timer Usage**:
 
-QueryProfiler uses POSIX timers to periodically sample query execution for performance analysis. The original implementation:
+ClickHouse's query profiler uses POSIX timers to sample thread stacks in periodic intervals for performance analysis. The original implementation:
 - Created and deleted timer_id frequently during profiling
-- Required global synchronization for timer management operations
+- Required global synchronization for all operations that read or write the timer
 - Used shared data structures that needed protection with locks
-- Generated significant overhead from repeated timer lifecycle management
+- Generated significant overhead from repeated timer updates management
 
 **Why Global Timer Management Creates Contention**:
 
@@ -247,14 +186,14 @@ Instead of shared timer management, maintain one timer per thread:
 // Before: Shared timer management with locks - SERIALIZATION BOTTLENECK
 class QueryProfiler:
     static global_mutex timer_management_lock
-    
+
     function startProfiling():
         timer_id = create_new_timer()  // Expensive system call
-        
+
         acquire_exclusive_lock(timer_management_lock)  // Global lock!
         update_shared_timer_state(timer_id)  // Shared state modification
         release_lock(timer_management_lock)
-    
+
     function stopProfiling():
         acquire_exclusive_lock(timer_management_lock)  // Global lock!
         cleanup_shared_timer_state(timer_id)  // Shared state modification
@@ -265,15 +204,15 @@ class QueryProfiler:
 class QueryProfiler:
     static thread_local timer_id per_thread_timer
     static thread_local boolean timer_initialized
-    
+
     function startProfiling():
         if not timer_initialized:
             per_thread_timer = create_new_timer()  // One-time per thread
             timer_initialized = true
-        
+
         // Reuse existing timer - no locks, no system calls!
         enable_timer(per_thread_timer)
-    
+
     function stopProfiling():
         // Just disable timer - no deletion, no locks!
         disable_timer(per_thread_timer)
@@ -313,7 +252,7 @@ This optimization addresses a subtle but critical issue in jemalloc's memory man
 
 **Understanding Two-Level Hash Tables in ClickHouse**:
 
-ClickHouse uses two-level hash tables for large aggregations:
+ClickHouse uses two-level hash tables for aggregations with large aggregation state:
 - **Level 1**: 256 buckets, each containing a single-level hash table
 - **Level 2**: Each bucket can grow independently based on data distribution
 - **Memory Pattern**: When queries complete, the 256 sub-tables are deallocated and their memory gets merged into larger memory blocks
@@ -394,14 +333,14 @@ FROM hits;
 ```
 
 The original execution plan:
-1. **Load Column**: Read ResolutionWidth values from storage repeatedly (90 times)
-2. **Compute Expressions**: Create temporary columns for each ResolutionWidth + N expression
-3. **Sum Values**: Aggregate each computed column separately
+1. **Load Column**: Read ResolutionWidth values from storage once
+2. **Compute Expressions**: Create 90 temporary columns for each ResolutionWidth + N expression
+3. **Sum Values**: Perform 90 separate aggregation operations on each computed column
 
 This creates massive memory pressure:
 - **90 Temporary Columns**: Separate storage for each computed expression
-- **Redundant Column Reads**: ResolutionWidth read 90 times instead of once
-- **Memory Bandwidth**: 90x more memory operations than necessary
+- **90 Redundant Aggregations**: Each sum operation processed separately instead of being reused
+- **Memory Bandwidth**: 90x more aggregation operations than necessary
 - **Cache Thrashing**: Massive data competing for cache space
 
 **The Algebraic Rewriting Solution**:
@@ -412,7 +351,7 @@ The optimization recognizes that `sum(column + literal)` can be algebraically re
 - **ClickBench Q29**: Massive **11.5x** (1,150%) performance improvement on 2×80 vCPU systems
 - **Overall ClickBench**: 5.3% geometric mean improvement across all 43 queries
 - **Memory Reuse**: `SUM(ResolutionWidth)` and `count(ResolutionWidth)` computed once and reused 90 times
-- **Memory Bandwidth**: Dramatic reduction from 90x redundant column reads to single read + reuse
+- **Memory Bandwidth**: Dramatic reduction from 90x redundant aggregation operations to single aggregation + reuse
 - No regressions observed on other ClickBench queries
 - Pattern applies to many other algebraic simplifications: `sum(column ± literal)` → `sum(column) ± literal * count(column)`
 
@@ -479,7 +418,7 @@ The solution addresses the mixed scenario by parallelizing the conversion phase:
 function mergeHashSets(left_set, right_set):
     if left_set.is_single_level() and right_set.is_two_level():
         left_set.convert_to_two_level()  // Serial conversion blocks all threads!
-    
+
     // Then merge
     merge_sets(left_set, right_set)
 
@@ -492,10 +431,10 @@ function parallel_hash_set_processing(all_sets):
             task = create_parallel_task():
                 set.convert_to_two_level()  // Parallel conversion!
             parallel_tasks.add(task)
-    
+
     // Wait for all conversions to complete
     wait_for_all_tasks(parallel_tasks)
-    
+
     // Phase 2: Now all sets are two-level, merge efficiently
     for each pair in all_sets:
         merge_sets(pair.left, pair.right)
@@ -539,11 +478,11 @@ Based on the implementation in [PR #52973](https://github.com/ClickHouse/ClickHo
 // Before: Only parallelize mixed-level merges
 function parallelizeMergePrepare(hash_sets):
     single_level_count = 0
-    
+
     for each set in hash_sets:
         if set.is_single_level():
             single_level_count++
-    
+
     // Only convert if mixed levels (some single, some two-level)
     if single_level_count > 0 and single_level_count < hash_sets.size():
         convert_to_two_level_parallel(hash_sets)
@@ -552,16 +491,16 @@ function parallelizeMergePrepare(hash_sets):
 function parallelizeMergePrepare(hash_sets):
     single_level_count = 0
     all_single_hash_size = 0
-    
+
     for each set in hash_sets:
         if set.is_single_level():
             single_level_count++
-    
+
     // Calculate total size if all sets are single-level
     if single_level_count == hash_sets.size():
         for each set in hash_sets:
             all_single_hash_size += set.size()
-    
+
     // Convert if mixed levels OR if all single-level with average size > THRESHOLD
     if (single_level_count > 0 and single_level_count < hash_sets.size()) or
        (all_single_hash_size / hash_sets.size() > THRESHOLD):
@@ -642,13 +581,13 @@ Based on the actual implementation in [PR #46289](https://github.com/ClickHouse/
 class StringSearcher:
     first_needle_character = needle[0]
     first_needle_character_vec = broadcast_to_simd_vector(first_needle_character)
-    
+
     function search():
         for position in haystack (step by 16 bytes):
             haystack_chunk = load_16_bytes(haystack + position)
             first_matches = simd_compare_equal(haystack_chunk, first_needle_character_vec)
             match_mask = extract_match_positions(first_matches)
-            
+
             for each match in match_mask:
                 // High false positive rate - many expensive verifications
                 if full_string_match(haystack + match_pos, needle):
@@ -660,19 +599,19 @@ class StringSearcher:
     second_needle_character = needle[1]  // Added second character
     first_needle_character_vec = broadcast_to_simd_vector(first_needle_character)
     second_needle_character_vec = broadcast_to_simd_vector(second_needle_character)
-    
+
     function search():
         for position in haystack (step by 16 bytes):
             haystack_chunk1 = load_16_bytes(haystack + position)
             haystack_chunk2 = load_16_bytes(haystack + position + 1)
-            
+
             // Compare both characters simultaneously
             first_matches = simd_compare_equal(haystack_chunk1, first_needle_character_vec)
             second_matches = simd_compare_equal(haystack_chunk2, second_needle_character_vec)
             combined_matches = simd_and(first_matches, second_matches)
-            
+
             match_mask = extract_match_positions(combined_matches)
-            
+
             for each match in match_mask:
                 // Dramatically fewer false positives - fewer expensive verifications
                 if full_string_match(haystack + match_pos, needle):
