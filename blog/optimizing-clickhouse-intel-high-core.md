@@ -444,14 +444,14 @@ This mixed scenario triggered the serial conversion bottleneck - all single-leve
 Pipeline visualization was crucial for diagnosing this issue.
 The telltale sign was the merge phase duration increasing with thread count - the opposite of what should happen.
 
-![PR50748 figure 1](assets/prs/50748_img1.png)
+![PR50748 figure 1](images/50748_img1.png)
 
 *Performance degradation with increased core count - classic Amdahl's Law violation*
 
-![PR50748 figure 2](assets/prs/50748_img2.png)
+![PR50748 figure 2](images/50748_img2.png)
 *Pipeline visualization (max_threads=80) - merge phase is reasonable*
 
-![PR50748 figure 3](assets/prs/50748_img3.png)
+![PR50748 figure 3](images/50748_img3.png)
 *Pipeline visualization (max_threads=112) - merge phase explodes to 3.2x longer!*
 
 **Why Parallel Conversion Works**:
@@ -489,7 +489,7 @@ function parallel_hash_set_processing(all_sets):
 
 **Performance Impact Analysis**:
 
-![PR50748 figure 4](assets/prs/50748_img4.png)
+![PR50748 figure 4](images/50748_img4.png)
 
 *Performance improvement after parallel conversion - Q5 achieves 264% improvement*
 
@@ -733,7 +733,7 @@ Using Perf analysis, I discovered that `ProfileEvents::increment` was generating
 The smoking gun was the cache line utilization report showing 8 different counters packed into single cache lines.
 We've also been developing new capabilities in the Linux perf c2c tool and working with the community to help developers more easily identify false sharing issues like this.
 
-![PR82697 figure 1](assets/prs/82697_img1.png)
+![PR82697 figure 1](images/82697_img1.png)
 *Perf analysis showing 36.6% cycles in ProfileEvents::increment*
 
 **Why Alignment Solves This**:
@@ -764,13 +764,13 @@ struct ProfileEvents:
 
 **Performance Impact Analysis**:
 
-![PR82697 figure 2](assets/prs/82697_img3.png)
+![PR82697 figure 2](images/82697_img3.png)
 *After optimization: ProfileEvents::increment drops to 8.5%*
 
 **Key Insight**: The performance gain increases with core count because cache coherence overhead grows super-linearly.
 This optimization doesn't just fix a bottleneck - it changes the scalability curve.
 
-![PR82697 figure 3](assets/prs/82697_img4.png)
+![PR82697 figure 3](images/82697_img4.png)
 
 *ClickBench Q3: 27.4% improvement, with larger gains on higher core count systems*
 
