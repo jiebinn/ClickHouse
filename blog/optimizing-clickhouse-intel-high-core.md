@@ -2,19 +2,28 @@
 
 ## The High Core Count Challenge: Why This Matters More Than Ever
 
-The computing landscape is undergoing a fundamental shift. Intel's latest processor generations are pushing core counts to unprecedented levels - from 128 P-cores per socket in Granite Rapids to 144 E-cores per socket in Sierra Forest, with future roadmaps targeting 200+ cores per socket. When you consider multi-socket systems, these numbers multiply dramatically: Customers can buy two or four socket systems with 2x or 4x the performance of a single socket system and 400 - 800 cores in a single server. This trend toward "more cores, not faster cores" is driven by physical limitations: power density, heat dissipation, and the end of Dennard scaling make it increasingly difficult to boost single-thread performance.
+The computing landscape is undergoing a fundamental shift.
+Intel's latest processor generations are pushing core counts to unprecedented levels - from 128 P-cores per socket in Granite Rapids to 144 E-cores per socket in Sierra Forest, with future roadmaps targeting 200+ cores per socket.
+When you consider multi-socket systems, these numbers multiply dramatically: Customers can buy two or four socket systems with 2x or 4x the performance of a single socket system and 400 - 800 cores in a single server.
+This trend toward "more cores, not faster cores" is driven by physical limitations: power density, heat dissipation, and the end of Dennard scaling make it increasingly difficult to boost single-thread performance.
 
-For analytical databases like ClickHouse, this presents both an enormous opportunity and a complex challenge. While more cores theoretically mean more parallel processing power, the reality is that most database systems hit severe scalability walls long before fully utilizing available hardware. Traditional bottlenecks - lock contention, cache coherence traffic, non-uniform memory access (NUMA), memory bandwidth saturation, and coordination overhead - become significantly worse as core counts increase.
+For analytical databases like ClickHouse, this presents both an enormous opportunity and a complex challenge.
+While more cores theoretically mean more parallel processing power, the reality is that most database systems hit severe scalability walls long before fully utilizing available hardware.
+Traditional bottlenecks - lock contention, cache coherence traffic, non-uniform memory access (NUMA), memory bandwidth saturation, and coordination overhead - become significantly worse as core counts increase.
 
 ## My Journey: High Core Count Optimization
 
-Over the past three years, I've dedicated part of my daily work to understanding and solving ClickHouse's scalability challenges on Intel's high core count processors. My work primarily focused on using various profiling and analysis tools - including perf, emon, pipeline visualization, and Intel VTune - to systematically analyze all 43 queries in ClickBench under high core count scenarios, identifying bottlenecks and optimizing the ClickHouse engine accordingly.
+Over the past three years, I've dedicated part of my daily work to understanding and solving ClickHouse's scalability challenges on Intel's high core count processors.
+My work primarily focused on using various profiling and analysis tools - including perf, emon, pipeline visualization, and Intel VTune - to systematically analyze all 43 queries in ClickBench under high core count scenarios, identifying bottlenecks and optimizing the ClickHouse engine accordingly.
 
-The results have been truly exciting: individual optimizations frequently deliver several times, or even 10x performance improvements for specific queries under high core count scenarios. Across the overall geometric mean of all 43 ClickBench queries, these optimizations consistently achieve improvements ranging from a few percentage points to over 10 percentage points. These optimization results demonstrate the tremendous potential for unlocking ClickHouse's scalability on modern high core count processors.
+The results have been truly exciting: individual optimizations frequently deliver several times, or even 10x performance improvements for specific queries under high core count scenarios.
+Across the overall geometric mean of all 43 ClickBench queries, these optimizations consistently achieve improvements ranging from a few percentage points to over 10 percentage points.
+These optimization results demonstrate the tremendous potential for unlocking ClickHouse's scalability on modern high core count processors.
 
 ## The Core Scaling Challenge: Fundamental Bottlenecks
 
-Most database optimization focuses on algorithmic improvements or single-threaded performance. While valuable, these approaches miss the fundamental challenges of high core count systems:
+Most database optimization focuses on algorithmic improvements or single-threaded performance.
+While valuable, these approaches miss the fundamental challenges of high core count systems:
 
 1. **Cache Coherence Overhead**: With 100+ cores, cache line bouncing can consume more cycles than useful work.
 2. **Lock Contention Explosion**: Amdahl's Law becomes brutal - even 1% serialized code kills scalability.
@@ -32,15 +41,21 @@ This post presents a systematic methodology for addressing these challenges, bas
 
 ## The Path Forward: Five Optimization Methodologies
 
-Through systematic analysis of ClickHouse's performance characteristics on high core count systems, I've identified five critical optimization methodologies. Each addresses a different aspect of the high core count scalability challenge, and together they form a comprehensive approach to unlocking the full potential of ultra-high core count systems.
+Through systematic analysis of ClickHouse's performance characteristics on high core count systems, I've identified five critical optimization methodologies.
+Each addresses a different aspect of the high core count scalability challenge, and together they form a comprehensive approach to unlocking the full potential of ultra-high core count systems.
 
 The journey begins with the most fundamental challenge: lock contention.
 
 ## Methodology 1: Taming the Lock Contention Beast
 
-When you scale from 8 cores to 80 cores, lock contention becomes dramatically worse due to the quadratic nature of thread coordination overhead. According to queuing theory, when N threads compete for the same lock, the average wait time grows proportionally to N². This means going from 8 to 80 cores can theoretically increase lock wait times by (80/8)² = 100x. Additionally, cache coherence traffic for the mutex itself grows linearly with core count, and context switching overhead compounds the problem. Every shared mutex becomes a potential scalability killer, and seemingly innocent synchronization patterns can bring entire systems to their knees.
+When you scale from 8 cores to 80 cores, lock contention becomes dramatically worse due to the quadratic nature of thread coordination overhead.
+According to queuing theory, when N threads compete for the same lock, the average wait time grows proportionally to N².
+This means going from 8 to 80 cores can theoretically increase lock wait times by (80/8)² = 100x.
+Additionally, cache coherence traffic for the mutex itself grows linearly with core count, and context switching overhead compounds the problem.
+Every shared mutex becomes a potential scalability killer, and seemingly innocent synchronization patterns can bring entire systems to their knees.
 
-The key insight is that lock contention elimination isn't just about removing locks - it's about fundamentally rethinking how threads coordinate and share state. This requires a multi-pronged approach: reducing critical section duration, replacing exclusive locks with more granular mechanisms, and in some cases, eliminating shared state entirely.
+The key insight is that lock contention elimination isn't just about removing locks - it's about fundamentally rethinking how threads coordinate and share state.
+This requires a multi-pronged approach: reducing critical section duration, replacing exclusive locks with more granular mechanisms, and in some cases, eliminating shared state entirely.
 
 ### Example 1.1: QueryConditionCache Lock Hold Time Reduction (PR #80247)
 
@@ -48,11 +63,13 @@ The key insight is that lock contention elimination isn't just about removing lo
 
 **Deep Dive: Reducing Critical Path Duration in Read-Heavy Workloads**
 
-This optimization demonstrates a fundamental principle of lock contention elimination: reduce the time spent holding locks, especially write locks in read-heavy scenarios. QueryConditionCache is a perfect example - it's read frequently but updated rarely, yet the original implementation treated all operations as potential writes.
+This optimization demonstrates a fundamental principle of lock contention elimination: reduce the time spent holding locks, especially write locks in read-heavy scenarios.
+QueryConditionCache is a perfect example - it's read frequently but updated rarely, yet the original implementation treated all operations as potential writes.
 
 **Understanding QueryConditionCache's Role**:
 
-The query condition cache stores the results of evaluating filter predicates (WHERE clause), enabling ClickHouse to skip reading irrelevant data. For each query, multiple threads check if cached conditions are still valid based on:
+The query condition cache stores the results of evaluating filter predicates (WHERE clause), enabling ClickHouse to skip reading irrelevant data.
+For each query, multiple threads check if cached conditions are still valid based on:
 - Mark ranges being read
 - Whether the part has a final mark  
 - Current query parameters and table state
@@ -148,7 +165,8 @@ The improvement comes from three sources:
 - Q10 and Q11 QPS increased by 85% and 89% respectively
 - Overall geometric mean improvement: 8.1%
 
-**Key Insight**: In read-heavy workloads, the goal is to make reads lock-free and minimize write lock duration. Check-before-lock patterns are essential for high core count scalability.
+**Key Insight**: In read-heavy workloads, the goal is to make reads lock-free and minimize write lock duration.
+Check-before-lock patterns are essential for high core count scalability.
 
 ### Example 1.2: Thread-Local Timer ID Optimization (PR #48778)
 
@@ -156,11 +174,13 @@ The improvement comes from three sources:
 
 **Deep Dive: Eliminating Global State with Thread-Local Storage**
 
-This optimization shows how thread-local storage can eliminate lock contention entirely by removing the need for shared state. Timer management is a classic example where global coordination creates unnecessary bottlenecks.
+This optimization shows how thread-local storage can eliminate lock contention entirely by removing the need for shared state.
+Timer management is a classic example where global coordination creates unnecessary bottlenecks.
 
 **Understanding query profiler's Timer Usage**:
 
-ClickHouse's query profiler uses POSIX timers to sample thread stacks in periodic intervals for performance analysis. The original implementation:
+ClickHouse's query profiler uses POSIX timers to sample thread stacks in periodic intervals for performance analysis.
+The original implementation:
 - Created and deleted timer_id frequently during profiling
 - Required global synchronization for all operations that read or write the timer
 - Used shared data structures that needed protection with locks
@@ -231,17 +251,23 @@ The improvement comes from:
 - Reduced timer create/delete system calls through reuse
 - Better scalability for high-concurrency profiling scenarios
 
-**Key Insight**: Thread-local storage can eliminate entire classes of lock contention by removing the need for shared state. When each thread can maintain its own copy of data, global synchronization becomes unnecessary.
+**Key Insight**: Thread-local storage can eliminate entire classes of lock contention by removing the need for shared state.
+When each thread can maintain its own copy of data, global synchronization becomes unnecessary.
 
 ## From Locks to Memory: The Next Frontier
 
-Having conquered the most obvious lock contention issues, our profiling revealed a subtler but equally critical challenge: memory allocation patterns. On high core count systems, memory becomes a shared resource in ways that aren't immediately obvious. Memory allocators themselves become contention points, memory bandwidth gets divided among more cores, and allocation patterns that work fine on small systems can create cascading performance problems at scale.
+Having conquered the most obvious lock contention issues, our profiling revealed a subtler but equally critical challenge: memory allocation patterns.
+On high core count systems, memory becomes a shared resource in ways that aren't immediately obvious.
+Memory allocators themselves become contention points, memory bandwidth gets divided among more cores, and allocation patterns that work fine on small systems can create cascading performance problems at scale.
 
-The solution requires thinking about memory not just as storage, but as a shared resource that needs careful management and optimization. This leads us to our second methodology.
+The solution requires thinking about memory not just as storage, but as a shared resource that needs careful management and optimization.
+This leads us to our second methodology.
 
 ## Methodology 2: Mastering Memory at Scale
 
-Memory optimization on high core count systems is fundamentally different from traditional single-threaded optimization. It's not just about using less memory - it's about using memory more efficiently across dozens or hundreds of concurrent threads. This involves optimizing allocator behavior, reducing memory bandwidth pressure, and sometimes completely rethinking algorithms to eliminate memory-intensive operations.
+Memory optimization on high core count systems is fundamentally different from traditional single-threaded optimization.
+It's not just about using less memory - it's about using memory more efficiently across dozens or hundreds of concurrent threads.
+This involves optimizing allocator behavior, reducing memory bandwidth pressure, and sometimes completely rethinking algorithms to eliminate memory-intensive operations.
 
 ### Example 2.1: Jemalloc Memory Reuse Optimization (PR #80245)
 
@@ -249,7 +275,8 @@ Memory optimization on high core count systems is fundamentally different from t
 
 **Deep Dive: Two-Level Hash Table Memory Reuse Problem**
 
-This optimization addresses a subtle but critical issue in jemalloc's memory management that becomes severe on high core count systems. The problem involves how jemalloc handles memory reuse for two-level hash tables with varying utilization patterns.
+This optimization addresses a subtle but critical issue in jemalloc's memory management that becomes severe on high core count systems.
+The problem involves how jemalloc handles memory reuse for two-level hash tables with varying utilization patterns.
 
 **Understanding Two-Level Hash Tables in ClickHouse**:
 
@@ -272,7 +299,8 @@ The root cause was identified as jemalloc's `lg_extent_max_active_fit` parameter
 
 **The Configuration Solution**:
 
-While we contributed the fix to [jemalloc PR #2842](https://github.com/jemalloc/jemalloc/pull/2842), jemalloc hasn't had a stable release for an extended period. Fortunately, we can resolve this issue through jemalloc's compilation configuration parameters.
+While we contributed the fix to [jemalloc PR #2842](https://github.com/jemalloc/jemalloc/pull/2842), jemalloc hasn't had a stable release for an extended period.
+Fortunately, we can resolve this issue through jemalloc's compilation configuration parameters.
 
 Based on the ClickHouse PR #80245 implementation, the fix involves tuning jemalloc's configuration parameters:
 
@@ -308,7 +336,8 @@ The improvement comes from:
 - Eliminated memory-related query performance degradation over time
 - Improved system stability under high memory pressure
 
-**Key Insight**: Memory allocator behavior can have dramatic impacts on high core count performance. Tuning allocator parameters is often necessary for optimal scalability.
+**Key Insight**: Memory allocator behavior can have dramatic impacts on high core count performance.
+Tuning allocator parameters is often necessary for optimal scalability.
 
 ### Example 2.2: AST/Analyzer Query Rewriting for Memory Reduction (PR #57853)
 
@@ -316,7 +345,8 @@ The improvement comes from:
 
 **Deep Dive: Frontend Query Optimization for Memory Efficiency**
 
-This optimization demonstrates how frontend query rewriting can dramatically reduce memory pressure by eliminating redundant computations. The key insight is that many analytical queries contain patterns that can be algebraically simplified.
+This optimization demonstrates how frontend query rewriting can dramatically reduce memory pressure by eliminating redundant computations.
+The key insight is that many analytical queries contain patterns that can be algebraically simplified.
 
 **Understanding the Memory Bottleneck**:
 
@@ -356,27 +386,37 @@ The optimization recognizes that `sum(column + literal)` can be algebraically re
 - No regressions observed on other ClickBench queries
 - Pattern applies to many other algebraic simplifications: `sum(column ± literal)` → `sum(column) ± literal * count(column)`
 
-**Key Insight**: Frontend query optimization can be more effective than backend execution optimization. Eliminating work entirely is better than doing work efficiently.
+**Key Insight**: Frontend query optimization can be more effective than backend execution optimization.
+Eliminating work entirely is better than doing work efficiently.
 
 ## The Aggregation Paradox: When More Threads Hurt Performance
 
-With memory allocation optimized, we encountered a counterintuitive phenomenon: certain queries actually got slower as we added more cores. This led us to discover one of the most insidious scalability problems in analytical databases - the aggregation merge bottleneck.
+With memory allocation optimized, we encountered a counterintuitive phenomenon: certain queries actually got slower as we added more cores.
+This led us to discover one of the most insidious scalability problems in analytical databases - the aggregation merge bottleneck.
 
-The issue is subtle but devastating. ClickHouse's aggregation engine works in two phases: first, each thread processes its portion of data in parallel (good), then all partial results must be merged together (potentially bad). If the merge phase isn't properly parallelized, it becomes a serial bottleneck that completely negates the benefits of parallel processing. Worse, more threads can actually make this bottleneck worse by creating more partial results to merge.
+The issue is subtle but devastating.
+ClickHouse's aggregation engine works in two phases: first, each thread processes its portion of data in parallel (good), then all partial results must be merged together (potentially bad).
+If the merge phase isn't properly parallelized, it becomes a serial bottleneck that completely negates the benefits of parallel processing.
+Worse, more threads can actually make this bottleneck worse by creating more partial results to merge.
 
 This discovery led to our third methodology: transforming aggregation from a scalability liability into a scalability asset.
 
 ## Methodology 3: Conquering the Aggregation Challenge
 
-Parallel aggregation is where the rubber meets the road for analytical databases. It's not enough to process data in parallel - you must also merge results in parallel. This requires careful algorithm design, smart data structure choices, and deep understanding of how hash tables behave under different load patterns. The goal is to eliminate serial merge phases and enable linear scaling even for the most complex aggregation queries.
+Parallel aggregation is where the rubber meets the road for analytical databases.
+It's not enough to process data in parallel - you must also merge results in parallel.
+This requires careful algorithm design, smart data structure choices, and deep understanding of how hash tables behave under different load patterns.
+The goal is to eliminate serial merge phases and enable linear scaling even for the most complex aggregation queries.
 
 ### Example 3.1: Parallel Hash Set Conversion (PR #50748)
 
-**Problem Identified**: ClickBench Q5 showed severe performance degradation as core count increased from 80 to 112 threads. Pipeline analysis revealed a serial bottleneck in hash set conversion.
+**Problem Identified**: ClickBench Q5 showed severe performance degradation as core count increased from 80 to 112 threads.
+Pipeline analysis revealed a serial bottleneck in hash set conversion.
 
 **Deep Dive: When More Threads Make Things Worse**
 
-This optimization exemplifies a counterintuitive phenomenon in parallel computing: adding more threads can actually decrease performance. Q5's performance degradation with increased core count violated the fundamental assumption that more parallelism equals better performance.
+This optimization exemplifies a counterintuitive phenomenon in parallel computing: adding more threads can actually decrease performance.
+Q5's performance degradation with increased core count violated the fundamental assumption that more parallelism equals better performance.
 
 **Understanding Hash Set Levels in ClickHouse**:
 
@@ -384,7 +424,8 @@ ClickHouse uses two hash table implementations for aggregation:
 1. **SingleLevel**: Flat hash table, faster for small datasets
 2. **TwoLevel**: Hierarchical hash table with 256 buckets, better for large datasets and parallel merging
 
-The system dynamically chooses based on data size: as data streams continuously write into hash sets, single-level hash sets convert to two-level hash sets when they reach a critical threshold. This creates a problem during merge operations.
+The system dynamically chooses based on data size: as data streams continuously write into hash sets, single-level hash sets convert to two-level hash sets when they reach a critical threshold.
+This creates a problem during merge operations.
 
 **The Serial Bottleneck Explained**:
 
@@ -393,11 +434,15 @@ When merging hash sets from different threads:
 - **All two-level sets**: Parallel merging possible (two sets merge in parallel, then result merges with third set)
 - **Mixed single/two-level sets**: Serial conversion bottleneck - all single-level sets must be serially converted to two-level first, then proceed to parallel merging
 
-With Q5, increasing threads from 80 to 112 meant less data per thread. Previously, with 80 threads, all hash sets were two-level. With 112 threads, the reduced per-thread data size resulted in a mixed scenario: some hash sets remained single-level while others became two-level. This mixed scenario triggered the serial conversion bottleneck - all single-level hash sets had to be serially converted to two-level before parallel merging could begin.
+With Q5, increasing threads from 80 to 112 meant less data per thread.
+Previously, with 80 threads, all hash sets were two-level.
+With 112 threads, the reduced per-thread data size resulted in a mixed scenario: some hash sets remained single-level while others became two-level.
+This mixed scenario triggered the serial conversion bottleneck - all single-level hash sets had to be serially converted to two-level before parallel merging could begin.
 
 **The Investigation Process**:
 
-Pipeline visualization was crucial for diagnosing this issue. The telltale sign was the merge phase duration increasing with thread count - the opposite of what should happen.
+Pipeline visualization was crucial for diagnosing this issue.
+The telltale sign was the merge phase duration increasing with thread count - the opposite of what should happen.
 
 ![PR50748 figure 1](assets/prs/50748_img1.png)
 
@@ -411,7 +456,8 @@ Pipeline visualization was crucial for diagnosing this issue. The telltale sign 
 
 **Why Parallel Conversion Works**:
 
-The solution addresses the mixed scenario by parallelizing the conversion phase: instead of serially converting all single-level hash sets to two-level during merge, we convert all single-level hash sets to two-level in parallel first, then proceed with parallel merging. Each set can be converted independently, eliminating the serial bottleneck.
+The solution addresses the mixed scenario by parallelizing the conversion phase: instead of serially converting all single-level hash sets to two-level during merge, we convert all single-level hash sets to two-level in parallel first, then proceed with parallel merging.
+Each set can be converted independently, eliminating the serial bottleneck.
 
 **Technical Solution**:
 ```
@@ -454,7 +500,8 @@ The improvement isn't just about Q5 - this optimization enables linear scaling f
 - 24 queries achieved >5% improvement
 - Overall geometric mean: 7.4% improvement
 
-**Key Insight**: This optimization demonstrates that scalability isn't just about making things parallel - it's about eliminating serial sections that grow with parallelism. Sometimes you need to restructure algorithms fundamentally, not just add more threads.
+**Key Insight**: This optimization demonstrates that scalability isn't just about making things parallel - it's about eliminating serial sections that grow with parallelism.
+Sometimes you need to restructure algorithms fundamentally, not just add more threads.
 
 ### Example 3.2: Single-Level Hash Set Merge Optimization (PR #52973)
 
@@ -462,7 +509,8 @@ The improvement isn't just about Q5 - this optimization enables linear scaling f
 
 **Deep Dive: Extending Parallel Merge to Single-Level Cases**
 
-Building on PR #50748, this optimization recognizes that parallel merge benefits aren't limited to mixed-level scenarios. Even when all hash sets are single-level, parallel preparation can improve performance if the total data size is large enough.
+Building on PR #50748, this optimization recognizes that parallel merge benefits aren't limited to mixed-level scenarios.
+Even when all hash sets are single-level, parallel preparation can improve performance if the total data size is large enough.
 
 **The Threshold Decision Problem**:
 
@@ -519,7 +567,8 @@ function parallelizeMergePrepare(hash_sets):
 
 **Deep Dive: Extending Parallelization to Keyed Aggregations**
 
-The previous two optimizations (Examples 3.1 and 3.2) addressed "merge without key" scenarios - simple hash set operations like `COUNT(DISTINCT)`. This optimization extends the parallel merge concept to "merge with key" scenarios, where hash tables contain both keys and aggregated values that must be combined according to aggregation semantics (like `GROUP BY` operations).
+The previous two optimizations (Examples 3.1 and 3.2) addressed "merge without key" scenarios - simple hash set operations like `COUNT(DISTINCT)`.
+This optimization extends the parallel merge concept to "merge with key" scenarios, where hash tables contain both keys and aggregated values that must be combined according to aggregation semantics (like `GROUP BY` operations).
 
 **Performance Impact**:
 - Q8: 10.3% improvement, Q9: 7.6% improvement
@@ -530,15 +579,20 @@ The previous two optimizations (Examples 3.1 and 3.2) addressed "merge without k
 
 ## Unleashing Two-Character SIMD Filtering
 
-With aggregation scaling solved, our attention turned to a different kind of parallelism - the kind that happens within individual CPU instructions. Modern Intel processors are marvels of parallel execution, capable of processing 8, 16, or even 32 data elements in a single instruction through SIMD (Single Instruction, Multiple Data) capabilities.
+With aggregation scaling solved, our attention turned to a different kind of parallelism - the kind that happens within individual CPU instructions.
+Modern Intel processors are marvels of parallel execution, capable of processing 8, 16, or even 32 data elements in a single instruction through SIMD (Single Instruction, Multiple Data) capabilities.
 
-However, harnessing this power is notoriously difficult. Compilers are conservative about vectorization, and database workloads often have complex control flow that inhibits automatic SIMD generation. The key insight is that SIMD optimization isn't just about processing more data per instruction - it's about redesigning algorithms to be fundamentally more efficient through better filtering techniques like two-character matching.
+However, harnessing this power is notoriously difficult.
+Compilers are conservative about vectorization, and database workloads often have complex control flow that inhibits automatic SIMD generation.
+The key insight is that SIMD optimization isn't just about processing more data per instruction - it's about redesigning algorithms to be fundamentally more efficient through better filtering techniques like two-character matching.
 
 This realization led to our fourth methodology: transforming scalar operations into vectorized powerhouses through smarter filtering.
 
 ## Methodology 4: SIMD - Two-Character Filtering and Beyond
 
-Effective SIMD optimization in database systems requires thinking beyond traditional vectorization. It's not enough to process 8 numbers instead of 1 - you need to use SIMD's parallel comparison capabilities to implement smarter algorithms that do less work overall. This is particularly powerful for string operations, where SIMD can dramatically reduce the number of expensive verification steps through better filtering techniques like two-character matching.
+Effective SIMD optimization in database systems requires thinking beyond traditional vectorization.
+It's not enough to process 8 numbers instead of 1 - you need to use SIMD's parallel comparison capabilities to implement smarter algorithms that do less work overall.
+This is particularly powerful for string operations, where SIMD can dramatically reduce the number of expensive verification steps through better filtering techniques like two-character matching.
 
 ### Example 4.1: Two-Character SIMD String Search (PR #46289)
 
@@ -546,7 +600,8 @@ Effective SIMD optimization in database systems requires thinking beyond traditi
 
 **Deep Dive: Reducing False Positives with Two-Character Filtering**
 
-Based on the implementation in [PR #46289](https://github.com/ClickHouse/ClickHouse/pull/46289/files), this optimization combines SIMD instruction usage with algorithmic improvements that use two-character filtering. The key insight is that SIMD can be used not just for parallel processing, but for implementing more selective filtering that dramatically reduces expensive verification operations.
+Based on the implementation in [PR #46289](https://github.com/ClickHouse/ClickHouse/pull/46289/files), this optimization combines SIMD instruction usage with algorithmic improvements that use two-character filtering.
+The key insight is that SIMD can be used not just for parallel processing, but for implementing more selective filtering that dramatically reduces expensive verification operations.
 
 **Understanding String Search in Analytical Queries**:
 
@@ -565,7 +620,8 @@ This query scans millions of URL strings, making string search performance criti
 
 **The Two-Character Filtering Solution**:
 
-The original SIMD implementation only checked the first character of the search pattern, leading to excessive false positives and expensive verification calls. The solution adds a second character check, dramatically improving selectivity while requiring minimal additional SIMD operations.
+The original SIMD implementation only checked the first character of the search pattern, leading to excessive false positives and expensive verification calls.
+The solution adds a second character check, dramatically improving selectivity while requiring minimal additional SIMD operations.
 
 **Why This Works**:
 - Single character matching has poor selectivity in real text
@@ -629,46 +685,62 @@ The two-character SIMD filtering delivers significant improvements:
 
 The improvement comes from dramatically fewer false positives, better cache locality, improved branch prediction, and the same SIMD throughput with much better filtering efficiency.
 
-**Key Insight**: Two-character SIMD filtering demonstrates that effective SIMD optimization isn't just about processing more data per instruction - it's about using SIMD's parallel comparison capabilities to dramatically improve algorithmic efficiency. The two-character approach shows how minimal additional SIMD operations can yield massive performance gains through better filtering.
+**Key Insight**: Two-character SIMD filtering demonstrates that effective SIMD optimization isn't just about processing more data per instruction - it's about using SIMD's parallel comparison capabilities to dramatically improve algorithmic efficiency.
+The two-character approach shows how minimal additional SIMD operations can yield massive performance gains through better filtering.
 
 ## The Hidden Performance Killer: Cache Coherence
 
-Our final methodology addresses perhaps the most insidious performance problem on high core count systems: false sharing. This issue is particularly devious because it's completely invisible to traditional profiling tools, yet can single-handedly destroy scalability.
+Our final methodology addresses perhaps the most insidious performance problem on high core count systems: false sharing.
+This issue is particularly devious because it's completely invisible to traditional profiling tools, yet can single-handedly destroy scalability.
 
-False sharing occurs when multiple threads access different variables that happen to reside in the same cache line. Even though the threads aren't actually sharing data, the CPU's cache coherence protocol treats any modification to the cache line as a conflict, forcing expensive synchronization between cores. On a 2 x 240 vCPUs system, this can turn simple counter increments into system-wide performance disasters.
+False sharing occurs when multiple threads access different variables that happen to reside in the same cache line.
+Even though the threads aren't actually sharing data, the CPU's cache coherence protocol treats any modification to the cache line as a conflict, forcing expensive synchronization between cores.
+On a 2 x 240 vCPUs system, this can turn simple counter increments into system-wide performance disasters.
 
-The challenge is that false sharing gets exponentially worse with core count, making it a uniquely high core count problem. A data structure layout that works perfectly on 8 cores can become catastrophically slow on 240 cores.
+The challenge is that false sharing gets exponentially worse with core count, making it a uniquely high core count problem.
+A data structure layout that works perfectly on 8 cores can become catastrophically slow on 240 cores.
 
 ## Methodology 5: Eliminating the False Sharing Menace
 
-False sharing elimination requires understanding CPU cache architecture at the hardware level. It's not enough to optimize algorithms - you must optimize memory layout to ensure that frequently-accessed data structures don't accidentally interfere with each other through cache line conflicts. This involves strategic use of alignment, padding, and data structure reorganization.
+False sharing elimination requires understanding CPU cache architecture at the hardware level.
+It's not enough to optimize algorithms - you must optimize memory layout to ensure that frequently-accessed data structures don't accidentally interfere with each other through cache line conflicts.
+This involves strategic use of alignment, padding, and data structure reorganization.
 
 ### Example 5.1: ProfileEvents Counter Alignment (PR #82697)
 
-**Problem Identified**: ClickBench Q3 showed 36.6% of CPU cycles spent in `ProfileEvents::increment` on a 2×240 vCPU system. Performance profiling revealed severe cache line contention.
+**Problem Identified**: ClickBench Q3 showed 36.6% of CPU cycles spent in `ProfileEvents::increment` on a 2×240 vCPU system.
+Performance profiling revealed severe cache line contention.
 
 **Deep Dive: Why This Happens and Why It Gets Worse at Scale**
 
-ProfileEvents counters are ClickHouse's internal metrics system - they track everything from query execution steps to memory allocations. In a typical analytical query, these counters are incremented millions of times across all threads. The original implementation packed multiple counters into the same memory region without considering cache line boundaries.
+ProfileEvents counters are ClickHouse's internal metrics system - they track everything from query execution steps to memory allocations.
+In a typical analytical query, these counters are incremented millions of times across all threads.
+The original implementation packed multiple counters into the same memory region without considering cache line boundaries.
 
 Here's why this creates a scalability disaster:
 
-1. **Cache Line Physics**: Modern Intel processors use 64-byte cache lines. When any byte in a cache line is modified, the entire line must be invalidated in other cores' caches.
+1. **Cache Line Physics**: Modern Intel processors use 64-byte cache lines.
+   When any byte in a cache line is modified, the entire line must be invalidated in other cores' caches.
 
-2. **False Sharing Amplification**: With 240 threads, each counter update triggers cache line invalidation across potentially dozens of cores. What should be independent operations become serialized through the cache coherence protocol.
+2. **False Sharing Amplification**: With 240 threads, each counter update triggers cache line invalidation across potentially dozens of cores.
+   What should be independent operations become serialized through the cache coherence protocol.
 
 3. **Exponential Degradation**: As core count increases, the probability of simultaneous access to the same cache line grows exponentially, creating a feedback loop of cache misses.
 
 **The Investigation Process**:
 
-Using Perf analysis, I discovered that `ProfileEvents::increment` was generating massive cache coherence traffic. The smoking gun was the cache line utilization report showing 8 different counters packed into single cache lines. We've also been developing new capabilities in the Linux perf c2c tool and working with the community to help developers more easily identify false sharing issues like this.
+Using Perf analysis, I discovered that `ProfileEvents::increment` was generating massive cache coherence traffic.
+The smoking gun was the cache line utilization report showing 8 different counters packed into single cache lines.
+We've also been developing new capabilities in the Linux perf c2c tool and working with the community to help developers more easily identify false sharing issues like this.
 
 ![PR82697 figure 1](assets/prs/82697_img1.png)
 *Perf analysis showing 36.6% cycles in ProfileEvents::increment*
 
 **Why Alignment Solves This**:
 
-Cache line alignment ensures each counter gets its own 64-byte cache line. This transforms false sharing (bad) into true sharing (manageable). When a thread updates its counter, only that specific cache line is affected.
+Cache line alignment ensures each counter gets its own 64-byte cache line.
+This transforms false sharing (bad) into true sharing (manageable).
+When a thread updates its counter, only that specific cache line is affected.
 
 **Technical Solution**: 
 
@@ -695,22 +767,28 @@ struct ProfileEvents:
 ![PR82697 figure 2](assets/prs/82697_img3.png)
 *After optimization: ProfileEvents::increment drops to 8.5%*
 
-**Key Insight**: The performance gain increases with core count because cache coherence overhead grows super-linearly. This optimization doesn't just fix a bottleneck - it changes the scalability curve.
+**Key Insight**: The performance gain increases with core count because cache coherence overhead grows super-linearly.
+This optimization doesn't just fix a bottleneck - it changes the scalability curve.
 
 ![PR82697 figure 3](assets/prs/82697_img4.png)
 
 *ClickBench Q3: 27.4% improvement, with larger gains on higher core count systems*
 
-**Broader Implications**: This optimization pattern applies to any frequently-updated shared data structure. The lesson is that memory layout becomes critical at scale - what works fine on 8 cores can be catastrophic on 240 cores.
+**Broader Implications**: This optimization pattern applies to any frequently-updated shared data structure.
+The lesson is that memory layout becomes critical at scale - what works fine on 8 cores can be catastrophic on 240 cores.
 
 ## The Journey's End: Lessons from the Trenches
 
-These five methodologies represent more than just individual optimizations - they form a comprehensive framework for approaching high core count performance challenges. Each methodology builds upon the previous ones, creating a systematic approach that can unlock dramatic performance improvements on high core count systems.
-These optimizations enable ClickHouse to scale linearly with core count, transforming it from a system that struggled beyond 32 cores into one that thrives on 200+ core processors. As Intel and other manufacturers push toward thousand-core processors in the coming years, these methodologies provide a foundation for continued scalability.
+These five methodologies represent more than just individual optimizations - they form a comprehensive framework for approaching high core count performance challenges.
+Each methodology builds upon the previous ones, creating a systematic approach that can unlock dramatic performance improvements on high core count systems.
+These optimizations enable ClickHouse to scale linearly with core count, transforming it from a system that struggled beyond 32 cores into one that thrives on 200+ core processors.
+As Intel and other manufacturers push toward thousand-core processors in the coming years, these methodologies provide a foundation for continued scalability.
 
 ## The Bigger Picture: Why This Matters
 
-As Intel continues to push core counts higher with each processor generation, the techniques presented here become increasingly critical. The optimizations that worked on 8-core systems not only fail to scale - they actively hurt performance on high core count systems. This represents a fundamental shift in how we must think about database optimization.
+As Intel continues to push core counts higher with each processor generation, the techniques presented here become increasingly critical.
+The optimizations that worked on 8-core systems not only fail to scale - they actively hurt performance on high core count systems.
+This represents a fundamental shift in how we must think about database optimization.
 
 The five methodologies provide a roadmap for this new reality:
 
@@ -724,9 +802,11 @@ Together, these methodologies address the fundamental challenges that prevent tr
 
 ## A Framework for the Future
 
-The methodologies presented here aren't just about ClickHouse - they represent a fundamental shift in how we must approach database optimization in the high core count era. As processors continue to evolve toward higher core counts, these techniques will become essential for any system that needs to scale.
+The methodologies presented here aren't just about ClickHouse - they represent a fundamental shift in how we must approach database optimization in the high core count era.
+As processors continue to evolve toward higher core counts, these techniques will become essential for any system that needs to scale.
 
-The key insight is that high core count optimization requires thinking systemically about performance. It's not enough to optimize individual components - you must understand how threads coordinate, how memory is shared, how data flows through the system, and how the underlying hardware behaves at scale.
+The key insight is that high core count optimization requires thinking systemically about performance.
+It's not enough to optimize individual components - you must understand how threads coordinate, how memory is shared, how data flows through the system, and how the underlying hardware behaves at scale.
 
 For teams working on high-performance systems, I recommend adopting this systematic approach:
 
@@ -737,7 +817,8 @@ For teams working on high-performance systems, I recommend adopting this systema
 5. **Leverage SIMD** - Focus on algorithmic improvements like two-character filtering that go beyond simple vectorization
 6. **Mind your memory layout** - Cache coherence effects become critical at scale
 
-The future belongs to systems that can harness the full power of high core count processors. We hope the techniques presented here can contribute to that future.
+The future belongs to systems that can harness the full power of high core count processors.
+We hope the techniques presented here can contribute to that future.
 
 ---
 
@@ -750,7 +831,8 @@ The future belongs to systems that can harness the full power of high core count
 
 ### Acknowledgments
 
-Special thanks to the ClickHouse community for rigorous code review and performance validation. These optimizations represent collaborative effort between Intel and ClickHouse teams to unlock the full potential of modern high core count processors.
+Special thanks to the ClickHouse community for rigorous code review and performance validation.
+These optimizations represent collaborative effort between Intel and ClickHouse teams to unlock the full potential of modern high core count processors.
 
 ---
 
