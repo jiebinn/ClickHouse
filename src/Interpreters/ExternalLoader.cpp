@@ -654,6 +654,56 @@ public:
         return infos.contains(name);
     }
 
+    bool unload(const String & name)
+    {
+        std::lock_guard lock{mutex};
+        Info * info = getInfo(name);
+        if (!info)
+            return false;
+
+        if (!info->loaded())
+        {
+            LOG_TRACE(log, "{} '{}' is not loaded, nothing to unload", type_name, name);
+            return false;
+        }
+
+        if (info->isLoading())
+        {
+            LOG_TRACE(log, "{} '{}' is currently loading, cannot unload", type_name, name);
+            return false;
+        }
+
+        resetInfoToUnloaded(name, info);
+
+        return true;
+    }
+
+    void unloadAll()
+    {
+        std::lock_guard lock{mutex};
+        for (auto & [name, info] : infos)
+        {
+            if (info.loaded() && !info.isLoading())
+            {
+                resetInfoToUnloaded(name, info);
+            }
+        }
+    }
+
+    void resetInfoToUnloaded(const String& name, Info & info) {
+        /// Reset state so that the next access triggers lazy reload.
+        LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
+        info.object = nullptr;
+        info.exception = nullptr;
+        info.state_id = 0;
+        info.loading_id = 0;
+        info.error_count = 0;
+        info.next_update_time = TimePoint::max();
+        info.loading_start_time = TimePoint();
+        info.loading_end_time = TimePoint();
+        info.last_successful_update_time = TimePoint();
+    }
+
     /// Starts reloading all the object which update time is earlier than now.
     /// The function doesn't touch the objects which were never tried to load.
     void reloadOutdated()
@@ -1494,6 +1544,16 @@ ReturnType ExternalLoader::reloadAllTriedToLoad() const
 bool ExternalLoader::has(const String & name) const
 {
     return loading_dispatcher->has(name);
+}
+
+bool ExternalLoader::unload(const String & name) const
+{
+    return loading_dispatcher->unload(name);
+}
+
+void ExternalLoader::unloadAll() const
+{
+    loading_dispatcher->unloadAll();
 }
 
 Strings ExternalLoader::getAllTriedToLoadNames() const
