@@ -109,6 +109,8 @@ namespace DB
     DECLARE(Bool, serialize_string_in_memory_with_zero_byte, true, "Serialize String values during aggregation with zero byte at the end. Enable to keep compatibility when querying cluster of incompatible versions.", 0) \
     DECLARE(Bool, use_hash_table_stats_for_join_reordering, false, "Enable using collected hash table statistics for cardinality estimation during join reordering", 0) \
     DECLARE(Bool, enable_join_fixed_hash_table_conversion, true, R"(Enable converting the hash table to a flat array for joins when the key is a single integer with a small value range)", 0) \
+    \
+    DECLARE(UInt64, max_streams_per_hierarchical_merge, 16, "Maximum number of input streams per MergingSortedTransform node; when exceeded a hierarchical merge tree is built to reduce lock contention.", 0) \
 
 
 // clang-format on
