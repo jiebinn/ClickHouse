@@ -236,6 +236,7 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             {"ai_function_throw_on_quota_exceeded", true, true, "New setting"},
             {"variant_throw_on_type_mismatch", true, true, "New setting to control type mismatch behavior in default Variant implementation"},
             {"dynamic_throw_on_type_mismatch", true, true, "New setting to control type mismatch behavior in default Dynamic implementation"},
+            {"max_streams_per_hierarchical_merge", 0, 16, "New setting for hierarchical merging to reduce lock contention in MergingSortedTransform."},
         });
         addSettingsChanges(settings_changes_history, "26.3",
         {
