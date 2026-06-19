@@ -519,7 +519,7 @@ static bool writeMetadataFiles(
             buffer_manifest_list->finalize();
         }
 
-        std::string json_representation = stringifyJson(metadata, 4);
+        std::string json_representation = stringifyJSON(metadata, 4);
 
         fiu_do_on(FailPoints::iceberg_writes_cleanup,
         {
@@ -758,7 +758,7 @@ void alter(
             }
         }
 
-        std::string json_representation = stringifyJson(metadata, 4);
+        std::string json_representation = stringifyJSON(metadata, 4);
 
         auto metadata_info = filename_generator.generateMetadataPathWithInfo();
 
