@@ -1,3 +1,4 @@
+-- Single-path types
 String
 String
 UInt8
@@ -7,3 +8,13 @@ Nullable(UInt8)
 [1]
 1
 1
+-- Multi-path types with Dynamic input
+Nullable(Tuple(String, String))
+Nullable(Tuple(String, String))
+Nullable(Tuple(UInt8, UInt8))
+Array(String)
+Array(String)
+Array(UInt8)
+('[1]','[2]')
+('1','2')
+(1,1)
