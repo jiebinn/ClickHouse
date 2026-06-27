@@ -4272,7 +4272,7 @@ static BoolMask forAnyHyperrectangle(
 {
     auto universe = [&](size_t i) -> Range
     {
-        return key_bounds ? (*key_bounds)[i] : createTypeAwareWholeUniverse(data_types[i]);
+        return key_bounds ? (*key_bounds)[i] : Range::createWholeUniverseTypeAware(data_types[i]);
     };
 
     if (!left_bounded && !right_bounded)
@@ -4569,7 +4569,7 @@ BoolMask KeyCondition::checkInRange(
     Hyperrectangle key_ranges;
     key_ranges.reserve(used_key_size);
     for (size_t i = 0; i < used_key_size; ++i)
-        key_ranges.push_back(createTypeAwareWholeUniverse(data_types[i]));
+        key_ranges.push_back(Range::createWholeUniverseTypeAware(data_types[i]));
 
     return forAnyHyperrectangle(used_key_size, left_keys, right_keys, true, true, key_ranges, data_types, 0, initial_mask, key_bounds,
         [&] (const Hyperrectangle & key_ranges_hyperrectangle)
