@@ -669,28 +669,68 @@ void DiskLocal::shutdown()
 
 void DiskLocal::checkAccessImpl(const String & path)
 {
-    if (!FS::canRead(disk_path))
+    /// `FS::canRead`/`FS::canWrite` return `false` only when access is explicitly denied (`EACCES`).
+    /// For any other failure - a removed directory (`ENOENT`), a read-only mount (`EROFS`), an
+    /// I/O error (`EIO`), etc. - they throw. In all of these cases the corresponding access is
+    /// unavailable, so a thrown exception is treated the same as a negative result. Otherwise the
+    /// exception would escape to `DiskLocalCheckThread::run`, which only adjusts the retry interval,
+    /// leaving `broken`/`readonly` stale and reporting a failed disk as healthy.
+    /// To avoid log noise on every periodic probe, the health-state changes are logged only on
+    /// transition (when the corresponding flag actually flips).
+
+    bool can_read = false;
+    String read_failure_reason;
+    try
     {
-        broken = true;
+        can_read = FS::canRead(disk_path);
+    }
+    catch (...)
+    {
+        read_failure_reason = getCurrentExceptionMessage(/* with_stacktrace = */ false);
+    }
+
+    if (!can_read)
+    {
+        if (!broken.exchange(true))
+            LOG_ERROR(logger, "There is no read access to disk {} ({}). Marking it as broken.{}",
+                name, disk_path, read_failure_reason.empty() ? "" : " Reason: " + read_failure_reason);
         throw Exception(ErrorCodes::PATH_ACCESS_DENIED, "There is no read access to disk {} ({}).", name, disk_path);
     }
-    else
+    broken = false;
+
+    bool can_write = false;
+    String write_failure_reason;
+    try
     {
-        broken = false;
+        can_write = FS::canWrite(disk_path);
+    }
+    catch (...)
+    {
+        write_failure_reason = getCurrentExceptionMessage(/* with_stacktrace = */ false);
     }
 
-    if (!FS::canWrite(disk_path))
+    if (!can_write)
     {
-        LOG_INFO(logger, "Cannot write to the root directory of disk {} ({}).", name, disk_path);
-        readonly = true;
+        if (!readonly.exchange(true))
+            LOG_WARNING(logger, "Cannot write to the root directory of disk {} ({}). Marking it as read-only.{}",
+                name, disk_path, write_failure_reason.empty() ? "" : " Reason: " + write_failure_reason);
         return;
     }
-    else
-    {
-        readonly = false;
-    }
+    readonly = false;
 
-    IDisk::checkAccessImpl(path);
+    /// Full read/write probe of the disk. A failure here (`ENOSPC`, `EIO`, a read-back mismatch, ...)
+    /// means the disk has an I/O problem, so mark it as broken and rethrow.
+    try
+    {
+        IDisk::checkAccessImpl(path);
+    }
+    catch (...)
+    {
+        if (!broken.exchange(true))
+            LOG_ERROR(logger, "Read/write check for disk {} ({}) failed. Marking it as broken. Reason: {}",
+                name, disk_path, getCurrentExceptionMessage(/* with_stacktrace = */ false));
+        throw;
+    }
 }
 
 void DiskLocal::setup()

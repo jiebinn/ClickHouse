@@ -163,7 +163,6 @@ private:
     void setup();
 
     const String disk_path;
-    const String disk_checker_path = ".disk_checker_file";
     std::atomic<UInt64> keep_free_space_bytes;
     LoggerPtr logger;
     DataSourceDescription data_source_description;
