@@ -64,11 +64,15 @@ SOURCE="${DATA_PATH}/all_1_1_0"
 # `creation_csn` with `Tx::NonTransactionalCSN` and the rollback is silently lost).
 # creation_csn = Tx::RolledBackCSN = 18446744073709551615 causes `read_txn_status`
 # to return `RolledBack` without consulting `TransactionLog`, making the rollback unambiguous.
-# creation_tid uses start_csn=2 (not 1=NonTransactionalCSN) so the TID is treated as
-# transactional. The file is written atomically (write to `.tmp` then rename) to avoid
-# a race where the server reads a partial file.
+# creation_tid uses a transactional `local_tid` outside the reserved range
+# (>`Tx::MaxReservedLocalTID=32`, here 33) so the TID is well-formed and treated as
+# transactional. `local_tid=1` would be `Tx::NonTransactionalLocalTID`, which both makes
+# `wasInvolvedInTransaction` return false and violates the `TransactionID` invariant
+# (it requires `start_csn==Tx::NonTransactionalCSN` whenever `local_tid==NonTransactionalLocalTID`),
+# tripping a `chassert` in debug/sanitizer builds. The file is written atomically (write to
+# `.tmp` then rename) to avoid a race where the server reads a partial file.
 cp -r "${SOURCE}" "${DATA_PATH}/all_1_2_2_1"
-printf 'version: 1\nstoring_version: 0\ncreation_tid: (2, 1, 00000000-0000-0000-0000-000000000000)\ncreation_csn: 18446744073709551615\nremoval_tid: (0, 0, 00000000-0000-0000-0000-000000000000)\nremoval_csn: 0' \
+printf 'version: 1\nstoring_version: 0\ncreation_tid: (2, 33, 00000000-0000-0000-0000-000000000000)\ncreation_csn: 18446744073709551615\nremoval_tid: (0, 0, 00000000-0000-0000-0000-000000000000)\nremoval_csn: 0' \
     > "${DATA_PATH}/all_1_2_2_1/txn_version.txt.tmp"
 mv "${DATA_PATH}/all_1_2_2_1/txn_version.txt.tmp" "${DATA_PATH}/all_1_2_2_1/txn_version.txt"
 
