@@ -27,9 +27,12 @@ private:
     const size_t check_period_ms;
     const LoggerPtr log;
 
-    BackgroundSchedulePoolTaskHolder task;
     AggregatedMetrics::GlobalSum is_readonly;
     AggregatedMetrics::GlobalSum is_broken;
+    /// Declared last so it is destroyed first: the explicit destructor (and the holder's own
+    /// destructor) deactivates the task and waits for an in-flight `run` to finish before the
+    /// metrics handles above are destroyed, avoiding a use-after-destruction race on shutdown.
+    BackgroundSchedulePoolTaskHolder task;
 };
 
 }
