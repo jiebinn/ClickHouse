@@ -1964,16 +1964,17 @@ void MergeTreeData::PartLoadingTree::add(const MergeTreePartInfo & info, const S
 
     auto * current = current_ptr.get();
 
-    /// Replace a rolled-back node with the incoming committed peer in the intersection case:
-    /// erase the victim, then re-insert its orphans and the incoming part sorted by (level,
-    /// mutation) descending so that covering parts are added before the parts they contain.
-    /// The containment case doesn't need this — `loadDataPartsFromDisk` promotes orphans of
-    /// any top-level part demoted to Outdated.
-    auto evict_rolled_back_and_reinsert = [&](auto victim_iter)
+    /// Replace a superseded node (rolled back, or in flight while the incoming peer is committed)
+    /// with the incoming committed peer in the intersection case: erase the victim, then re-insert
+    /// its orphans and the incoming part sorted by (level, mutation) descending so that covering
+    /// parts are added before the parts they contain. The containment case doesn't need this —
+    /// `loadDataPartsFromDisk` promotes orphans of any top-level part demoted to Outdated.
+    auto evict_and_reinsert = [&](auto victim_iter, std::string_view reason)
     {
         LOG_INFO(
             getLogger("MergeTreeData"),
-            "Removing rolled-back part {} from loading tree (its descendants and incoming part {} will be re-inserted)",
+            "Removing {} part {} from loading tree (its descendants and incoming part {} will be re-inserted)",
+            reason,
             victim_iter->second->name,
             name);
         std::vector<std::tuple<MergeTreePartInfo, String, DiskPtr>> to_reinsert;
@@ -2033,15 +2034,23 @@ void MergeTreeData::PartLoadingTree::add(const MergeTreePartInfo & info, const S
                 }
                 if (existing_status == RollbackStatus::RolledBack)
                 {
-                    evict_rolled_back_and_reinsert(prev);
+                    evict_and_reinsert(prev, "rolled-back");
                     return;
                 }
                 if (incoming_status == RollbackStatus::UnknownCSN || existing_status == RollbackStatus::UnknownCSN)
                 {
                     /// At least one part is still being created by a running transaction (TransactionLog
                     /// has no CSN and `tryGetRunningTransaction` returned non-null in `read_txn_status`).
-                    /// Skip the incoming part — the in-flight transaction will commit or roll back later,
-                    /// and a subsequent load will resolve the intersection unambiguously.
+                    /// Two intersecting parts can never both commit, so when the incoming part is already
+                    /// definitive (committed or non-transactional) and the existing tree-resident part is
+                    /// still in flight, the in-flight part is bound to roll back: evict it and keep the
+                    /// incoming part rather than risk losing committed data. Otherwise the incoming part is
+                    /// the in-flight one (or both are), so skip it and let a later load settle the intersection.
+                    if (existing_status == RollbackStatus::UnknownCSN && incoming_status != RollbackStatus::UnknownCSN)
+                    {
+                        evict_and_reinsert(prev, "in-flight (superseded by a committed intersecting part)");
+                        return;
+                    }
                     LOG_WARNING(
                         getLogger("MergeTreeData"),
                         "Skipping part {} (intersects part {}): transaction is still in flight",
@@ -2087,12 +2096,17 @@ void MergeTreeData::PartLoadingTree::add(const MergeTreePartInfo & info, const S
                 }
                 if (existing_status == RollbackStatus::RolledBack)
                 {
-                    evict_rolled_back_and_reinsert(it);
+                    evict_and_reinsert(it, "rolled-back");
                     return;
                 }
                 if (incoming_status == RollbackStatus::UnknownCSN || existing_status == RollbackStatus::UnknownCSN)
                 {
                     /// See the equivalent branch in the `prev` arm above.
+                    if (existing_status == RollbackStatus::UnknownCSN && incoming_status != RollbackStatus::UnknownCSN)
+                    {
+                        evict_and_reinsert(it, "in-flight (superseded by a committed intersecting part)");
+                        return;
+                    }
                     LOG_WARNING(
                         getLogger("MergeTreeData"),
                         "Skipping part {} (intersects part {}): transaction is still in flight",
