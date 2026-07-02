@@ -217,6 +217,15 @@ static const Strings data_formats = {
     "Null",
 };
 
+template <typename T>
+static String decimalFieldToString(const Field & f)
+{
+    const auto & d = f.safeGet<DecimalField<T>>();
+    WriteBufferFromOwnString wb;
+    writeText(d.getValue(), d.getScale(), wb);
+    return wb.str();
+}
+
 static String fieldToNumericString(const Field & f)
 {
     switch (f.getType())
@@ -231,12 +240,14 @@ static String fieldToNumericString(const Field & f)
                 return v > 0 ? "inf" : "-inf";
             return std::to_string(v);
         }
-        case Field::Types::Decimal64: {
-            const auto & d = f.safeGet<DecimalField<Decimal64>>();
-            WriteBufferFromOwnString wb;
-            writeText(d.getValue(), d.getScale(), wb);
-            return wb.str();
-        }
+        case Field::Types::Int128: return toString(f.safeGet<Int128>());
+        case Field::Types::UInt128: return toString(f.safeGet<UInt128>());
+        case Field::Types::Int256: return toString(f.safeGet<Int256>());
+        case Field::Types::UInt256: return toString(f.safeGet<UInt256>());
+        case Field::Types::Decimal32: return decimalFieldToString<Decimal32>(f);
+        case Field::Types::Decimal64: return decimalFieldToString<Decimal64>(f);
+        case Field::Types::Decimal128: return decimalFieldToString<Decimal128>(f);
+        case Field::Types::Decimal256: return decimalFieldToString<Decimal256>(f);
         case Field::Types::String: return f.safeGet<String>();
         default: return "0";
     }
@@ -308,11 +319,15 @@ Field QueryFuzzer::getRandomField(int type)
                 = {std::numeric_limits<double>::quiet_NaN(),
                    std::numeric_limits<double>::infinity(),
                    -std::numeric_limits<double>::infinity(),
+                   std::numeric_limits<double>::max(),
+                   -std::numeric_limits<double>::max(),
+                   std::numeric_limits<double>::denorm_min(),
                    0.,
                    -0.,
                    0.0001,
                    0.5,
                    0.9999,
+                   -1.,
                    1.,
                    1.0001,
                    2.,
@@ -321,6 +336,10 @@ Field QueryFuzzer::getRandomField(int type)
                    1000.0001,
                    1e10,
                    1e20,
+                   /// Around 2^53: the last consecutive integer representable in Float64
+                   9007199254740991.,
+                   9007199254740992.,
+                   9007199254740994.,
                    static_cast<double>(FLT_MIN),
                    static_cast<double>(FLT_MIN) + static_cast<double>(FLT_EPSILON),
                    static_cast<double>(FLT_MAX),
@@ -328,9 +347,31 @@ Field QueryFuzzer::getRandomField(int type)
             return values[fuzz_rand() % std::size(values)];
         }
         case 2: {
-            static constexpr UInt64 scales[] = {0, 1, 2, 10};
-            return DecimalField<Decimal64>(
-                bad_int64_values[fuzz_rand() % std::size(bad_int64_values)], static_cast<UInt32>(scales[fuzz_rand() % std::size(scales)]));
+            const Int64 mantissa = bad_int64_values[fuzz_rand() % std::size(bad_int64_values)];
+            switch (fuzz_rand() % 4)
+            {
+                case 0: {
+                    static constexpr UInt32 scales[] = {0, 1, 9};
+                    return DecimalField<Decimal32>(static_cast<Int32>(mantissa), scales[fuzz_rand() % std::size(scales)]);
+                }
+                case 1: {
+                    static constexpr UInt32 scales[] = {0, 1, 2, 10, 18};
+                    return DecimalField<Decimal64>(mantissa, scales[fuzz_rand() % std::size(scales)]);
+                }
+                case 2: {
+                    static constexpr UInt32 scales[] = {0, 2, 19, 38};
+                    /// Optionally push the mantissa beyond the Int64 range
+                    const Int128 wide_mantissa = fuzz_rand() % 2 == 0 ? Int128(mantissa) : Int128(mantissa) * 1000000000000000000LL;
+                    return DecimalField<Decimal128>(wide_mantissa, scales[fuzz_rand() % std::size(scales)]);
+                }
+                default: {
+                    static constexpr UInt32 scales[] = {0, 2, 39, 76};
+                    const Int256 wide_mantissa = fuzz_rand() % 2 == 0
+                        ? Int256(mantissa)
+                        : Int256(mantissa) * Int256(1000000000000000000LL) * Int256(1000000000000000000LL);
+                    return DecimalField<Decimal256>(wide_mantissa, scales[fuzz_rand() % std::size(scales)]);
+                }
+            }
         }
         case 3: {
             /// Date/Date32 boundary values as strings — stress date parsing and arithmetic.
@@ -420,6 +461,20 @@ Field QueryFuzzer::getRandomField(int type)
                    R"([1,"two",null,true,{}])"};
             return String(json_values[fuzz_rand() % std::size(json_values)]);
         }
+        case 10: {
+            /// Wide integer boundary values — magnitudes beyond the Int64/UInt64 range
+            switch (fuzz_rand() % 8)
+            {
+                case 0: return Int128(std::numeric_limits<Int64>::min()) - 1;
+                case 1: return UInt128(std::numeric_limits<UInt64>::max()) + 1;
+                case 2: return std::numeric_limits<Int128>::min();
+                case 3: return std::numeric_limits<Int128>::max();
+                case 4: return std::numeric_limits<UInt128>::max();
+                case 5: return std::numeric_limits<Int256>::min();
+                case 6: return std::numeric_limits<Int256>::max();
+                default: return std::numeric_limits<UInt256>::max();
+            }
+        }
         default: chassert(false); return Null{};
     }
 }
@@ -432,10 +487,13 @@ Field QueryFuzzer::fuzzField(Field field)
 
     int type_index = -1;
 
-    if (type == Field::Types::Int64 || type == Field::Types::UInt64 || type == Field::Types::Int128 || type == Field::Types::UInt128
-        || type == Field::Types::Int256 || type == Field::Types::UInt256 || type == Field::Types::Bool)
+    if (type == Field::Types::Int64 || type == Field::Types::UInt64 || type == Field::Types::Bool)
     {
         type_index = 0;
+    }
+    else if (type == Field::Types::Int128 || type == Field::Types::UInt128 || type == Field::Types::Int256 || type == Field::Types::UInt256)
+    {
+        type_index = 10;
     }
     else if (type == Field::Types::Float64)
     {
@@ -471,7 +529,7 @@ Field QueryFuzzer::fuzzField(Field field)
         {
             // Change type sometimes, but not often, because it mostly leads to
             // boring errors.
-            type_index = fuzz_rand() % 10;
+            type_index = fuzz_rand() % 11;
         }
         return getRandomField(type_index);
     }
@@ -569,7 +627,7 @@ Field QueryFuzzer::fuzzField(Field field)
             }
             else
             {
-                arr.insert(arr.begin(), fuzzField(getRandomField(fuzz_rand() % 10)));
+                arr.insert(arr.begin(), fuzzField(getRandomField(fuzz_rand() % 11)));
                 if (debug_stream)
                     *debug_stream << "inserted (0)\n";
             }
@@ -605,7 +663,7 @@ Field QueryFuzzer::fuzzField(Field field)
             }
             else
             {
-                arr.insert(arr.begin(), fuzzField(getRandomField(fuzz_rand() % 10)));
+                arr.insert(arr.begin(), fuzzField(getRandomField(fuzz_rand() % 11)));
 
                 if (debug_stream)
                     *debug_stream << "inserted (0)\n";
@@ -634,8 +692,8 @@ Field QueryFuzzer::fuzzField(Field field)
         if (fuzz_rand() % 5 == 0)
         {
             const size_t pos = map.size() >= 2 ? (fuzz_rand() % (map.size() / 2)) * 2 : 0;
-            map.insert(map.begin() + pos, fuzzField(getRandomField(fuzz_rand() % 10)));
-            map.insert(map.begin() + pos + 1, fuzzField(getRandomField(fuzz_rand() % 10)));
+            map.insert(map.begin() + pos, fuzzField(getRandomField(fuzz_rand() % 11)));
+            map.insert(map.begin() + pos + 1, fuzzField(getRandomField(fuzz_rand() % 11)));
             if (debug_stream)
                 *debug_stream << fmt::format("map: inserted pair (pos {})\n", pos);
         }
@@ -6015,7 +6073,7 @@ String QueryFuzzer::generateParamValue()
         {
             if (i > 0)
                 s += ",";
-            s += fieldToNumericString(getRandomField(fuzz_rand() % 10));
+            s += fieldToNumericString(getRandomField(fuzz_rand() % 11));
         }
         s += close;
         return s;
@@ -6028,9 +6086,9 @@ String QueryFuzzer::generateParamValue()
         {
             if (i > 0)
                 s += ",";
-            s += fieldToNumericString(getRandomField(fuzz_rand() % 10));
+            s += fieldToNumericString(getRandomField(fuzz_rand() % 11));
             s += ":";
-            s += fieldToNumericString(getRandomField(fuzz_rand() % 10));
+            s += fieldToNumericString(getRandomField(fuzz_rand() % 11));
         }
         s += "}";
         return s;
@@ -6040,7 +6098,7 @@ String QueryFuzzer::generateParamValue()
         case 0: return collection('[', ']'); /// Array(T)
         case 1: return collection('(', ')'); /// Tuple(T1, T2, ...)
         case 2: return map_literal(); /// Map(K, V)
-        default: return fieldToNumericString(getRandomField(fuzz_rand() % 10));
+        default: return fieldToNumericString(getRandomField(fuzz_rand() % 11));
     }
 }
 
