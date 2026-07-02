@@ -813,7 +813,7 @@ SinkToStoragePtr StorageQueryRunner::write(const ASTPtr & /*query*/, const Stora
     std::shared_ptr<const QueryRunnerJobOrigin> origin;
     if (!metadata_snapshot->sql_security_type)
     {
-        local_context->checkAccess(AccessType::REMOTE);
+        local_context->checkAccess(AccessType::READ, toStringSource(AccessTypeObjects::Source::REMOTE));
         origin = std::make_shared<const QueryRunnerJobOrigin>(QueryRunnerJobOrigin{
             .user_id = {},
             .roles = {},
