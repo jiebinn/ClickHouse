@@ -16,7 +16,7 @@ CREATE TABLE t_pk_minmax_dropped (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 0.01;
 INSERT INTO t_pk_minmax_dropped SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -33,7 +33,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [3, +Inf))), and((event_t
 Parts: 1/1
 Granules: 10/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -65,7 +65,7 @@ CREATE TABLE t_pk_minmax_prefix (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 1;
 INSERT INTO t_pk_minmax_prefix SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_prefix WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_prefix WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -82,7 +82,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [5, 5])), and((event_time
 Parts: 1/1
 Granules: 2/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_prefix WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_prefix WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -114,7 +114,7 @@ CREATE TABLE t_pk_minmax_reverse (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time DESC)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, allow_experimental_reverse_key = 1, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 0.01;
 INSERT INTO t_pk_minmax_reverse SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_reverse WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_reverse WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -131,7 +131,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [3, +Inf))), and((event_t
 Parts: 1/1
 Granules: 10/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_reverse WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_reverse WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -162,7 +162,7 @@ CREATE TABLE t_pk_minmax_nullable (p Nullable(Int32), id UInt32)
 ENGINE = MergeTree PARTITION BY p ORDER BY (id, p)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, allow_nullable_key = 1, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 0.01;
 INSERT INTO t_pk_minmax_nullable SELECT if(number % 7 = 0, NULL, number % 5), number % 10 FROM numbers(50);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_nullable WHERE p IS NULL) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_nullable WHERE p IS NULL) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: (p isNull)
@@ -179,7 +179,7 @@ Condition: (p isNull)
 Parts: 1/1
 Granules: 8/8
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_nullable WHERE p IS NULL) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_nullable WHERE p IS NULL) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: (p isNull)
@@ -217,7 +217,7 @@ CREATE TABLE t_pk_minmax_reverse_loaded (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time DESC)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, allow_experimental_reverse_key = 1, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 1;
 INSERT INTO t_pk_minmax_reverse_loaded SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -234,7 +234,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [3, +Inf))), and((event_t
 Parts: 1/1
 Granules: 2/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -268,7 +268,7 @@ CREATE TABLE t_pk_minmax_paths_loaded (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 1;
 INSERT INTO t_pk_minmax_paths_loaded SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -285,7 +285,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [5, 5])), and((event_time
 Parts: 1/1
 Granules: 2/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 0, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 0, use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -302,7 +302,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [5, 5])), and((event_time
 Parts: 1/1
 Granules: 2/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -335,7 +335,7 @@ CREATE TABLE t_pk_minmax_paths_dropped (event_time UInt32, id UInt32)
 ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
 SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 0.01;
 INSERT INTO t_pk_minmax_paths_dropped SELECT number % 100, number % 10 FROM numbers(100);
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
@@ -352,7 +352,7 @@ Condition: or(and((event_time in [1001, +Inf)), (id in [3, +Inf))), and((event_t
 Parts: 1/1
 Granules: 10/100
 Search Algorithm: generic exclusion search
-SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1, actions = 0, pretty = 0 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
 Min-Max
 Keys:
 Condition: or((event_time in [1001, +Inf)), (event_time in [10, 10]))
