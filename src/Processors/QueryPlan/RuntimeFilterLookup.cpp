@@ -179,8 +179,8 @@ void forEachColumnHashBatch(const IColumn & column, UInt64 seed, ProcessBatch &&
 UInt64 growBloomFilterBytes(UInt64 distinct_keys, UInt64 hash_functions, UInt64 default_bloom_filter_bytes, Float64 max_ratio_of_set_bits)
 {
     const Float64 target_fill_rate = std::min(RUNTIME_BLOOM_FILTER_TARGET_FILL_RATE, max_ratio_of_set_bits);
-    const UInt64 ideal_bloom_filter_bytes = static_cast<UInt64>(std::ceil(-static_cast<double>(hash_functions) * static_cast<double>(distinct_keys) / std::log1p(-target_fill_rate) / 8.0));
-    return std::max(std::min(ideal_bloom_filter_bytes, MAX_STATS_SIZED_BLOOM_FILTER_BYTES), default_bloom_filter_bytes);
+    const double ideal_bloom_filter_bytes = std::ceil(-static_cast<double>(hash_functions) * static_cast<double>(distinct_keys) / std::log1p(-target_fill_rate) / 8.0);
+    return std::max(static_cast<UInt64>(std::min(ideal_bloom_filter_bytes, static_cast<double>(MAX_STATS_SIZED_BLOOM_FILTER_BYTES))), default_bloom_filter_bytes);
 }
 
 /// Check if a filter of `bloom_filter_bytes` fills past `max_ratio_of_set_bits` for `distinct_keys`.
