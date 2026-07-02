@@ -103,17 +103,18 @@ std::unique_ptr<S3::Client> getClient(
     bool for_disk_s3,
     std::optional<std::string> opt_disk_name,
     std::optional<std::function<std::shared_ptr<DataLake::IStorageCredentials>()>> refresh_credentials_callback,
-    bool is_loading_from_existing_metadata)
+    bool is_loading_from_existing_metadata,
+    bool force_anonymous_load_fallback)
 
 {
     auto url = S3::URI(endpoint, false, true, settings.auth_settings[S3AuthSetting::uri_style]);
     if (!url.key.ends_with('/'))
         url.key.push_back('/');
-    return getClient(url, settings, context, for_disk_s3, opt_disk_name, refresh_credentials_callback, is_loading_from_existing_metadata);
+    return getClient(url, settings, context, for_disk_s3, opt_disk_name, refresh_credentials_callback, is_loading_from_existing_metadata, force_anonymous_load_fallback);
 }
 
 std::unique_ptr<S3::Client>
-getClient(const S3::URI & url, const S3Settings & settings, ContextPtr context, bool for_disk_s3, std::optional<std::string> opt_disk_name, std::optional<std::function<std::shared_ptr<DataLake::IStorageCredentials>()>> refresh_credentials_callback, bool is_loading_from_existing_metadata)
+getClient(const S3::URI & url, const S3Settings & settings, ContextPtr context, bool for_disk_s3, std::optional<std::string> opt_disk_name, std::optional<std::function<std::shared_ptr<DataLake::IStorageCredentials>()>> refresh_credentials_callback, bool is_loading_from_existing_metadata, bool force_anonymous_load_fallback)
 {
     const auto & auth_settings = settings.auth_settings;
     const auto & server_settings = context->getGlobalContext()->getServerSettings();
@@ -217,8 +218,14 @@ getClient(const S3::URI & url, const S3Settings & settings, ContextPtr context, 
     /// On metadata load, downgrade a now-restricted definition to anonymous (if allowed by the server setting)
     /// so the server starts with the table inaccessible instead of aborting. Also drop a `gcp_oauth` http client
     /// without an explicit ADC triple, else the downgrade would still mint a token with the server's GCP identity.
+    /// `force_anonymous_load_fallback` takes the anonymous fallback even when the operator disabled the server
+    /// setting (hard-fail mode). It is set only for server-internal tables (e.g. the system log-pipeline
+    /// S3Queue tables), which must not abort startup: they load anonymously and are re-credentialed afterwards
+    /// by their bootstrap. It is not user-controllable, so it does not weaken the operator's hard-fail choice
+    /// for user tables.
     if (credentials_configuration.forbid_implicit_credentials && is_loading_from_existing_metadata
-        && server_settings[ServerSetting::s3_load_table_anonymously_if_credentials_restricted])
+        && (server_settings[ServerSetting::s3_load_table_anonymously_if_credentials_restricted]
+            || force_anonymous_load_fallback))
     {
         credentials_configuration.anonymous_fallback_for_server_credentials = true;
 

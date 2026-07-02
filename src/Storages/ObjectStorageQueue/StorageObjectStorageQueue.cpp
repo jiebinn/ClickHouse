@@ -341,6 +341,15 @@ StorageObjectStorageQueue::StorageObjectStorageQueue(
     /// held weakly by `WithContext`, and `createObjectStorage` copies the context it is given into its
     /// credential refresher, so the transient settings copy here is safe.
     configuration->is_loading_from_existing_metadata = isLoadingFromExistingMetadata(mode);
+
+    /// Server-internal log-pipeline S3Queue tables live in the `system` database and are named `<log>_s3queue`.
+    /// Users cannot create tables there, so this is a safe internal marker. These tables must never abort server
+    /// startup when server-managed credentials are restricted: force the anonymous-load fallback in `getClient`
+    /// even if the operator disabled `s3_load_table_anonymously_if_credentials_restricted`. Their bootstrap
+    /// re-credentials the client in place right after startup.
+    if (table_id_.database_name == DatabaseCatalog::SYSTEM_DATABASE && table_id_.table_name.ends_with("_s3queue"))
+        configuration->force_anonymous_load_fallback = true;
+
     auto object_storage_context = Context::createCopy(context_);
     object_storage_context->setSetting(
         "s3_allow_server_credentials_in_user_queries",

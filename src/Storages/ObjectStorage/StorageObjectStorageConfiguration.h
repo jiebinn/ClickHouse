@@ -329,6 +329,13 @@ public:
     /// startup (see `getClient` and the `s3_load_table_anonymously_if_credentials_restricted` server setting).
     bool is_loading_from_existing_metadata = false;
 
+    /// Set for server-internal tables (e.g. the system log-pipeline S3Queue tables) so their S3 client build
+    /// always downgrades restricted server-managed credentials to anonymous instead of aborting, even when the
+    /// operator disabled `s3_load_table_anonymously_if_credentials_restricted`. Not user-controllable: user
+    /// tables never set it, so it does not weaken the operator's hard-fail choice for user queries. The internal
+    /// table's bootstrap re-credentials the client afterwards.
+    bool force_anonymous_load_fallback = false;
+
 protected:
     void initializeFromParsedArguments(const StorageParsedArguments & parsed_arguments);
     virtual void fromNamedCollection(const NamedCollection & collection, ContextPtr context) = 0;
