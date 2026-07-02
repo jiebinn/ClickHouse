@@ -5723,8 +5723,8 @@ function indentSelection(elem, dedent) {
             const m = line.match(/^( {1,4}|\t)/);
             return m ? line.substring(m[0].length) : line;
         }
-        /// Do not add trailing whitespace to blank lines.
-        return line.length === 0 ? line : INDENT + line;
+        /// Do not add trailing whitespace to blank lines (empty or whitespace-only).
+        return /^\s*$/.test(line) ? line : INDENT + line;
     }).join('\n');
 
     if (newBlock === block) return; /// Nothing to unindent — leave the selection untouched.
