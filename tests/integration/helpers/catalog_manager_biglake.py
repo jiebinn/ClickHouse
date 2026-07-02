@@ -16,6 +16,8 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.exceptions import (
     AuthorizationExpiredError,
     CommitStateUnknownException,
+    NoSuchNamespaceError,
+    NoSuchTableError,
     OAuthError,
     ServerError,
     ServiceUnavailableError,
@@ -54,6 +56,15 @@ _TRANSIENT_CREATE_ERRORS = (
     ServiceUnavailableError,
     CommitStateUnknownException,
     requests.exceptions.RequestException,
+)
+
+# The only errors that PROVE a table is gone. wait_for_table_gone treats these
+# as confirmation; any other error from load_table (5xx, connection reset, the
+# transient class create_table retries) is NOT proof of removal and must be
+# retried under the deadline rather than accepted as "gone".
+_TABLE_GONE_ERRORS = (
+    NoSuchTableError,
+    NoSuchNamespaceError,
 )
 
 
@@ -490,7 +501,17 @@ class BigLakeCatalogManager(CatalogManager):
         timeout: float = 120,
         poll_interval: float = 5,
     ) -> None:
-        """Poll until load_table raises, confirming the table is gone."""
+        """Poll until load_table proves the table is gone.
+
+        Only a genuine not-found (see `_TABLE_GONE_ERRORS`) confirms removal.
+        A transient load failure -- the same 5xx / connection-reset class
+        create_table retries -- does NOT prove the table is gone, so it is
+        retried under the deadline like a still-visible table rather than
+        accepted as success. Otherwise a teardown-time blip on load_table would
+        let test_table_disappears_after_cleanup pass with a live table behind.
+        Auth-expiry is non-retryable (see `_AUTH_EXPIRY_ERRORS`) and likewise is
+        not proof of removal, so it propagates.
+        """
         namespace = self._session_namespace
         identifier = f"{namespace}.{table_name}"
         deadline = time.monotonic() + timeout
@@ -506,18 +527,29 @@ class BigLakeCatalogManager(CatalogManager):
                     attempt,
                 )
             except _AUTH_EXPIRY_ERRORS:
-                # Must precede the generic handler: an expired static token is
+                # Must precede the handlers below: an expired static token is
                 # non-retryable (see _AUTH_EXPIRY_ERRORS) and, crucially, is NOT
                 # proof the table is gone. Treating it as "gone" here would be a
                 # false-positive cleanup, so propagate instead of returning.
                 raise
-            except Exception:
+            except _TABLE_GONE_ERRORS:
                 log.info(
                     "Table '%s' gone after %d attempts",
                     identifier,
                     attempt,
                 )
                 return
+            except Exception as exc:
+                # A transient load failure (5xx, connection reset) is NOT proof
+                # the table is gone. Retry under the deadline instead of
+                # accepting a false-positive cleanup.
+                log.warning(
+                    "load_table('%s') failed transiently (attempt %d): %s; "
+                    "retrying, not treating as gone",
+                    identifier,
+                    attempt,
+                    exc,
+                )
 
             if time.monotonic() >= deadline:
                 raise TimeoutError(
@@ -646,7 +678,28 @@ class BigLakeCatalogManager(CatalogManager):
         try:
             self.catalog.drop_namespace(self._session_namespace)
             log.info("Dropped session namespace '%s'", self._session_namespace)
+        except _AUTH_EXPIRY_ERRORS as auth_exc:
+            # Same non-retryable contract as the per-table loop: the static
+            # catalog token cannot be refreshed in place. When pending is empty
+            # (the common case, since cleanup_table untracks confirmed drops) or
+            # the token expires only after the loop, this final drop_namespace
+            # is the one remaining catalog call, and swallowing an auth failure
+            # here would silently leave the namespace behind. Run the GCS
+            # storage backstop (fresh gcsfs from the refreshed credential), then
+            # propagate so the teardown failure is visible.
+            log.warning(
+                "cleanup_all: auth expired dropping namespace '%s' (%s); "
+                "relying on the GCS storage sweep",
+                self._session_namespace,
+                auth_exc,
+            )
+            self._delete_gcs_prefix(
+                self._namespace_gcs_path(self._session_namespace)
+            )
+            raise
         except Exception:
+            # Best-effort: the namespace may be non-empty (retained tables) or
+            # already gone. The GCS prefix delete below is the storage backstop.
             pass
 
         self._delete_gcs_prefix(self._namespace_gcs_path(self._session_namespace))
