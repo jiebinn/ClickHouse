@@ -21,8 +21,8 @@ query="SYSTEM PREWARM PRIMARY INDEX CACHE ON CLUSTER test_shard_localhost $CLICK
 
 # The ON CLUSTER path must check SYSTEM PREWARM PRIMARY INDEX CACHE, not SYSTEM PREWARM MARK CACHE.
 # Holder of the primary index cache grant is allowed; holder of only the mark cache grant is denied.
-${CLICKHOUSE_CLIENT} --user "$index_user" --query "$query"
-${CLICKHOUSE_CLIENT} --user "$mark_user" --query "$query -- { serverError ACCESS_DENIED }"
+${CLICKHOUSE_CLIENT} --distributed_ddl_output_mode none --user "$index_user" --query "$query"
+${CLICKHOUSE_CLIENT} --distributed_ddl_output_mode none --user "$mark_user" --query "$query -- { serverError ACCESS_DENIED }"
 
 ${CLICKHOUSE_CLIENT} --query "DROP USER $index_user, $mark_user"
 ${CLICKHOUSE_CLIENT} --query "DROP TABLE t_04498"
