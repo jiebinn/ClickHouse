@@ -20,10 +20,11 @@
   *
   * The contract being locked: a bracket is colored (given a rainbow depth) only once it has
   * a real, properly-nested mate. A lone `(`, a stray `)`, or a mismatched pair stays at
-  * depth -1. Once nesting is broken (a closer that does not match the innermost opener) or a
-  * `;` statement boundary is crossed, the outstanding openers are discarded so a later closer
-  * cannot reach over the break and retroactively match an opener — e.g. `([)]` colors nothing
-  * and `SELECT (; SELECT )` does not match across the `;`.
+  * depth -1. Once nesting is broken (a closer that does not match the innermost opener), the
+  * outstanding openers are discarded so a later closer cannot reach over the break and
+  * retroactively match an opener — e.g. `([)]` colors nothing. A `;` is not a boundary: like
+  * `clickhouse-client`, brackets still match across it (`SELECT (; SELECT )` pairs the `(`
+  * with the `)`).
   */
 
 namespace
@@ -112,11 +113,6 @@ BracketInfo computeBracketInfo(const std::vector<Tok> & tokens)
             }
             /// A closing bracket with no match keeps depth -1.
         }
-        else if (type == TokenType::Semicolon)
-        {
-            /// Brackets do not match across a statement boundary.
-            stack.clear();
-        }
     }
     return info;
 }
@@ -167,12 +163,14 @@ TEST(PlayBracketMatching, CrossingNestingColorsNothing)
     EXPECT_EQ(bracketDepths("([) ()"), (std::vector<ssize_t>{-1, -1, -1, 0, 0}));
 }
 
-TEST(PlayBracketMatching, NoMatchAcrossSemicolon)
+TEST(PlayBracketMatching, MatchesAcrossSemicolonLikeClient)
 {
-    /// The AI-review repro: brackets must not match across a `;` statement boundary.
-    EXPECT_EQ(bracketDepths("(; )"), (std::vector<ssize_t>{-1, -1}));
-    EXPECT_EQ(bracketDepths("SELECT (; SELECT )"), (std::vector<ssize_t>{-1, -1}));
-    /// A pair entirely within one statement, and a fresh pair after the `;`, still color.
+    /// `clickhouse-client`'s rainbow loop skips `;` without clearing its bracket stack, so a
+    /// `(` still pairs with a `)` in a later statement. The Web UI mirrors that (parity) rather
+    /// than resetting the stack at `;`.
+    EXPECT_EQ(bracketDepths("(; )"), (std::vector<ssize_t>{0, 0}));
+    EXPECT_EQ(bracketDepths("SELECT (; SELECT )"), (std::vector<ssize_t>{0, 0}));
+    /// A pair entirely within one statement, and a fresh pair after the `;`, also color.
     EXPECT_EQ(bracketDepths("(); ()"), (std::vector<ssize_t>{0, 0, 0, 0}));
     EXPECT_EQ(bracketDepths("SELECT (1); SELECT (2)"), (std::vector<ssize_t>{0, 0, 0, 0}));
 }

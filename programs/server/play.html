@@ -5120,11 +5120,12 @@ const RAINBOW_BRACKET_COUNT = 7;
 /// is left at depth -1 so it keeps the default color instead of a rainbow one, mirroring
 /// `clickhouse-client`, which colors a bracket only after it finds its match.
 ///
-/// Once the nesting is broken (a closer that does not match the innermost opener) or a `;`
-/// statement boundary is crossed, the outstanding openers are discarded so a later closer
-/// cannot reach over the break and retroactively match an opener that was never properly
-/// closed — e.g. `SELECT ([)]` colors nothing and `SELECT (; SELECT )` does not match across
-/// the `;`.
+/// Once the nesting is broken (a closer that does not match the innermost opener), the
+/// outstanding openers are discarded so a later closer cannot reach over the break and
+/// retroactively match an opener that was never properly closed — e.g. `SELECT ([)]` colors
+/// nothing. A `;` is not treated as a statement boundary: like `clickhouse-client` (whose
+/// rainbow loop skips `;` without clearing its bracket stack), brackets still match across it,
+/// so `SELECT (; SELECT )` pairs the `(` with the later `)`.
 ///
 /// The matched pair is the bracket adjacent to the cursor (preferring the one immediately
 /// before the caret, as most editors do) together with its counterpart.
@@ -5160,12 +5161,6 @@ function computeBracketInfo(tokens, cursor, focused) {
                 stack.length = 0;
             }
             /// A closing bracket with no match keeps depth -1 (rendered with the default color).
-        } else if (type === TT.Semicolon) {
-            /// Brackets do not match across a statement boundary: an opener left unclosed
-            /// before a `;` can never get a mate, so drop the whole stack here (otherwise a
-            /// `)` in a later statement would match a `(` in an earlier one, as in
-            /// `SELECT (; SELECT )`).
-            stack.length = 0;
         }
     }
 
