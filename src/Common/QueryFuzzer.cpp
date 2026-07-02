@@ -48,6 +48,7 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ASTHypotheticalIndexQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
@@ -1172,6 +1173,153 @@ static String getFuzzedTableName(const String & original_name, size_t index)
     return original_name + "__fuzz_" + toString(index);
 }
 
+/// Fuzz a table storage definition (ENGINE and SETTINGS clauses).
+/// Used both for the storage of a plain CREATE TABLE and for the
+/// inner table storage of a materialized view.
+void QueryFuzzer::fuzzTableStorage(ASTStorage & storage)
+{
+    if (!storage.engine)
+        return;
+
+    auto & engine_name = storage.engine->name;
+
+    /// Replace ReplicatedMergeTree to ordinary MergeTree
+    /// to avoid inconsistency of metadata in zookeeper.
+    if (startsWith(engine_name, "Replicated"))
+    {
+        engine_name = engine_name.substr(strlen("Replicated"));
+        auto * engine = storage.engine;
+        if (engine->arguments)
+        {
+            if (engine->arguments->children.size() <= 2)
+                engine->reset(engine->arguments);
+            else
+                engine->arguments->children.erase(engine->arguments->children.begin(), engine->arguments->children.begin() + 2);
+        }
+    }
+
+    /// Swap between MergeTree variants that require no mandatory extra columns.
+    /// CollapsingMergeTree/VersionedCollapsingMergeTree require a sign column and
+    /// GraphiteMergeTree requires a config name, so those are excluded.
+    if (endsWith(engine_name, "MergeTree") && fuzz_rand() % 20 == 0)
+    {
+        static const Strings safe_mergetree_engines = {
+            "MergeTree",
+            "AggregatingMergeTree",
+            "CoalescingMergeTree",
+            "SummingMergeTree",
+            "ReplacingMergeTree",
+        };
+        engine_name = pickRandomly(fuzz_rand, safe_mergetree_engines);
+        /// Clear engine arguments to avoid arity mismatches with the new engine
+        if (auto & arguments = storage.engine->arguments)
+            arguments->children.clear();
+    }
+
+    /// For MergeTree family engines, inject hot table settings with low probability.
+    if (!endsWith(engine_name, "MergeTree"))
+        return;
+
+    static const Strings hot_bool_settings
+        = {"add_minmax_index_for_block_number_column",
+           "add_minmax_index_for_block_offset_column",
+           "add_minmax_index_for_numeric_columns",
+           "add_minmax_index_for_string_columns",
+           "add_minmax_index_for_temporal_columns",
+           "allow_coalescing_columns_in_partition_or_order_key",
+           "allow_experimental_replacing_merge_with_cleanup",
+           "allow_experimental_text_index_positions",
+           "allow_floating_point_partition_key",
+           "allow_nullable_key",
+           "allow_summing_columns_in_partition_or_order_key",
+           "allow_suspicious_indices",
+           "allow_vertical_merges_from_compact_to_wide_parts",
+           "assign_part_uuids",
+           "compress_marks",
+           "compress_primary_key",
+           "enable_block_number_column",
+           "enable_block_offset_column",
+           "enable_mixed_granularity_parts",
+           "enable_vertical_merge_algorithm",
+           "materialize_projections_on_merge",
+           "optimize_row_order",
+           "prewarm_mark_cache",
+           "prewarm_primary_key_cache",
+           "ttl_only_drop_parts",
+           "use_const_adaptive_granularity",
+           "use_primary_key_cache"};
+
+    auto fuzz_setting = [&](const String & name, Field value)
+    {
+        if (!storage.settings)
+        {
+            auto new_settings = make_intrusive<ASTSetQuery>();
+            new_settings->is_standalone = false;
+            storage.set(storage.settings, new_settings);
+        }
+        storage.settings->changes.emplace_back(name, std::move(value));
+    };
+
+    for (const auto & name : hot_bool_settings)
+        if (fuzz_rand() % 20 == 0)
+            fuzz_setting(name, UInt64(1));
+
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("deduplicate_merge_projection_mode", String(pickRandomly(fuzz_rand, Strings{"ignore", "throw", "drop", "rebuild"})));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("dynamic_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("inactive_parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("index_granularity", UInt64(1) << (fuzz_rand() % 14));
+    if (fuzz_rand() % 20 == 0)
+        /// 0 disables adaptive granularity; other values must be >= `min_index_granularity_bytes` (1024 by default)
+        fuzz_setting("index_granularity_bytes", fuzz_rand() % 4 == 0 ? UInt64(0) : UInt64(1) << (fuzz_rand() % 14 + 10));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("lightweight_mutation_projection_mode", String(pickRandomly(fuzz_rand, Strings{"throw", "drop", "rebuild"})));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("map_serialization_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_buckets"));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("max_avg_part_size_for_too_many_parts", UInt64(fuzz_rand() % (1 << 24)));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("merge_max_block_size", UInt64(1) << (fuzz_rand() % 14));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("merge_max_block_size_bytes", UInt64(1) << (fuzz_rand() % 14));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("merge_with_ttl_timeout", Int64(fuzz_rand() % 7200));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("min_bytes_for_full_part_storage", UInt64(1) << (fuzz_rand() % 14));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("min_bytes_for_wide_part", UInt64(fuzz_rand() % 2));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("min_rows_for_wide_part", UInt64(fuzz_rand() % 2));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("nullable_serialization_version", String(fuzz_rand() % 2 == 0 ? "basic" : "allow_sparse"));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("number_of_partitions_to_consider_for_merge", UInt64(fuzz_rand() % 50 + 1));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("object_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting(
+            "object_shared_data_serialization_version", String(pickRandomly(fuzz_rand, Strings{"map", "map_with_buckets", "advanced"})));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("ratio_of_defaults_for_sparse_serialization", Float64(fuzz_rand() % 101) / 100.0);
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("remove_empty_parts", UInt64(0));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("serialization_info_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_types"));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("string_serialization_version", String(fuzz_rand() % 2 == 0 ? "single_stream" : "with_size_stream"));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("vertical_merge_algorithm_min_bytes_to_activate", UInt64(1) << (fuzz_rand() % 14));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("allow_tuple_element_aggregation", UInt64(fuzz_rand() % 2));
+    if (fuzz_rand() % 20 == 0)
+        fuzz_setting("materialize_projections_on_insert", UInt64(fuzz_rand() % 2));
+}
+
 void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
 {
     if (create.columns_list && create.columns_list->columns)
@@ -1195,163 +1343,30 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
         }
     }
 
-    if (create.storage && create.storage->engine)
+    if (create.storage && create.storage->engine && create.database && !create.table)
     {
+        /// For database engine fuzzing, only swap between parameter-free engines.
+        /// Avoid touching Replicated (needs ZooKeeper), Lazy (needs arg), or external
+        /// engines (MySQL/PostgreSQL need connection params).
+        static const std::unordered_set<String> safe_database_engines = {"Atomic", "Memory", "Dictionary"};
         auto & engine_name = create.storage->engine->name;
-
-        if (create.database && !create.table)
+        if (safe_database_engines.contains(engine_name) && fuzz_rand() % 10 == 0)
         {
-            /// For database engine fuzzing, only swap between parameter-free engines.
-            /// Avoid touching Replicated (needs ZooKeeper), Lazy (needs arg), or external
-            /// engines (MySQL/PostgreSQL need connection params).
-            static const std::unordered_set<String> safe_database_engines = {"Atomic", "Memory", "Dictionary"};
-            if (safe_database_engines.contains(engine_name) && fuzz_rand() % 10 == 0)
-            {
-                engine_name = pickRandomly(fuzz_rand, safe_database_engines);
-                if (auto & arguments = create.storage->engine->arguments)
-                    arguments->children.clear();
-            }
-        }
-        else
-        {
-            /// Replace ReplicatedMergeTree to ordinary MergeTree
-            /// to avoid inconsistency of metadata in zookeeper.
-            if (startsWith(engine_name, "Replicated"))
-            {
-                engine_name = engine_name.substr(strlen("Replicated"));
-                auto * engine = create.storage->engine;
-                if (engine->arguments)
-                {
-                    if (engine->arguments->children.size() <= 2)
-                        engine->reset(engine->arguments);
-                    else
-                        engine->arguments->children.erase(engine->arguments->children.begin(), engine->arguments->children.begin() + 2);
-                }
-            }
-
-            /// Swap between MergeTree variants that require no mandatory extra columns.
-            /// CollapsingMergeTree/VersionedCollapsingMergeTree require a sign column and
-            /// GraphiteMergeTree requires a config name, so those are excluded.
-            if (endsWith(engine_name, "MergeTree") && fuzz_rand() % 20 == 0)
-            {
-                static const Strings safe_mergetree_engines = {
-                    "MergeTree",
-                    "AggregatingMergeTree",
-                    "CoalescingMergeTree",
-                    "SummingMergeTree",
-                    "ReplacingMergeTree",
-                };
-                engine_name = pickRandomly(fuzz_rand, safe_mergetree_engines);
-                /// Clear engine arguments to avoid arity mismatches with the new engine
-                if (auto & arguments = create.storage->engine->arguments)
-                    arguments->children.clear();
-            }
+            engine_name = pickRandomly(fuzz_rand, safe_database_engines);
+            if (auto & arguments = create.storage->engine->arguments)
+                arguments->children.clear();
         }
     }
-
-    /// For MergeTree family engines, inject hot table settings with low probability.
-    if (create.storage && create.storage->engine && endsWith(create.storage->engine->name, "MergeTree"))
+    else if (create.storage)
     {
-        static const Strings hot_bool_settings
-            = {"add_minmax_index_for_block_number_column",
-               "add_minmax_index_for_block_offset_column",
-               "add_minmax_index_for_numeric_columns",
-               "add_minmax_index_for_string_columns",
-               "add_minmax_index_for_temporal_columns",
-               "allow_coalescing_columns_in_partition_or_order_key",
-               "allow_experimental_replacing_merge_with_cleanup",
-               "allow_experimental_text_index_positions",
-               "allow_floating_point_partition_key",
-               "allow_nullable_key",
-               "allow_summing_columns_in_partition_or_order_key",
-               "allow_suspicious_indices",
-               "allow_vertical_merges_from_compact_to_wide_parts",
-               "assign_part_uuids",
-               "compress_marks",
-               "compress_primary_key",
-               "enable_block_number_column",
-               "enable_block_offset_column",
-               "enable_mixed_granularity_parts",
-               "enable_vertical_merge_algorithm",
-               "materialize_projections_on_merge",
-               "optimize_row_order",
-               "prewarm_mark_cache",
-               "prewarm_primary_key_cache",
-               "ttl_only_drop_parts",
-               "use_const_adaptive_granularity",
-               "use_primary_key_cache"};
+        fuzzTableStorage(*create.storage);
+    }
 
-        auto fuzz_setting = [&](const String & name, Field value)
-        {
-            if (!create.storage->settings)
-            {
-                auto new_settings = make_intrusive<ASTSetQuery>();
-                new_settings->is_standalone = false;
-                create.storage->set(create.storage->settings, new_settings);
-            }
-            create.storage->settings->changes.emplace_back(name, std::move(value));
-        };
-
-        for (const auto & name : hot_bool_settings)
-            if (fuzz_rand() % 20 == 0)
-                fuzz_setting(name, UInt64(1));
-
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting(
-                "deduplicate_merge_projection_mode", String(pickRandomly(fuzz_rand, Strings{"ignore", "throw", "drop", "rebuild"})));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("dynamic_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("inactive_parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("index_granularity", UInt64(1) << (fuzz_rand() % 14));
-        if (fuzz_rand() % 20 == 0)
-            /// 0 disables adaptive granularity; other values must be >= `min_index_granularity_bytes` (1024 by default)
-            fuzz_setting("index_granularity_bytes", fuzz_rand() % 4 == 0 ? UInt64(0) : UInt64(1) << (fuzz_rand() % 14 + 10));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("lightweight_mutation_projection_mode", String(pickRandomly(fuzz_rand, Strings{"throw", "drop", "rebuild"})));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("map_serialization_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_buckets"));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("max_avg_part_size_for_too_many_parts", UInt64(fuzz_rand() % (1 << 24)));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("merge_max_block_size", UInt64(1) << (fuzz_rand() % 14));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("merge_max_block_size_bytes", UInt64(1) << (fuzz_rand() % 14));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("merge_with_ttl_timeout", Int64(fuzz_rand() % 7200));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("min_bytes_for_full_part_storage", UInt64(1) << (fuzz_rand() % 14));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("min_bytes_for_wide_part", UInt64(fuzz_rand() % 2));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("min_rows_for_wide_part", UInt64(fuzz_rand() % 2));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("nullable_serialization_version", String(fuzz_rand() % 2 == 0 ? "basic" : "allow_sparse"));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("number_of_partitions_to_consider_for_merge", UInt64(fuzz_rand() % 50 + 1));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("object_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting(
-                "object_shared_data_serialization_version",
-                String(pickRandomly(fuzz_rand, Strings{"map", "map_with_buckets", "advanced"})));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("ratio_of_defaults_for_sparse_serialization", Float64(fuzz_rand() % 101) / 100.0);
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("remove_empty_parts", UInt64(0));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("serialization_info_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_types"));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("string_serialization_version", String(fuzz_rand() % 2 == 0 ? "single_stream" : "with_size_stream"));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("vertical_merge_algorithm_min_bytes_to_activate", UInt64(1) << (fuzz_rand() % 14));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("allow_tuple_element_aggregation", UInt64(fuzz_rand() % 2));
-        if (fuzz_rand() % 20 == 0)
-            fuzz_setting("materialize_projections_on_insert", UInt64(fuzz_rand() % 2));
+    /// The inner table storage of a materialized view lives in `targets`, not in `storage`.
+    if (create.is_materialized_view)
+    {
+        if (auto * inner_storage = create.getTargetInnerEngine(ViewTarget::To))
+            fuzzTableStorage(*inner_storage);
     }
 
     /// Fuzz CREATE MATERIALIZED VIEW: toggle POPULATE and refresh strategy parameters
@@ -1436,6 +1451,28 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
             }
         }
 
+        /// Fuzz SOURCE(...) parameter values — same ASTPair shape as layout parameters.
+        /// Mostly produces broken sources, which exercises source validation error paths.
+        if (create.dictionary->source && create.dictionary->source->elements)
+        {
+            for (auto & param_child : create.dictionary->source->elements->children)
+            {
+                if (auto * pair = param_child->as<ASTPair>())
+                {
+                    if (pair->second)
+                    {
+                        if (auto * lit = pair->second->as<ASTLiteral>())
+                            if (fuzz_rand() % 10 == 0)
+                                lit->value = fuzzField(lit->value);
+                    }
+                }
+            }
+        }
+
+        /// Shuffle composite PRIMARY KEY column order
+        if (create.dictionary->primary_key && create.dictionary->primary_key->children.size() > 1 && fuzz_rand() % 10 == 0)
+            std::shuffle(create.dictionary->primary_key->children.begin(), create.dictionary->primary_key->children.end(), fuzz_rand);
+
         /// Fuzz lifetime bounds
         if (create.dictionary->lifetime && fuzz_rand() % 5 == 0)
         {
@@ -1499,6 +1536,28 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
     /// Toggle CREATE ↔ CREATE OR REPLACE
     if (fuzz_rand() % 30 == 0)
         create.create_or_replace = !create.create_or_replace;
+
+    /// Toggle IF NOT EXISTS
+    if (fuzz_rand() % 30 == 0)
+        create.if_not_exists = !create.if_not_exists;
+
+    /// Toggle EMPTY: CREATE ... EMPTY AS SELECT skips inserting the initial data
+    if (create.select && fuzz_rand() % 20 == 0)
+        create.is_create_empty = !create.is_create_empty;
+
+    /// Toggle AS <table> ↔ CLONE AS <table> (CLONE requires a source table of the same engine family)
+    if (!create.as_table.empty() && fuzz_rand() % 20 == 0)
+        create.is_clone_as = !create.is_clone_as;
+
+    /// Fuzz an existing COMMENT literal or add one — exercises metadata escaping and persistence
+    if (create.comment)
+    {
+        auto * lit = create.comment->as<ASTLiteral>();
+        if (lit && fuzz_rand() % 5 == 0)
+            lit->value = fuzzField(lit->value);
+    }
+    else if (fuzz_rand() % 30 == 0)
+        create.set(create.comment, make_intrusive<ASTLiteral>(fuzzField(String("fuzzed comment"))));
 
 
     /// Drop storage clauses: each is optional and null-checked by formatImpl
@@ -1587,6 +1646,33 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
         /// Drop a random projection (exercises projection removal path)
         if (!projs.empty() && fuzz_rand() % 50 == 0)
             projs.erase(projs.begin() + fuzz_rand() % projs.size());
+    }
+
+    /// Fuzz constraints: toggle CHECK ↔ ASSUME and fuzz the predicate expression
+    if (create.columns_list && create.columns_list->constraints)
+    {
+        for (auto & con_ast : create.columns_list->constraints->children)
+        {
+            auto * constraint = con_ast->as<ASTConstraintDeclaration>();
+            if (!constraint)
+                continue;
+
+            /// ASSUME constraints feed the `optimize_using_constraints` optimizer machinery
+            if (fuzz_rand() % 10 == 0)
+                constraint->type = constraint->type == ASTConstraintDeclaration::Type::CHECK ? ASTConstraintDeclaration::Type::ASSUME
+                                                                                             : ASTConstraintDeclaration::Type::CHECK;
+
+            for (auto & child : constraint->children)
+            {
+                if (child.get() == constraint->expr)
+                {
+                    fuzz(child);
+                    /// fuzz() may replace the node, so re-point the raw child pointer
+                    constraint->expr = child.get();
+                    break;
+                }
+            }
+        }
     }
 
     /// Drop a random constraint (exercises constraint removal path)
