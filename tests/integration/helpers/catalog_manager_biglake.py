@@ -508,6 +508,11 @@ class BigLakeCatalogManager(CatalogManager):
         try:
             self.catalog.drop_table(table_identifier)
             log.info("Dropped table '%s'", table_identifier)
+            # Confirmed gone -- stop tracking so the end-of-session cleanup_all
+            # sweep does not re-drop (and pointlessly retry) an already-removed
+            # table. A failed drop leaves it tracked so cleanup_all retries it.
+            if table_name in self._tables_created:
+                self._tables_created.remove(table_name)
         except Exception as exc:
             log.warning("Cleanup of table '%s' failed: %s", table_identifier, exc)
 
@@ -520,15 +525,64 @@ class BigLakeCatalogManager(CatalogManager):
         except Exception as exc:
             log.warning("GCS cleanup of '%s' failed: %s", gcs_path, exc)
 
-    def cleanup_all(self) -> None:
+    def _drop_confirmed(self, table_name: str) -> bool:
+        """Attempt to drop a tracked table; return True ONLY on a confirmed
+        drop (the catalog `drop_table` call returned without raising).
+
+        Any raised drop returns False so the caller retains the name and
+        retries. We deliberately do NOT treat a raised drop as "gone" -- a
+        transient 5xx/network error obviously leaves the table live, and a
+        `NoSuchTableError` does NOT prove removal either: under BigLake
+        async-index lag a just-committed table can be briefly invisible to
+        `drop_table` and surface later. Forgetting a name on that ambiguous
+        signal is exactly the leak this path guards against, so "confirmed
+        gone" means only a `drop_table` that returned.
+        """
+        identifier = f"{self._session_namespace}.{table_name}"
         self._refresh_token_if_needed()
-        for table_name in self._tables_created:
-            table_identifier = f"{self._session_namespace}.{table_name}"
-            try:
-                self.catalog.drop_table(table_identifier)
-            except Exception:
-                pass
-        self._tables_created.clear()
+        try:
+            self.catalog.drop_table(identifier)
+            log.info("Dropped tracked table '%s'", identifier)
+            return True
+        except Exception as drop_exc:
+            log.warning(
+                "Drop of tracked table '%s' unconfirmed (%s); retaining",
+                identifier,
+                drop_exc,
+            )
+            return False
+
+    def cleanup_all(self, timeout: float = 120, poll_interval: float = 5) -> None:
+        """Drop every tracked table, then the session namespace and its GCS
+        storage.
+
+        A tracked table is forgotten ONLY once its drop is confirmed (see
+        `_drop_confirmed`). Drops that raise -- transient 5xx/network errors,
+        or BigLake async-index lag that makes a just-committed table briefly
+        invisible to `drop_table` -- are retried under a bounded wall-clock
+        deadline rather than being cleared unconditionally, so a teardown-time
+        blip cannot lose track of a still-live table. Any tables still
+        unconfirmed after the deadline are retained (never cleared blindly) and
+        logged; the final namespace drop + GCS prefix delete are the storage
+        backstop for anything the per-table catalog drop could not reach.
+        """
+        deadline = time.monotonic() + timeout
+        pending = list(self._tables_created)
+        while pending:
+            pending = [n for n in pending if not self._drop_confirmed(n)]
+            if not pending or time.monotonic() >= deadline:
+                break
+            time.sleep(poll_interval)
+        if pending:
+            log.warning(
+                "cleanup_all: %d tracked table(s) could not be confirmed "
+                "dropped after %ds; relying on the namespace/storage sweep: %s",
+                len(pending),
+                timeout,
+                pending,
+            )
+        # Keep only the names we could NOT confirm gone -- never clear blindly.
+        self._tables_created = pending
 
         self._refresh_token_if_needed()
         try:
