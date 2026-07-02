@@ -549,6 +549,26 @@ DatabaseMaterializedPostgreSQL::getTablesForBackup(const FilterByNameFunction & 
     /// the nested tables directly rather than the `StorageMaterializedPostgreSQL` wrappers.
     {
         std::lock_guard lock(tables_mutex);
+
+        /// `startupDatabaseAsync` only *schedules* the background synchronization task, and `waitDatabaseStarted`
+        /// returns as soon as that scheduling job has run - not once `startSynchronization` has actually populated
+        /// `materialized_tables`. So right after `CREATE DATABASE` or a server restart - in particular for the
+        /// whole time the initial `fetchRequiredTables` call to PostgreSQL is in flight, or while synchronization
+        /// is failing and retrying - this method can run with an empty map, before any wrapper (and possibly any
+        /// nested table) exists. Backing up in that window would fall through to `DatabaseAtomic::getTablesForBackup`
+        /// and silently produce an empty or partial database backup. A database that finished starting up always
+        /// has at least one table (`startSynchronization` refuses an empty tables list), so an empty map here means
+        /// synchronization has not populated it yet: fail closed.
+        if (materialized_tables.empty())
+            throw Exception(
+                ErrorCodes::CANNOT_BACKUP_TABLE,
+                "Cannot back up database {}: it has not finished its initial synchronization from PostgreSQL yet "
+                "(the list of replicated tables has not been populated - the database may have just been created, "
+                "the server may have just restarted, or synchronization may be failing and retrying). Failing "
+                "closed instead of producing an empty or partial database backup. Retry the backup once "
+                "synchronization has populated the tables.",
+                getDatabaseName());
+
         for (const auto & [table_name, storage] : materialized_tables)
         {
             if (filter && !filter(table_name))

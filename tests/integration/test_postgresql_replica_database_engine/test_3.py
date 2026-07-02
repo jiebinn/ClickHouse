@@ -1392,6 +1392,55 @@ def test_backup_database_fails_closed_on_unsynchronized_table(started_cluster):
     pg_manager.execute(f"DROP TABLE IF EXISTS {bad}")
 
 
+def test_backup_database_fails_closed_before_synchronization(started_cluster):
+    # Regression for an AI-review finding: BACKUP DATABASE of a MaterializedPostgreSQL database whose initial
+    # synchronization has not populated the wrapper set yet used to silently succeed with an empty (or partial)
+    # backup. `startupDatabaseAsync` only *schedules* the background synchronization task, and `waitDatabaseStarted`
+    # returns before `startSynchronization` fills `materialized_tables`. So right after CREATE DATABASE or a server
+    # restart - and for the whole time the initial `fetchRequiredTables` call to PostgreSQL is in flight -
+    # `getTablesForBackup` saw an empty map, skipped the fail-closed guard, and delegated to
+    # `DatabaseAtomic::getTablesForBackup`, which backs up only the (here: zero) already-created nested tables.
+    # DatabaseMaterializedPostgreSQL::getTablesForBackup now fails the whole backup closed when the map is empty.
+    #
+    # This deterministically reproduces the empty-`materialized_tables` window by pointing the database at
+    # PostgreSQL with bad credentials, so `startSynchronization` keeps failing at `fetchRequiredTables` and never
+    # populates the map (the same state that transiently exists right after CREATE DATABASE / restart).
+    table = "backup_before_sync"
+    pg_manager.execute(f"DROP TABLE IF EXISTS {table}")
+    pg_manager.create_postgres_table(table)
+    instance.query(
+        f"INSERT INTO postgres_database.{table} SELECT number, number FROM numbers(50)"
+    )
+
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        settings=[
+            f"materialized_postgresql_tables_list = '{table}'",
+            "materialized_postgresql_backoff_min_ms = 100",
+            "materialized_postgresql_backoff_max_ms = 100",
+        ],
+        user="postrges",
+        password="kek",
+    )
+
+    # Synchronization cannot connect, so `materialized_tables` is never populated and no nested table is created.
+    instance.wait_for_log_line('role "postrges" does not exist')
+    assert "test_database" in instance.query("SHOW DATABASES")
+    assert "" == instance.query("SHOW TABLES FROM test_database").strip()
+
+    backup_name = "Disk('backups', 'mpg_before_sync_backup')"
+    # Fail closed: refuse the backup rather than silently producing an empty snapshot. Without the guard the
+    # backup would instead succeed with no table data.
+    error = instance.query_and_get_error(
+        f"BACKUP DATABASE test_database TO {backup_name}"
+    )
+    assert "has not finished its initial synchronization" in error, error
+
+    pg_manager.drop_materialized_db("test_database")
+    pg_manager.execute(f"DROP TABLE IF EXISTS {table}")
+
+
 def test_table_schema_changed_while_server_down(started_cluster):
     # Regression test for https://github.com/ClickHouse/ClickHouse/issues/66273:
     # when the structure of a replicated PostgreSQL table changes while it is not observed
