@@ -14,10 +14,8 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials as GoogleOAuth2Credentials
 from pyiceberg.catalog import load_catalog
 from pyiceberg.exceptions import (
-    AuthorizationExpiredError,
     CommitStateUnknownException,
     NoSuchTableError,
-    OAuthError,
     ServerError,
     ServiceUnavailableError,
 )
@@ -30,14 +28,18 @@ BIGLAKE_CATALOG_URL = "https://biglake.googleapis.com/iceberg/v1beta/restcatalog
 GOOGLE_OAUTH2_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 NAMESPACE_PREFIX = "ch_e2e_bl_"
 
-# REST/network errors that create_table retries; pyiceberg itself retries
-# only auth errors (stop_after_attempt(2)), so these otherwise escape.
+# REST/network errors that create_table retries; pyiceberg's REST client
+# retries only auth errors (stop_after_attempt(2)), so these otherwise escape.
+# Auth-expiry errors are deliberately NOT here: self.catalog is a RestCatalog
+# built once in __init__ with a static bearer token, and _refresh_token_if_needed
+# refreshes only the GoogleOAuth2Credentials object, so retrying an expired token
+# just resends the same stale token. Rebuilding self.catalog mid-retry is unsafe
+# because callers share it concurrently (test_many_tables_pagination fans
+# create_table across a 10-thread pool), so auth expiry is left to propagate.
 _TRANSIENT_CREATE_ERRORS = (
     ServerError,
     ServiceUnavailableError,
     CommitStateUnknownException,
-    AuthorizationExpiredError,
-    OAuthError,
     requests.exceptions.RequestException,
 )
 
@@ -309,22 +311,35 @@ class BigLakeCatalogManager(CatalogManager):
         # connection reset, commit-state-unknown) otherwise propagates and
         # fails the shared module-scoped fixture. Retry create+append under a
         # wall-clock deadline, mirroring wait_for_table_ready/resolve_table_name.
+        #
+        # Retrying is safe ONLY for the auto-generated-name path: each attempt
+        # uses a fresh unique name, so a partial prior attempt (table created,
+        # append failed) cannot resurface as TableAlreadyExistsError nor
+        # duplicate rows -- creation stays exactly-once. When a caller supplies
+        # a fixed table_name (test_many_tables_pagination asserts the exact
+        # short names it passed appear in SHOW TABLES, so we cannot substitute a
+        # UUID), a fresh name is not an option, so that path makes a single
+        # attempt and lets a transient error propagate as before.
         namespace = self._session_namespace
         iceberg_schema = arrow_to_iceberg_schema(data)
+
+        if table_name is not None:
+            self._refresh_token_if_needed()
+            table = self.catalog.create_table(
+                identifier=f"{namespace}.{table_name}",
+                schema=iceberg_schema,
+                location=f"{self._warehouse_path()}/{namespace}/{table_name}",
+            )
+            table.append(data)
+            log.info("Created BigLake Iceberg table '%s.%s'", namespace, table_name)
+            self._tables_created.append(table_name)
+            return table_name
 
         deadline = time.monotonic() + timeout
         attempt = 0
         while True:
             attempt += 1
-            # Use a fresh table name each attempt so a partially-completed
-            # prior attempt (table created, append failed) cannot resurface as
-            # TableAlreadyExistsError or duplicate the appended rows: creation
-            # stays exactly-once.
-            candidate = (
-                table_name
-                if table_name is not None
-                else f"tbl_{uuid.uuid4().hex[:8]}"
-            )
+            candidate = f"tbl_{uuid.uuid4().hex[:8]}"
             table_identifier = f"{namespace}.{candidate}"
             table_location = f"{self._warehouse_path()}/{namespace}/{candidate}"
 
