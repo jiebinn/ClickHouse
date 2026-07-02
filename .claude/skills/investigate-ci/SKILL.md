@@ -285,6 +285,16 @@ Three complementary sources, cheapest first:
   investigate profile denies `gh api` (it can POST), so do not reach for the issue timeline API;
   the by-test-name PR search below catches those.
 
+  **`closedByPullRequestsReferences` gives only `number`/`url` — not the fields you classify on.**
+  So for every PR discovered from the issue (references or comments), fetch the classification
+  fields explicitly before scoring the Fix column; do **not** rely on the by-name search to
+  re-find it (it often won't — e.g. issue #75982's fixer #80765 is not returned by searching
+  `test_dns_cache`):
+
+  ```bash
+  gh pr view <pr> --repo ClickHouse/ClickHouse --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
+  ```
+
 - **By test name:** search PRs (open **and** merged) whose title/body names the test or its
   fragment:
 
@@ -301,13 +311,14 @@ For each candidate fix PR, classify its **status** — this is what goes in the 
 
 - **WIP** — open PR. Note draft vs in-review (`isDraft`). Not yet protecting any run.
 - **Merged** — `state == MERGED`, with a `mergeCommit`. Then decide **whether it is already in the
-  failing run**, which determines the recommendation:
-  - **Merged, NOT in this branch** → the fix landed on master after the report's commit. The PR
-    just needs a rebase/retry. This is the common "already fixed on master — rebase and retry"
-    case.
-  - **Merged, ALREADY in this branch** → the fix was present in the failing run yet the test still
-    failed. The "fix" is incomplete or unrelated — do **not** treat the failure as resolved; keep
-    investigating (step 5).
+  failing run** using the containment rule below (never from `mergedAt` alone), which determines the
+  recommendation:
+  - **Merged, present in this branch** → the fix was in the failing run yet the test still failed.
+    Incomplete or unrelated — do **not** treat as resolved; keep investigating (step 5).
+  - **Merged, not in this branch (master PR report)** → the fix landed on master after the report's
+    commit → rebase/retry. The common "already fixed on master — rebase and retry" case.
+  - **Merged, presence unverified (backport/`REF`/non-master)** → cannot confirm containment; keep
+    the failure open, do not call it fixed.
 - **None** — no fix PR found.
 
 **Deciding "already in this branch or not".** Compare the fix's merge against the report commit
@@ -318,32 +329,34 @@ git cat-file -e <mergeCommit> && git merge-base --is-ancestor <mergeCommit> <rep
   && echo "fix commit IS in the failing run" || echo "fix commit is NOT in the failing run history (or absent locally)"
 ```
 
-This check is **asymmetric — trust only the positive**:
+This check is **asymmetric — trust only the positive**. A **negative never concludes on its own**,
+on *any* report type: the exact merge commit being absent does not prove the fix *logic* is absent,
+because the branch may carry it under a different SHA (a cherry-pick, a copy merged from elsewhere,
+or the same patch authored directly in the PR). So:
 
 - **`is-ancestor` true** → the fix is definitely present. If the test still failed, the fix is
   incomplete/unrelated → keep investigating; do **not** report "already fixed".
-- **`is-ancestor` false** → conclusive **only for a master PR report**, where the fix must be that
-  exact merge commit, so false ⇒ `merged #N — not in this branch → rebase/retry`. For an S3
-  `REF`/master-CI report, a **release/backport branch**, or any non-master base, the fix may already
-  be present under a **different** commit (a cherry-pick), so a false result does **not** prove
-  absence. You may *search* for the equivalent change, but treat only a **positive** find as
-  conclusive:
+- **`is-ancestor` false (or the merge commit is absent locally)** → **do not conclude yet.** Always
+  run the equivalent-change search first, and treat only a **positive** find as conclusive:
 
   ```bash
   git log --oneline <report-sha> --grep "<fix PR title or key phrase>"
-  git log --oneline <report-sha> -- <file the fix touched>   # look for a backport/cherry-pick
+  git log --oneline <report-sha> -- <file the fix touched>   # catches a cherry-pick / self-applied copy
   ```
 
   - **Found an equivalent change** → `merged #N — in branch` (fix present; if the test still failed,
-    keep digging).
-  - **Not found** → this is a **failed heuristic, not proof**: a cherry-pick can rewrite the subject,
-    squash a different file set, or fall past shallow history. Do **not** downgrade to `rebase/retry`
-    or short-circuit. Report `merged #N — presence unverified` and keep the failure open for step 5.
+    it is incomplete → keep digging). This holds regardless of report type.
+  - **Not found** → a failed search is a **heuristic, not proof** (a cherry-pick can rewrite the
+    subject, squash a different file set, or fall past shallow history). Decide by report type:
+    - **master PR report** → `merged #N — not in this branch → rebase/retry`. The `git log -- <file>`
+      search reliably catches an in-branch copy (it does not depend on the commit subject), so "not
+      found" on a master-based branch is a sound basis for rebase/retry — the common, useful case.
+    - **S3 `REF`/master-CI report, release/backport branch, non-master base, or commit absent /
+      base unknown** → `merged #N — presence unverified`; keep the failure open for step 5. Do
+      **not** emit `rebase/retry` here.
 
-  So `rebase/retry` is reached **only** on a master PR report with the merge commit genuinely absent.
-  On any non-master/`REF` report, or when you cannot resolve it (commit absent locally, base
-  unknown), the outcome is `in branch` (positive find) or `presence unverified` — never turn a
-  negative `git log` into an "already fixed" recommendation.
+  Never turn a bare negative `is-ancestor` — without the equivalent-change search — into any
+  conclusion.
 
 Time order is a weak last resort, not a substitute: a fix `mergedAt` **after** the run's
 commit/`check_start_time` cannot be in the run, but "before" does **not** prove presence (the branch
