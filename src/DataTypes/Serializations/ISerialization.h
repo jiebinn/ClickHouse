@@ -354,6 +354,10 @@ public:
 
         /// Current level of array. Needed to differentiate stream names of nested array offsets.
         size_t array_level = 0;
+
+        /// When set, `SerializationSparse::enumerateStreams` skips the `SparseElements`
+        /// substream (and its nested subtree).
+        bool skip_sparse_values_substream = false;
     };
 
     virtual void enumerateStreams(

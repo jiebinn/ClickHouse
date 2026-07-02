@@ -335,6 +335,12 @@ void SerializationSparse::enumerateStreams(
         callback(settings.path);
     }
 
+    if (settings.skip_sparse_values_substream)
+    {
+        settings.path.pop_back();
+        return;
+    }
+
     settings.path.back() = Substream::SparseElements;
     settings.path.back().creator = std::make_shared<SubcolumnCreator>(offsets_data.column, column_size);
     settings.path.back().data = data;

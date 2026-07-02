@@ -591,18 +591,6 @@ void MergeTreeReaderWide::prefetchForColumn(
         if (ISerialization::isEphemeralSubcolumn(substream_path, substream_path.size()))
             return;
 
-        /// The values stream is skipped during deserialization when the caller only wants
-        /// `SparseOffsets`; mirror that here so the prefetcher doesn't issue reads for the
-        /// `SparseElements` substream we will never consume.
-        if (only_read_sparse_offsets)
-        {
-            for (const auto & elem : substream_path)
-            {
-                if (elem.type == ISerialization::Substream::SparseElements)
-                    return;
-            }
-        }
-
         /// `SparseOffsets` already cached by the planning-mode analyzer; the scan will
         /// serve them from `SparseOffsetsShare` without touching the file, so don't
         /// prefetch (especially relevant for remote storage).
@@ -626,16 +614,18 @@ void MergeTreeReaderWide::prefetchForColumn(
         }
     };
 
+    ISerialization::EnumerateStreamsSettings settings;
+    settings.skip_sparse_values_substream = only_read_sparse_offsets;
+
     /// If we already deserialized prefixes, we can use deserialization state during streams enumeration to enumerate dynamic subcolumns.
     if (!deserialize_binary_bulk_state_map.empty())
     {
         auto data = ISerialization::SubstreamData(serialization).withType(name_and_type.type).withDeserializeState(deserialize_binary_bulk_state_map[name_and_type.name]);
-        ISerialization::EnumerateStreamsSettings settings;
         serialization->enumerateStreams(settings, callback, data);
     }
     else
     {
-        serialization->enumerateStreams(callback);
+        serialization->enumerateStreams(settings, callback, ISerialization::SubstreamData(serialization));
     }
 }
 
