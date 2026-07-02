@@ -3193,18 +3193,30 @@ checkURL();
 /// success must not clear an error the user's own query left on screen. It is used for the
 /// automatic database-restore loads that fire merely because the panel was reopened; explicit
 /// panel actions keep reporting their errors in the result pane as before.
-async function auxiliaryQuery(server_address, user, password, query, url_params = '', quiet = false) {
+///
+/// `generation` is the `connectionGeneration` captured by the caller before the request was
+/// started. Even a non-quiet request may finish after the connection settings changed (which
+/// bumps `connectionGeneration`); reporting its result would then clear or overwrite the main
+/// result pane with a response from the previous connection, so the result-pane side effects are
+/// skipped once the generation no longer matches. Pass `null` for requests that are not
+/// connection-scoped and should always report.
+async function auxiliaryQuery(server_address, user, password, query, url_params = '', quiet = false, generation = null) {
     let url = server_address +
         (server_address.indexOf('?') >= 0 ? '&' : '?') +
         'add_http_cors_header=1&default_format=JSON' + url_params;
     if (user) url += '&user=' + encodeURIComponent(user);
     if (password) url += '&password=' + encodeURIComponent(password);
 
+    /// Whether this request still belongs to the active connection. Re-evaluated after the
+    /// `await` (not captured up front) because the connection can change while the fetch is in
+    /// flight; a stale request must not touch the shared result pane.
+    const belongs_to_active_connection = () => generation === null || generation === connectionGeneration;
+
     let response;
     try {
         response = await fetch(url, { method: "POST", body: query, headers: { 'Authorization': 'never' } });
     } catch (e) {
-        if (!quiet) {
+        if (!quiet && belongs_to_active_connection()) {
             clear();
             resultEl.renderError("Network error");
             logoEl.style.display = 'none';
@@ -3212,14 +3224,14 @@ async function auxiliaryQuery(server_address, user, password, query, url_params 
         return false;
     }
     if (!response.ok) {
-        if (!quiet) {
+        if (!quiet && belongs_to_active_connection()) {
             clear();
             resultEl.renderError(await response.text());
             logoEl.style.display = 'none';
         }
         return false;
     }
-    if (!quiet) {
+    if (!quiet && belongs_to_active_connection()) {
         resultEl.clearError();
         logoEl.style.display = 'block';
     }
@@ -3266,7 +3278,8 @@ async function loadDatabases(server_address, user, password) {
                 database = 'information_schema',
                 database = 'system',
                 database != 'default',
-                database`);
+                database`,
+        '', false, generation);
     if (!json) return false;
 
     if (current_load_databases_request_num != load_databases_request_num) return false;
@@ -3550,6 +3563,11 @@ async function loadTables(server_address, user, password, database, container, s
     /// expanded state passes set_current = false and must not move the highlight.
     const selection_num = set_current ? ++current_selection_num : 0;
 
+    /// Capture the connection generation before awaiting: an explicit (non-quiet) open/refresh
+    /// whose connection is replaced while its `system.tables` query is in flight must not report
+    /// its result into the main result pane (see `auxiliaryQuery`).
+    const generation = connectionGeneration;
+
     /// A restore load (set_current = false) is a background panel-maintenance query triggered by
     /// merely reopening the panel, so it runs quietly: it must not overwrite the main result pane
     /// with its own success or error. An explicit open/refresh (set_current = true) keeps
@@ -3558,7 +3576,7 @@ async function loadTables(server_address, user, password, database, container, s
         `SELECT table, engine, total_rows, total_bytes FROM system.tables WHERE database = {database:String}
             ORDER BY table LIKE '.inner%', table`,
         '&param_database=' + encodeURIComponent(database),
-        !set_current);
+        !set_current, generation);
     if (!json) return false;
 
     if (request_num != load_tables_request_nums.get(container)) return false;
