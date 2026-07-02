@@ -11,6 +11,7 @@
 #include <DataTypes/DataTypeDate32.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeTime64.h>
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -24,6 +25,11 @@
 #include <IO/SeekableReadBuffer.h>
 #include <IO/NetUtils.h>
 #include <Common/PODArray.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wimplicit-int-conversion"
+#include <cctz/time_zone.h>
+#pragma clang diagnostic pop
 
 namespace DB
 {
@@ -400,6 +406,79 @@ int arrowTimeUnitForScale(UInt32 scale)
     return flatbuf::TimeUnit_NANOSECOND;
 }
 
+/// Arrow permits a timestamp's timezone to be a fixed numeric UTC offset (e.g. "+05:30", "-08:00",
+/// "00:00") or the non-IANA marker "fixed" as well as an IANA name. cctz (and therefore
+/// `DataTypeDateTime64`) cannot load offset-named zones, so such strings would throw "Cannot load time
+/// zone". Normalize only those two intended forms: a full [+|-]HH:MM[:SS] offset (the minute component
+/// is mandatory) and the "fixed" marker. Everything else (misspelled IANA names, bare-hour strings like
+/// "12" or "+05") is passed through unchanged so `DataTypeDateTime64` still rejects genuinely-malformed
+/// producer metadata with "Cannot load time zone" instead of silently masking it. This mirrors
+/// `normalizeArrowTimezone` in the Apache-Arrow-library reader (`ArrowColumnToCHColumn.cpp`), so the
+/// native reader interprets fixed-offset timezones identically.
+String normalizeArrowTimezone(const String & timezone)
+{
+    if (timezone.empty())
+        return timezone;
+
+    cctz::time_zone tz;
+    if (cctz::load_time_zone(timezone, &tz))
+        return timezone;
+
+    /// "fixed" is a non-IANA marker some Arrow producers emit; values are UTC instants regardless.
+    if (timezone == "fixed")
+        return "UTC";
+
+    /// Parse a fixed offset of the form [+|-]HH:MM or [+|-]HH:MM:SS (sign optional, defaults to +).
+    std::string_view sv = timezone;
+    int sign = 1;
+    if (!sv.empty() && (sv.front() == '+' || sv.front() == '-'))
+    {
+        sign = sv.front() == '-' ? -1 : 1;
+        sv.remove_prefix(1);
+    }
+
+    auto parse_two_digits = [](std::string_view & s, int & out) -> bool
+    {
+        if (s.size() < 2 || !isdigit(static_cast<unsigned char>(s[0])) || !isdigit(static_cast<unsigned char>(s[1])))
+            return false;
+        out = (s[0] - '0') * 10 + (s[1] - '0');
+        s.remove_prefix(2);
+        return true;
+    };
+
+    int hours = 0;
+    int minutes = 0;
+    int seconds = 0;
+    /// Require a full [+|-]HH:MM offset: the minute component is mandatory. A bare hour such as "12" or
+    /// "+05" is not a valid fixed-offset spelling, so it must pass through and be rejected rather than
+    /// silently become Fixed/UTC+12:00:00 and shift displayed values.
+    bool ok = parse_two_digits(sv, hours) && !sv.empty() && sv.front() == ':';
+    if (ok)
+    {
+        sv.remove_prefix(1);
+        ok = parse_two_digits(sv, minutes);
+        if (ok && !sv.empty() && sv.front() == ':')
+        {
+            sv.remove_prefix(1);
+            ok = parse_two_digits(sv, seconds);
+        }
+    }
+
+    /// Not a parseable offset: pass through unchanged and let `DataTypeDateTime64` reject it. Reject
+    /// leftovers, out-of-range fields, and offsets beyond cctz's supported +/-24h range.
+    if (!ok || !sv.empty() || minutes >= 60 || seconds >= 60
+        || (hours * 3600 + minutes * 60 + seconds) > 24 * 3600)
+        return timezone;
+
+    String name = fmt::format("Fixed/UTC{}{:02}:{:02}:{:02}", sign < 0 ? '-' : '+', hours, minutes, seconds);
+
+    /// Final guard: only return the normalized name if cctz can actually load it; otherwise pass the
+    /// original through so the error surfaces rather than being silently masked.
+    if (cctz::load_time_zone(name, &tz))
+        return name;
+    return timezone;
+}
+
 flatbuffers::Offset<flatbuf::Field>
 buildField(
     flatbuffers::FlatBufferBuilder & b, const std::string & name, const DataTypePtr & type, const FormatSettings & settings,
@@ -510,6 +589,24 @@ buildField(
                 auto tz_off = b.CreateString(dt64.getTimeZone().getTimeZone());
                 type_type = flatbuf::Type_Timestamp;
                 type_offset = flatbuf::CreateTimestamp(b, static_cast<flatbuf::TimeUnit>(unit), tz_off).Union();
+                break;
+            }
+            case TypeIndex::Time:
+                /// ClickHouse `Time` is seconds-of-day stored as Int32 → Arrow `time32[s]`, matching the
+                /// library writer (`{"Time", arrow::time32(SECOND)}`).
+                type_type = flatbuf::Type_Time;
+                type_offset = flatbuf::CreateTime(b, flatbuf::TimeUnit_SECOND, 32).Union();
+                break;
+            case TypeIndex::Time64:
+            {
+                /// `Time64(scale)` → Arrow `time32` (SECOND/MILLISECOND, 32-bit) for scale <= 3, else
+                /// `time64` (MICROSECOND/NANOSECOND, 64-bit), matching the library writer's `getArrowType`.
+                const auto & time64 = assert_cast<const DataTypeTime64 &>(*t);
+                const int unit = arrowTimeUnitForScale(time64.getScale());
+                const int32_t bit_width
+                    = (unit == flatbuf::TimeUnit_SECOND || unit == flatbuf::TimeUnit_MILLISECOND) ? 32 : 64;
+                type_type = flatbuf::Type_Time;
+                type_offset = flatbuf::CreateTime(b, static_cast<flatbuf::TimeUnit>(unit), bit_width).Union();
                 break;
             }
             case TypeIndex::Decimal32: case TypeIndex::Decimal64: case TypeIndex::Decimal128: case TypeIndex::Decimal256:
@@ -945,12 +1042,21 @@ DataTypePtr fieldToCHType(
                 : DataTypePtr(std::make_shared<DataTypeDateTime>());
             break;
         case TypeKind::Timestamp:
-        case TypeKind::Time:
         {
             UInt32 scale = static_cast<UInt32>(type.unit) * 3;
+            /// Normalize a fixed numeric UTC offset ("+05:30") or the "fixed" marker to a cctz-loadable
+            /// name; a genuinely-malformed zone is passed through so `DataTypeDateTime64` rejects it.
             result = type.timezone.empty()
                 ? std::make_shared<DataTypeDateTime64>(scale)
-                : std::make_shared<DataTypeDateTime64>(scale, type.timezone);
+                : std::make_shared<DataTypeDateTime64>(scale, normalizeArrowTimezone(type.timezone));
+            break;
+        }
+        case TypeKind::Time:
+        {
+            /// Arrow `time32`/`time64` → ClickHouse `Time64(unit * 3)`. `Time` carries no timezone, so the
+            /// stored value is timezone-independent, matching the library reader (`readColumnWithTimeData`).
+            UInt32 scale = static_cast<UInt32>(type.unit) * 3;
+            result = std::make_shared<DataTypeTime64>(scale);
             break;
         }
         case TypeKind::Duration:

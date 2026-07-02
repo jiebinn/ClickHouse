@@ -18,6 +18,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeTime64.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeVariant.h>
@@ -219,6 +220,61 @@ void RecordBatchEncoder::encodeValues(
                         ErrorCodes::DECIMAL_OVERFLOW, "Decimal value is too large to convert to the Arrow timestamp scale");
             }
             appendBuffer(values.data(), num_rows * sizeof(Int64));
+            return;
+        }
+        case TypeIndex::Time:
+            /// ClickHouse `Time` is seconds-of-day stored as Int32 → Arrow `time32[s]` (4-byte values).
+            appendFixedWidth<ColumnInt32>(*this, column, num_rows);
+            return;
+        case TypeIndex::Time64:
+        {
+            /// `Time64(scale)` → Arrow `time32` (scale <= 3) or `time64`, rescaling the value up to the
+            /// Arrow unit's scale, mirroring the library writer (`fillArrowArrayWithTime64ColumnData`).
+            const UInt32 scale = assert_cast<const DataTypeTime64 &>(*type).getScale();
+            const int unit = arrowTimeUnitForScale(scale);
+            const UInt32 target_scale = static_cast<UInt32>(unit) * 3;
+            Int64 factor = 1;
+            for (UInt32 i = scale; i < target_scale; ++i)
+                factor *= 10;
+            const bool to_time32 = (unit == flatbuf::TimeUnit_SECOND || unit == flatbuf::TimeUnit_MILLISECOND);
+            const auto & data = assert_cast<const ColumnDecimal<Time64> &>(column).getData();
+            const NullMap * null_map
+                = null_map_column ? &assert_cast<const ColumnUInt8 &>(*null_map_column).getData() : nullptr;
+            if (to_time32)
+            {
+                PODArray<Int32> values(num_rows);
+                for (size_t i = 0; i < num_rows; ++i)
+                {
+                    /// A null row's arbitrary value is masked by the validity bitmap; do not rescale or
+                    /// range-check it (matching the library writer's `AppendNull`).
+                    if (null_map && (*null_map)[i])
+                    {
+                        values[i] = 0;
+                        continue;
+                    }
+                    Int64 value = data[i].value;
+                    if (common::mulOverflow(value, factor, value)
+                        || value > std::numeric_limits<Int32>::max() || value < std::numeric_limits<Int32>::min())
+                        throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Decimal math overflow");
+                    values[i] = static_cast<Int32>(value);
+                }
+                appendBuffer(values.data(), num_rows * sizeof(Int32));
+            }
+            else
+            {
+                PODArray<Int64> values(num_rows);
+                for (size_t i = 0; i < num_rows; ++i)
+                {
+                    if (null_map && (*null_map)[i])
+                    {
+                        values[i] = 0;
+                        continue;
+                    }
+                    if (common::mulOverflow(data[i].value, factor, values[i]))
+                        throw Exception(ErrorCodes::DECIMAL_OVERFLOW, "Decimal math overflow");
+                }
+                appendBuffer(values.data(), num_rows * sizeof(Int64));
+            }
             return;
         }
         case TypeIndex::Decimal32: case TypeIndex::Decimal64: case TypeIndex::Decimal128: case TypeIndex::Decimal256:

@@ -409,22 +409,29 @@ ColumnPtr RecordBatchDecoder::decodeInner(const ArrowField & field, size_t rows,
             break;
         }
         case TypeKind::Timestamp:
+        {
+            /// Maps to DateTime64(unit*3); the raw int64 value is exactly the underlying value at that scale.
+            const Slice values = nextBuffer();
+            fillFixed<ColumnDecimal<DateTime64>>(*column, rows, values, 8);
+            break;
+        }
         case TypeKind::Time:
         {
+            /// Maps to Time64(unit*3); the raw value is exactly the underlying value at that scale, matching
+            /// the library reader (`readColumnWithTimeData`). `time32[s|ms]` stores 4-byte values;
+            /// `time64[us|ns]` stores 8-byte values.
             const Slice values = nextBuffer();
-            /// Both map to DateTime64(unit*3); the raw value is exactly the underlying value at that scale.
-            /// `time32[s|ms]` stores 4-byte values; `time64`/`timestamp` store 8-byte values.
-            if (type.kind == TypeKind::Time && type.time_bit_width == 32)
+            if (type.time_bit_width == 32)
             {
                 checkBufferSize(values, requiredBytes(rows, sizeof(Int32)), "time32");
-                auto & data = assert_cast<ColumnDecimal<DateTime64> &>(*column).getData();
+                auto & data = assert_cast<ColumnDecimal<Time64> &>(*column).getData();
                 data.resize(rows);
                 const auto * src = reinterpret_cast<const Int32 *>(values.ptr);
                 for (size_t i = 0; i < rows; ++i)
-                    data[i] = DateTime64(src[i]);
+                    data[i] = Time64(src[i]);
                 break;
             }
-            fillFixed<ColumnDecimal<DateTime64>>(*column, rows, values, 8);
+            fillFixed<ColumnDecimal<Time64>>(*column, rows, values, 8);
             break;
         }
         case TypeKind::Duration:
