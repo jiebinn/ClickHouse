@@ -1985,7 +1985,7 @@ target_link_libraries(grpc_cpp_plugin
   grpc_plugin_support
 )
 
-# When using musl, native build tools need CRT objects (crt1, crti, crtn) for _start.
+# musl: executables need explicit CRT objects because of -nostartfiles.
 if (USE_MUSL)
     target_sources(grpc_cpp_plugin PRIVATE
         $<TARGET_OBJECTS:musl-crt1>

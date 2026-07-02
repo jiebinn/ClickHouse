@@ -117,12 +117,11 @@ function (google_cloud_cpp_generate_proto SRCS)
         else ()
             set(NATIVE_protoc $<TARGET_FILE:protoc>)
         endif()
-
         add_custom_command(
             OUTPUT "${pb_cc}" "${pb_h}"
             COMMAND ${NATIVE_protoc} ARGS --cpp_out "${OUT_DIR}"
                     ${protobuf_include_path} "${file_path}"
-            DEPENDS "${file_path}" ${NATIVE_protoc}
+            DEPENDS "${file_path}"
             COMMENT "Running C++ protocol buffer compiler on ${file_path}"
             VERBATIM)
     endforeach ()
@@ -213,7 +212,7 @@ function (google_cloud_cpp_generate_grpcpp SRCS)
                 --plugin=protoc-gen-grpc=${GOOGLE_CLOUD_CPP_GRPC_PLUGIN_EXECUTABLE}
                 "--grpc_out=${OUT_DIR}" "--cpp_out=${OUT_DIR}"
                 ${protobuf_include_path} "${file_path}"
-            DEPENDS "${file_path}" ${Protobuf_PROTOC_EXECUTABLE} ${GOOGLE_CLOUD_CPP_GRPC_PLUGIN_EXECUTABLE}
+            DEPENDS "${file_path}"
             COMMENT "Running gRPC C++ protocol buffer compiler on ${file_path}"
             VERBATIM)
     endforeach ()

@@ -1,21 +1,17 @@
 set(MUSL_SOURCE_DIR "${ClickHouse_SOURCE_DIR}/contrib/musl")
 
-# musl is supported only on amd64 and aarch64. Other arches are explicitly out
-# of scope: the mem*/math replacements (see contrib/libllvmlibc-cmake) and the
-# perf validation only cover these two.
-if (ARCH_AMD64)
-    set(MUSL_ARCH "x86_64")
-elseif (ARCH_AARCH64)
-    set(MUSL_ARCH "aarch64")
-else()
-    message(FATAL_ERROR "USE_MUSL is supported only on amd64 and aarch64, not ${CMAKE_SYSTEM_PROCESSOR}")
+# MUSL_ARCH is musl's name for the target architecture (the arch/<MUSL_ARCH>
+# directory in the musl sources), set by cmake/linux/toolchain-*-musl.cmake.
+if (NOT MUSL_ARCH)
+    message(FATAL_ERROR "Building musl from sources requires one of the cmake/linux/toolchain-*-musl.cmake toolchains")
 endif()
+
+enable_language(ASM)
 
 set(MUSL_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
 file(MAKE_DIRECTORY "${MUSL_GENERATED_DIR}/bits")
 
-# Generate bits/alltypes.h
-# This combines arch-specific and generic type definitions using sed script
+# Generate bits/alltypes.h from the arch-specific and generic type definitions.
 add_custom_command(
     OUTPUT "${MUSL_GENERATED_DIR}/bits/alltypes.h"
     COMMAND sed -f "${MUSL_SOURCE_DIR}/tools/mkalltypes.sed"
@@ -30,8 +26,7 @@ add_custom_command(
     VERBATIM
 )
 
-# Generate bits/syscall.h
-# Copy syscall numbers and generate SYS_* aliases
+# Generate bits/syscall.h: the syscall numbers plus SYS_* aliases.
 add_custom_command(
     OUTPUT "${MUSL_GENERATED_DIR}/bits/syscall.h"
     COMMAND cp "${MUSL_SOURCE_DIR}/arch/${MUSL_ARCH}/bits/syscall.h.in"
@@ -55,7 +50,6 @@ execute_process(
 set(MUSL_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/version.h")
 file(WRITE "${MUSL_VERSION_HEADER}" "#define VERSION \"${MUSL_VERSION}\"\n")
 
-# Create a custom target for all generated headers
 add_custom_target(musl-headers
     DEPENDS
         "${MUSL_GENERATED_DIR}/bits/alltypes.h"
@@ -63,7 +57,6 @@ add_custom_target(musl-headers
         "${MUSL_VERSION_HEADER}"
 )
 
-# Collect source files
 set(MUSL_SOURCES_BASE_COMMON
     "${MUSL_SOURCE_DIR}/src/aio/aio.c"
     "${MUSL_SOURCE_DIR}/src/aio/aio_suspend.c"
@@ -1416,111 +1409,108 @@ set(MUSL_SOURCES_BASE_COMMON
     "${MUSL_SOURCE_DIR}/src/unistd/writev.c"
 )
 
-if (ARCH_AMD64)
+# Generic sources replaced by arch-specific implementations below (following
+# the upstream musl build system, which prefers arch/<arch> files when present).
+if (MUSL_ARCH STREQUAL "x86_64")
     set(MUSL_ARCH_REMOVE_SOURCES
-    "${MUSL_SOURCE_DIR}/src/fenv/fenv.c"
-    "${MUSL_SOURCE_DIR}/src/ldso/dlsym.c"
-    "${MUSL_SOURCE_DIR}/src/ldso/tlsdesc.c"
-    "${MUSL_SOURCE_DIR}/src/math/__invtrigl.c"
-    "${MUSL_SOURCE_DIR}/src/math/acosl.c"
-    "${MUSL_SOURCE_DIR}/src/math/asinl.c"
-    "${MUSL_SOURCE_DIR}/src/math/atan2l.c"
-    "${MUSL_SOURCE_DIR}/src/math/atanl.c"
-    "${MUSL_SOURCE_DIR}/src/math/exp2l.c"
-    "${MUSL_SOURCE_DIR}/src/math/expl.c"
-    "${MUSL_SOURCE_DIR}/src/math/expm1l.c"
-    "${MUSL_SOURCE_DIR}/src/math/log10l.c"
-    "${MUSL_SOURCE_DIR}/src/math/log1pl.c"
-    "${MUSL_SOURCE_DIR}/src/math/log2l.c"
-    "${MUSL_SOURCE_DIR}/src/math/logl.c"
-    "${MUSL_SOURCE_DIR}/src/math/sqrtl.c"
-    "${MUSL_SOURCE_DIR}/src/process/vfork.c"
-    "${MUSL_SOURCE_DIR}/src/setjmp/longjmp.c"
-    "${MUSL_SOURCE_DIR}/src/setjmp/setjmp.c"
-    "${MUSL_SOURCE_DIR}/src/signal/restore.c"
-    "${MUSL_SOURCE_DIR}/src/signal/sigsetjmp.c"
-    "${MUSL_SOURCE_DIR}/src/string/memcpy.c"
-    "${MUSL_SOURCE_DIR}/src/string/memset.c"
-    "${MUSL_SOURCE_DIR}/src/thread/__set_thread_area.c"
-    "${MUSL_SOURCE_DIR}/src/thread/__unmapself.c"
-    "${MUSL_SOURCE_DIR}/src/thread/clone.c"
-    "${MUSL_SOURCE_DIR}/src/thread/syscall_cp.c"
+        "${MUSL_SOURCE_DIR}/src/fenv/fenv.c"
+        "${MUSL_SOURCE_DIR}/src/ldso/dlsym.c"
+        "${MUSL_SOURCE_DIR}/src/ldso/tlsdesc.c"
+        "${MUSL_SOURCE_DIR}/src/math/__invtrigl.c"
+        "${MUSL_SOURCE_DIR}/src/math/acosl.c"
+        "${MUSL_SOURCE_DIR}/src/math/asinl.c"
+        "${MUSL_SOURCE_DIR}/src/math/atan2l.c"
+        "${MUSL_SOURCE_DIR}/src/math/atanl.c"
+        "${MUSL_SOURCE_DIR}/src/math/exp2l.c"
+        "${MUSL_SOURCE_DIR}/src/math/expl.c"
+        "${MUSL_SOURCE_DIR}/src/math/expm1l.c"
+        "${MUSL_SOURCE_DIR}/src/math/log10l.c"
+        "${MUSL_SOURCE_DIR}/src/math/log1pl.c"
+        "${MUSL_SOURCE_DIR}/src/math/log2l.c"
+        "${MUSL_SOURCE_DIR}/src/math/logl.c"
+        "${MUSL_SOURCE_DIR}/src/math/sqrtl.c"
+        "${MUSL_SOURCE_DIR}/src/process/vfork.c"
+        "${MUSL_SOURCE_DIR}/src/setjmp/longjmp.c"
+        "${MUSL_SOURCE_DIR}/src/setjmp/setjmp.c"
+        "${MUSL_SOURCE_DIR}/src/signal/restore.c"
+        "${MUSL_SOURCE_DIR}/src/signal/sigsetjmp.c"
+        "${MUSL_SOURCE_DIR}/src/string/memcpy.c"
+        "${MUSL_SOURCE_DIR}/src/string/memmove.c"
+        "${MUSL_SOURCE_DIR}/src/string/memset.c"
+        "${MUSL_SOURCE_DIR}/src/thread/__set_thread_area.c"
+        "${MUSL_SOURCE_DIR}/src/thread/__unmapself.c"
+        "${MUSL_SOURCE_DIR}/src/thread/clone.c"
+        "${MUSL_SOURCE_DIR}/src/thread/syscall_cp.c"
     )
     set(MUSL_ARCH_C_SOURCES
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/sqrtl.c"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/sqrtl.c"
     )
     set(MUSL_ARCH_ASM_SOURCES
-    "${MUSL_SOURCE_DIR}/src/fenv/x86_64/fenv.s"
-    "${MUSL_SOURCE_DIR}/src/ldso/x86_64/dlsym.s"
-    "${MUSL_SOURCE_DIR}/src/ldso/x86_64/tlsdesc.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/__invtrigl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/acosl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/asinl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/atan2l.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/atanl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/exp2l.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/expl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/expm1l.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/log10l.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/log1pl.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/log2l.s"
-    "${MUSL_SOURCE_DIR}/src/math/x86_64/logl.s"
-    "${MUSL_SOURCE_DIR}/src/process/x86_64/vfork.s"
-    "${MUSL_SOURCE_DIR}/src/setjmp/x86_64/longjmp.s"
-    "${MUSL_SOURCE_DIR}/src/setjmp/x86_64/setjmp.s"
-    "${MUSL_SOURCE_DIR}/src/signal/x86_64/restore.s"
-    "${MUSL_SOURCE_DIR}/src/signal/x86_64/sigsetjmp.s"
-    "${MUSL_SOURCE_DIR}/src/string/x86_64/memset.s"
-    "${MUSL_SOURCE_DIR}/src/thread/x86_64/__set_thread_area.s"
-    "${MUSL_SOURCE_DIR}/src/thread/x86_64/__unmapself.s"
-    "${MUSL_SOURCE_DIR}/src/thread/x86_64/clone.s"
-    "${MUSL_SOURCE_DIR}/src/thread/x86_64/syscall_cp.s"
+        "${MUSL_SOURCE_DIR}/src/fenv/x86_64/fenv.s"
+        "${MUSL_SOURCE_DIR}/src/ldso/x86_64/dlsym.s"
+        "${MUSL_SOURCE_DIR}/src/ldso/x86_64/tlsdesc.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/__invtrigl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/acosl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/asinl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/atan2l.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/atanl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/exp2l.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/expl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/expm1l.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/log10l.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/log1pl.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/log2l.s"
+        "${MUSL_SOURCE_DIR}/src/math/x86_64/logl.s"
+        "${MUSL_SOURCE_DIR}/src/process/x86_64/vfork.s"
+        "${MUSL_SOURCE_DIR}/src/setjmp/x86_64/longjmp.s"
+        "${MUSL_SOURCE_DIR}/src/setjmp/x86_64/setjmp.s"
+        "${MUSL_SOURCE_DIR}/src/signal/x86_64/restore.s"
+        "${MUSL_SOURCE_DIR}/src/signal/x86_64/sigsetjmp.s"
+        "${MUSL_SOURCE_DIR}/src/string/x86_64/memcpy.s"
+        "${MUSL_SOURCE_DIR}/src/string/x86_64/memmove.s"
+        "${MUSL_SOURCE_DIR}/src/string/x86_64/memset.s"
+        "${MUSL_SOURCE_DIR}/src/thread/x86_64/__set_thread_area.s"
+        "${MUSL_SOURCE_DIR}/src/thread/x86_64/__unmapself.s"
+        "${MUSL_SOURCE_DIR}/src/thread/x86_64/clone.s"
+        "${MUSL_SOURCE_DIR}/src/thread/x86_64/syscall_cp.s"
     )
-    set(MUSL_LDSO_ARCH_C_SOURCES
-    )
-    set(MUSL_LDSO_ARCH_ASM_SOURCES
-    )
-elseif (ARCH_AARCH64)
+elseif (MUSL_ARCH STREQUAL "aarch64")
     set(MUSL_ARCH_REMOVE_SOURCES
-    "${MUSL_SOURCE_DIR}/src/fenv/fenv.c"
-    "${MUSL_SOURCE_DIR}/src/ldso/dlsym.c"
-    "${MUSL_SOURCE_DIR}/src/ldso/tlsdesc.c"
-    "${MUSL_SOURCE_DIR}/src/process/vfork.c"
-    "${MUSL_SOURCE_DIR}/src/setjmp/longjmp.c"
-    "${MUSL_SOURCE_DIR}/src/setjmp/setjmp.c"
-    "${MUSL_SOURCE_DIR}/src/signal/restore.c"
-    "${MUSL_SOURCE_DIR}/src/signal/sigsetjmp.c"
-    "${MUSL_SOURCE_DIR}/src/string/memcpy.c"
-    "${MUSL_SOURCE_DIR}/src/string/memset.c"
-    "${MUSL_SOURCE_DIR}/src/thread/__set_thread_area.c"
-    "${MUSL_SOURCE_DIR}/src/thread/__unmapself.c"
-    "${MUSL_SOURCE_DIR}/src/thread/clone.c"
-    "${MUSL_SOURCE_DIR}/src/thread/syscall_cp.c"
+        "${MUSL_SOURCE_DIR}/src/fenv/fenv.c"
+        "${MUSL_SOURCE_DIR}/src/ldso/dlsym.c"
+        "${MUSL_SOURCE_DIR}/src/ldso/tlsdesc.c"
+        "${MUSL_SOURCE_DIR}/src/process/vfork.c"
+        "${MUSL_SOURCE_DIR}/src/setjmp/longjmp.c"
+        "${MUSL_SOURCE_DIR}/src/setjmp/setjmp.c"
+        "${MUSL_SOURCE_DIR}/src/signal/restore.c"
+        "${MUSL_SOURCE_DIR}/src/signal/sigsetjmp.c"
+        "${MUSL_SOURCE_DIR}/src/string/memcpy.c"
+        "${MUSL_SOURCE_DIR}/src/string/memset.c"
+        "${MUSL_SOURCE_DIR}/src/thread/__set_thread_area.c"
+        "${MUSL_SOURCE_DIR}/src/thread/__unmapself.c"
+        "${MUSL_SOURCE_DIR}/src/thread/clone.c"
+        "${MUSL_SOURCE_DIR}/src/thread/syscall_cp.c"
     )
     set(MUSL_ARCH_C_SOURCES
-    "${MUSL_SOURCE_DIR}/src/thread/aarch64/__set_thread_area.c"
+        "${MUSL_SOURCE_DIR}/src/thread/aarch64/__set_thread_area.c"
     )
     set(MUSL_ARCH_ASM_SOURCES
-    "${MUSL_SOURCE_DIR}/src/fenv/aarch64/fenv.s"
-    "${MUSL_SOURCE_DIR}/src/ldso/aarch64/dlsym.s"
-    "${MUSL_SOURCE_DIR}/src/ldso/aarch64/tlsdesc.s"
-    "${MUSL_SOURCE_DIR}/src/process/aarch64/vfork.s"
-    "${MUSL_SOURCE_DIR}/src/setjmp/aarch64/longjmp.s"
-    "${MUSL_SOURCE_DIR}/src/setjmp/aarch64/setjmp.s"
-    "${MUSL_SOURCE_DIR}/src/signal/aarch64/restore.s"
-    "${MUSL_SOURCE_DIR}/src/signal/aarch64/sigsetjmp.s"
-    "${MUSL_SOURCE_DIR}/src/string/aarch64/memcpy.S"
-    "${MUSL_SOURCE_DIR}/src/string/aarch64/memset.S"
-    "${MUSL_SOURCE_DIR}/src/thread/aarch64/__unmapself.s"
-    "${MUSL_SOURCE_DIR}/src/thread/aarch64/clone.s"
-    "${MUSL_SOURCE_DIR}/src/thread/aarch64/syscall_cp.s"
-    )
-    set(MUSL_LDSO_ARCH_C_SOURCES
-    )
-    set(MUSL_LDSO_ARCH_ASM_SOURCES
+        "${MUSL_SOURCE_DIR}/src/fenv/aarch64/fenv.s"
+        "${MUSL_SOURCE_DIR}/src/ldso/aarch64/dlsym.s"
+        "${MUSL_SOURCE_DIR}/src/ldso/aarch64/tlsdesc.s"
+        "${MUSL_SOURCE_DIR}/src/process/aarch64/vfork.s"
+        "${MUSL_SOURCE_DIR}/src/setjmp/aarch64/longjmp.s"
+        "${MUSL_SOURCE_DIR}/src/setjmp/aarch64/setjmp.s"
+        "${MUSL_SOURCE_DIR}/src/signal/aarch64/restore.s"
+        "${MUSL_SOURCE_DIR}/src/signal/aarch64/sigsetjmp.s"
+        "${MUSL_SOURCE_DIR}/src/string/aarch64/memcpy.S"
+        "${MUSL_SOURCE_DIR}/src/string/aarch64/memset.S"
+        "${MUSL_SOURCE_DIR}/src/thread/aarch64/__unmapself.s"
+        "${MUSL_SOURCE_DIR}/src/thread/aarch64/clone.s"
+        "${MUSL_SOURCE_DIR}/src/thread/aarch64/syscall_cp.s"
     )
 else()
-    message(FATAL_ERROR "Unsupported architecture for musl: ${CMAKE_SYSTEM_PROCESSOR}")
+    message(FATAL_ERROR "Unsupported architecture for musl: ${MUSL_ARCH}")
 endif()
 
 set(MUSL_LDSO_SOURCES
@@ -1594,60 +1584,21 @@ set(MUSL_COMPAT_SOURCES
     "${MUSL_SOURCE_DIR}/compat/time32/wait4_time32.c"
 )
 
-# Enable assembly language
-enable_language(ASM)
-
-# Separate ASM sources from C sources
-set(MUSL_ALL_ASM_SOURCES ${MUSL_ARCH_ASM_SOURCES} ${MUSL_LDSO_ARCH_ASM_SOURCES})
-
-set(MUSL_SOURCES_BASE ${MUSL_SOURCES_BASE_COMMON})
-list(REMOVE_ITEM MUSL_SOURCES_BASE ${MUSL_ARCH_REMOVE_SOURCES})
-
-# mem*/bcmp are provided by LLVM-libc (see contrib/libllvmlibc-cmake) which
-# dispatches to AVX-512BW/AVX2/SSE4 on x86_64 and NEON on aarch64. Drop musl's
-# byte-loop C implementations so LLVM-libc's symbols win at link time.
-list(REMOVE_ITEM MUSL_SOURCES_BASE
-    "${MUSL_SOURCE_DIR}/src/string/bcmp.c"
-    "${MUSL_SOURCE_DIR}/src/string/memcmp.c"
-    "${MUSL_SOURCE_DIR}/src/string/memcpy.c"
-    "${MUSL_SOURCE_DIR}/src/string/memmove.c"
-    "${MUSL_SOURCE_DIR}/src/string/memset.c"
-)
-
-# Drop the x86_64 mem* assembly for the same reason (it is SSE2-era; the
-# LLVM-libc wrapper dispatches between AVX2 and AVX-512 at runtime and is
-# strictly better).
-#
-# aarch64 is the opposite: `src/string/aarch64/{memcpy,memset}.S` are the Arm
-# Optimized Routines — the same code glibc ships as `__memcpy_generic` — and
-# they beat LLVM-libc's generic C++ tiers by 10-30% on small/medium copies
-# (`position_empty_needle`, `column_array_replicate`, `int_parsing` perf
-# regressions). Keep them; the LLVM-libc aarch64 wrapper deliberately does not
-# define `memcpy`/`memset`, so these strong symbols are the only definitions.
-list(REMOVE_ITEM MUSL_ALL_ASM_SOURCES
-    "${MUSL_SOURCE_DIR}/src/string/x86_64/memset.s"
-)
+list(REMOVE_ITEM MUSL_SOURCES_BASE_COMMON ${MUSL_ARCH_REMOVE_SOURCES})
 
 set(MUSL_C_SOURCES
-    ${MUSL_SOURCES_BASE}
+    ${MUSL_SOURCES_BASE_COMMON}
     ${MUSL_ARCH_C_SOURCES}
     ${MUSL_LDSO_SOURCES}
-    ${MUSL_LDSO_ARCH_C_SOURCES}
     ${MUSL_COMPAT_SOURCES}
 )
 
-# Remove duplicates
-list(REMOVE_DUPLICATES MUSL_C_SOURCES)
-list(REMOVE_DUPLICATES MUSL_ALL_ASM_SOURCES)
-
-# Build the musl static library. C and ASM go into a single static library to
-# avoid circular dependency issues with OBJECT libraries.
-set(MUSL_ALL_SOURCES ${MUSL_C_SOURCES} ${MUSL_ALL_ASM_SOURCES})
-
-add_library(musl STATIC ${MUSL_ALL_SOURCES})
+# C and ASM go into a single static library to avoid circular dependency
+# issues with OBJECT libraries.
+add_library(musl STATIC ${MUSL_C_SOURCES} ${MUSL_ARCH_ASM_SOURCES})
 set_target_properties(musl PROPERTIES FOLDER "contrib/musl-cmake")
 
-foreach(asm_file ${MUSL_ALL_ASM_SOURCES})
+foreach(asm_file ${MUSL_ARCH_ASM_SOURCES})
     set_source_files_properties(${asm_file} PROPERTIES
         LANGUAGE ASM
         # -Qunused-arguments: don't error on C flags unused by the assembler;
@@ -1656,31 +1607,17 @@ foreach(asm_file ${MUSL_ALL_ASM_SOURCES})
     )
 endforeach()
 
-# Ensure generated headers are created first
+# Generated headers must exist before any musl source is compiled.
 add_dependencies(musl musl-headers)
 
-# Include directories.
+# Private includes for building musl itself, in priority order: arch-specific
+# headers, generic arch fallbacks, internal overrides (src/include, src/internal),
+# generated headers, version.h.
 #
-# For building musl itself, the include order is:
-#   1. arch/${MUSL_ARCH}     - arch-specific headers (e.g. x86_64/ksigaction.h)
-#   2. arch/generic          - generic arch fallbacks
-#   3. src/include           - internal overrides (features.h with 'hidden' macro)
-#   4. src/internal          - internal headers (generic ksigaction.h etc.)
-#   5. generated dir         - bits/alltypes.h, bits/syscall.h
-#   6. build dir             - version.h
-#   7. include               - stub headers for external consumers (execinfo.h)
-set(MUSL_OVERRIDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-# Private includes for building musl.
-# Use -iquote for arch-specific header directories so they win over
-# src/internal for quote-includes like `#include "ksigaction.h"`. On x86_64,
-# arch/x86_64/ksigaction.h defines `__restore` as an alias to `__restore_rt`
-# (provided by arch-specific restore.s); the generic src/internal/ksigaction.h
-# declares them as separate symbols and would leave `__restore` undefined.
-# CMake deduplicates include_directories, so paths also present in SYSTEM
-# PUBLIC below would become `-isystem` and lose to `-I src/internal`.
-# `-iquote` is searched before `-I` for quote-includes and bypasses
-# include_directories deduplication entirely.
+# The arch dirs use -iquote so they win over src/internal for quote-includes like
+# `#include "ksigaction.h"` (the generic one would leave `__restore` undefined on
+# x86_64). -iquote also bypasses CMake's include deduplication against the SYSTEM
+# PUBLIC dirs below, which would otherwise flip the order.
 target_compile_options(musl BEFORE PRIVATE
     "-iquote" "${MUSL_SOURCE_DIR}/arch/${MUSL_ARCH}"
     "-iquote" "${MUSL_SOURCE_DIR}/arch/generic"
@@ -1693,19 +1630,16 @@ target_include_directories(musl BEFORE PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
-# Public includes for external code that links to musl
-# These provide bits/*.h headers to dependents
-# the override directory comes first to provide stub headers (e.g. execinfo.h)
-# that musl does not have but some consumers expect
+# Public includes for code that links to musl; the first directory provides
+# stub headers for interfaces musl lacks (execinfo.h).
 target_include_directories(musl SYSTEM PUBLIC
-    "${MUSL_OVERRIDE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${MUSL_GENERATED_DIR}"
     "${MUSL_SOURCE_DIR}/include"
     "${MUSL_SOURCE_DIR}/arch/${MUSL_ARCH}"
     "${MUSL_SOURCE_DIR}/arch/generic"
 )
 
-# Compiler flags
 target_compile_options(musl PRIVATE
     -std=c99
     -ffreestanding
@@ -1739,7 +1673,6 @@ target_compile_options(musl PRIVATE
     -Wno-ignored-attributes
 )
 
-# Compiler definitions
 target_compile_definitions(musl PRIVATE
     -D_XOPEN_SOURCE=700
 )
@@ -1748,29 +1681,9 @@ target_compile_definitions(musl PUBLIC
     -D__MUSL__=1
 )
 
-# Build CRT objects (startup/shutdown code). These are separate object files
-# linked at specific positions:
-# crti.o -> [crtbegin.o] -> program objects -> [crtend.o] -> crtn.o
+# CRT objects (startup/shutdown code), linked into every executable as
+# crt1.o -> crti.o -> [program objects] -> crtn.o (see clickhouse_add_executable).
 
-# Build Scrt1.o (static position-independent startup)
-add_library(musl-Scrt1 OBJECT "${MUSL_SOURCE_DIR}/crt/Scrt1.c")
-target_include_directories(musl-Scrt1 PRIVATE
-    # src/include first: provides features.h with the 'hidden' and 'weak' macros
-    "${MUSL_SOURCE_DIR}/src/include"
-    "${MUSL_SOURCE_DIR}/src/internal"
-    "${MUSL_SOURCE_DIR}/arch/${MUSL_ARCH}"
-    "${MUSL_GENERATED_DIR}"
-)
-target_compile_options(musl-Scrt1 PRIVATE
-    -std=c99
-    -ffreestanding
-    -fno-stack-protector
-    -fPIC
-    -fno-builtin
-)
-add_dependencies(musl-Scrt1 musl-headers)
-
-# Build crt1.o (static non-PIC startup)
 add_library(musl-crt1 OBJECT "${MUSL_SOURCE_DIR}/crt/crt1.c")
 target_include_directories(musl-crt1 PRIVATE
     # src/include first: provides features.h with the 'hidden' and 'weak' macros
@@ -1787,7 +1700,6 @@ target_compile_options(musl-crt1 PRIVATE
 )
 add_dependencies(musl-crt1 musl-headers)
 
-# Build crti.o (initialization prologue)
 add_library(musl-crti OBJECT "${MUSL_SOURCE_DIR}/crt/${MUSL_ARCH}/crti.s")
 set_source_files_properties(
     "${MUSL_SOURCE_DIR}/crt/${MUSL_ARCH}/crti.s"
@@ -1795,13 +1707,9 @@ set_source_files_properties(
 )
 target_compile_options(musl-crti PRIVATE -Qunused-arguments -Wa,--noexecstack)
 
-# Build crtn.o (initialization epilogue)
 add_library(musl-crtn OBJECT "${MUSL_SOURCE_DIR}/crt/${MUSL_ARCH}/crtn.s")
 set_source_files_properties(
     "${MUSL_SOURCE_DIR}/crt/${MUSL_ARCH}/crtn.s"
     PROPERTIES LANGUAGE ASM
 )
 target_compile_options(musl-crtn PRIVATE -Qunused-arguments -Wa,--noexecstack)
-
-# The musl library is linked via target_link_libraries; CRT objects via
-# $<TARGET_OBJECTS:musl-crt*>.

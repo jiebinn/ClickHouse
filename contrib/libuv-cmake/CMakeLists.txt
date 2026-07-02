@@ -69,7 +69,7 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND uv_defines _GNU_SOURCE _POSIX_C_SOURCE=200112)
-  # Don't link librt for musl - rt functions are in libc
+  # musl provides the rt functions in libc.
   if(NOT USE_MUSL)
     list(APPEND uv_libraries rt)
   endif()

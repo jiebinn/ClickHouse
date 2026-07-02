@@ -569,10 +569,7 @@ macro (clickhouse_add_executable target)
     # invoke built-in add_executable
     # explicitly acquire and interpose malloc symbols by clickhouse_malloc
     # if GLIBC_COMPATIBILITY is ON and ENABLE_THINLTO is on than provide memcpy symbol explicitly to neutrialize thinlto's libcall generation.
-    # When USE_MUSL is set, we also include musl CRT objects (crt1, crti, crtn) since we use -nostartfiles
-    # to avoid glibc's CRT objects from the sysroot.
-    # memcpy and friends are provided by libllvmlibc (see contrib/libllvmlibc-cmake)
-    # under USE_MUSL, so no separate $<TARGET_OBJECTS:memcpy> is appended there.
+    # if USE_MUSL is on, also include musl CRT objects (crt1, crti, crtn) because we link with -nostartfiles.
     if (USE_MUSL)
         add_executable (${ARGV} $<TARGET_OBJECTS:musl-crt1> $<TARGET_OBJECTS:musl-crti> $<TARGET_OBJECTS:musl-crtn> $<TARGET_OBJECTS:clickhouse_malloc>)
     elseif (ARCH_AMD64 AND GLIBC_COMPATIBILITY AND ENABLE_THINLTO)

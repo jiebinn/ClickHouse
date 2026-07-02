@@ -1,5 +1,4 @@
-# When USE_MUSL is set, global link flags include -nostartfiles so we need
-# to provide musl CRT objects explicitly (same as clickhouse_add_executable does)
+# musl: executables need explicit CRT objects because of -nostartfiles.
 if (USE_MUSL)
     add_executable(lexer_test main.c $<TARGET_OBJECTS:musl-crt1> $<TARGET_OBJECTS:musl-crti> $<TARGET_OBJECTS:musl-crtn>)
 else ()
