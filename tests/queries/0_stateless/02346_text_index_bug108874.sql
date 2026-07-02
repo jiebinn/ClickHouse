@@ -63,6 +63,19 @@ SELECT 'mapValues merge-over-dist', count() FROM logs_merge WHERE has(mapValues(
 SELECT 'mapKeys merge-over-dist',   count() FROM logs_merge WHERE has(mapKeys(attributes), 'ip')
     SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
 
+-- Buffer table over the Distributed child. getQueryProcessingStage and read() forward the
+-- already-analyzed query to the destination, so like Merge/MaterializedView the Buffer must fail
+-- closed instead of inheriting the IStorage default (supportsSubcolumns() == true). The buffer is
+-- empty (flushed), so the SELECT reads only the destination Distributed table -> shard MergeTree,
+-- and force_data_skipping_indices governs those indexed shard reads.
+CREATE TABLE logs_buffer (attributes Map(String, String))
+ENGINE = Buffer(currentDatabase(), logs_dist, 1, 10, 100, 10000, 1000000, 10000000, 100000000);
+SELECT 'mapValues buffer-over-dist', count() FROM logs_buffer WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapKeys buffer-over-dist',   count() FROM logs_buffer WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+
+DROP TABLE logs_buffer;
 DROP TABLE logs_merge;
 DROP TABLE logs_mv;
 DROP TABLE logs_dist;
