@@ -1936,7 +1936,7 @@ void Aggregator::writeToTemporaryFileImpl(
     if (params.overflow_row)
     {
         auto agg_chunk = prepareChunkAndFillWithoutKey(data_variants, false, true);
-        auto block = to_block(agg_chunk);
+        auto block = to_block(std::move(agg_chunk));
         out->write(block);
         update_max_sizes(block);
     }
