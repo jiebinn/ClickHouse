@@ -624,7 +624,7 @@ private:
         // Take ALP_PARAMS_ESTIMATION_SAMPLES samples from the entire column for global parameter estimation.
         // Evenly select sample positions across the column.
         const UInt32 sample_step = float_count > ALP_PARAMS_ESTIMATION_SAMPLES * ALP_PARAMS_ESTIMATION_SAMPLE_FLOATS
-            ? (float_count - ALP_PARAMS_ESTIMATION_SAMPLES * ALP_PARAMS_ESTIMATION_SAMPLE_FLOATS) / ALP_PARAMS_ESTIMATION_SAMPLES
+            ? (float_count - ALP_PARAMS_ESTIMATION_SAMPLE_FLOATS) / (ALP_PARAMS_ESTIMATION_SAMPLES - 1)
             : ALP_PARAMS_ESTIMATION_SAMPLE_FLOATS;
 
         T sample[ALP_PARAMS_ESTIMATION_SAMPLE_FLOATS];
