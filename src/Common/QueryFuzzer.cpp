@@ -1195,24 +1195,32 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
     if (create.storage && create.storage->engine && endsWith(create.storage->engine->name, "MergeTree"))
     {
         static const Strings hot_bool_settings
-            = {"add_minmax_index_for_numeric_columns",
+            = {"add_minmax_index_for_block_number_column",
+               "add_minmax_index_for_block_offset_column",
+               "add_minmax_index_for_numeric_columns",
                "add_minmax_index_for_string_columns",
                "add_minmax_index_for_temporal_columns",
                "allow_coalescing_columns_in_partition_or_order_key",
+               "allow_experimental_replacing_merge_with_cleanup",
+               "allow_experimental_text_index_positions",
                "allow_floating_point_partition_key",
                "allow_nullable_key",
                "allow_summing_columns_in_partition_or_order_key",
                "allow_suspicious_indices",
                "allow_vertical_merges_from_compact_to_wide_parts",
+               "assign_part_uuids",
                "compress_marks",
                "compress_primary_key",
                "enable_block_number_column",
                "enable_block_offset_column",
                "enable_mixed_granularity_parts",
                "enable_vertical_merge_algorithm",
+               "materialize_projections_on_merge",
+               "optimize_row_order",
                "prewarm_mark_cache",
                "prewarm_primary_key_cache",
                "ttl_only_drop_parts",
+               "use_const_adaptive_granularity",
                "use_primary_key_cache"};
 
         auto fuzz_setting = [&](const String & name, Field value)
@@ -1234,11 +1242,18 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
             fuzz_setting(
                 "deduplicate_merge_projection_mode", String(pickRandomly(fuzz_rand, Strings{"ignore", "throw", "drop", "rebuild"})));
         if (fuzz_rand() % 20 == 0)
+            fuzz_setting("dynamic_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
+        if (fuzz_rand() % 20 == 0)
             fuzz_setting("inactive_parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("index_granularity", UInt64(1) << (fuzz_rand() % 14));
         if (fuzz_rand() % 20 == 0)
+            /// 0 disables adaptive granularity; other values must be >= `min_index_granularity_bytes` (1024 by default)
+            fuzz_setting("index_granularity_bytes", fuzz_rand() % 4 == 0 ? UInt64(0) : UInt64(1) << (fuzz_rand() % 14 + 10));
+        if (fuzz_rand() % 20 == 0)
             fuzz_setting("lightweight_mutation_projection_mode", String(pickRandomly(fuzz_rand, Strings{"throw", "drop", "rebuild"})));
+        if (fuzz_rand() % 20 == 0)
+            fuzz_setting("map_serialization_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_buckets"));
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("max_avg_part_size_for_too_many_parts", UInt64(fuzz_rand() % (1 << 24)));
         if (fuzz_rand() % 20 == 0)
@@ -1258,17 +1273,27 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("number_of_partitions_to_consider_for_merge", UInt64(fuzz_rand() % 50 + 1));
         if (fuzz_rand() % 20 == 0)
+            fuzz_setting("object_serialization_version", String(pickRandomly(fuzz_rand, Strings{"v1", "v2", "v3"})));
+        if (fuzz_rand() % 20 == 0)
+            fuzz_setting(
+                "object_shared_data_serialization_version",
+                String(pickRandomly(fuzz_rand, Strings{"map", "map_with_buckets", "advanced"})));
+        if (fuzz_rand() % 20 == 0)
             fuzz_setting("parts_to_delay_insert", UInt64(fuzz_rand() % 50 + 1));
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("ratio_of_defaults_for_sparse_serialization", Float64(fuzz_rand() % 101) / 100.0);
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("remove_empty_parts", UInt64(0));
         if (fuzz_rand() % 20 == 0)
+            fuzz_setting("serialization_info_version", String(fuzz_rand() % 2 == 0 ? "basic" : "with_types"));
+        if (fuzz_rand() % 20 == 0)
             fuzz_setting("string_serialization_version", String(fuzz_rand() % 2 == 0 ? "single_stream" : "with_size_stream"));
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("vertical_merge_algorithm_min_bytes_to_activate", UInt64(1) << (fuzz_rand() % 14));
         if (fuzz_rand() % 20 == 0)
             fuzz_setting("allow_tuple_element_aggregation", UInt64(fuzz_rand() % 2));
+        if (fuzz_rand() % 20 == 0)
+            fuzz_setting("materialize_projections_on_insert", UInt64(fuzz_rand() % 2));
     }
 
     /// Fuzz CREATE MATERIALIZED VIEW: toggle POPULATE and refresh strategy parameters
@@ -1695,6 +1720,7 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
     /// Fuzz named parameters of text index independently of type swap.
     if (index_type->name == "text" && index_type->arguments)
     {
+        bool has_positions = false;
         for (auto & arg_ast : index_type->arguments->children)
         {
             auto * equals_fn = arg_ast->as<ASTFunction>();
@@ -1780,6 +1806,12 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
                 if (fuzz_rand() % 5 == 0)
                     value_ast = make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2048 + 1));
             }
+            else if (param_id->name() == "positions")
+            {
+                has_positions = true;
+                if (fuzz_rand() % 5 == 0)
+                    value_ast = make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2));
+            }
             else if (param_id->name() == "preprocessor" || param_id->name() == "postprocessor")
             {
                 /// Both take a String -> String expression over the indexed column
@@ -1794,6 +1826,10 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
                 }
             }
         }
+        /// `positions` requires the `allow_experimental_text_index_positions` MergeTree setting.
+        if (!has_positions && fuzz_rand() % 10 == 0)
+            index_type->arguments->children.push_back(
+                makeASTFunction("equals", make_intrusive<ASTIdentifier>("positions"), make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2))));
     }
 
     /// Fuzz vector_similarity index positional arguments independently of type swap.
