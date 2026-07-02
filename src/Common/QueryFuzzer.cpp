@@ -1711,6 +1711,8 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
     static const std::unordered_set<String> bf_index_types = {"ngrambf_v1", "tokenbf_v1", "sparse_grams"};
     /// Simple no-arg tokenizers valid as text index tokenizer values.
     static const Strings simple_tokenizers = {"splitByNonAlpha", "splitByString", "array", "asciiCJK", "unicodeWord"};
+    /// Non-empty separators for the splitByString tokenizer (empty ones are rejected).
+    static const Strings tokenizer_separators = {" ", ",", ";", ".", "\t", "\n", "ab", "叫", "😉"};
     static const Strings posting_list_codecs = {"none", "bitpacking"};
     /// vector_similarity index parameters (positional):
     ///   ('hnsw', distance, M, quantization, hnsw_max_connections_per_layer, hnsw_candidate_list_size_for_construction)
@@ -1720,7 +1722,7 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
     /// Fuzz named parameters of text index independently of type swap.
     if (index_type->name == "text" && index_type->arguments)
     {
-        bool has_positions = false;
+        std::unordered_set<String> seen_params;
         for (auto & arg_ast : index_type->arguments->children)
         {
             auto * equals_fn = arg_ast->as<ASTFunction>();
@@ -1731,6 +1733,7 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
             if (!param_id)
                 continue;
 
+            seen_params.insert(param_id->name());
             auto & value_ast = equals_fn->arguments->children[1];
 
             if (param_id->name() == "tokenizer")
@@ -1763,6 +1766,20 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
                         sparse_fn->arguments = args;
                         value_ast = sparse_fn;
                     }
+                    else if (fuzz_rand() % 2 == 0)
+                    {
+                        /// Create splitByString([separators]) function: non-empty array of non-empty strings
+                        Array separators;
+                        const size_t num_separators = fuzz_rand() % 3 + 1;
+                        for (size_t i = 0; i < num_separators; ++i)
+                            separators.push_back(pickRandomly(fuzz_rand, tokenizer_separators));
+                        auto args = make_intrusive<ASTExpressionList>();
+                        args->children.push_back(make_intrusive<ASTLiteral>(std::move(separators)));
+                        auto split_fn = make_intrusive<ASTFunction>();
+                        split_fn->name = "splitByString";
+                        split_fn->arguments = args;
+                        value_ast = split_fn;
+                    }
                     else
                     {
                         /// Swap between simple string-form tokenizers
@@ -1789,6 +1806,17 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
                         tok_fn->arguments->children[1] = make_intrusive<ASTLiteral>(max_len);
                         tok_fn->arguments->children[2] = make_intrusive<ASTLiteral>(cutoff);
                     }
+                    else if (
+                        tok_fn->name == "splitByString" && tok_fn->arguments && !tok_fn->arguments->children.empty()
+                        && fuzz_rand() % 5 == 0)
+                    {
+                        /// Re-roll the separators array
+                        Array separators;
+                        const size_t num_separators = fuzz_rand() % 3 + 1;
+                        for (size_t i = 0; i < num_separators; ++i)
+                            separators.push_back(pickRandomly(fuzz_rand, tokenizer_separators));
+                        tok_fn->arguments->children[0] = make_intrusive<ASTLiteral>(std::move(separators));
+                    }
                 }
             }
             else if (param_id->name() == "posting_list_codec")
@@ -1808,7 +1836,6 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
             }
             else if (param_id->name() == "positions")
             {
-                has_positions = true;
                 if (fuzz_rand() % 5 == 0)
                     value_ast = make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2));
             }
@@ -1826,10 +1853,19 @@ void QueryFuzzer::fuzzIndexDeclaration(ASTIndexDeclaration & index)
                 }
             }
         }
-        /// `positions` requires the `allow_experimental_text_index_positions` MergeTree setting.
-        if (!has_positions && fuzz_rand() % 10 == 0)
-            index_type->arguments->children.push_back(
-                makeASTFunction("equals", make_intrusive<ASTIdentifier>("positions"), make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2))));
+        /// Append named arguments the original query did not have; otherwise the loop above never touches them.
+        auto add_missing_param = [&](const String & name, Field value)
+        {
+            if (!seen_params.contains(name) && fuzz_rand() % 10 == 0)
+                index_type->arguments->children.push_back(
+                    makeASTFunction("equals", make_intrusive<ASTIdentifier>(name), make_intrusive<ASTLiteral>(std::move(value))));
+        };
+        add_missing_param("dictionary_block_size", UInt64(fuzz_rand() % 2048 + 1));
+        add_missing_param("dictionary_block_frontcoding_compression", UInt64(fuzz_rand() % 2));
+        add_missing_param("posting_list_block_size", UInt64(fuzz_rand() % 2048 + 1));
+        add_missing_param("posting_list_codec", String(pickRandomly(fuzz_rand, posting_list_codecs)));
+        /// `positions = 1` requires the `allow_experimental_text_index_positions` MergeTree setting.
+        add_missing_param("positions", UInt64(fuzz_rand() % 2));
     }
 
     /// Fuzz vector_similarity index positional arguments independently of type swap.
