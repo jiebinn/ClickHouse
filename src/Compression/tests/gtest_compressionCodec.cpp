@@ -1536,7 +1536,7 @@ TEST(CompressionCodecMultipleTest, DecompressMalformedInputShortBlockHeader)
 }
 
 /// Expects getCompressionCodecForFile to reject the block with the given error code.
-static void expectRejectedBlock(ReadBuffer & in, int expected_code, bool skip_to_next_block = true)
+void expectRejectedBlock(ReadBuffer & in, int expected_code, bool skip_to_next_block = true)
 {
     UInt32 size_compressed = 0;
     UInt32 size_decompressed = 0;
