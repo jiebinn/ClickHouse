@@ -155,6 +155,22 @@ const ConstantNode * tryAsConstantNode(const QueryTreeNodePtr & node)
     return node->as<ConstantNode>();
 }
 
+/// Non-Nullable Int / UInt (which covers Bool as UInt8). Nullable is excluded because
+/// the truthy test also filters NULLs, stricter than MatchesNonDefault.
+std::optional<String>
+tryAsTruthyIntegerColumn(const QueryTreeNodePtr & node, const QueryTreeNodePtr & expected_table_expression)
+{
+    auto col = tryAsColumnRef(node, expected_table_expression);
+    if (!col)
+        return std::nullopt;
+    if (col->type->isNullable())
+        return std::nullopt;
+    WhichDataType which(*col->type);
+    if (!(which.isInt() || which.isUInt()))
+        return std::nullopt;
+    return col->name;
+}
+
 bool isZero(const Field & value)
 {
     if (value.isNull())
@@ -189,6 +205,9 @@ classifySparsityPredicate(const QueryTreeNodePtr & predicate, const QueryTreeNod
     if (auto base = tryAsNullSubcolumnOf(predicate, table_expression_node))
         return RecognisedSparsityPredicate{*base, SparsityPredicateClass::MatchesDefault};
 
+    if (auto name = tryAsTruthyIntegerColumn(predicate, table_expression_node))
+        return RecognisedSparsityPredicate{*name, SparsityPredicateClass::MatchesNonDefault};
+
     const auto * func = predicate->as<FunctionNode>();
     if (!func)
         return std::nullopt;
@@ -205,6 +224,8 @@ classifySparsityPredicate(const QueryTreeNodePtr & predicate, const QueryTreeNod
         {
             if (auto base = tryAsNullSubcolumnOf(args[0], table_expression_node))
                 return RecognisedSparsityPredicate{*base, SparsityPredicateClass::MatchesNonDefault};
+            if (auto name_ref = tryAsTruthyIntegerColumn(args[0], table_expression_node))
+                return RecognisedSparsityPredicate{*name_ref, SparsityPredicateClass::MatchesDefault};
             return std::nullopt;
         }
 

@@ -44,6 +44,8 @@ struct RecognisedSparsityPredicate
 ///   Bool:            col = true / col != true       (value space is {false, true})
 ///   UInt*:           col > 0  / col >= 1            -> MatchesNonDefault
 ///                    col < 1  / col <= 0            -> MatchesDefault
+///   Int/UInt/Bool:   col                            -> MatchesNonDefault (bare truthy test)
+///                    not(col)                       -> MatchesDefault
 std::optional<RecognisedSparsityPredicate>
 classifySparsityPredicate(const QueryTreeNodePtr & predicate, const QueryTreeNodePtr & table_expression_node);
 

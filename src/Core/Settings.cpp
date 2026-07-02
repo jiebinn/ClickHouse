@@ -4613,6 +4613,7 @@ Patterns recognised:
 - `empty(col)` / `notEmpty(col)` on `String` columns.
 - `col = true` / `col != true` on `Bool` columns.
 - `col > 0`, `col >= 1`, `col < 1`, `col <= 0` on unsigned integer columns.
+- Bare `col` / `NOT col` on `Int*`, `UInt*`, `Bool` columns (truthy test).
 
 The equality patterns are not applied to `Float*`, `Enum*`, `Nullable`, `LowCardinality`,
 or composite types (`Tuple`, `Array`, `Map`, ...) — for these the count is served from the

@@ -1,0 +1,12 @@
+sum u off	2000
+sum u planning	2000
+sum u data_read	2000
+sum i planning	2000
+sum b planning	5
+sum notu off	497500
+sum notu planning	497500
+sum notu data_read	497500
+positive	Granules: 10/10
+positive	Sparsity
+positive	Granules: 5/10
+negative	Granules: 10/10
