@@ -5834,7 +5834,7 @@ CONV_FN(CreateHypotheticalIndex, hi)
     }
     else
     {
-        ret += "i0";
+        ret += "hi0";
     }
     ret += " ON ";
     ExprSchemaTableToString(ret, hi.est());

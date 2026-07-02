@@ -1187,6 +1187,7 @@ static void dupTableDef(SQLTable & next, const SQLTable & t)
     }
     next.col_counter = t.col_counter;
     next.idx_counter = t.idx_counter;
+    next.hidx_counter = t.hidx_counter;
     next.proj_counter = t.proj_counter;
     next.constr_counter = t.constr_counter;
 }
@@ -1769,14 +1770,33 @@ String StatementGenerator::addTableColumn(
     return result_col_name;
 }
 
-void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const bool projection, IndexDef * idef)
+void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const IndexUsage usage, IndexDef * idef)
 {
     Expr * expr = idef->mutable_expr();
-    std::uniform_int_distribution<uint32_t> idx_range(
-        static_cast<uint32_t>(projection ? IndexType::IDX_basic : IndexType::IDX_set),
-        static_cast<uint32_t>(projection ? IndexType::IDX_commit_order : IndexType::IDX_text));
-    const IndexType itpe
-        = (!projection && rg.nextMediumNumber() < 21) ? IndexType::IDX_text : static_cast<IndexType>(idx_range(rg.generator));
+    const bool projection = usage == IndexUsage::ProjectionIndex;
+    IndexType itpe;
+
+    if (usage == IndexUsage::HypotheticalIndex)
+    {
+        /// `InterpreterHypotheticalIndexQuery` rejects text and vector similarity indexes with `NOT_IMPLEMENTED`
+        static const std::vector<IndexType> hypothetical_index_types
+            = {IndexType::IDX_set,
+               IndexType::IDX_minmax,
+               IndexType::IDX_bloom_filter,
+               IndexType::IDX_ngrambf_v1,
+               IndexType::IDX_tokenbf_v1,
+               IndexType::IDX_sparse_grams};
+
+        itpe = rg.pickRandomly(hypothetical_index_types);
+    }
+    else
+    {
+        std::uniform_int_distribution<uint32_t> idx_range(
+            static_cast<uint32_t>(projection ? IndexType::IDX_basic : IndexType::IDX_set),
+            static_cast<uint32_t>(projection ? IndexType::IDX_commit_order : IndexType::IDX_text));
+
+        itpe = (!projection && rg.nextMediumNumber() < 21) ? IndexType::IDX_text : static_cast<IndexType>(idx_range(rg.generator));
+    }
 
     chassert(!t.cols.empty());
     idef->set_type(itpe);
@@ -1989,7 +2009,10 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
     }
     if (!projection)
     {
-        idef->mutable_idx()->set_value(rg.nextIdentifier("i", t.idx_counter++, fc.allow_nasty_identifiers));
+        const String prefix = usage == IndexUsage::HypotheticalIndex ? "hi" : "i";
+        const uint32_t counter = usage == IndexUsage::HypotheticalIndex ? t.hidx_counter : t.idx_counter;
+
+        idef->mutable_idx()->set_value(rg.nextIdentifier(prefix, counter, fc.allow_nasty_identifiers));
         if (rg.nextSmallNumber() < 7)
         {
             uint32_t granularity = 1;
@@ -2045,7 +2068,7 @@ void StatementGenerator::addTableProjection(RandomGenerator & rg, SQLTable & t, 
     }
     else
     {
-        addTableIndex(rg, t, true, pdef->mutable_idx_def());
+        addTableIndex(rg, t, IndexUsage::ProjectionIndex, pdef->mutable_idx_def());
     }
     this->inside_projection = false;
 }
@@ -2453,7 +2476,7 @@ void StatementGenerator::generateNextCreateTable(RandomGenerator & rg, const boo
                 {{add_idx,
                   [&]
                   {
-                      addTableIndex(rg, next, false, ndef->mutable_idx_def());
+                      addTableIndex(rg, next, IndexUsage::TableIndex, ndef->mutable_idx_def());
                       added_idxs++;
                   }},
                  {add_proj,

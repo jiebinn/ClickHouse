@@ -154,6 +154,13 @@ enum class TableRequirement
     RequireReplaceable = 2
 };
 
+enum class IndexUsage
+{
+    TableIndex = 1,
+    ProjectionIndex = 2,
+    HypotheticalIndex = 3,
+};
+
 class StatementGenerator
 {
 public:
@@ -198,7 +205,6 @@ private:
     uint32_t aliases_counter = 0;
     uint32_t id_counter = 0;
     uint32_t freeze_counter = 0;
-    uint32_t hindex_counter = 0;
     std::unordered_set<String> freeze_names;
 
     std::unordered_map<String, std::shared_ptr<SQLDatabase>> staged_databases;
@@ -548,7 +554,7 @@ private:
         RandomGenerator & rg, SQLTable & t, bool modify, bool is_pk, ColumnSpecial special, SQLColumn & col, ColumnDef * cd);
     String addTableColumn(
         RandomGenerator & rg, SQLTable & t, uint32_t cname, bool staged, bool modify, bool is_pk, ColumnSpecial special, ColumnDef * cd);
-    void addTableIndex(RandomGenerator & rg, SQLTable & t, bool projection, IndexDef * idef);
+    void addTableIndex(RandomGenerator & rg, SQLTable & t, IndexUsage usage, IndexDef * idef);
     void addTableProjection(RandomGenerator & rg, SQLTable & t, ProjectionDef * pdef);
     void addTableConstraint(RandomGenerator & rg, SQLTable & t, ConstraintDef * cdef);
     void generateTableKey(RandomGenerator & rg, const SQLRelation & rel, const SQLBase & b, bool allow_asc_desc, TableKey * tkey);
@@ -892,7 +898,9 @@ public:
         = [](const SQLTable & t) { return t.isAttached() && t.isMergeTreeFamily(true) && t.can_run_merges; };
     /// Hypothetical (WHAT-IF) indexes are only supported on MergeTree family tables
     const std::function<bool(const SQLTable &)> attached_tables_for_create_hypothetical_index = [&conf = this->fc](const SQLTable & t)
-    { return t.isAttached() && t.isMergeTreeFamily(true) && static_cast<uint32_t>(t.hypothetical_indexes.size()) < conf.max_hypotheticals; };
+    {
+        return t.isAttached() && t.isMergeTreeFamily(true) && static_cast<uint32_t>(t.hypothetical_indexes.size()) < conf.max_hypotheticals;
+    };
     const std::function<bool(const SQLTable &)> attached_tables_for_drop_hypothetical_index
         = [](const SQLTable & t) { return t.isAttached() && !t.hypothetical_indexes.empty(); };
 

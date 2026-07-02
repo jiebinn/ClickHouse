@@ -836,7 +836,7 @@ void StatementGenerator::generateNextDrop(RandomGenerator & rg, Drop * dp)
               {
                   /// DROP ALL HYPOTHETICAL INDEXES. The `object` field is required by the proto, but not rendered for this statement.
                   dp->set_all(true);
-                  sot->mutable_index()->set_value("i0");
+                  sot->mutable_index()->set_value("hi0");
               }
               else
               {
@@ -1936,7 +1936,7 @@ std::optional<String> StatementGenerator::alterSingleTable(
              [&]
              {
                  AddIndex * add_index = ati->mutable_add_index();
-                 addTableIndex(rg, t, false, add_index->mutable_new_idx());
+                 addTableIndex(rg, t, IndexUsage::TableIndex, add_index->mutable_new_idx());
                  if (has_idxs)
                  {
                      const uint32_t next_option = rg.nextSmallNumber();
@@ -3429,8 +3429,7 @@ void StatementGenerator::generateNextCreateHypotheticalIndex(RandomGenerator & r
     SQLTable & t = rg.pickRandomly(filterCollection<SQLTable>(attached_tables_for_create_hypothetical_index));
     IndexDef * idef = hi->mutable_create_def();
 
-    addTableIndex(rg, t, false, idef);
-    idef->mutable_idx()->set_value(rg.nextIdentifier("i", this->hindex_counter++, fc.allow_nasty_identifiers));
+    addTableIndex(rg, t, IndexUsage::HypotheticalIndex, idef);
     hi->set_if_not_exists(rg.nextSmallNumber() < 4);
     t.setName(hi->mutable_est(), false);
 }

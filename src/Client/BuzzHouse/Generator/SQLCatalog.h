@@ -447,6 +447,7 @@ struct SQLTable : SQLBase
 public:
     uint32_t col_counter = 0;
     uint32_t idx_counter = 0;
+    uint32_t hidx_counter = 0;
     uint32_t proj_counter = 0;
     uint32_t constr_counter = 0;
     std::unordered_map<String, SQLColumn> cols;
