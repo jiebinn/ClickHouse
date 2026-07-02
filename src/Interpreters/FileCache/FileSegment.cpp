@@ -688,7 +688,17 @@ void FileSegment::setDownloadedUnlocked(const FileSegmentGuard::Lock & lock)
     download_finished_time = timeInSeconds(std::chrono::system_clock::now());
 
     if (download_data && download_data->cache_writer)
-        download_data->cache_writer->finalize();
+    {
+        try
+        {
+            download_data->cache_writer->finalize();
+        }
+        catch (...)
+        {
+            setDownloadFailedUnlocked(lock);
+            return;
+        }
+    }
 
     resetDownloadDataUnlocked(lock);
 
