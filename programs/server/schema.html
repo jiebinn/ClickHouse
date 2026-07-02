@@ -2222,13 +2222,24 @@ function isSameOriginTarget(value) {
 async function autoLoadOnOpen() {
     if (openedLocally || !isSameOriginTarget($('url').value)) return;
     if (window.PasswordCredential && !$('user').value && !$('password').value) {
+        /// `navigator.credentials.get` is async, so the same-origin target and empty fields checked
+        /// above can change while it is pending: the user could paste a cross-origin URL into `#url`
+        /// or start typing their own credentials. Filling the saved same-origin login and then
+        /// auto-loading against the *now-current* fields would forward those credentials to the
+        /// user-chosen (possibly attacker) target — the very leak `isSameOriginTarget` guards against
+        /// on this path. Snapshot the URL, and after the retrieval re-establish both invariants; if
+        /// either changed, abort the whole auto-load — the user is now driving and will load
+        /// explicitly via the form (`Load` / Enter).
+        const url = $('url').value;
+        let cred = null;
         try {
-            const cred = await navigator.credentials.get({ password: true, mediation: 'silent' });
-            if (cred && cred.password) {
-                $('user').value = cred.id;
-                $('password').value = cred.password;
-            }
+            cred = await navigator.credentials.get({ password: true, mediation: 'silent' });
         } catch (e) { console.warn('credentials.get failed:', e); }
+        if ($('url').value !== url || $('user').value || $('password').value) return;
+        if (cred && cred.password) {
+            $('user').value = cred.id;
+            $('password').value = cred.password;
+        }
     }
     loadAll();
 }
