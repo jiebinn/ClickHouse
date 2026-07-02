@@ -1057,7 +1057,14 @@ def main():
         "{mergeQueueEntry{position state}}}' "
         f"-f id={pr_node_id}"
     )
-    if not Shell.check(enqueue_cmd, verbose=True):
+    returncode, stdout, stderr = Shell.get_res_stdout_stderr(enqueue_cmd, verbose=True)
+    # GitHub rejects `enqueuePullRequest` with "Pull request is already in the
+    # queue" when the PR is already queued - e.g. the "Merge when ready" button
+    # was clicked on github.com, or a previous run of this tool already enqueued
+    # it. That is the desired end state, so treat it as success instead of
+    # bailing out with an error.
+    already_queued = "already in the queue" in (stdout + stderr).lower()
+    if returncode != 0 and not already_queued:
         print(
             f"ERROR: Failed to add PR #{pr_number} to the merge queue. "
             f"This often happens when mergeStateStatus is UNKNOWN "
@@ -1067,6 +1074,8 @@ def main():
             f"Retry manually:\n  {enqueue_cmd}"
         )
         sys.exit(1)
+    if already_queued:
+        print(f"PR #{pr_number} is already in the merge queue")
 
     # Give GitHub a moment to update the PR's merge state, then verify it
     # actually landed in the queue.
