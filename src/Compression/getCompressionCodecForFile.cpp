@@ -47,6 +47,9 @@ getCompressionCodecForFile(ReadBuffer & read_buffer, UInt32 & size_compressed, U
             size_compressed,
             static_cast<UInt32>(header_size));
 
+    if (size_decompressed == 0)
+        throw Exception(ErrorCodes::CORRUPTED_DATA, "Compressed block header reports decompressed size 0. Most likely corrupted data.");
+
     if (method == static_cast<uint8_t>(CompressionMethodByte::Multiple))
     {
         if (size_compressed < static_cast<UInt32>(header_size) + 1)

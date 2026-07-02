@@ -1593,6 +1593,21 @@ TEST(GetCompressionCodecForFileTest, ThrowsOnCompressedSizeAboveLimit)
     expectRejectedBlock(in, ErrorCodes::TOO_LARGE_SIZE_COMPRESSED);
 }
 
+TEST(GetCompressionCodecForFileTest, ThrowsOnZeroDecompressedSize)
+{
+    /// Decompression rejects blocks with decompressed size 0, so identification must too.
+    constexpr unsigned char block[] = {
+        0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
+        0x82, /// LZ4 method byte
+        0x0D, 0x00, 0x00, 0x00, /// size_compressed = 13 (valid)
+        0x00, 0x00, 0x00, 0x00, /// size_decompressed = 0
+        0x01, 0x02, 0x03, 0x04, /// payload, so unguarded code would identify the codec successfully
+    };
+
+    ReadBufferFromMemory in(reinterpret_cast<const char *>(block), std::size(block));
+    expectRejectedBlock(in, ErrorCodes::CORRUPTED_DATA);
+}
+
 TEST(GetCompressionCodecForFileTest, ThrowsOnMultipleSizeBelowConsumed)
 {
     /// Multiple block whose declared size_compressed (10) is below the chain bytes consumed (9B header + 1B count + 2 method bytes).
