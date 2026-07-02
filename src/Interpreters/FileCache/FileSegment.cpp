@@ -695,6 +695,7 @@ void FileSegment::setDownloadedUnlocked(const FileSegmentGuard::Lock & lock)
         }
         catch (...)
         {
+            tryLogCurrentException(getLog(), "Failed to finalize cache writer while marking file segment as downloaded");
             setDownloadFailedUnlocked(lock);
             return;
         }
@@ -962,7 +963,14 @@ void FileSegment::complete(const LockedKeyPtr & locked_key, bool allow_backgroun
                     {
                         if (download_data->cache_writer)
                         {
-                            download_data->cache_writer->finalize();
+                            try
+                            {
+                                download_data->cache_writer->finalize();
+                            }
+                            catch (...)
+                            {
+                                tryLogCurrentException(getLog(), "Failed to finalize cache writer on complete");
+                            }
                             download_data->cache_writer.reset();
                         }
                         download_data->remote_file_reader.reset();
@@ -994,7 +1002,14 @@ void FileSegment::complete(const LockedKeyPtr & locked_key, bool allow_backgroun
                     {
                         if (download_data->cache_writer)
                         {
-                            download_data->cache_writer->finalize();
+                            try
+                            {
+                                download_data->cache_writer->finalize();
+                            }
+                            catch (...)
+                            {
+                                tryLogCurrentException(getLog(), "Failed to finalize cache writer on complete");
+                            }
                             download_data->cache_writer.reset();
                         }
                         download_data->remote_file_reader.reset();
