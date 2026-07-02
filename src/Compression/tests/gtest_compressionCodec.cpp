@@ -2090,6 +2090,29 @@ TEST_F(ALPTest, DecompressMalformedInputWithInvalidExceptionIndex)
     verifyDecompressExpectedException(source, "Cannot decompress ALP-encoded data, invalid exception index, index: 1024, float count: 1024");
 }
 
+TEST_F(ALPTest, DecompressMalformedInputWithTrailingBytesAfterValidPayload)
+{
+    std::vector<UInt8> source = {
+        0x01,       // meta byte (version=1, variant=STD)
+        0x08,       // float width
+        0x00, 0x04, // block float count
+        0x02,       // exponent
+        0x00,       // fraction
+        0x00, 0x00, // exception count = 0
+        0x01,       // bits = 1
+        // FOR base (8 bytes)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    // Bitpacked data (128 bytes for 1024 values with 1 bit each)
+    source.resize(source.size() + 128, 0xFF);
+
+    // Append trailing bytes after valid payload
+    const std::vector<UInt8> trailing_bytes = {0xDE, 0xAD, 0xBE, 0xEF};
+    source.insert(source.end(), trailing_bytes.begin(), trailing_bytes.end());
+
+    verifyDecompressExpectedException(source, "Cannot decompress ALP-encoded data, stream size mismatch");
+}
+
 TEST_F(ALPTest, DecompressMalformedInputWithInvalidReservedBitsInMetaByte)
 {
     const std::vector<UInt8> source = {
@@ -2260,6 +2283,29 @@ TEST_F(ALPTest, DecompressMalformedInputRDWithInvalidExceptionIndex)
     source.insert(source.end(), exception_data.begin(), exception_data.end());
 
     verifyDecompressExpectedException(source, "Cannot decompress ALP(RD)-encoded data, invalid exception index, index: 1024, float count: 1024");
+}
+
+TEST_F(ALPTest, DecompressMalformedInputRDWithTrailingBytesAfterValidPayload)
+{
+    std::vector<UInt8> source = {
+        0x11,       // meta byte (version=1, variant=RD)
+        0x08,       // float width (Float64)
+        0x00, 0x04, // block float count = 1024
+        // RD header: left_bits=1, dict_size=1, one dictionary entry
+        0x01,       // left_bits = 1
+        0x01,       // dict_size = 1
+        0x00, 0x00, // dictionary entry
+        // Block: exception count = 0
+        0x00, 0x00  // exception count = 0
+    };
+    // Append 8064 zero bytes for bitpacked right (bitpacked left is 0 bytes for dict_size=1)
+    source.resize(source.size() + 8064, 0x00);
+
+    // Append trailing bytes after valid payload
+    const std::vector<UInt8> trailing_bytes = {0xDE, 0xAD, 0xBE, 0xEF};
+    source.insert(source.end(), trailing_bytes.begin(), trailing_bytes.end());
+
+    verifyDecompressExpectedException(source, "Cannot decompress ALP(RD)-encoded data, stream size mismatch");
 }
 
 }

@@ -758,7 +758,7 @@ public:
         const char * dest_start = dest;
         const char * dest_end = dest + uncompressed_size;
 
-        while (source < source_end)
+        while (dest < dest_end)
         {
             const UInt16 block_float_count = static_cast<UInt16>(std::min<size_t>(ALP_BLOCK_MAX_FLOAT_COUNT, (dest_end - dest) / sizeof(T)));
             decodeBlock(source, source_end, dest, dest_end, block_float_count);
@@ -1166,7 +1166,7 @@ public:
 
         decodeDictParams(source, source_end);
 
-        while (source < source_end)
+        while (dest < dest_end)
         {
             const UInt16 block_float_count = static_cast<UInt16>(std::min<size_t>(ALP_BLOCK_MAX_FLOAT_COUNT, (dest_end - dest) / sizeof(T)));
             decodeBlock(source, source_end, dest, dest_end, block_float_count);
