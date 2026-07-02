@@ -3918,9 +3918,9 @@ static const std::vector<std::unordered_set<String>> & swapFuncs
         {"naiveBayesClassifier", "detectCharset", "detectLanguage", "detectLanguageUnknown", "detectLanguageMixed", "detectTonality"},
         /// Word-level NLP (language/extension + word)
         {"stem", "lemmatize", "synonyms"},
-        /// AI functions: text + optional params map (text[, params] → result)
+        /// AI functions: text + optional params map
         {"aiEmbed", "aiGenerate"},
-        /// AI functions: text + semantic_arg + optional params map (text, semantic_arg[, params] → result)
+        /// AI functions: text + a per-function arg (categories / instruction / target_language) + optional params map
         {"aiClassify", "aiExtract", "aiTranslate"},
         /// Geo distance functions (lon1, lat1, lon2, lat2 → Float64)
         {"greatCircleDistance", "geoDistance", "greatCircleAngle"},
