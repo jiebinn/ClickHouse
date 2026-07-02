@@ -1710,7 +1710,11 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     const bool use_sparse_pk_representation
         = settings[Setting::use_lightweight_primary_key_index_analysis];
 
-    size_t num_key_columns = 0;
+    /// Number of leading primary key columns covered by the index analysis (`index_bounds` has one entry
+    /// per such column). For the sparse representation this is the in-memory index prefix extended to the
+    /// deepest used column with a partition-minmax bound; for the non-sparse one it is all key columns of
+    /// the condition.
+    size_t num_analyzed_key_columns = 0;
 
     /// Non-sparse representation that includes all columns whether Filter needs or not
     DataTypes key_types;
@@ -1721,6 +1725,17 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     /// Sparse representation that includes only columns that Filter needs
     std::vector<size_t> used_key_indices;
     size_t sparse_keys_size = 0;
+
+    /// The part of the filter's used key prefix that is loaded in the in-memory index, i.e. the leading key
+    /// columns with per-mark values (`index_columns` holds exactly these; `equal_boundaries_mask` covers
+    /// exactly these). Key columns in [num_used_prefix_key_columns_loaded_in_memory, num_analyzed_key_columns)
+    /// have no per-mark values: they are analysed via their partition-minmax bound (see `index_bounds` below)
+    /// as constant coordinates.
+    size_t num_used_prefix_key_columns_loaded_in_memory = 0;
+    
+    /// Number of leading `used_key_indices` entries that refer to key columns loaded in the in-memory index;
+    /// only these get per-mark values in `sparse_key_left`/`sparse_key_right`.
+    size_t num_sparse_keys_loaded_in_memory = 0;
     std::vector<FieldRef> sparse_key_left;
     std::vector<FieldRef> sparse_key_right;
     DataTypes sparse_key_types;
@@ -1736,9 +1751,30 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         const size_t num_index_columns_loaded = index->size();
 
         /// Do not process more columns than needed
-        num_key_columns = std::min(used_key_prefix_size, num_index_columns_loaded);
+        num_used_prefix_key_columns_loaded_in_memory = std::min(used_key_prefix_size, num_index_columns_loaded);
 
-        for (size_t i = 0; i < num_key_columns; ++i)
+        //// Get PK columns potentially used in `KeyCondition` Filter
+        used_key_indices = key_condition.getUsedColumnsInOrder();
+
+        const auto has_partition_bound = [&](size_t idx)
+        {
+            chassert(!pk_to_minmax_slot || idx < pk_to_minmax_slot->size());
+            return pk_to_minmax_slot && (*pk_to_minmax_slot)[idx].has_value();
+        };
+
+        /// A key column used by the filter that is not loaded in the in-memory index but is bounded by the part's
+        /// partition minmax can still be analysed: it becomes a constant coordinate whose range is that bound (see
+        /// `index_bounds` below). Cover the deepest such column so the bound is not lost. `used_key_indices` is
+        /// ascending, so the last match is the deepest; it never exceeds `used_key_prefix_size` because the column
+        /// is, by definition, referenced by the filter.
+        size_t partition_bounded_prefix = 0;
+        for (size_t used_column : used_key_indices)
+            if (has_partition_bound(used_column))
+                partition_bounded_prefix = used_column + 1;
+
+        num_analyzed_key_columns = std::max(partition_bounded_prefix, num_used_prefix_key_columns_loaded_in_memory);
+
+        for (size_t i = 0; i < num_used_prefix_key_columns_loaded_in_memory; ++i)
         {
             chassert(i < index->size());
             chassert(index->at(i));
@@ -1746,22 +1782,30 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             reverse_flags.push_back(!sorting_key.reverse_flags.empty() && sorting_key.reverse_flags[i]);
         }
 
-        //// Get PK columns potentially used in `KeyCondition` Filter
-        used_key_indices = key_condition.getUsedColumnsInOrder();
-
-        /// Remove used_key_indices entries whose marks not loaded into memory
+        /// Keep used_key_indices entries that are loaded, plus unloaded ones covered by a partition-minmax bound.
         used_key_indices.erase(
-            std::remove_if(used_key_indices.begin(), used_key_indices.end(), [&](size_t idx) { return idx >= num_key_columns; }),
+            std::remove_if(
+                used_key_indices.begin(),
+                used_key_indices.end(),
+                [&](size_t idx) { return idx >= num_used_prefix_key_columns_loaded_in_memory && !has_partition_bound(idx); }),
             used_key_indices.end());
 
         /// Now we create sparse arrays for efficient processing in `KeyCondition`. The goal is to only send the information
         /// that is needed and avoid creation of `FieldRef`, `Range` both of which under the hood uses Field which are very slow.
         /// In the event of long PK, this can become extremely slow.
-        /// So in the sparse form, we only have keys which are used in `KeyCondition` by some RPN element and marks are loaded into memory
+        /// So in the sparse form, we only have keys which are used in `KeyCondition` by some RPN element and are
+        /// either loaded into memory or bounded by the part's partition minmax.
         sparse_keys_size = used_key_indices.size();
 
-        sparse_key_left.resize(sparse_keys_size);
-        sparse_key_right.resize(sparse_keys_size);
+        /// Only the loaded sparse columns (a leading subsequence, since `used_key_indices` is ascending) have
+        /// per-mark boundary values. The trailing constant-coordinate columns are handled inside `KeyCondition`
+        /// via `index_bounds`, so nothing is written for them per mark range.
+        num_sparse_keys_loaded_in_memory = static_cast<size_t>(
+            std::lower_bound(used_key_indices.begin(), used_key_indices.end(), num_used_prefix_key_columns_loaded_in_memory)
+            - used_key_indices.begin());
+
+        sparse_key_left.resize(num_sparse_keys_loaded_in_memory);
+        sparse_key_right.resize(num_sparse_keys_loaded_in_memory);
 
         /// Datatypes are always same regardless of `MarkRange`, so we construct it only once.
         sparse_key_types.reserve(sparse_keys_size);
@@ -1771,18 +1815,19 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             sparse_key_types.emplace_back(primary_key.data_types[key_col]);
         }
 
-        /// Equality bitmap for all key columns (not only sparse): `equal_boundaries_mask[i] = (left_key_i == right_key_i)`
+        /// Equality bitmap for the key columns present in the in-memory index (not only sparse):
+        /// `equal_boundaries_mask[i] = (left_key_i == right_key_i)`
         /// For intermediate key columns that are not used by KeyCondition, we still need to know if their left and right
         /// marks are the same or not to properly construct all hyperrectangles. However, this is extremely fast because
         /// for intermediate columns we never create `Range`, `FieldRef`, or `Field` in `KeyCondition`.
-        equal_boundaries_mask.resize(num_key_columns);
+        equal_boundaries_mask.resize(num_used_prefix_key_columns_loaded_in_memory);
     }
     else
     {
-        num_key_columns = key_condition.getNumKeyColumns();
-        if (num_key_columns > 0)
+        num_analyzed_key_columns = key_condition.getNumKeyColumns();
+        if (num_analyzed_key_columns > 0)
         {
-            for (size_t i = 0; i < num_key_columns; ++i)
+            for (size_t i = 0; i < num_analyzed_key_columns; ++i)
             {
                 if (i < index->size())
                 {
@@ -1800,7 +1845,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             }
         }
 
-        used_key_size = num_key_columns;
+        used_key_size = num_analyzed_key_columns;
         index_left.resize(used_key_size);
         index_right.resize(used_key_size);
     }
@@ -1830,13 +1875,17 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         };
     }
 
-    /// For index columns that are also covered by the part's partition minmax index, use a minmax bounds
-    /// instead of (-inf, +inf).
-    /// Partition minmax index is always store in value-ascending order, so we do not need to consider reverse_flags here.
+    /// For index columns that are also covered by the part's partition minmax index, use minmax bounds
+    /// instead of (-inf, +inf). The same bounds are consulted by the full and the sparse key representation.
+    /// Indexed by full primary key position (not by sparse position), so the sparse path can look up the
+    /// bound of a key column by its key index. For key columns without per-mark values (not loaded in the
+    /// in-memory index) these bounds are the only information: `KeyCondition` analyses them as constant
+    /// coordinates whose range is the bound.
+    /// Partition minmax index is always stored in value-ascending order, so we do not need to consider reverse_flags here.
     Hyperrectangle index_bounds;
-    index_bounds.reserve(used_key_size);
-    for (size_t i = 0; i < used_key_size; ++i)
-        index_bounds.push_back(Range::createWholeUniverseTypeAware(key_types[i]));
+    index_bounds.reserve(num_analyzed_key_columns);
+    for (size_t i = 0; i < num_analyzed_key_columns; ++i)
+        index_bounds.push_back(Range::createWholeUniverseTypeAware(primary_key.data_types[i]));
 
     /// pk_to_minmax_slot maps each PK column to its slot in the part's partition-minmax index.
     if (pk_to_minmax_slot)
@@ -1845,7 +1894,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         if (minmax_index && minmax_index->initialized)
         {
             const auto & hyperrectangle = minmax_index->hyperrectangle;
-            for (size_t i = 0; i < used_key_size; ++i)
+            for (size_t i = 0; i < num_analyzed_key_columns; ++i)
             {
                 const auto slot = (*pk_to_minmax_slot)[i];
                 if (slot)
@@ -1875,18 +1924,18 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
                 if (range.end == marks_count)
                 {
-                    /// Last mark: the right boundary of every key column is +inf. The left and right
+                    /// Last mark: the right boundary of every loaded key column is +inf. The left and right
                     /// boundaries are equal only when the left boundary value is also +inf, i.e. when the
                     /// value at range.begin is NULL (create_field_ref maps NULL to +inf for NULL_LAST
                     /// ordering). A non-nullable column is never NULL, so its boundaries are never equal.
-                    for (size_t i = 0; i < num_key_columns; ++i)
+                    for (size_t i = 0; i < num_used_prefix_key_columns_loaded_in_memory; ++i)
                     {
                         const auto & col = (*index_columns)[i].column;
                         chassert(col);
                         equal_boundaries_mask[i] = col->isNullAt(range.begin);
                     }
 
-                    for (size_t sparse_pos = 0; sparse_pos < sparse_keys_size; ++sparse_pos)
+                    for (size_t sparse_pos = 0; sparse_pos < num_sparse_keys_loaded_in_memory; ++sparse_pos)
                     {
                         const size_t key_col = used_key_indices[sparse_pos];
 
@@ -1900,8 +1949,8 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                 }
                 else
                 {
-                    /// Non-final mark: compare PK index values at range.begin and range.end for all key columns.
-                    for (size_t i = 0; i < num_key_columns; ++i)
+                    /// Non-final mark: compare PK index values at range.begin and range.end for all loaded key columns.
+                    for (size_t i = 0; i < num_used_prefix_key_columns_loaded_in_memory; ++i)
                     {
                         const auto & col = (*index_columns)[i].column;
 
@@ -1910,8 +1959,10 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                         equal_boundaries_mask[i] = (col->compareAt(range.begin, range.end, *col, 1) == 0);
                     }
 
-                    /// Build left/right boundaries only for used key columns.
-                    for (size_t sparse_pos = 0; sparse_pos < sparse_keys_size; ++sparse_pos)
+                    /// Build left/right boundaries only for used loaded key columns. The trailing
+                    /// constant-coordinate columns need no per-range values: `KeyCondition` takes their
+                    /// range from `index_bounds` once per call.
+                    for (size_t sparse_pos = 0; sparse_pos < num_sparse_keys_loaded_in_memory; ++sparse_pos)
                     {
                         const size_t key_col = used_key_indices[sparse_pos];
 
@@ -1929,7 +1980,8 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                     sparse_key_right.data(),
                     sparse_key_types,
                     equal_boundaries_mask,
-                    initial_mask);
+                    initial_mask,
+                    &index_bounds);
             }
 
             if (range.end == marks_count)
