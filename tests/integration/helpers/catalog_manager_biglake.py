@@ -464,6 +464,11 @@ class BigLakeCatalogManager(CatalogManager):
                     attempt,
                     listed_names,
                 )
+            except _AUTH_EXPIRY_ERRORS:
+                # Non-retryable (see _AUTH_EXPIRY_ERRORS): the stale static token
+                # cannot be refreshed in place, so polling would only burn the
+                # deadline. Propagate, mirroring create_table/cleanup_all.
+                raise
             except Exception as exc:
                 log.warning(
                     "load_table('%s') failed (attempt %d): %s",
@@ -500,6 +505,12 @@ class BigLakeCatalogManager(CatalogManager):
                     identifier,
                     attempt,
                 )
+            except _AUTH_EXPIRY_ERRORS:
+                # Must precede the generic handler: an expired static token is
+                # non-retryable (see _AUTH_EXPIRY_ERRORS) and, crucially, is NOT
+                # proof the table is gone. Treating it as "gone" here would be a
+                # false-positive cleanup, so propagate instead of returning.
+                raise
             except Exception:
                 log.info(
                     "Table '%s' gone after %d attempts",
