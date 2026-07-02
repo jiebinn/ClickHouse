@@ -4849,7 +4849,7 @@ async function getQueryUnderCursor() {
             const has_content = current_query_start < offset_before_token;
             if (has_content && current_offset >= cursor_position) {
                 if (should_select_query) query_area.setSelectionRange(current_query_start, current_offset);
-                query_area.focus();
+                focusEditorForRun();
                 queryUnderCursorStart = current_query_start;
                 return all_queries.substring(current_query_start, current_offset);
             }
@@ -4870,7 +4870,7 @@ async function getQueryUnderCursor() {
     /// with the cursor placed after it" case.
     if (current_query_start === current_offset && current_offset === all_queries.length && last_query_end >= 0) {
         if (should_select_query) query_area.setSelectionRange(last_query_start, last_query_end);
-        query_area.focus();
+        focusEditorForRun();
         queryUnderCursorStart = last_query_start;
         return all_queries.substring(last_query_start, last_query_end);
     }
@@ -4878,7 +4878,7 @@ async function getQueryUnderCursor() {
     /// Cursor is in the last query (no trailing semicolon).
     const tail = all_queries.substring(current_query_start);
     if (should_select_query) query_area.setSelectionRange(current_query_start, all_queries.length);
-    query_area.focus();
+    focusEditorForRun();
     queryUnderCursorStart = current_query_start;
     return tail;
 }
@@ -5135,6 +5135,14 @@ let queryErrorPos = -1;
 let editorInteractionGen = 0;
 let runEditorInteraction = 0;
 
+/// True only while `getQueryUnderCursor` performs its internal `query_area.focus()` to run a query.
+/// That programmatic refocus happens *after* `beginFlight` has snapshotted the generation, so if it
+/// were counted as the user returning to the editor it would advance `editorInteractionGen` past the
+/// snapshot and suppress the syntax-error highlight for runs started from the "Run" / "Run all"
+/// buttons (where the textarea was not already focused, so `focus()` really does fire a `focus`
+/// event). Use `focusEditorForRun` to set this around that focus; `onReturnToEditor` then ignores it.
+let suppressReturnToEditor = false;
+
 /// Clear the syntax-error highlight and repaint. Called when the user returns to the editor
 /// (focus, typing, cursor movement) or when a new query run starts.
 function clearQueryError() {
@@ -5147,8 +5155,23 @@ function clearQueryError() {
 /// the same focus/keydown/pointerdown/input events; the generation bump is what lets a late error
 /// response know the user has already returned to editing (see `editorInteractionGen`).
 function onReturnToEditor() {
+    /// A programmatic refocus performed to start a run is not a user return to the editor; ignore it
+    /// so it does not suppress the very highlight the run is about to produce (see `suppressReturnToEditor`).
+    if (suppressReturnToEditor) return;
     ++editorInteractionGen;
     clearQueryError();
+}
+
+/// Focus the editor the way `getQueryUnderCursor` does when it selects the query to run, without
+/// letting the resulting `focus` event count as the user returning to the editor (see
+/// `suppressReturnToEditor`). Other `focus` listeners (e.g. the backdrop repaint) still run.
+function focusEditorForRun() {
+    suppressReturnToEditor = true;
+    try {
+        query_area.focus();
+    } finally {
+        suppressReturnToEditor = false;
+    }
 }
 
 /// Convert a 0-based UTF-8 byte offset into a JS (UTF-16) string index. ClickHouse reports the
