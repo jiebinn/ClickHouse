@@ -217,25 +217,40 @@ function parseTestResults(jsonData) {
           test.links = result.links;
         }
 
-        // Extract CIDB links from unified ext.labels (or legacy ext.hlabels).
+        // Extract CIDB links and other labels from unified ext.labels (or legacy ext.hlabels).
+        // Non-cidb labels (e.g. `issue`, `retry_ok`) mirror how CI attributes a failure:
+        // an `issue` label means CI matched a tracking issue; `retry_ok` etc. are the flags an
+        // infrastructure tracking issue matches on via `Failure flags:`.
         if (result.ext) {
           const cidbLinks = [];
+          const labels = [];
           if (Array.isArray(result.ext.labels)) {
             for (const label of result.ext.labels) {
-              if (label && typeof label === 'object' && label.name === 'cidb' && label.link) {
-                cidbLinks.push(label.link);
+              if (label && typeof label === 'object' && label.name) {
+                if (label.name === 'cidb' && label.link) {
+                  cidbLinks.push(label.link);
+                } else if (label.name !== 'cidb') {
+                  labels.push(label.link ? `${label.name} (${label.link})` : label.name);
+                }
               }
             }
           }
           if (Array.isArray(result.ext.hlabels)) {
             for (const hlabel of result.ext.hlabels) {
-              if (Array.isArray(hlabel) && hlabel[0] === 'cidb' && hlabel[1]) {
-                cidbLinks.push(hlabel[1]);
+              if (Array.isArray(hlabel) && hlabel[0]) {
+                if (hlabel[0] === 'cidb' && hlabel[1]) {
+                  cidbLinks.push(hlabel[1]);
+                } else if (hlabel[0] !== 'cidb') {
+                  labels.push(hlabel[1] ? `${hlabel[0]} (${hlabel[1]})` : hlabel[0]);
+                }
               }
             }
           }
           if (cidbLinks.length > 0) {
             test.cidbLinks = cidbLinks;
+          }
+          if (labels.length > 0) {
+            test.labels = labels;
           }
         }
 
@@ -452,6 +467,9 @@ async function fetchReport(inputUrl, options = {}) {
           if (failed.length > 0 && options.failedOnly && !result.isPRLevel) {
             for (const test of failed) {
               console.log(`      ❌ FAIL: ${test.name}`);
+              if (test.labels && test.labels.length > 0) {
+                console.log(`         🏷️  labels: ${test.labels.join(', ')}`);
+              }
               if (options.showCidb && test.cidbLinks && test.cidbLinks.length > 0) {
                 for (const cidbLink of test.cidbLinks) {
                   console.log(`         📊 CIDB: ${cidbLink}`);

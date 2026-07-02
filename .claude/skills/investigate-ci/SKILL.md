@@ -100,12 +100,13 @@ can re-read or `grep`. If `node` is **absent**, skip the report fetch (and the s
 and rely on the issue body's failure output plus step 3 — do not treat a missing `node` as a
 fatal error.
 
-**The tool prints only the log *tail* (the last ~30 non-empty lines of each `result.info`), not the
-full output.** CI's matchers test `Failure reason` against the **whole** `result.info`, so a
-`Failure reason` located earlier than the tail will match in CI yet be **invisible** here — when
-mirroring CI's attribution (step 2a) or judging whether a reason string is present, do not read a
-"not in the visible output" as a definitive non-match; drill via the CIDB link or the full artifact
-(step 4) if it matters.
+Per failure the tool prints a `🏷️ labels:` line (CI's non-CIDB labels — the `issue` match link and
+flags like `retry_ok`; see step 2a), the CIDB link, and the **log *tail*** — the last ~30 non-empty
+lines of `result.info`, **not** the full output. CI's matchers test `Failure reason` against the
+**whole** `result.info`, so a `Failure reason` located earlier than the tail will match in CI yet be
+**invisible** here — when mirroring CI's attribution (step 2a) or judging whether a reason string is
+present, do not read a "not in the visible output" as a definitive non-match; drill via the CIDB
+link or the full artifact (step 4) if it matters.
 
 - If `$0` is a PR URL with many reports and the noise is high, narrow with `--report <n>`
   after listing reports (run the tool with no `--failed` to see the index).
@@ -169,10 +170,21 @@ last ~8 hours**, and routes each by whether it also carries the **`infrastructur
   [#92089](https://github.com/ClickHouse/ClickHouse/issues/92089) (`Job pattern: Stateless tests (amd_msan%`,
   `Failure reason: DB::Exception: Timeout exceeded`).
 
-(CI attaches an `issue` label to a matched failure internally, but `fetch_ci_report.js` prints
-**only** CIDB links — not the `issue` label or the linked issue URL — so its output is **not** a
-"tracked" signal. The GitHub issue search below is the authoritative way to reproduce CI's
-attribution; never read the absence of a marker in the report output as "not tracked".)
+**Fast path — read the labels `fetch_ci_report.js` prints.** The tool surfaces each failure's
+non-CIDB labels on a `🏷️ labels:` line. Two are decisive:
+
+- An **`issue`** label means CI matched a tracking issue **at run time** — the printed link **is**
+  that issue (e.g. `Server died` → `issue (…/issues/107487)`, `Hung check …` → `…/107941`). That is
+  a definitive `tracked #N`; no search needed to establish tracking (still read the issue for the
+  fix).
+- **Failure flags** (e.g. `retry_ok`) appear here too — these are exactly the labels an
+  infrastructure issue matches on via `Failure flags:` (below), so this line is how you verify that
+  constraint.
+
+But **absence** of an `issue` label is **not** proof of "untracked": CI stamps it from the catalog
+*as it was at that run* (open + closed-within-8h then), so a tracking issue filed or reopened
+**after** the run won't show. So: an `issue` label → `tracked` immediately; no label → still run the
+GitHub search below before concluding `needs issue`/`untracked`.
 
 **For an `INFRA/BUILD` or timeout/harness-level failure, also run the infrastructure path.** A
 test-name search alone will miss these, so a pre-existing, already-tracked infra failure would be
@@ -186,10 +198,13 @@ gh issue list --repo ClickHouse/ClickHouse --state all --label testing --label i
   --limit 100 --json number,title,url,body,state,closedAt
 ```
 
-Compare each candidate's `Job pattern:`/`Test pattern:`/`Failure reason:`/`Failure flags:` fields
-to the failing job name and output the way `_check_infrastructure_match` does. A match on an open
-issue — or one closed within ~8 h (check `closedAt`) — is `tracked #N` exactly as CI would
-attribute it; a match on an issue closed longer ago is a `stale #N` reopen candidate (same
+Compare each candidate's fields the way `_check_infrastructure_match` does: `Failure reason:` is a
+substring of the output; `Job pattern:`/`Test pattern:` match the failing job/test name; and every
+`Failure flags:` value must appear on the failure's `🏷️ labels:` line from step 1 (that line is
+the only place these flags are visible — e.g. `test_dns_cache … → retry_ok`). All present fields
+must hold. A match on an open issue — or one closed within ~8 h (check `closedAt`) — is `tracked #N`
+exactly as CI would attribute it; a match on an issue closed longer ago is a `stale #N` reopen
+candidate (same
 same-failure/recurrence check as the flaky case).
 
 **Always run the issue search for every failed name** — it is one cheap `gh issue list` and is the
@@ -207,9 +222,10 @@ makes no sense. It is a "searched, nothing matched, and not worth filing" verdic
 
 Determine, per test:
 
-- **Tracked** — an open (or closed within ~8 h — check `closedAt`) `testing` issue matches by the
-  rule above. No new issue needed; CI will keep auto-matching it. This applies to generic-bucket
-  names too when a `testing` issue exists (e.g. `Server died` → #107487).
+- **Tracked** — the failure carries an `issue` label in the report (its link **is** the tracking
+  issue), or an open / closed-within-~8 h (`closedAt`) `testing` issue matches by the rule above. No
+  new issue needed; CI will keep auto-matching it. Applies to generic-bucket names too when a
+  `testing` issue exists (e.g. `Server died` → #107487).
 - **Needs an issue** — the failure is a pre-existing **FLAKY** or **INFRA/BUILD** problem (per
   step 3), names a **specific** test/crash (a `NNNNN_*`/`test_*` case, or an identifiable crash/race
   with a stable `STID` mapping to one code site), and has **no** matching `testing` issue. Flag it
@@ -307,22 +323,27 @@ This check is **asymmetric — trust only the positive**:
 - **`is-ancestor` true** → the fix is definitely present. If the test still failed, the fix is
   incomplete/unrelated → keep investigating; do **not** report "already fixed".
 - **`is-ancestor` false** → conclusive **only for a master PR report**, where the fix must be that
-  exact merge commit. For an S3 `REF`/master-CI report, a **release/backport branch**, or any
-  non-master base, the fix may already be present under a **different** commit (a cherry-pick), so a
-  false result does **not** prove absence. Do **not** emit `rebase/retry` or short-circuit on it.
-  First check whether an equivalent change is on the failing branch — e.g. search that branch's
-  history for the fix by subject or by the file/line it changed:
+  exact merge commit, so false ⇒ `merged #N — not in this branch → rebase/retry`. For an S3
+  `REF`/master-CI report, a **release/backport branch**, or any non-master base, the fix may already
+  be present under a **different** commit (a cherry-pick), so a false result does **not** prove
+  absence. You may *search* for the equivalent change, but treat only a **positive** find as
+  conclusive:
 
   ```bash
   git log --oneline <report-sha> --grep "<fix PR title or key phrase>"
   git log --oneline <report-sha> -- <file the fix touched>   # look for a backport/cherry-pick
   ```
 
-  Only conclude `merged #N — not in this branch → rebase/retry` when the base is `master` **and**
-  the merge commit is genuinely absent, or when a branch-history search also finds no equivalent
-  change. If you cannot resolve it (commit absent locally, base unknown), report
-  `merged #N — presence unverified` and keep the failure open for step 5 rather than declaring it
-  fixed — never turn an unverified guess into an "already fixed on master" recommendation.
+  - **Found an equivalent change** → `merged #N — in branch` (fix present; if the test still failed,
+    keep digging).
+  - **Not found** → this is a **failed heuristic, not proof**: a cherry-pick can rewrite the subject,
+    squash a different file set, or fall past shallow history. Do **not** downgrade to `rebase/retry`
+    or short-circuit. Report `merged #N — presence unverified` and keep the failure open for step 5.
+
+  So `rebase/retry` is reached **only** on a master PR report with the merge commit genuinely absent.
+  On any non-master/`REF` report, or when you cannot resolve it (commit absent locally, base
+  unknown), the outcome is `in branch` (positive find) or `presence unverified` — never turn a
+  negative `git log` into an "already fixed" recommendation.
 
 Time order is a weak last resort, not a substitute: a fix `mergedAt` **after** the run's
 commit/`check_start_time` cannot be in the run, but "before" does **not** prove presence (the branch
