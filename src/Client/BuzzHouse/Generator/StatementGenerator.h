@@ -891,8 +891,8 @@ public:
     const std::function<bool(const SQLTable &)> has_mergeable_tables
         = [](const SQLTable & t) { return t.isAttached() && t.isMergeTreeFamily(true) && t.can_run_merges; };
     /// Hypothetical (WHAT-IF) indexes are only supported on MergeTree family tables
-    const std::function<bool(const SQLTable &)> attached_tables_for_create_hypothetical_index = [this](const SQLTable & t)
-    { return t.isAttached() && t.isMergeTreeFamily(true) && static_cast<uint32_t>(t.hypothetical_indexes.size()) < fc.max_hypotheticals; };
+    const std::function<bool(const SQLTable &)> attached_tables_for_create_hypothetical_index = [&conf = this->fc](const SQLTable & t)
+    { return t.isAttached() && t.isMergeTreeFamily(true) && static_cast<uint32_t>(t.hypothetical_indexes.size()) < conf.max_hypotheticals; };
     const std::function<bool(const SQLTable &)> attached_tables_for_drop_hypothetical_index
         = [](const SQLTable & t) { return t.isAttached() && !t.hypothetical_indexes.empty(); };
 
