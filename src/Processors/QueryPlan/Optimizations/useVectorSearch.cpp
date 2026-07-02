@@ -525,7 +525,11 @@ bool optimizeVectorSearchSecondPass(QueryPlan::Node & /*root*/, Stack & stack, Q
         }
     }
 
-    return optimize_plan || apply_row_filter_for_rescoring;
+    const bool vector_optimization_applied = optimize_plan || apply_row_filter_for_rescoring;
+    if (!vector_optimization_applied && settings.optimize_prewhere && filter_step)
+        optimizePrewhere(*filter_or_prewhere_node, settings.remove_unused_columns, false);
+
+    return vector_optimization_applied;
 }
 
 }

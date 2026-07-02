@@ -174,7 +174,7 @@ ActionsDAG splitAndFillPrewhereInfo(
     return std::move(split_result.second);
 }
 
-void optimizePrewhere(QueryPlan::Node & parent_node, const bool remove_unused_columns)
+void optimizePrewhere(QueryPlan::Node & parent_node, const bool remove_unused_columns, const bool suppress_for_vector_search)
 {
     /// Assume that there are at least 2 nodes:
     /// 1. FilterNode - parent_node
@@ -225,7 +225,7 @@ void optimizePrewhere(QueryPlan::Node & parent_node, const bool remove_unused_co
     /// The former is more impactful, therefore disable PREWHERE if the vector
     /// second pass can actually use the vector-search read hints.
     auto * read_from_merge_tree_step = typeid_cast<ReadFromMergeTree *>(child_node->step.get());
-    if (read_from_merge_tree_step && shouldSuppressPrewhereForVectorSearch(*read_from_merge_tree_step, settings))
+    if (suppress_for_vector_search && read_from_merge_tree_step && shouldSuppressPrewhereForVectorSearch(*read_from_merge_tree_step, settings))
         return;
 
     /// Extract column compressed sizes

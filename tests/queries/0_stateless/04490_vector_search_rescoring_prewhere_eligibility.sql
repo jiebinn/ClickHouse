@@ -57,4 +57,36 @@ FROM
 )
 WHERE explain LIKE '%Prewhere filter column:%';
 
+SELECT count() > 0
+FROM
+(
+    EXPLAIN actions = 1
+    WITH [0.0, 0.0] AS reference_vec
+    SELECT id, vec
+    FROM tab
+    WHERE attr = 1
+    ORDER BY L2Distance(vec, reference_vec)
+    LIMIT 3
+    SETTINGS vector_search_with_rescoring = 0,
+             optimize_move_to_prewhere = 1,
+             query_plan_optimize_prewhere = 1
+)
+WHERE explain LIKE '%Prewhere filter column:%';
+
+SELECT count() = 0
+FROM
+(
+    EXPLAIN actions = 1
+    WITH [0.0, 0.0] AS reference_vec
+    SELECT id, vec
+    FROM tab
+    WHERE attr = 1
+    ORDER BY L2Distance(vec, reference_vec)
+    LIMIT 3
+    SETTINGS vector_search_with_rescoring = 0,
+             optimize_move_to_prewhere = 1,
+             query_plan_optimize_prewhere = 0
+)
+WHERE explain LIKE '%Prewhere filter column:%';
+
 DROP TABLE tab;
