@@ -1248,7 +1248,12 @@ FileSegment::Info FileSegment::getInfo(const FileSegmentPtr & file_segment)
 
 bool FileSegment::isDetached() const
 {
-    return download_state.load() == State::DETACHED;
+    /// Keep the lock: `complete` uses `isDetached` to confirm a benign concurrent detach when
+    /// `lockKeyMetadata` fails. `setDetachedState` sets DETACHED and resets `key_metadata` under
+    /// the segment lock, so only taking the lock here guarantees we observe DETACHED once the key
+    /// metadata is gone - a bare atomic load could race and turn the detach into a `LOGICAL_ERROR`.
+    auto lk = lock();
+    return download_state == State::DETACHED;
 }
 
 bool FileSegment::isCompleted(bool sync) const
