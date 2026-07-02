@@ -14,9 +14,12 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials as GoogleOAuth2Credentials
 from pyiceberg.catalog import load_catalog
 from pyiceberg.exceptions import (
+    AuthorizationExpiredError,
     CommitStateUnknownException,
+    OAuthError,
     ServerError,
     ServiceUnavailableError,
+    UnauthorizedError,
 )
 
 from helpers.catalog_manager import CatalogManager, arrow_to_iceberg_schema
@@ -27,14 +30,25 @@ BIGLAKE_CATALOG_URL = "https://biglake.googleapis.com/iceberg/v1beta/restcatalog
 GOOGLE_OAUTH2_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 NAMESPACE_PREFIX = "ch_e2e_bl_"
 
+# Auth-expiry errors are non-retryable everywhere in this manager: self.catalog
+# is a RestCatalog built once in __init__ with a static bearer token, and
+# _refresh_token_if_needed refreshes only the separate GoogleOAuth2Credentials
+# object, never the token baked into the catalog. Retrying any catalog call after
+# the token expires just resends the same stale token until the deadline.
+# Rebuilding self.catalog mid-retry is unsafe because callers share it
+# concurrently (test_many_tables_pagination fans catalog calls across a 10-thread
+# pool), so auth expiry is always left to propagate. These mirror pyiceberg's own
+# retry-then-reraise set for its REST client (AuthorizationExpiredError,
+# UnauthorizedError; OAuthError covers the token-endpoint path).
+_AUTH_EXPIRY_ERRORS = (
+    AuthorizationExpiredError,
+    OAuthError,
+    UnauthorizedError,
+)
+
 # REST/network errors that create_table retries; pyiceberg's REST client
 # retries only auth errors (stop_after_attempt(2)), so these otherwise escape.
-# Auth-expiry errors are deliberately NOT here: self.catalog is a RestCatalog
-# built once in __init__ with a static bearer token, and _refresh_token_if_needed
-# refreshes only the GoogleOAuth2Credentials object, so retrying an expired token
-# just resends the same stale token. Rebuilding self.catalog mid-retry is unsafe
-# because callers share it concurrently (test_many_tables_pagination fans
-# create_table across a 10-thread pool), so auth expiry is left to propagate.
+# Auth-expiry errors are deliberately excluded (see _AUTH_EXPIRY_ERRORS).
 _TRANSIENT_CREATE_ERRORS = (
     ServerError,
     ServiceUnavailableError,
@@ -537,6 +551,11 @@ class BigLakeCatalogManager(CatalogManager):
         `drop_table` and surface later. Forgetting a name on that ambiguous
         signal is exactly the leak this path guards against, so "confirmed
         gone" means only a `drop_table` that returned.
+
+        Auth-expiry errors (see `_AUTH_EXPIRY_ERRORS`) are re-raised, not
+        retained-and-retried: `self.catalog` holds a static token that
+        `_refresh_token_if_needed` cannot push into it, so every retry resends
+        the same stale token. `cleanup_all` turns that into a fail-fast exit.
         """
         identifier = f"{self._session_namespace}.{table_name}"
         self._refresh_token_if_needed()
@@ -544,6 +563,8 @@ class BigLakeCatalogManager(CatalogManager):
             self.catalog.drop_table(identifier)
             log.info("Dropped tracked table '%s'", identifier)
             return True
+        except _AUTH_EXPIRY_ERRORS:
+            raise
         except Exception as drop_exc:
             log.warning(
                 "Drop of tracked table '%s' unconfirmed (%s); retaining",
@@ -565,14 +586,40 @@ class BigLakeCatalogManager(CatalogManager):
         unconfirmed after the deadline are retained (never cleared blindly) and
         logged; the final namespace drop + GCS prefix delete are the storage
         backstop for anything the per-table catalog drop could not reach.
+
+        Auth-expiry is the one non-retryable case: since `self.catalog` cannot
+        pick up a refreshed token, retrying drops would only burn the deadline
+        and still leave the tables behind. On auth expiry we stop immediately
+        (no deadline loop), keep the tables tracked, run the GCS storage
+        backstop -- which builds a fresh gcsfs client from the refreshed
+        credential and so still reaps the data files -- and then propagate,
+        mirroring create_table.
         """
         deadline = time.monotonic() + timeout
         pending = list(self._tables_created)
-        while pending:
-            pending = [n for n in pending if not self._drop_confirmed(n)]
-            if not pending or time.monotonic() >= deadline:
-                break
-            time.sleep(poll_interval)
+        try:
+            while pending:
+                pending = [n for n in pending if not self._drop_confirmed(n)]
+                if not pending or time.monotonic() >= deadline:
+                    break
+                time.sleep(poll_interval)
+        except _AUTH_EXPIRY_ERRORS as auth_exc:
+            # Fail fast: the static catalog token has expired and cannot be
+            # refreshed in place, so every further drop would resend it. Keep
+            # the tables tracked (never cleared) and fall back to the GCS
+            # storage sweep, which uses the refreshed credential, then
+            # propagate so the teardown failure is visible.
+            log.warning(
+                "cleanup_all: auth expired mid-cleanup (%s); skipping catalog "
+                "drops and relying on the GCS storage sweep for tracked "
+                "table(s): %s",
+                auth_exc,
+                pending,
+            )
+            self._delete_gcs_prefix(
+                self._namespace_gcs_path(self._session_namespace)
+            )
+            raise
         if pending:
             log.warning(
                 "cleanup_all: %d tracked table(s) could not be confirmed "
