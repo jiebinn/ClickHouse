@@ -15,5 +15,11 @@ SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1e2147483648');
 SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1.23e-1');
 SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1e2');
 
+-- Digit separators are stripped, both in the mantissa and in the exponent, so the grouped
+-- spelling of an overflowing exponent takes the same saturation path.
+SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1_000');
+SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1e2_147_483_648');
+SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1e-2_147_483_648');
+
 -- Malformed exponent (no digits) must fail to parse.
 SELECT formatQuerySingleLine('SELECT 1 FROM numbers(1) SAMPLE 1e'); -- { serverError SYNTAX_ERROR }

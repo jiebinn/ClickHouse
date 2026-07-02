@@ -66,10 +66,8 @@ static const char * readUInt128Text(ASTSampleRatio::BigNum & x, const char * pos
     return result;
 }
 
-/// Read the exponent (optional sign followed by digits) into an Int64.
-/// The magnitude is saturated to Int64 max, which still triggers saturation in bigIntExp10
-/// (any value > 38 saturates), so absurdly large exponents can't silently overflow to 0.
-/// Returns false if there is no digit after the (optional) sign.
+/// `tryReadIntText` silently leaves the exponent at 0 on overflow. Read it via `readUInt128Text`
+/// and saturate the magnitude, so a huge exponent can't be mistaken for `1e0`.
 static bool readExponent(const char * & pos, const char * end, Int64 & exponent)
 {
     const char * start = pos;
@@ -98,7 +96,7 @@ static bool readExponent(const char * & pos, const char * end, Int64 & exponent)
     return true;
 }
 
-static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rational & res)
+static bool parseDecimalImpl(const char * pos, const char * end, ASTSampleRatio::Rational & res)
 {
     ASTSampleRatio::BigNum num_before = 0;
     ASTSampleRatio::BigNum num_after = 0;
@@ -144,8 +142,27 @@ static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rat
     if (exponent < 0)
         res.denominator = saturatingMultiply(res.denominator, bigIntExp10(-exponent));
 
+    /// Reject trailing characters instead of silently ignoring them (they could change the fraction).
+    if (pos != end)
+        return false;
+
     /// NOTE You do not need to remove the common power of ten from the numerator and denominator.
     return true;
+}
+
+static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rational & res)
+{
+    /// A Number token may contain '_' digit separators; `readUInt128Text` stops at them, so strip
+    /// first (as `parseNumber` does) to handle grouped spellings like 1_000 or 1e2_000.
+    std::string stripped;
+    stripped.reserve(end - pos);
+    for (const char * it = pos; it != end; ++it)
+    {
+        if (*it != '_')
+            stripped += *it;
+    }
+
+    return parseDecimalImpl(stripped.data(), stripped.data() + stripped.size(), res);
 }
 
 
