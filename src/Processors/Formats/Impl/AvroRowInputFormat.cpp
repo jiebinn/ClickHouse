@@ -32,6 +32,7 @@
 #include <Formats/FormatFactory.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <fmt/format.h>
 #include <Processors/Formats/Impl/AvroConfluentSchemaRegistry.h>
 #include <base/EnumReflection.h>
 #include <Compiler.hh>
@@ -1708,6 +1709,14 @@ void registerAvroSchemaReader(FormatFactory & factory)
         return std::make_shared<AvroSchemaReader>(buf, true, settings);
     });
 
+    for (const auto * format_name : {"Avro", "AvroConfluent"})
+    {
+        factory.registerAdditionalInfoForSchemaCacheGetter(format_name, [](const FormatSettings & settings)
+        {
+            return fmt::format(
+                "schema_inference_allow_nullable_tuple_type={}", settings.schema_inference_allow_nullable_tuple_type);
+        });
+    }
 }
 
 }
