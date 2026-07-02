@@ -3146,7 +3146,12 @@ function checkURL() {
 url_elem.addEventListener('input', checkURL);
 checkURL();
 
-async function auxiliaryQuery(server_address, user, password, query, url_params = '') {
+/// `quiet` runs a background panel-maintenance query without touching the main result pane:
+/// a failure must not wipe the current result and replace it with this query's error, and a
+/// success must not clear an error the user's own query left on screen. It is used for the
+/// automatic database-restore loads that fire merely because the panel was reopened; explicit
+/// panel actions keep reporting their errors in the result pane as before.
+async function auxiliaryQuery(server_address, user, password, query, url_params = '', quiet = false) {
     let url = server_address +
         (server_address.indexOf('?') >= 0 ? '&' : '?') +
         'add_http_cors_header=1&default_format=JSON' + url_params;
@@ -3157,19 +3162,25 @@ async function auxiliaryQuery(server_address, user, password, query, url_params 
     try {
         response = await fetch(url, { method: "POST", body: query, headers: { 'Authorization': 'never' } });
     } catch (e) {
-        clear();
-        resultEl.renderError("Network error");
-        logoEl.style.display = 'none';
+        if (!quiet) {
+            clear();
+            resultEl.renderError("Network error");
+            logoEl.style.display = 'none';
+        }
         return false;
     }
     if (!response.ok) {
-        clear();
-        resultEl.renderError(await response.text());
-        logoEl.style.display = 'none';
+        if (!quiet) {
+            clear();
+            resultEl.renderError(await response.text());
+            logoEl.style.display = 'none';
+        }
         return false;
     }
-    resultEl.clearError();
-    logoEl.style.display = 'block';
+    if (!quiet) {
+        resultEl.clearError();
+        logoEl.style.display = 'block';
+    }
     return await response.json();
 }
 
@@ -3497,10 +3508,15 @@ async function loadTables(server_address, user, password, database, container, s
     /// expanded state passes set_current = false and must not move the highlight.
     const selection_num = set_current ? ++current_selection_num : 0;
 
+    /// A restore load (set_current = false) is a background panel-maintenance query triggered by
+    /// merely reopening the panel, so it runs quietly: it must not overwrite the main result pane
+    /// with its own success or error. An explicit open/refresh (set_current = true) keeps
+    /// surfacing its error as before.
     let json = await auxiliaryQuery(server_address, user, password,
         `SELECT table, engine, total_rows, total_bytes FROM system.tables WHERE database = {database:String}
             ORDER BY table LIKE '.inner%', table`,
-        '&param_database=' + encodeURIComponent(database));
+        '&param_database=' + encodeURIComponent(database),
+        !set_current);
     if (!json) return false;
 
     if (request_num != load_tables_request_nums.get(container)) return false;
