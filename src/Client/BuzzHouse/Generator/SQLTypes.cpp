@@ -2116,8 +2116,7 @@ StatementGenerator::bottomType(RandomGenerator & rg, const uint64_t allowed_type
               std::unique_ptr<SQLType> sub;
               uint32_t dimension = rg.nextSmallNumber();
               uint32_t stride = dimension;
-              /// QBit accepts Int8 as element type besides the floating-point ones.
-              const bool use_int8 = rg.nextSmallNumber() < 3;
+              QBit * qbit = tp ? tp->mutable_qbit() : nullptr;
 
               /// Occasionally generate a strided QBit. Constraints: dimension % stride == 0 and stride % 8 == 0.
               if (rg.nextSmallNumber() < 3)
@@ -2127,17 +2126,12 @@ StatementGenerator::bottomType(RandomGenerator & rg, const uint64_t allowed_type
                   dimension = stride * num_groups;
               }
 
-              if (use_int8)
+              if (rg.nextSmallNumber() < 3)
               {
                   sub = std::make_unique<IntType>(8, false);
                   if (tp)
                   {
-                      QBit * qbit = tp->mutable_qbit();
-
                       qbit->set_int8(true);
-                      qbit->set_dimension(dimension);
-                      if (stride != dimension)
-                          qbit->set_stride(stride);
                   }
               }
               else
@@ -2147,13 +2141,14 @@ StatementGenerator::bottomType(RandomGenerator & rg, const uint64_t allowed_type
                   std::tie(sub, nflo) = randomFloatType(rg, allowed_types);
                   if (tp)
                   {
-                      QBit * qbit = tp->mutable_qbit();
-
                       qbit->set_floats(nflo);
-                      qbit->set_dimension(dimension);
-                      if (stride != dimension)
-                          qbit->set_stride(stride);
                   }
+              }
+              if (qbit)
+              {
+                  qbit->set_dimension(dimension);
+                  if (stride != dimension)
+                      qbit->set_stride(stride);
               }
               res = std::make_unique<QBitType>(std::move(sub), dimension, stride);
           }},
