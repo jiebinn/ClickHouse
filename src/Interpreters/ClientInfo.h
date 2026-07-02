@@ -137,6 +137,8 @@ public:
 
     bool is_replicated_database_internal = false;
     bool is_shared_catalog_internal = false;
+    /// Server-internal query (not user-issued), propagated to remote queries.
+    /// Independent of `query_kind == SECONDARY_QUERY`: either can hold without the other.
     bool is_internal = false;
 
     /// For parallel processing on replicas
