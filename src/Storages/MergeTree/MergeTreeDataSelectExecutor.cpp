@@ -1737,7 +1737,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     /// have no per-mark values: they are analysed via their partition-minmax bound (see `index_bounds` below)
     /// as constant coordinates.
     size_t num_used_prefix_key_columns_loaded_in_memory = 0;
-    
+
     /// Number of leading `used_key_indices` entries that refer to key columns loaded in the in-memory index;
     /// only these get per-mark values in `sparse_key_left`/`sparse_key_right`.
     size_t num_sparse_keys_loaded_in_memory = 0;
