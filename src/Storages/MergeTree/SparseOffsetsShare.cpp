@@ -117,11 +117,11 @@ SparseOffsetsShare::sliceFromBucket(
     size_t start_idx = 0;
     for (size_t i = 0; i < ranges.size(); ++i)
     {
-        const auto & r = ranges[i];
-        const size_t r_end = r.start_row_in_part + r.total_rows;
-        if (r.start_row_in_part <= abs_row_start && abs_row_start < r_end)
+        const auto & entry = ranges[i];
+        const size_t entry_end_row = entry.start_row_in_part + entry.total_rows;
+        if (entry.start_row_in_part <= abs_row_start && abs_row_start < entry_end_row)
         {
-            start = &r;
+            start = &entry;
             start_idx = i;
             break;
         }
@@ -182,38 +182,40 @@ SparseOffsetsShare::sliceFromBucket(
     size_t produce_total = 0;
     for (size_t i = start_idx; i < ranges.size(); ++i)
     {
-        const auto & r = ranges[i];
-        const size_t r_start = r.start_row_in_part;
-        const size_t r_end = r_start + r.total_rows;
-        if (r_start >= abs_row_end)
+        const auto & entry = ranges[i];
+        const size_t entry_start_row = entry.start_row_in_part;
+        const size_t entry_end_row = entry_start_row + entry.total_rows;
+        if (entry_start_row >= abs_row_end)
             break;
-        if (r_end <= abs_row_start)
+        if (entry_end_row <= abs_row_start)
             continue;
 
-        const auto & rd = assert_cast<const ColumnUInt64 &>(*r.offsets).getData();
-        const auto * b = rd.data();
-        const auto * e = b + rd.size();
+        const auto & entry_offsets = assert_cast<const ColumnUInt64 &>(*entry.offsets).getData();
+        const auto * offsets_begin = entry_offsets.data();
+        const auto * offsets_end = offsets_begin + entry_offsets.size();
 
-        const size_t skip_lo_abs = std::max(abs_row_start, r_start);
-        const size_t skip_hi_abs = std::min(abs_row_start + rows_offset, r_end);
-        const size_t produce_lo_abs = std::max(abs_row_start + rows_offset, r_start);
-        const size_t produce_hi_abs = std::min(abs_row_end, r_end);
+        /// Rows of the scan window that fall inside this entry, split into skip
+        /// (`rows_offset` prefix, counted but not emitted) and produce (emitted).
+        const size_t entry_skip_start_row = std::max(abs_row_start, entry_start_row);
+        const size_t entry_skip_end_row = std::min(abs_row_start + rows_offset, entry_end_row);
+        const size_t entry_produce_start_row = std::max(abs_row_start + rows_offset, entry_start_row);
+        const size_t entry_produce_end_row = std::min(abs_row_end, entry_end_row);
 
-        if (skip_hi_abs > skip_lo_abs)
+        if (entry_skip_end_row > entry_skip_start_row)
         {
-            const size_t lo = skip_lo_abs - r_start;
-            const size_t hi = skip_hi_abs - r_start;
-            const auto * a = std::lower_bound(b, e, lo);
-            const auto * c = std::lower_bound(a, e, hi);
-            skipped_total += c - a;
+            const size_t skip_start_within_entry = entry_skip_start_row - entry_start_row;
+            const size_t skip_end_within_entry = entry_skip_end_row - entry_start_row;
+            const auto * slice_begin = std::lower_bound(offsets_begin, offsets_end, skip_start_within_entry);
+            const auto * slice_end = std::lower_bound(slice_begin, offsets_end, skip_end_within_entry);
+            skipped_total += slice_end - slice_begin;
         }
-        if (produce_hi_abs > produce_lo_abs)
+        if (entry_produce_end_row > entry_produce_start_row)
         {
-            const size_t lo = produce_lo_abs - r_start;
-            const size_t hi = produce_hi_abs - r_start;
-            const auto * a = std::lower_bound(b, e, lo);
-            const auto * c = std::lower_bound(a, e, hi);
-            produce_total += c - a;
+            const size_t produce_start_within_entry = entry_produce_start_row - entry_start_row;
+            const size_t produce_end_within_entry = entry_produce_end_row - entry_start_row;
+            const auto * slice_begin = std::lower_bound(offsets_begin, offsets_end, produce_start_within_entry);
+            const auto * slice_end = std::lower_bound(slice_begin, offsets_end, produce_end_within_entry);
+            produce_total += slice_end - slice_begin;
         }
     }
     stitched_data.resize(produce_total);
@@ -221,38 +223,39 @@ SparseOffsetsShare::sliceFromBucket(
     size_t out_pos = 0;
     for (size_t i = start_idx; i < ranges.size(); ++i)
     {
-        const auto & r = ranges[i];
-        const size_t r_start = r.start_row_in_part;
-        const size_t r_end = r_start + r.total_rows;
-        if (r_start >= abs_row_end)
+        const auto & entry = ranges[i];
+        const size_t entry_start_row = entry.start_row_in_part;
+        const size_t entry_end_row = entry_start_row + entry.total_rows;
+        if (entry_start_row >= abs_row_end)
             break;
-        if (r_end <= abs_row_start)
+        if (entry_end_row <= abs_row_start)
             continue;
 
-        const size_t produce_lo_abs = std::max(abs_row_start + rows_offset, r_start);
-        const size_t produce_hi_abs = std::min(abs_row_end, r_end);
-        if (produce_hi_abs <= produce_lo_abs)
+        const size_t entry_produce_start_row = std::max(abs_row_start + rows_offset, entry_start_row);
+        const size_t entry_produce_end_row = std::min(abs_row_end, entry_end_row);
+        if (entry_produce_end_row <= entry_produce_start_row)
             continue;
 
-        const auto & rd = assert_cast<const ColumnUInt64 &>(*r.offsets).getData();
-        const auto * b = rd.data();
-        const auto * e = b + rd.size();
-        const size_t lo = produce_lo_abs - r_start;
-        const size_t hi = produce_hi_abs - r_start;
-        const auto * a = std::lower_bound(b, e, lo);
-        const auto * c = std::lower_bound(a, e, hi);
+        const auto & entry_offsets = assert_cast<const ColumnUInt64 &>(*entry.offsets).getData();
+        const auto * offsets_begin = entry_offsets.data();
+        const auto * offsets_end = offsets_begin + entry_offsets.size();
+        const size_t produce_start_within_entry = entry_produce_start_row - entry_start_row;
+        const size_t produce_end_within_entry = entry_produce_end_row - entry_start_row;
+        const auto * slice_begin = std::lower_bound(offsets_begin, offsets_end, produce_start_within_entry);
+        const auto * slice_end = std::lower_bound(slice_begin, offsets_end, produce_end_within_entry);
 
-        /// Each source position `p` is relative to `r_start`. To put it in the consumer's
-        /// frame, shift to `(p + r_start) - (abs_row_start + rows_offset) + frame_prev_size`.
-        const UInt64 shift = static_cast<UInt64>(r_start)
+        /// Each source position `p` is relative to `entry_start_row`. To put it in the
+        /// consumer's frame, shift to
+        /// `(p + entry_start_row) - (abs_row_start + rows_offset) + frame_prev_size`.
+        const UInt64 shift = static_cast<UInt64>(entry_start_row)
             + static_cast<UInt64>(frame_prev_size)
             - static_cast<UInt64>(abs_row_start + rows_offset);
-        const size_t n = c - a;
+        const size_t slice_count = slice_end - slice_begin;
         UInt64 * __restrict__ dst = stitched_data.data() + out_pos;
-        const UInt64 * __restrict__ src = a;
-        for (size_t k = 0; k < n; ++k)
-            dst[k] = src[k] + shift;
-        out_pos += n;
+        const UInt64 * __restrict__ src = slice_begin;
+        for (size_t j = 0; j < slice_count; ++j)
+            dst[j] = src[j] + shift;
+        out_pos += slice_count;
     }
 
     return std::make_unique<SubstreamsCacheSparseOffsetsElement>(
