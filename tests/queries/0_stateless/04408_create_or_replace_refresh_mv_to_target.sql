@@ -14,6 +14,8 @@ DROP TABLE IF EXISTS dep SYNC;
 DROP TABLE IF EXISTS dep_tgt SYNC;
 DROP TABLE IF EXISTS mv_dep SYNC;
 DROP TABLE IF EXISTS tgt_dep SYNC;
+DROP TABLE IF EXISTS plain_mv SYNC;
+DROP TABLE IF EXISTS append_mv SYNC;
 
 CREATE TABLE src (x UInt32) ENGINE = MergeTree ORDER BY x;
 INSERT INTO src VALUES (1), (2), (3);
@@ -50,6 +52,15 @@ CREATE OR REPLACE MATERIALIZED VIEW rmv_other REFRESH EVERY 1 HOUR TO tgt AS SEL
 -- target exclusively, so it must not bypass the check either.
 CREATE MATERIALIZED VIEW `_tmp_replace_a_b` REFRESH EVERY 1 HOUR TO tgt AS SELECT x FROM src; -- { serverError BAD_ARGUMENTS }
 
+-- A plain (non-refreshable) MV and an APPEND refreshable MV do not exclusively own their target, so
+-- replacing them succeeds even while a non-APPEND refreshable view owns it, just like a plain CREATE.
+CREATE OR REPLACE MATERIALIZED VIEW plain_mv TO tgt AS SELECT x FROM src;
+SELECT 'plain', name FROM system.tables WHERE database = currentDatabase() AND name = 'plain_mv';
+CREATE OR REPLACE MATERIALIZED VIEW append_mv REFRESH EVERY 1 HOUR APPEND TO tgt AS SELECT x FROM src;
+SELECT 'append', name FROM system.tables WHERE database = currentDatabase() AND name = 'append_mv';
+
+DROP TABLE IF EXISTS append_mv SYNC;
+DROP TABLE IF EXISTS plain_mv SYNC;
 DROP TABLE IF EXISTS mv_dep SYNC;
 DROP TABLE IF EXISTS tgt_dep SYNC;
 DROP TABLE IF EXISTS dep SYNC;
