@@ -1,7 +1,6 @@
 # Link musl libc built from sources (contrib/musl-cmake) into everything.
-# The CRT objects cannot be linked here: CMake's Ninja generator does not support
-# $<TARGET_OBJECTS:...> in INTERFACE_LINK_LIBRARIES, so clickhouse_add_executable
-# adds them to each executable instead.
+# The CRT startup files are wired into every executable's link line in
+# cmake/linux/default_libs.cmake; see the ordering comment there.
 
 target_link_libraries(global-libs INTERFACE musl)
 

@@ -422,14 +422,6 @@ target_link_libraries(protoc _libprotoc _libprotobuf)
 if (NOT USE_MUSL)
     target_link_libraries(protoc pthread)
 endif()
-# musl: executables need explicit CRT objects because of -nostartfiles.
-if (USE_MUSL)
-    target_sources(protoc PRIVATE
-        $<TARGET_OBJECTS:musl-crt1>
-        $<TARGET_OBJECTS:musl-crti>
-        $<TARGET_OBJECTS:musl-crtn>
-    )
-endif()
 target_link_libraries(protoc
     utf8_validity
     ${protobuf_absl_used_targets})

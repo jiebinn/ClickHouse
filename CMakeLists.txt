@@ -594,12 +594,9 @@ endif ()
 macro (clickhouse_add_executable target)
     # invoke built-in add_executable
     # explicitly acquire and interpose malloc symbols by clickhouse_malloc
-    # if USE_MUSL is on, also include musl CRT objects (crt1, crti, crtn) because we link with -nostartfiles.
-    if (USE_MUSL)
-        add_executable (${ARGV} $<TARGET_OBJECTS:musl-crt1> $<TARGET_OBJECTS:musl-crti> $<TARGET_OBJECTS:musl-crtn> $<TARGET_OBJECTS:clickhouse_malloc>)
-    else ()
-        add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc>)
-    endif ()
+    # Note: for musl builds (-nostartfiles), the CRT startup files are added to every
+    # executable through the link flags, see cmake/linux/default_libs.cmake.
+    add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc>)
 
     get_target_property (type ${target} TYPE)
     if (${type} STREQUAL EXECUTABLE)

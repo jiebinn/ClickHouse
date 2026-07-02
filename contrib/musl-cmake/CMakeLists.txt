@@ -1681,8 +1681,14 @@ target_compile_definitions(musl PUBLIC
     -D__MUSL__=1
 )
 
-# CRT objects (startup/shutdown code), linked into every executable as
-# crt1.o -> crti.o -> [program objects] -> crtn.o (see clickhouse_add_executable).
+# CRT objects (startup/shutdown code), linked into every executable in the canonical
+# order crt1.o, crti.o, [program objects and libraries], crtn.o: crti/crtn provide the
+# prologue/epilogue of the `.init`/`.fini` sections and must wrap every other
+# contribution to them. CMake's Ninja generator always emits $<TARGET_OBJECTS:...>
+# before the target's own objects, so the order cannot be expressed through source
+# lists; instead the objects are copied to stable paths below and wired into the link
+# line in cmake/linux/default_libs.cmake (crt1/crti through CMAKE_EXE_LINKER_FLAGS,
+# which precede all objects, and crtn through DEFAULT_LIBS, which follow all libraries).
 
 add_library(musl-crt1 OBJECT "${MUSL_SOURCE_DIR}/crt/crt1.c")
 target_include_directories(musl-crt1 PRIVATE
@@ -1713,3 +1719,30 @@ set_source_files_properties(
     PROPERTIES LANGUAGE ASM
 )
 target_compile_options(musl-crtn PRIVATE -Qunused-arguments -Wa,--noexecstack)
+
+# The CRT object libraries must not participate in the global link interface: they
+# inherit a (weak) dependency back on `musl` through `global-group`, and together with
+# the `musl` -> `musl-crt` dependency below that would form a dependency cycle
+# involving non-static-library targets, which CMake rejects. They also don't link
+# anything — they only compile standalone startup objects.
+set_target_properties(musl-crt1 musl-crti musl-crtn PROPERTIES LINK_LIBRARIES "" INTERFACE_LINK_LIBRARIES "")
+
+# Copy the CRT objects to stable paths so that the link flags in
+# cmake/linux/default_libs.cmake can reference them. Every executable links the `musl`
+# library, and `musl` depends on `musl-crt`, so the copies exist before any link runs.
+foreach (crt crt1 crti crtn)
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${crt}.o"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_OBJECTS:musl-${crt}>" "${CMAKE_CURRENT_BINARY_DIR}/${crt}.o"
+        DEPENDS musl-${crt} "$<TARGET_OBJECTS:musl-${crt}>"
+        COMMENT "Copying ${crt}.o"
+        VERBATIM
+    )
+endforeach ()
+add_custom_target(musl-crt
+    DEPENDS
+        "${CMAKE_CURRENT_BINARY_DIR}/crt1.o"
+        "${CMAKE_CURRENT_BINARY_DIR}/crti.o"
+        "${CMAKE_CURRENT_BINARY_DIR}/crtn.o"
+)
+add_dependencies(musl musl-crt)
