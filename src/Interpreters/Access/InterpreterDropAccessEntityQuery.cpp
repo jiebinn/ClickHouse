@@ -64,18 +64,14 @@ BlockIO InterpreterDropAccessEntityQuery::execute()
         auto & definer_dependencies = DefinerDependencies::instance();
         for (const auto & name : query.names)
         {
-            if (definer_dependencies.hasDependencies(name))
+            std::vector<String> objects;
+            for (const auto & uuid : definer_dependencies.getObjectsForDefiner(name))
             {
-                auto object_uuids = definer_dependencies.getObjectsForDefiner(name);
-                std::vector<String> objects;
-                objects.reserve(object_uuids.size());
-                for (const auto & uuid : object_uuids)
-                {
-                    const auto table = DatabaseCatalog::instance().tryGetByUUID(uuid).second;
-                    objects.push_back(table ? table->getStorageID().getNameForLogs() : toString(uuid));
-                }
-                throw Exception(ErrorCodes::HAVE_DEPENDENT_OBJECTS, "User `{}` is used as a definer of {}.", name, toString(objects));
+                if (const auto table = DatabaseCatalog::instance().tryGetByUUID(uuid).second)
+                    objects.push_back(table->getStorageID().getNameForLogs());
             }
+            if (!objects.empty())
+                throw Exception(ErrorCodes::HAVE_DEPENDENT_OBJECTS, "User `{}` is used as a definer of {}.", name, toString(objects));
         }
     }
 

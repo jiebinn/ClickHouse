@@ -336,15 +336,17 @@ public:
     void submit(QueryRunnerJob job)
     {
         job.seq = pending.issue();
+        const auto batch = job.batch;
+        const UInt64 seq = job.seq;
         if (!queue.tryPush(std::move(job)))
         {
             if (queue.isFinished())
                 LOG_WARNING(log, "The table is shutting down, discarding the query");
             else
                 LOG_ERROR(LogFrequencyLimiter(log, 5), "The queue is full (max_queue_size = {}), discarding the query", max_queue_size);
-            if (job.batch)
-                job.batch->countDown();
-            pending.retire(job.seq);
+            if (batch)
+                batch->countDown();
+            pending.retire(seq);
         }
     }
 
