@@ -602,11 +602,11 @@
 <div class="header">
     <h1>ClickHouse Schema Visualizer</h1>
     <div class="controls">
-        <div class="connection-params">
-            <input id="url" type="text" placeholder="URL" spellcheck="false">
-            <input id="user" type="text" placeholder="user" spellcheck="false">
-            <input id="password" type="password" placeholder="password">
-        </div>
+        <form class="connection-params" id="connection-form">
+            <input id="url" name="url" type="text" placeholder="URL" spellcheck="false">
+            <input id="user" name="user" type="text" placeholder="user" spellcheck="false">
+            <input id="password" name="password" type="password" placeholder="password">
+        </form>
         <button id="load" class="btn btn-primary">Load</button>
         <button id="theme-toggle" class="theme-toggle" title="Toggle theme">🌘</button>
     </div>
@@ -2152,6 +2152,10 @@ $('zoom-out').onclick = () => { state.zoom = Math.max(0.2, state.zoom / 1.2); ap
 $('zoom-reset').onclick = () => { state.zoom = 1; applyZoom(); };
 
 $('load').onclick = loadAll;
+/// The connection inputs live in a `<form>` (with `name=` attributes, as in `play.html`) so the
+/// browser offers to save and later autofill the credentials. Handle its submit — triggered by
+/// Enter in a field — by loading the schema instead of navigating away.
+$('connection-form').addEventListener('submit', (e) => { e.preventDefault(); loadAll(); });
 /// Pressing Enter in any connection field loads the schema, mirroring the Load button.
 for (const id of ['url', 'user', 'password']) {
     $(id).addEventListener('keydown', (e) => {
@@ -2204,9 +2208,31 @@ function isSameOriginTarget(value) {
         return false;
     }
 }
-if (!openedLocally && isSameOriginTarget($('url').value)) {
+/// Auto-load the same-origin default on open. First give the browser a chance to supply a
+/// remembered same-origin login: `storeCredentials` saves one via the Credential Management API,
+/// but that stored credential is only surfaced through `navigator.credentials.get` — the bare
+/// inputs are not autofilled reliably before this automatic first load, so it could otherwise fire
+/// with empty fields and show `Failed: ...` even though a saved login exists. Retrieve it here —
+/// only when the fields are empty and only for a same-origin target (the same `isSameOriginTarget`
+/// gate that guards this auto-load), so the credential stays bound to the origin it was stored for
+/// — then start the load once the values are in place. `mediation: 'silent'` never shows UI: it
+/// returns a previously granted credential or nothing, so opening the page stays non-interactive.
+/// This completes the `play.html`-style remembered auth (`play.html` needs no retrieval step
+/// because it never auto-contacts a server on open).
+async function autoLoadOnOpen() {
+    if (openedLocally || !isSameOriginTarget($('url').value)) return;
+    if (window.PasswordCredential && !$('user').value && !$('password').value) {
+        try {
+            const cred = await navigator.credentials.get({ password: true, mediation: 'silent' });
+            if (cred && cred.password) {
+                $('user').value = cred.id;
+                $('password').value = cred.password;
+            }
+        } catch (e) { console.warn('credentials.get failed:', e); }
+    }
     loadAll();
 }
+autoLoadOnOpen();
 </script>
 </body>
 </html>
