@@ -643,6 +643,13 @@ struct ToDateTime64Transform
     DateTime64::NativeType execute(Int32 d, const DateLUTImpl & time_zone) const
     {
         Int64 dt = static_cast<Int64>(time_zone.fromDayNum(ExtendedDayNum(d)));
+        /// Date32 reaches 2299-12-31, whose whole-seconds value (10413705600) overflows the Int64 DateTime64 ticks
+        /// at high precision (e.g. * 10^9 at scale 9 exceeds Int64::max). Clamp to the scale-dependent bounds before
+        /// multiplying, matching the numeric ToDateTime64Transform* transforms; otherwise decimalFromComponents throws
+        /// DECIMAL_OVERFLOW. The Date (UInt16, up to 2149) and DateTime (UInt32, up to 2106) source overloads stay
+        /// below these bounds at every scale, so only the Date32 overload needs the clamp.
+        dt = std::max<time_t>(dt, minWholeSecondsForDateTime64(scale_multiplier));
+        dt = std::min<time_t>(dt, maxWholeSecondsForDateTime64(scale_multiplier));
         return DecimalUtils::decimalFromComponentsWithMultiplier<DateTime64>(dt, 0, scale_multiplier);
     }
 

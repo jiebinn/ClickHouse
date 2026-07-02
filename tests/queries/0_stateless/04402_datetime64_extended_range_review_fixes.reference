@@ -22,3 +22,5 @@
 1	1	1	1
 -- toDateTime64 from a UInt64 above Int64::max saturates to the maximum instead of wrapping to a pre-epoch value
 1	1
+-- Date32 -> DateTime64 saturates per-scale instead of throwing DECIMAL_OVERFLOW (previously overflowed at scale 9)
+1	1	2299-12-31 00:00:00.00000000
