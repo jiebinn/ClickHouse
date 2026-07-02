@@ -1774,7 +1774,7 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
 {
     Expr * expr = idef->mutable_expr();
     const bool projection = usage == IndexUsage::ProjectionIndex;
-    IndexType itpe;
+    IndexType itpe = IndexType::IDX_set;
 
     if (usage == IndexUsage::HypotheticalIndex)
     {
