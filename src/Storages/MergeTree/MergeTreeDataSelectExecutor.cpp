@@ -1724,9 +1724,19 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     const bool use_sparse_pk_representation
         = settings[Setting::use_lightweight_primary_key_index_analysis];
 
-    /// The part's partition minmax index may be absent or uninitialized (e.g. for projection parts);
-    /// such a part has no usable partition-minmax bounds.
-    const auto part_minmax_index = pk_to_minmax_slot ? part->getMinMaxIndex() : nullptr;
+    /// If until index 4 of PK key columns is used in the filter, then used_key_prefix_size would be 5.
+    /// There is no need to process later key columns.
+    const size_t used_key_prefix_size = key_condition.getUsedKeyPrefixSize();
+
+    /// Do not touch the part's minmax index unless some key column the filter uses has a partition-minmax
+    /// bound to consume: `getMinMaxIndex` may lazy-load `minmax_*.idx` from disk, and a bound at a key
+    /// position the filter never references cannot affect the analysis. The minmax index may also be
+    /// absent or uninitialized (e.g. for projection parts); such a part has no usable bounds either.
+    const bool partition_bound_usable = pk_to_minmax_slot
+        && std::any_of(pk_to_minmax_slot->begin(),
+                       pk_to_minmax_slot->begin() + std::min(pk_to_minmax_slot->size(), used_key_prefix_size),
+                       [](const auto & slot) { return slot.has_value(); });
+    const auto part_minmax_index = partition_bound_usable ? part->getMinMaxIndex() : nullptr;
     const bool part_has_minmax_index = part_minmax_index && part_minmax_index->initialized;
 
     /// Number of leading primary key columns covered by the index analysis (`index_bounds` has one entry
@@ -1762,10 +1772,6 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
     if (use_sparse_pk_representation)
     {
-        /// If until index 4 of PK key columns is used in the filter, then used_key_prefix_size would be 5.
-        /// There is no need to process later key columns
-        const size_t used_key_prefix_size = key_condition.getUsedKeyPrefixSize();
-
         /// If earlier columns have high cardinality, then later columns may not be loaded
         const size_t num_index_columns_loaded = index->size();
 
