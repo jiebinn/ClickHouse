@@ -1354,6 +1354,7 @@ message QBit {
         bool int8 = 2;
     }
     required uint32 dimension = 3;
+    optional uint32 stride = 4;
 }
 
 message AggregateParam {
