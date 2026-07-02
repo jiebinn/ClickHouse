@@ -149,17 +149,24 @@ public:
     /// For example, suppose, a table has 6 columns in primary key : (0, 1, 2, 3, 4, 5)
     /// The caller wants to use only columns (1, 3, 4) for range check.
     /// Then, `sparse_key_indices` = {1, 3, 4}
-    /// `equal_boundaries_mask` = {false, true, false, true, true, false} (size must be max(sparse_key_indices) + 1)
-    ///      Information about entire prefix until `max(sparse_key_indices) column` must be specified.
+    /// `equal_boundaries_mask` = {false, true, false, true, true, false}
+    ///      Information about the entire prefix covered by `equal_boundaries_mask` must be specified.
     /// `sparse_left_keys` and `sparse_right_keys` contain only 3 fields each, corresponding to columns (1, 3, 4).
     /// `sparse_data_types` contain only 3 data types each, corresponding to columns (1, 3, 4).
+    /// key_bounds - optional per-column bounds the key values are known to lie within (e.g. the part's
+    /// partition minmax), indexed by full key column position. A key without a bound defaults to (-inf, +inf).
+    /// `sparse_key_indices` may also contain indices >= `equal_boundaries_mask.size()` (e.g. key columns not
+    /// present in the in-memory index but bounded by the part's partition minmax). Such columns are constant
+    /// coordinates: their range is `(*key_bounds)[key_index]` for the whole call, they do not participate in
+    /// the hyperrectangle enumeration, and their entries in `sparse_left_keys`/`sparse_right_keys` are ignored.
     BoolMask checkInRange(
         const std::vector<size_t> & sparse_key_indices,
         const FieldRef * sparse_left_keys,
         const FieldRef * sparse_right_keys,
         const DataTypes & sparse_data_types,
         const std::vector<UInt8> & equal_boundaries_mask,
-        BoolMask initial_mask) const;
+        BoolMask initial_mask,
+        const Hyperrectangle * key_bounds = nullptr) const;
 
     /// Same as checkInRange, but calculate only may_be_true component of a result.
     /// This is more efficient than checkInRange(...).can_be_true.
