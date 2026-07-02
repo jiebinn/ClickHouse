@@ -1233,6 +1233,29 @@ def test_onelake_warehouse_wrong_format(node, catalog_manager):
     assert error, "Expected CREATE DATABASE to fail with malformed warehouse"
 
 
+@only_onelake
+def test_onelake_both_auth_methods_rejected(node, catalog_manager):
+    """Providing both a bearer token and client credentials is rejected."""
+
+    db = catalog_manager.make_database_name()
+    # A dummy token is enough: validation fires before any network call.
+    sql = catalog_manager.create_db_sql(db, bearer_token="dummy_token")
+
+    error = node.query_and_get_error(sql)
+    assert "exactly one" in error, error
+
+
+@only_onelake
+def test_onelake_no_auth_method_rejected(node, catalog_manager):
+    """Providing neither a bearer token nor client credentials is rejected."""
+
+    db = catalog_manager.make_database_name()
+    sql = catalog_manager.create_db_sql(db, client_id="", client_secret="")
+
+    error = node.query_and_get_error(sql)
+    assert "exactly one" in error, error
+
+
 # ---------------------------------------------------------------------------
 # Catalog list pagination (regression: list-tables / list-namespaces
 # silently truncated when the server paginates the response)

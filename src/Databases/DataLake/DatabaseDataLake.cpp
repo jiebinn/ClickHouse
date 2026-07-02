@@ -1089,6 +1089,18 @@ void registerDatabaseDataLake(DatabaseFactory & factory)
                                     "To allow its usage, enable setting allow_database_iceberg");
                 }
 
+                if (!args.create_query.attach && catalog_type == DatabaseDataLakeCatalogType::ICEBERG_ONELAKE)
+                {
+                    /// Require exactly one auth method: a bearer token, or a client id + secret pair.
+                    const bool has_bearer = !database_settings[DatabaseDataLakeSetting::onelake_bearer_token].value.empty();
+                    const bool has_client = !database_settings[DatabaseDataLakeSetting::onelake_client_id].value.empty()
+                        && !database_settings[DatabaseDataLakeSetting::onelake_client_secret].value.empty();
+                    if (has_bearer == has_client)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                            "OneLake catalog requires exactly one authentication method: either `onelake_bearer_token` "
+                            "or both `onelake_client_id` and `onelake_client_secret`");
+                }
+
                 engine_func->name = "Iceberg";
                 break;
             }

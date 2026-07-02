@@ -247,7 +247,8 @@ class OneLakeCatalogManager(CatalogManager):
         Uses real credentials by default; pass keyword overrides
         (``tenant_id``, ``client_id``, ``client_secret``,
         ``catalog_url``, ``oauth_server_uri``, ``warehouse``,
-        ``auth_scope``) to substitute individual values.
+        ``auth_scope``) to substitute individual values. Pass
+        ``bearer_token`` to also emit an ``onelake_bearer_token`` setting.
         """
         cfg = self.config
         t = overrides.get("tenant_id", cfg.tenant_id)
@@ -260,11 +261,17 @@ class OneLakeCatalogManager(CatalogManager):
         )
         w = overrides.get("warehouse", self.warehouse)
         a = overrides.get("auth_scope", "https://storage.azure.com/.default")
+        # Optional; lets a test provide both auth methods at once.
+        bearer = overrides.get("bearer_token")
+        bearer_line = (
+            f"    onelake_bearer_token='{bearer}',\n" if bearer is not None else ""
+        )
         return (
             f"CREATE DATABASE {database_name} ENGINE = DataLakeCatalog('{u}')\n"
             f"SETTINGS\n"
             f"    catalog_type='onelake',\n"
             f"    warehouse='{w}',\n"
+            f"{bearer_line}"
             f"    onelake_tenant_id='{t}',\n"
             f"    onelake_client_id='{c}',\n"
             f"    onelake_client_secret='{s}',\n"
