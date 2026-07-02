@@ -59,8 +59,8 @@ ExecutionStatus ReplicatedDatabaseQueryStatusSource::checkStatus([[maybe_unused]
         status = ExecutionStatus(-1, "Cannot obtain error message");
     });
     /// Only the absent-node case is the benign race, so report success like the non-debug branch for it. A present
-    /// node holds a real (deserialized) status, or is unreadable/corrupt (the getExecutionStatus sentinel) which the
-    /// cross-check must still surface.
+    /// node holds a real deserialized status (positive code), or the (-1) sentinel when its payload is corrupt
+    /// (tryDeserializeText is atomic, so the sentinel survives) which the cross-check must still surface.
     if (!node_exists)
         return ExecutionStatus{0};
     return status;

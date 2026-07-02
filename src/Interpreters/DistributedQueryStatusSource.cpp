@@ -146,6 +146,8 @@ ExecutionStatus DistributedQueryStatusSource::getExecutionStatus(const fs::path 
     retries_ctl.retryLoop([&]() { finished_exists = context->getDefaultOrAuxiliaryZooKeeper(zookeeper_name)->tryGet(status_path, status_data); });
     if (node_exists)
         *node_exists = finished_exists;
+    /// tryDeserializeText is atomic: a present-but-corrupt payload leaves the (-1) sentinel intact, so a
+    /// caller pairing node_exists with the sentinel can tell an absent node from a corrupt present one.
     if (finished_exists)
         status.tryDeserializeText(status_data);
 
