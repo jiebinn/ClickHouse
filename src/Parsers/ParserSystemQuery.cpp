@@ -13,6 +13,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/InstrumentationManager.h>
+#include <Common/Exception.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 
 #include <base/EnumReflection.h>
@@ -22,6 +23,11 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+}
 
 [[nodiscard]] static bool parseQueryWithOnClusterAndMaybeTable(boost::intrusive_ptr<ASTSystemQuery> & res, IParser::Pos & pos,
                                                  Expected & expected, bool require_table, bool allow_string_literal)
@@ -213,12 +219,14 @@ enum class SystemQueryTargetType : uint8_t
             String zk_path = path_ast->as<ASTLiteral &>().value.safeGet<String>();
             if (!zk_path.empty() && zk_path[zk_path.size() - 1] == '/')
                 zk_path.pop_back();
-            if (!zk_path.empty())
-            {
-                res->full_replica_zk_path = std::move(zk_path);
-                res->zk_name = zkutil::extractZooKeeperName(res->full_replica_zk_path);
-                res->replica_zk_path = zkutil::extractZooKeeperPath(res->full_replica_zk_path, /*check_starts_with_slash*/false);
-            }
+            /// An empty ZKPATH used to be silently dropped, so the query was kept as if no `FROM` clause
+            /// was given (`is_drop_whole_replica`). That formatted back to a different query, breaking the
+            /// AST format/parse round-trip. Reject it here instead.
+            if (zk_path.empty())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path is empty");
+            res->full_replica_zk_path = std::move(zk_path);
+            res->zk_name = zkutil::extractZooKeeperName(res->full_replica_zk_path);
+            res->replica_zk_path = zkutil::extractZooKeeperPath(res->full_replica_zk_path, /*check_starts_with_slash*/false);
         }
         else
             return false;

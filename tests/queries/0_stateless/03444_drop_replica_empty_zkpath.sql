@@ -1,2 +1,4 @@
 -- Tags: no-parallel
 SYSTEM DROP REPLICA 'r1' FROM ZKPATH ''; -- { serverError BAD_ARGUMENTS }
+SYSTEM DROP REPLICA 'r1' FROM ZKPATH '/'; -- { serverError BAD_ARGUMENTS }
+SYSTEM DROP DATABASE REPLICA 'r1' FROM ZKPATH ''; -- { serverError BAD_ARGUMENTS }
