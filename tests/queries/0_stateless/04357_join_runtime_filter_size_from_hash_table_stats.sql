@@ -29,7 +29,7 @@ SELECT count() FROM rf_probe l INNER JOIN rf_build r ON l.k = r.k SETTINGS join_
 -- Stats sizing OFF: filter stays at 256 bytes, saturates and disables itself.
 SELECT count() FROM rf_probe l INNER JOIN rf_build r ON l.k = r.k SETTINGS join_runtime_filter_size_from_hash_table_stats = 0, log_comment = 'rf_off';
 
--- Stats sizing ON but a max-set-bits ratio below the 50% target fill: the filter is predicted to get saturated and gets disabled.
+-- Stats sizing ON with a max-set-bits ratio below the 50% target fill: the filter is grown to honor the stricter ratio and stays active.
 SELECT count() FROM rf_probe l INNER JOIN rf_build r ON l.k = r.k SETTINGS join_runtime_filter_size_from_hash_table_stats = 1, join_runtime_bloom_filter_max_ratio_of_set_bits = 0.4, log_comment = 'rf_saturated';
 
 SYSTEM FLUSH LOGS query_log;
@@ -46,7 +46,7 @@ FROM system.query_log
 WHERE current_database = currentDatabase() AND log_comment = 'rf_off' AND type = 'QueryFinish'
 ORDER BY event_time_microseconds DESC LIMIT 1;
 
--- SATURATED: filter predicted to get staturated and gets disabled, rows skipped -> 1
+-- LOW RATIO: filter grown to honor the stricter ratio, stays active, nothing skipped -> 0
 SELECT ProfileEvents['RuntimeFilterRowsSkipped'] > 0
 FROM system.query_log
 WHERE current_database = currentDatabase() AND log_comment = 'rf_saturated' AND type = 'QueryFinish'
