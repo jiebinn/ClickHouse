@@ -1427,11 +1427,6 @@
             transform: translateX(-100%);
             color: transparent;
             user-select: none;
-            /* The version/uptime indicator floats over the right end of the url input. Give it
-               an opaque background matching the input so a long hostname's text is masked behind
-               it and the version/uptime text stays readable, instead of the two overlapping.
-               The color matches the input, so the box is invisible when nothing is behind it. */
-            background: var(--element-background-color);
         }
 
         #url_status.ok
@@ -4253,6 +4248,32 @@ function formatUptime(t) {
     return days + " day" + (days > 1 ? 's' : '');
 }
 
+/// The version/uptime indicator (`#server_info`) floats over the right end of the url input.
+/// A short hostname leaves it clearly visible, but a long one would overlap it into an illegible
+/// mix. The hostname takes precedence: hide the indicator as soon as the hostname text reaches
+/// it. The connection-status dot (the rest of `#url_status`) is left untouched — `visibility`
+/// keeps the indicator's width, so hiding it does not shift the dot.
+function updateServerInfoVisibility() {
+    const server_info = document.getElementById('server_info');
+    if (!server_info.textContent) { return; } /// nothing shown yet
+    /// Skip while the input is not laid out (e.g. inside a closed drop-down); recomputed on open.
+    if (!url_elem.offsetWidth) { return; }
+
+    /// Width of the hostname text in the input's own font.
+    const style = getComputedStyle(url_elem);
+    const ctx = updateServerInfoVisibility.ctx ||
+        (updateServerInfoVisibility.ctx = document.createElement('canvas').getContext('2d'));
+    ctx.font = `${style.fontSize} ${style.fontFamily}`;
+    const text_width = ctx.measureText(url_elem.value).width;
+
+    const url_rect = url_elem.getBoundingClientRect();
+    const text_end = url_rect.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft) + text_width;
+    const indicator_left = document.getElementById('url_status').getBoundingClientRect().left;
+    /// A few pixels of breathing room before they would touch.
+    server_info.style.visibility = (text_end + 4 > indicator_left) ? 'hidden' : 'visible';
+}
+window.addEventListener('resize', updateServerInfoVisibility);
+
 let check_credentials_request_num = 0;
 function checkCredentials() {
     ++check_credentials_request_num;
@@ -4262,6 +4283,7 @@ function checkCredentials() {
             if (json) {
                 [user_elem, password_elem].forEach(e => { e.classList.remove('fail'); e.classList.add('ok'); });
                 document.getElementById('server_info').innerText = `v${json.v}, uptime ${formatUptime(json.t)} `;
+                updateServerInfoVisibility();
             } else {
                 [user_elem, password_elem].forEach(e => { e.classList.remove('ok'); e.classList.add('fail'); });
             }
@@ -5071,6 +5093,8 @@ const connection_dropdown_elem = document.getElementById('connection-dropdown');
 function openConnectionDropdown() {
     connection_dropdown_elem.hidden = false;
     connection_key_elem.setAttribute('aria-expanded', 'true');
+    /// The url input was unmeasurable while the drop-down was display:none; recompute now.
+    updateServerInfoVisibility();
 }
 
 function closeConnectionDropdown() {
@@ -5096,6 +5120,9 @@ function syncConnectionUI() {
         }
         closeConnectionDropdown();
     }
+    /// The url input's width differs between the inline bar and the drop-down, so the point at
+    /// which the hostname reaches the version/uptime indicator changes: recompute its visibility.
+    updateServerInfoVisibility();
 }
 
 connection_key_elem.addEventListener('click', (e) => {
