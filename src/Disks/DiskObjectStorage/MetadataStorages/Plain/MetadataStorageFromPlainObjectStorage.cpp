@@ -218,9 +218,6 @@ void MetadataStorageFromPlainObjectStorageTransaction::unlinkFile(const std::str
 
 void MetadataStorageFromPlainObjectStorageTransaction::removeDirectory(const std::string & path)
 {
-    if (!metadata_storage.existsDirectory(path))
-        throw Exception(ErrorCodes::DIRECTORY_DOESNT_EXIST, "Directory '{}' does not exist", path);
-
     if (auto it = metadata_storage.iterateDirectory(path); it->isValid())
         throw Exception(ErrorCodes::CANNOT_RMDIR, "Directory '{}' is not empty", path);
 
