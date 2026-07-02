@@ -618,6 +618,9 @@ async function fetchReport(inputUrl, options = {}) {
       console.log('--- Failures ---');
       for (const test of failed) {
         console.log(`❌ FAIL  ${test.name}  (${test.duration}s)`);
+        if (test.labels && test.labels.length > 0) {
+          console.log(`   🏷️  labels: ${test.labels.join(', ')}`);
+        }
         if (options.showCidb && test.cidbLinks && test.cidbLinks.length > 0) {
           for (const cidbLink of test.cidbLinks) {
             console.log(`   📊 CIDB: ${cidbLink}`);
