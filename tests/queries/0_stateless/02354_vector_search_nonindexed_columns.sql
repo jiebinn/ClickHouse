@@ -30,8 +30,10 @@ FROM numbers(100);
 
 -- Test vector search on indexed column (vec1) with different filter strategies
 --
--- Expect to use index lookups for auto and postfilter strategies, and PREWHERE
--- filter + brute force distance calculation for the prefilter strategy
+-- With the PK filter below, vector index analysis does not produce usable row
+-- hints for auto and postfilter strategies, so implicit PREWHERE is restored.
+-- The prefilter strategy explicitly prefers PREWHERE and brute force distance
+-- calculation.
 
 SELECT '-- Search with index, strategy = auto';
 SELECT replaceRegexpAll(trimLeft(explain), '__set_Int32_\\d+_\\d+', '__set_Int32_XXX')
