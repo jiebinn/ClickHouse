@@ -15,7 +15,6 @@ from google.oauth2.credentials import Credentials as GoogleOAuth2Credentials
 from pyiceberg.catalog import load_catalog
 from pyiceberg.exceptions import (
     CommitStateUnknownException,
-    NoSuchTableError,
     ServerError,
     ServiceUnavailableError,
 )
@@ -325,12 +324,21 @@ class BigLakeCatalogManager(CatalogManager):
 
         if table_name is not None:
             self._refresh_token_if_needed()
-            table = self.catalog.create_table(
-                identifier=f"{namespace}.{table_name}",
-                schema=iceberg_schema,
-                location=f"{self._warehouse_path()}/{namespace}/{table_name}",
-            )
-            table.append(data)
+            try:
+                table = self.catalog.create_table(
+                    identifier=f"{namespace}.{table_name}",
+                    schema=iceberg_schema,
+                    location=f"{self._warehouse_path()}/{namespace}/{table_name}",
+                )
+                table.append(data)
+            except Exception:
+                # create may have committed before a later step (append, or a
+                # CommitStateUnknownException from create itself) threw.
+                # Reconcile the partial attempt so no table is leaked untracked,
+                # then propagate: named creates are single-attempt, so the
+                # caller-supplied identifier is never created twice.
+                self._drop_failed_attempt(table_name)
+                raise
             log.info("Created BigLake Iceberg table '%s.%s'", namespace, table_name)
             self._tables_created.append(table_name)
             return table_name
@@ -351,10 +359,16 @@ class BigLakeCatalogManager(CatalogManager):
                     location=table_location,
                 )
                 table.append(data)
-            except _TRANSIENT_CREATE_ERRORS as exc:
-                # Drop whatever this attempt may have created so the retry
-                # starts clean and no orphan table/namespace entry lingers.
+            except Exception as exc:
+                # ANY failure here may have left a committed table behind
+                # (create succeeds before append can throw; create itself can
+                # raise CommitStateUnknownException after committing). Reconcile
+                # the partial attempt FIRST -- for every exception, transient or
+                # not -- so nothing is leaked untracked, then decide retry vs
+                # re-raise.
                 self._drop_failed_attempt(candidate)
+                if not isinstance(exc, _TRANSIENT_CREATE_ERRORS):
+                    raise
                 if time.monotonic() >= deadline:
                     raise
                 log.warning(
@@ -377,20 +391,30 @@ class BigLakeCatalogManager(CatalogManager):
             return candidate
 
     def _drop_failed_attempt(self, table_name: str) -> None:
-        """Best-effort drop of a table left behind by a failed create attempt."""
+        """Reconcile a table left behind by a failed create attempt.
+
+        Drops it if possible; otherwise registers it in `_tables_created` so the
+        end-of-session `cleanup_all` sweep reaps it. Never leaves a possibly-live
+        table untracked. `NoSuchTableError` is treated as unconfirmed (not proof
+        the table is gone): BigLake indexes asynchronously, so a just-committed
+        table can be invisible to `drop_table` here and only surface later. The
+        only case that skips registration is a clearly successful drop.
+        """
         identifier = f"{self._session_namespace}.{table_name}"
         try:
             self._refresh_token_if_needed()
             self.catalog.drop_table(identifier)
             log.info("Dropped partially-created table '%s'", identifier)
-        except NoSuchTableError:
-            pass
+            return
         except Exception as exc:
             log.warning(
-                "Could not drop partially-created table '%s': %s",
+                "Could not confirm drop of partially-created table '%s' (%s); "
+                "tracking it for end-of-session cleanup",
                 identifier,
                 exc,
             )
+        if table_name not in self._tables_created:
+            self._tables_created.append(table_name)
 
     def wait_for_table_ready(
         self,
