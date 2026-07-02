@@ -1396,6 +1396,27 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
                     ? RefreshScheduleKind::AFTER
                     : RefreshScheduleKind::EVERY;
             }
+
+            /// Fuzz offset (EVERY ... OFFSET ...)
+            if (create.refresh_strategy->offset && fuzz_rand() % 5 == 0)
+                create.refresh_strategy->offset->interval.seconds = static_cast<UInt64>(fuzz_rand() % 3600);
+
+            /// Drop the DEPENDS ON list — exercises the dependency-free scheduling path
+            if (create.refresh_strategy->dependencies && fuzz_rand() % 20 == 0)
+            {
+                auto & ch = create.refresh_strategy->children;
+                ch.erase(
+                    std::remove_if(
+                        ch.begin(), ch.end(), [&](const ASTPtr & c) { return c.get() == create.refresh_strategy->dependencies; }),
+                    ch.end());
+                create.refresh_strategy->dependencies = nullptr;
+            }
+
+            /// Fuzz REFRESH ... SETTINGS values
+            if (create.refresh_strategy->settings)
+                for (auto & change : create.refresh_strategy->settings->changes)
+                    if (fuzz_rand() % 5 == 0)
+                        change.value = fuzzField(change.value);
         }
     }
 
@@ -1563,8 +1584,9 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
     /// Drop storage clauses: each is optional and null-checked by formatImpl
     if (create.storage)
     {
-        /// Helper: remove a raw-pointer child from storage->children and null it
-        auto drop_storage_clause = [&](IAST *& ptr)
+        /// Helper: remove a raw-pointer child from storage->children and null it.
+        /// Generic over the pointee type: `engine` is `ASTFunction *`, the rest are `IAST *`.
+        auto drop_storage_clause = [&](auto *& ptr)
         {
             if (!ptr)
                 return;
@@ -1579,9 +1601,18 @@ void QueryFuzzer::fuzzCreateQuery(ASTCreateQuery & create)
             drop_storage_clause(create.storage->primary_key);
         if (fuzz_rand() % 50 == 0)
             drop_storage_clause(create.storage->ttl_table);
+        if (fuzz_rand() % 50 == 0)
+            drop_storage_clause(create.storage->unique_key);
         /// PARTITION BY removal is rarer — changes table sharding fundamentally
         if (fuzz_rand() % 100 == 0)
             drop_storage_clause(create.storage->partition_by);
+        /// With PRIMARY KEY still present the sorting key defaults to it (valid DDL);
+        /// without either, this hits the "ORDER BY or PRIMARY KEY required" rejection
+        if (fuzz_rand() % 100 == 0)
+            drop_storage_clause(create.storage->order_by);
+        /// No ENGINE clause falls back to the `default_table_engine` setting
+        if (fuzz_rand() % 100 == 0)
+            drop_storage_clause(create.storage->engine);
         /// Introduce DESC on individual MergeTree ORDER BY key columns.
         /// The parser strips ASTStorageOrderByElement wrappers when all directions are ASC
         /// (all-or-nothing rule: KeyDescription expects either all wrapped or none).
