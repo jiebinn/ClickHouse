@@ -1427,6 +1427,11 @@
             transform: translateX(-100%);
             color: transparent;
             user-select: none;
+            /* The version/uptime indicator floats over the right end of the url input. Give it
+               an opaque background matching the input so a long hostname's text is masked behind
+               it and the version/uptime text stays readable, instead of the two overlapping.
+               The color matches the input, so the box is invisible when nothing is behind it. */
+            background: var(--element-background-color);
         }
 
         #url_status.ok
