@@ -409,6 +409,14 @@ void ApproximateRuntimeFilter::switchToBloomFilter()
     if (bloom_filter)
         return;
 
+    /// A non-positive max-set-bits ratio can never be satisfied.
+    if (max_ratio_of_set_bits_in_bloom_filter <= 0.0)
+    {
+        setFullyDisabled();
+        releaseExactValues();
+        return;
+    }
+
     UInt64 bloom_filter_bytes = getBytesLimit();
     if (distinct_keys_hint)
     {
