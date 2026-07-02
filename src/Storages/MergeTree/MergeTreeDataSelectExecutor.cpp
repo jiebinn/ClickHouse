@@ -1710,6 +1710,11 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     const bool use_sparse_pk_representation
         = settings[Setting::use_lightweight_primary_key_index_analysis];
 
+    /// The part's partition minmax index may be absent or uninitialized (e.g. for projection parts);
+    /// such a part has no usable partition-minmax bounds.
+    const auto part_minmax_index = pk_to_minmax_slot ? part->getMinMaxIndex() : nullptr;
+    const bool part_has_minmax_index = part_minmax_index && part_minmax_index->initialized;
+
     /// Number of leading primary key columns covered by the index analysis (`index_bounds` has one entry
     /// per such column). For the sparse representation this is the in-memory index prefix extended to the
     /// deepest used column with a partition-minmax bound; for the non-sparse one it is all key columns of
@@ -1759,7 +1764,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         const auto has_partition_bound = [&](size_t idx)
         {
             chassert(!pk_to_minmax_slot || idx < pk_to_minmax_slot->size());
-            return pk_to_minmax_slot && (*pk_to_minmax_slot)[idx].has_value();
+            return part_has_minmax_index && (*pk_to_minmax_slot)[idx].has_value();
         };
 
         /// A key column used by the filter that is not loaded in the in-memory index but is bounded by the part's
@@ -1888,18 +1893,14 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         index_bounds.push_back(Range::createWholeUniverseTypeAware(primary_key.data_types[i]));
 
     /// pk_to_minmax_slot maps each PK column to its slot in the part's partition-minmax index.
-    if (pk_to_minmax_slot)
+    if (part_has_minmax_index)
     {
-        auto minmax_index = part->getMinMaxIndex();
-        if (minmax_index && minmax_index->initialized)
+        const auto & hyperrectangle = part_minmax_index->hyperrectangle;
+        for (size_t i = 0; i < num_analyzed_key_columns; ++i)
         {
-            const auto & hyperrectangle = minmax_index->hyperrectangle;
-            for (size_t i = 0; i < num_analyzed_key_columns; ++i)
-            {
-                const auto slot = (*pk_to_minmax_slot)[i];
-                if (slot)
-                    index_bounds[i] = hyperrectangle[*slot];
-            }
+            const auto slot = (*pk_to_minmax_slot)[i];
+            if (slot)
+                index_bounds[i] = hyperrectangle[*slot];
         }
     }
 
