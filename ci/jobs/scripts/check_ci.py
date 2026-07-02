@@ -1065,6 +1065,12 @@ def main():
     # bailing out with an error.
     already_queued = "already in the queue" in (stdout + stderr).lower()
     if returncode != 0 and not already_queued:
+        # Surface the real gh output so auth/permission/validation/rate-limit
+        # failures stay diagnosable, as the previous verbose Shell.check did.
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(stderr)
         print(
             f"ERROR: Failed to add PR #{pr_number} to the merge queue. "
             f"This often happens when mergeStateStatus is UNKNOWN "
