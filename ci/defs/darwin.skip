@@ -192,3 +192,4 @@
 04242_file_log_delete_recreate
 04257_file_log_rename_and_recreate
 04402_float_parsing_corner_cases
+04498_alter_table_with_custom_disk
