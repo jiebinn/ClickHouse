@@ -9,9 +9,18 @@ from typing import Dict, List, Optional, Tuple
 
 import gcsfs
 import pyarrow as pa
+import requests
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials as GoogleOAuth2Credentials
 from pyiceberg.catalog import load_catalog
+from pyiceberg.exceptions import (
+    AuthorizationExpiredError,
+    CommitStateUnknownException,
+    NoSuchTableError,
+    OAuthError,
+    ServerError,
+    ServiceUnavailableError,
+)
 
 from helpers.catalog_manager import CatalogManager, arrow_to_iceberg_schema
 
@@ -20,6 +29,17 @@ log = logging.getLogger(__name__)
 BIGLAKE_CATALOG_URL = "https://biglake.googleapis.com/iceberg/v1beta/restcatalog"
 GOOGLE_OAUTH2_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
 NAMESPACE_PREFIX = "ch_e2e_bl_"
+
+# REST/network errors that create_table retries; pyiceberg itself retries
+# only auth errors (stop_after_attempt(2)), so these otherwise escape.
+_TRANSIENT_CREATE_ERRORS = (
+    ServerError,
+    ServiceUnavailableError,
+    CommitStateUnknownException,
+    AuthorizationExpiredError,
+    OAuthError,
+    requests.exceptions.RequestException,
+)
 
 
 @dataclass
@@ -278,34 +298,84 @@ class BigLakeCatalogManager(CatalogManager):
         return f"e2e_biglake_{uuid.uuid4().hex[:8]}"
 
     def create_table(
-        self, data: pa.Table, table_name: Optional[str] = None
+        self,
+        data: pa.Table,
+        table_name: Optional[str] = None,
+        timeout: float = 120,
+        poll_interval: float = 5,
     ) -> str:
-        if table_name is None:
-            table_name = f"tbl_{uuid.uuid4().hex[:8]}"
-
+        # pyiceberg's REST client only retries auth errors and gives up
+        # after 2 attempts, so a single transient BigLake blip (5xx,
+        # connection reset, commit-state-unknown) otherwise propagates and
+        # fails the shared module-scoped fixture. Retry create+append under a
+        # wall-clock deadline, mirroring wait_for_table_ready/resolve_table_name.
         namespace = self._session_namespace
-        table_identifier = f"{namespace}.{table_name}"
-        table_location = (
-            f"{self._warehouse_path()}/{namespace}/{table_name}"
-        )
-
-        self._refresh_token_if_needed()
-
         iceberg_schema = arrow_to_iceberg_schema(data)
-        table = self.catalog.create_table(
-            identifier=table_identifier,
-            schema=iceberg_schema,
-            location=table_location,
-        )
-        table.append(data)
 
-        log.info(
-            "Created BigLake Iceberg table '%s' at %s",
-            table_identifier,
-            table_location,
-        )
-        self._tables_created.append(table_name)
-        return table_name
+        deadline = time.monotonic() + timeout
+        attempt = 0
+        while True:
+            attempt += 1
+            # Use a fresh table name each attempt so a partially-completed
+            # prior attempt (table created, append failed) cannot resurface as
+            # TableAlreadyExistsError or duplicate the appended rows: creation
+            # stays exactly-once.
+            candidate = (
+                table_name
+                if table_name is not None
+                else f"tbl_{uuid.uuid4().hex[:8]}"
+            )
+            table_identifier = f"{namespace}.{candidate}"
+            table_location = f"{self._warehouse_path()}/{namespace}/{candidate}"
+
+            self._refresh_token_if_needed()
+            try:
+                table = self.catalog.create_table(
+                    identifier=table_identifier,
+                    schema=iceberg_schema,
+                    location=table_location,
+                )
+                table.append(data)
+            except _TRANSIENT_CREATE_ERRORS as exc:
+                # Drop whatever this attempt may have created so the retry
+                # starts clean and no orphan table/namespace entry lingers.
+                self._drop_failed_attempt(candidate)
+                if time.monotonic() >= deadline:
+                    raise
+                log.warning(
+                    "create_table('%s') transient failure (attempt %d), "
+                    "retrying: %s",
+                    table_identifier,
+                    attempt,
+                    exc,
+                )
+                time.sleep(poll_interval)
+                continue
+
+            log.info(
+                "Created BigLake Iceberg table '%s' at %s (attempt %d)",
+                table_identifier,
+                table_location,
+                attempt,
+            )
+            self._tables_created.append(candidate)
+            return candidate
+
+    def _drop_failed_attempt(self, table_name: str) -> None:
+        """Best-effort drop of a table left behind by a failed create attempt."""
+        identifier = f"{self._session_namespace}.{table_name}"
+        try:
+            self._refresh_token_if_needed()
+            self.catalog.drop_table(identifier)
+            log.info("Dropped partially-created table '%s'", identifier)
+        except NoSuchTableError:
+            pass
+        except Exception as exc:
+            log.warning(
+                "Could not drop partially-created table '%s': %s",
+                identifier,
+                exc,
+            )
 
     def wait_for_table_ready(
         self,
