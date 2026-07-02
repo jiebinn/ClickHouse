@@ -212,6 +212,30 @@ QueryPlan decorrelateQueryPlan(
         QueryPlan lhs_plan = context.correlated_query_plan.extractSubplan(node);
         QueryPlan rhs_plan;
 
+        /// The extracted inner subplan may have zero output columns. This happens when the inner
+        /// relation only contributes its cardinality: e.g. an EXISTS body reduced to a bare filter,
+        /// or a correlated scalar whose inner table provides only the predicate column (the
+        /// correlated column is attributed to the outer table, not the inner relation). Such a
+        /// zero-column relation loses its row count once it becomes the streamed side of a join,
+        /// because a Block derives its row count from its columns (Block::rows() == 0 with no
+        /// columns), so the decorrelation join would drop all rows and produce a wrong result.
+        /// Materialize a single placeholder column so the relation always carries a determinable
+        /// row count. It is materialized (not a bare constant) so it cannot be folded away, and it
+        /// is projected out downstream (buildExistsResultExpression / scalar result renaming /
+        /// aggregation), so it does not affect the result.
+        if (lhs_plan.getCurrentHeader()->columns() == 0)
+        {
+            ActionsDAG marker_dag(lhs_plan.getCurrentHeader()->getNamesAndTypesList());
+            auto marker_type = std::make_shared<DataTypeUInt8>();
+            auto marker_column = marker_type->createColumnConst(0, 0u);
+            auto marker_name = "__correlated_subquery_row_marker_" + context.correlated_subquery.action_node_name;
+            marker_dag.getOutputs() = { &marker_dag.materializeNode(marker_dag.addColumn(std::move(marker_column), marker_type, std::move(marker_name))) };
+
+            auto marker_step = std::make_unique<ExpressionStep>(lhs_plan.getCurrentHeader(), std::move(marker_dag));
+            marker_step->setStepDescription("Row marker for zero-column correlated subquery body");
+            lhs_plan.addStep(std::move(marker_step));
+        }
+
         auto default_join_kind = settings[Setting::correlated_subqueries_default_join_kind];
         context.query_plan.addStep(std::make_unique<CommonSubplanStep>(context.query_plan.getCurrentHeader()));
 
