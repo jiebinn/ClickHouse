@@ -375,8 +375,8 @@ inline ReturnType readBoolTextWord(bool & x, ReadBuffer & buf, bool support_uppe
 /// Look at readFloatText.h
 template <typename T> void readFloatTextPrecise(T & x, ReadBuffer & in);
 template <typename T> bool tryReadFloatTextPrecise(T & x, ReadBuffer & in);
-template <typename T> void readFloatTextFast(T & x, ReadBuffer & in);
-template <typename T> bool tryReadFloatTextFast(T & x, ReadBuffer & in);
+template <typename T> void readFloatImpreciseForCompatibility(T & x, ReadBuffer & in);
+template <typename T> bool tryReadFloatImpreciseForCompatibility(T & x, ReadBuffer & in);
 
 
 /// simple: all until '\n' or '\t'

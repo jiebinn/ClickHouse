@@ -811,7 +811,7 @@ template <typename T> bool tryReadFloatTextPrecise(T & x, ReadBuffer & in)
         return readFloatTextPreciseImpl<T, bool>(x, in);
 }
 
-template <typename T> void readFloatTextFast(T & x, ReadBuffer & in)
+template <typename T> void readFloatImpreciseForCompatibility(T & x, ReadBuffer & in)
 {
     bool has_fractional = false;
     if constexpr (std::is_same_v<T, BFloat16>)
@@ -824,7 +824,7 @@ template <typename T> void readFloatTextFast(T & x, ReadBuffer & in)
         readFloatTextFastImpl<T, void>(x, in, has_fractional);
 }
 
-template <typename T> bool tryReadFloatTextFast(T & x, ReadBuffer & in)
+template <typename T> bool tryReadFloatImpreciseForCompatibility(T & x, ReadBuffer & in)
 {
     bool has_fractional = false;
     if constexpr (std::is_same_v<T, BFloat16>)
@@ -918,12 +918,12 @@ template bool tryReadFloatTextPrecise<BFloat16>(BFloat16 &, ReadBuffer &);
 template bool tryReadFloatTextPrecise<Float32>(Float32 &, ReadBuffer &);
 template bool tryReadFloatTextPrecise<Float64>(Float64 &, ReadBuffer &);
 
-template void readFloatTextFast<BFloat16>(BFloat16 &, ReadBuffer &);
-template void readFloatTextFast<Float32>(Float32 &, ReadBuffer &);
-template void readFloatTextFast<Float64>(Float64 &, ReadBuffer &);
-template bool tryReadFloatTextFast<BFloat16>(BFloat16 &, ReadBuffer &);
-template bool tryReadFloatTextFast<Float32>(Float32 &, ReadBuffer &);
-template bool tryReadFloatTextFast<Float64>(Float64 &, ReadBuffer &);
+template void readFloatImpreciseForCompatibility<BFloat16>(BFloat16 &, ReadBuffer &);
+template void readFloatImpreciseForCompatibility<Float32>(Float32 &, ReadBuffer &);
+template void readFloatImpreciseForCompatibility<Float64>(Float64 &, ReadBuffer &);
+template bool tryReadFloatImpreciseForCompatibility<BFloat16>(BFloat16 &, ReadBuffer &);
+template bool tryReadFloatImpreciseForCompatibility<Float32>(Float32 &, ReadBuffer &);
+template bool tryReadFloatImpreciseForCompatibility<Float64>(Float64 &, ReadBuffer &);
 
 template void readFloatTextSimple<BFloat16>(BFloat16 &, ReadBuffer &);
 template void readFloatTextSimple<Float32>(Float32 &, ReadBuffer &);

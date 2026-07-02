@@ -29,7 +29,7 @@ void deserializeNumberText(T & x, ReadBuffer & istr, const FormatSettings & sett
         if (settings.precise_float_parsing)
             readFloatTextPrecise(x, istr);
         else
-            readFloatTextFast(x, istr);
+            readFloatImpreciseForCompatibility(x, istr);
     }
     else
         readText(x, istr);
@@ -39,7 +39,7 @@ template <typename T>
 bool tryDeserializeNumberText(T & x, ReadBuffer & istr, const FormatSettings & settings)
 {
     if constexpr (is_floating_point<T>)
-        return settings.precise_float_parsing ? tryReadFloatTextPrecise(x, istr) : tryReadFloatTextFast(x, istr);
+        return settings.precise_float_parsing ? tryReadFloatTextPrecise(x, istr) : tryReadFloatImpreciseForCompatibility(x, istr);
     else
         return tryReadText(x, istr);
 }

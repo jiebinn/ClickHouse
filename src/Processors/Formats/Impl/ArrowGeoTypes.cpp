@@ -126,9 +126,9 @@ inline CartesianPoint parseWKTPoint(ReadBuffer & in_buffer, bool precise_float_p
     }
     else
     {
-        tryReadFloatTextFast(x, in_buffer);
+        tryReadFloatImpreciseForCompatibility(x, in_buffer);
         in_buffer.ignore();
-        readFloatTextFast(y, in_buffer);
+        readFloatImpreciseForCompatibility(y, in_buffer);
     }
     return {x, y};
 }
