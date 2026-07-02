@@ -172,6 +172,24 @@ public:
         else
         {
             /// Unanchored match: try every start position from `search_from` to `end` (inclusive), leftmost wins.
+            ///
+            /// If the program begins with an unbounded greedy quantifier over a byte set, a failed attempt
+            /// at `start` also fails at every position strictly inside the consumed run: at an interior start
+            /// the quantifier consumes the same run end, and the set of give-back positions it tries is a
+            /// subset of those already tried (and rejected) at `start`. So the search can resume at that
+            /// run's end instead of `start + 1`. Without this, patterns like `[0-9]+a` on non-matching input
+            /// rescan the run at every offset and are quadratic. This shortcut is sound only for
+            /// `max == UNBOUNDED`: a finite `max` can still match by aligning its bounded window later in the
+            /// run, so the bounded case relies on the `cursor + max` scan cap in `emitCharQuant` instead.
+            for (const Op & op : top_ops)
+            {
+                if (op.kind == OpKind::CaptureStart || op.kind == OpKind::CaptureEnd)
+                    continue; /// zero-width, does not move the cursor
+                if (op.kind == OpKind::CharQuant && op.max == UNBOUNDED)
+                    leading_quant_op = &op;
+                break; /// the first cursor-advancing operation decides
+            }
+
             auto * loop = newBB("start_loop");
             b.CreateBr(loop);
             b.SetInsertPoint(loop);
@@ -186,11 +204,20 @@ public:
             b.SetInsertPoint(body);
             match_start = start;
             initCaptures();
+            leading_run_end = nullptr;
             auto * attempt_fail = newBB("attempt_fail");
             matchAt(&top, start, attempt_fail);
 
             b.SetInsertPoint(attempt_fail);
-            auto * start_next = gepByte(start, 1);
+            auto * start_plus_one = gepByte(start, 1);
+            llvm::Value * start_next = start_plus_one;
+            if (leading_quant_op && leading_run_end)
+            {
+                /// Resume at the leading quantifier's run end, but always advance by at least one byte:
+                /// an empty run leaves `leading_run_end == start`, which would otherwise loop forever.
+                auto * past = b.CreateICmpUGT(leading_run_end, start);
+                start_next = b.CreateSelect(past, leading_run_end, start_plus_one);
+            }
             b.CreateBr(loop);
             start->addIncoming(start_next, attempt_fail);
         }
@@ -226,6 +253,12 @@ private:
     llvm::Value * capture_ends_arg = nullptr;
     llvm::Value * match_start = nullptr;
     std::vector<Op> top_ops;
+
+    /// For an unanchored search whose program begins with an unbounded greedy quantifier over a byte
+    /// set: the leading op (so a failed attempt can resume past its consumed run) and that run's end
+    /// at the current start position. See `emit` and `emitCharQuant`.
+    const Op * leading_quant_op = nullptr;
+    llvm::Value * leading_run_end = nullptr;
 
     llvm::PointerType * bytePtrTy() { return b.getInt8Ty()->getPointerTo(); }
     llvm::BasicBlock * newBB(const char * name) { return llvm::BasicBlock::Create(context, name, function); }
@@ -299,15 +332,17 @@ private:
     }
 
     /// Emit a scan that consumes the maximal run of bytes that are in `set`, starting at `cursor`,
-    /// stopping at the first byte not in `set` or at `end`. Leaves the insert point at a fresh block
-    /// where the returned value (a pointer to the stop position) is available.
-    llvm::Value * emitConsumeRun(llvm::Value * cursor, const CharSet & set)
+    /// stopping at the first byte not in `set` or at `scan_limit` (which callers set to `end` for an
+    /// unbounded quantifier, or to `cursor + max` for a bounded one so the scan does no more work than
+    /// the cap allows). Leaves the insert point at a fresh block where the returned value (a pointer to
+    /// the stop position) is available.
+    llvm::Value * emitConsumeRun(llvm::Value * cursor, const CharSet & set, llvm::Value * scan_limit)
     {
         size_t in_count = set.count();
         if (in_count == 0)
             return cursor;
         if (in_count == 256)
-            return end_arg; /// Every byte is in the set, so the run extends to the end of the string.
+            return scan_limit; /// Every byte is in the set, so the run extends all the way to `scan_limit`.
 
         /// Pick the cheaper set to test with SIMD: the members themselves, or the stop set (complement).
         bool stop_when_member = false;
@@ -360,7 +395,7 @@ private:
 
         if (use_simd)
         {
-            auto * remaining = ptrDiff(end_arg, p);
+            auto * remaining = ptrDiff(scan_limit, p);
             auto * has16 = b.CreateICmpUGE(remaining, b.getInt64(16));
             b.CreateCondBr(has16, simd_body, scalar_step);
 
@@ -396,7 +431,7 @@ private:
         }
 
         b.SetInsertPoint(scalar_step);
-        auto * at_end = b.CreateICmpEQ(p, end_arg);
+        auto * at_end = b.CreateICmpEQ(p, scan_limit);
         run_end->addIncoming(p, scalar_step);
         b.CreateCondBr(at_end, done, scalar_test);
 
@@ -441,15 +476,25 @@ private:
 
     void emitCharQuant(const Op & op, llvm::Value * cursor, const Cont * rest, llvm::BasicBlock * fail)
     {
-        llvm::Value * run_end = emitConsumeRun(cursor, op.set);
-
-        llvm::Value * hi = run_end;
+        /// For a finite `max`, cap the run scan at `cursor + max`. Scanning the whole maximal run first
+        /// and only then clamping to `max` is what makes iterative callers (`extractAll`,
+        /// `replaceRegexpAll`) with bounded repeats quadratic, as each call rescans the full remainder.
+        llvm::Value * scan_limit = end_arg;
         if (op.max != UNBOUNDED)
         {
             auto * max_ptr = gepByte(cursor, static_cast<int64_t>(op.max));
-            auto * over = b.CreateICmpUGT(run_end, max_ptr);
-            hi = b.CreateSelect(over, max_ptr, run_end);
+            scan_limit = b.CreateSelect(b.CreateICmpUGT(max_ptr, end_arg), end_arg, max_ptr);
         }
+
+        llvm::Value * run_end = emitConsumeRun(cursor, op.set, scan_limit);
+
+        /// A leading unbounded quantifier lets a failed unanchored attempt skip its whole consumed run
+        /// at once (see `emit`); record where that run ends at this start position.
+        if (&op == leading_quant_op)
+            leading_run_end = run_end;
+
+        /// `run_end` already honors `scan_limit == cursor + max`, so it is the greedy stop position.
+        llvm::Value * hi = run_end;
 
         if (op.min > 0)
         {
