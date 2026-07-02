@@ -2438,7 +2438,7 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
     /// table with such a column). Otherwise the struct is read as a plain Tuple, as it worked
     /// before Nullable(Tuple) was supported.
     bool allow_nullable_struct = settings.format_settings.schema_inference_allow_nullable_tuple_type
-        || (type_hint && type_hint->isNullable());
+        || (type_hint && isNullableOrLowCardinalityNullable(type_hint));
     if (read_as_nullable_column &&
         arrow_column->type()->id() != arrow::Type::LIST &&
         arrow_column->type()->id() != arrow::Type::LARGE_LIST &&
