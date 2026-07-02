@@ -4,3 +4,5 @@ mapValues dist	2
 mapKeys local	1
 mapKeys cluster	2
 mapKeys dist	2
+mapValues lazy-proxy dist	2
+mapKeys lazy-proxy dist	2

@@ -1,4 +1,4 @@
--- Tags: distributed
+-- Tags: distributed, no-replicated-database
 
 -- Regression test for https://github.com/ClickHouse/ClickHouse/issues/108874
 -- A text index on mapValues(map)/mapKeys(map) was used for a local MergeTree table and via
@@ -45,3 +45,37 @@ SELECT 'mapKeys dist',    count() FROM logs_dist WHERE has(mapKeys(attributes), 
 
 DROP TABLE logs_dist;
 DROP TABLE logs;
+
+-- Lazy-proxy variant. When a database has lazy_load_tables = 1, each table is wrapped in a
+-- StorageTableProxy that forwards to the real storage on first access. StorageProxy forwarded
+-- supportsSubcolumns() but not supportsOptimizationToSubcolumns(), so a proxy around Distributed
+-- fell back to the IStorage default (which ties it to supportsSubcolumns() == true) and re-enabled
+-- the mapValues -> subcolumn rewrite on the initiator. The index was then missed again through a
+-- lazy-loaded Distributed engine table, even after StorageDistributed itself opted out.
+
+DROP DATABASE IF EXISTS {CLICKHOUSE_DATABASE_1:Identifier};
+CREATE DATABASE {CLICKHOUSE_DATABASE_1:Identifier} ENGINE = Atomic SETTINGS lazy_load_tables = 1;
+
+CREATE TABLE {CLICKHOUSE_DATABASE_1:Identifier}.logs
+(
+    attributes Map(String, String),
+    INDEX attributes_vals_idx mapValues(attributes) TYPE text(tokenizer = 'array') GRANULARITY 1,
+    INDEX attributes_keys_idx mapKeys(attributes) TYPE text(tokenizer = 'array') GRANULARITY 1
+)
+ENGINE = MergeTree ORDER BY tuple();
+
+CREATE TABLE {CLICKHOUSE_DATABASE_1:Identifier}.logs_dist (attributes Map(String, String))
+ENGINE = Distributed('test_cluster_two_shards_localhost', {CLICKHOUSE_DATABASE_1:String}, logs, rand());
+
+INSERT INTO {CLICKHOUSE_DATABASE_1:Identifier}.logs VALUES ({'ip': '192.168.1.1'});
+
+-- Re-attach so the tables become StorageTableProxy instances.
+DETACH DATABASE {CLICKHOUSE_DATABASE_1:Identifier};
+ATTACH DATABASE {CLICKHOUSE_DATABASE_1:Identifier};
+
+SELECT 'mapValues lazy-proxy dist', count() FROM {CLICKHOUSE_DATABASE_1:Identifier}.logs_dist WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapKeys lazy-proxy dist',   count() FROM {CLICKHOUSE_DATABASE_1:Identifier}.logs_dist WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+
+DROP DATABASE {CLICKHOUSE_DATABASE_1:Identifier};
