@@ -13,6 +13,8 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
     extern const int BAD_ARGUMENTS;
 }
 
@@ -116,6 +118,19 @@ namespace
 
         DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
         {
+            if (arguments.empty())
+                throw Exception(
+                    ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION,
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1.",
+                    getName(),
+                    arguments.size());
+
+            if (arguments.size() > 1)
+                throw Exception(
+                    ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION,
+                    "Number of arguments for function {} doesn't match: passed {}, should be 1.",
+                    getName(),
+                    arguments.size());
 
             FunctionArgumentDescriptors mandatory_args{
                 {"timestr", static_cast<FunctionArgumentDescriptor::TypeValidator>(&isString), nullptr, "String"},
