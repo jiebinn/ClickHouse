@@ -66,11 +66,43 @@ static const char * readUInt128Text(ASTSampleRatio::BigNum & x, const char * pos
     return result;
 }
 
+/// Read the exponent (optional sign followed by digits) into an Int64.
+/// The magnitude is saturated to Int64 max, which still triggers saturation in bigIntExp10
+/// (any value > 38 saturates), so absurdly large exponents can't silently overflow to 0.
+/// Returns false if there is no digit after the (optional) sign.
+static bool readExponent(const char * & pos, const char * end, Int64 & exponent)
+{
+    const char * start = pos;
+
+    bool negative = false;
+    if (pos < end && (*pos == '+' || *pos == '-'))
+    {
+        negative = *pos == '-';
+        ++pos;
+    }
+
+    ASTSampleRatio::BigNum magnitude = 0;
+    const char * pos_after_magnitude = readUInt128Text(magnitude, pos, end);
+
+    if (pos_after_magnitude == pos)
+    {
+        pos = start;
+        return false;
+    }
+    pos = pos_after_magnitude;
+
+    Int64 clamped = magnitude > static_cast<ASTSampleRatio::BigNum>(std::numeric_limits<Int64>::max())
+        ? std::numeric_limits<Int64>::max()
+        : static_cast<Int64>(magnitude);
+    exponent = negative ? -clamped : clamped;
+    return true;
+}
+
 static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rational & res)
 {
     ASTSampleRatio::BigNum num_before = 0;
     ASTSampleRatio::BigNum num_after = 0;
-    Int32 exponent = 0;
+    Int64 exponent = 0;
 
     const char * pos_after_first_num = readUInt128Text(num_before, pos, end);
 
@@ -98,9 +130,7 @@ static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rat
     if (has_exponent)
     {
         ++pos;
-        const char * pos_after_exponent = tryReadIntText(exponent, pos, end);
-
-        if (pos_after_exponent == pos)
+        if (!readExponent(pos, end, exponent))
             return false;
     }
 
@@ -112,7 +142,7 @@ static bool parseDecimal(const char * pos, const char * end, ASTSampleRatio::Rat
     if (exponent > 0)
         res.numerator = saturatingMultiply(res.numerator, bigIntExp10(exponent));
     if (exponent < 0)
-        res.denominator = saturatingMultiply(res.denominator, bigIntExp10(-static_cast<Int64>(exponent)));
+        res.denominator = saturatingMultiply(res.denominator, bigIntExp10(-exponent));
 
     /// NOTE You do not need to remove the common power of ten from the numerator and denominator.
     return true;
