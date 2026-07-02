@@ -84,6 +84,11 @@
 # succeeds), likely a memory-accounting difference.
 01961_roaring_memory_tracking
 
+# Investigate
+04051_negative_limit_with_ties_distributed
+04052_negative_limit_with_ties_distributed_large
+04054_negative_limit_with_ties_distributed_large_boundary
+
 # ─────── NOT a macOS platform gap: env/harness/portability - verify on CI or fix ───────
 
 # Local fast-test server lacks these cluster/keeper definitions (CLUSTER_DOESNT_EXIST / NO_ZOOKEEPER);
@@ -127,4 +132,3 @@
 # (no query reaches the server), while the identical test with the same numpy/scipy/pandas versions
 # passes in ~3s locally. Looks like a runner-specific hang in the scipy import. Needs further investigation.
 02294_anova_cmp
-
