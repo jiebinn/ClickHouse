@@ -84,6 +84,13 @@ static String formatCodecChoices(RandomGenerator & rg, const DB::Strings & choic
         {
             res += "(";
             res += std::to_string(rg.randomInt<uint32_t>(1, 22));
+            if (rg.nextBool())
+            {
+                /// Optional second argument: zstd window log; 0 means the library default.
+                /// Interacts with the `zstd_window_log_max` setting on the read side.
+                res += ",";
+                res += std::to_string(rg.nextBool() ? 0 : rg.randomInt<uint32_t>(10, 31));
+            }
             res += ")";
         }
         else if ((choices[i] == "Delta" || choices[i] == "DoubleDelta") && rg.nextBool())
@@ -105,6 +112,13 @@ static String formatCodecChoices(RandomGenerator & rg, const DB::Strings & choic
             res += ",";
             res += std::to_string(rg.nextBool() ? 4 : 8);
             res += ")";
+        }
+        else if (choices[i] == "T64" && rg.nextBool())
+        {
+            /// Transposition variant: 'byte' (the default) or 'bit' (full bit transpose)
+            res += "('";
+            res += rg.nextBool() ? "bit" : "byte";
+            res += "')";
         }
     }
     return res;

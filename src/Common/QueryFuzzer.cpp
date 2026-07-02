@@ -1561,19 +1561,34 @@ void QueryFuzzer::fuzzCodecFunction(ASTFunction & codec_fn)
 
     const String chosen = pickRandomly(fuzz_rand, pool);
     if (chosen == "ZSTD" && fuzz_rand() % 2 == 0)
-        codec_fn.arguments->children.push_back(makeASTFunction("ZSTD", make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 22 + 1))));
+    {
+        auto level = make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 22 + 1));
+        if (fuzz_rand() % 2 == 0)
+        {
+            /// Optional second argument: zstd window log; 0 means the library default.
+            /// Interacts with the `zstd_window_log_max` setting on the read side.
+            const UInt64 window_log = (fuzz_rand() % 2 == 0) ? 0 : (fuzz_rand() % 22 + 10);
+            codec_fn.arguments->children.push_back(makeASTFunction("ZSTD", level, make_intrusive<ASTLiteral>(window_log)));
+        }
+        else
+            codec_fn.arguments->children.push_back(makeASTFunction("ZSTD", level));
+    }
     else if (chosen == "LZ4HC" && fuzz_rand() % 2 == 0)
         codec_fn.arguments->children.push_back(makeASTFunction("LZ4HC", make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 12 + 1))));
-    else if (chosen == "Delta" && fuzz_rand() % 2 == 0)
+    else if ((chosen == "Delta" || chosen == "DoubleDelta" || chosen == "Gorilla") && fuzz_rand() % 2 == 0)
     {
+        /// Optional data byte-size argument, shared by the three delta-style codecs.
         static const UInt64 delta_sizes[] = {1, 2, 4, 8};
-        codec_fn.arguments->children.push_back(makeASTFunction("Delta", make_intrusive<ASTLiteral>(delta_sizes[fuzz_rand() % 4])));
+        codec_fn.arguments->children.push_back(makeASTFunction(chosen, make_intrusive<ASTLiteral>(delta_sizes[fuzz_rand() % 4])));
     }
     else if (chosen == "FPC" && fuzz_rand() % 2 == 0)
         codec_fn.arguments->children.push_back(makeASTFunction(
             "FPC",
             make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 28 + 1)),
             make_intrusive<ASTLiteral>(UInt64(fuzz_rand() % 2 == 0 ? 4 : 8))));
+    else if (chosen == "T64" && fuzz_rand() % 2 == 0)
+        codec_fn.arguments->children.push_back(
+            makeASTFunction("T64", make_intrusive<ASTLiteral>(String(fuzz_rand() % 2 == 0 ? "bit" : "byte"))));
     else
         codec_fn.arguments->children.push_back(makeASTFunction(chosen));
 }
@@ -2473,7 +2488,27 @@ DataTypePtr QueryFuzzer::getRandomType()
         }
         case TypeIndex::Time64: return std::make_shared<DataTypeTime64>(fuzz_rand() % 10);
         case TypeIndex::Dynamic: return std::make_shared<DataTypeDynamic>(fuzz_rand() % 20);
-        case TypeIndex::Object: return std::make_shared<DataTypeObject>(DataTypeObject::SchemaFormat::JSON);
+        case TypeIndex::Object: {
+            /// Randomize the `JSON` type parameters, which drive distinct code paths:
+            /// `max_dynamic_paths = 0` pushes every path into shared data,
+            /// `max_dynamic_types` bounds the `Dynamic` values
+            Strings params;
+            if (fuzz_rand() % 3 == 0)
+                params.push_back("max_dynamic_paths=" + std::to_string(fuzz_rand() % 300));
+            if (fuzz_rand() % 3 == 0)
+                params.push_back("max_dynamic_types=" + std::to_string(fuzz_rand() % 40));
+            if (params.empty())
+                return std::make_shared<DataTypeObject>(DataTypeObject::SchemaFormat::JSON);
+            String json_type = "JSON(";
+            for (size_t i = 0; i < params.size(); ++i)
+            {
+                if (i > 0)
+                    json_type += ", ";
+                json_type += params[i];
+            }
+            json_type += ")";
+            return DataTypeFactory::instance().get(json_type);
+        }
         case TypeIndex::QBit: {
             static const DataTypePtr qbit_element_types[]
                 = {std::make_shared<DataTypeInt8>(),
