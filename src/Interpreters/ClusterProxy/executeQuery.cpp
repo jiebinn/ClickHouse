@@ -656,13 +656,28 @@ static std::vector<bool> getActiveReplicasForParallelReplicas(const ContextPtr &
         /// Strip it here too, otherwise an `all_groups.<db>` cluster gets no liveness data and we fall back to
         /// counting inactive replicas again.
         String database_name = cluster_name;
+        bool all_groups = false;
         static constexpr std::string_view all_groups_prefix = DatabaseReplicated::ALL_GROUPS_CLUSTER_PREFIX;
         if (database_name.starts_with(all_groups_prefix))
+        {
             database_name = database_name.substr(all_groups_prefix.size());
+            all_groups = true;
+        }
 
         if (auto database = DatabaseCatalog::instance().tryGetDatabase(database_name))
             if (const auto * replicated = typeid_cast<const DatabaseReplicated *>(database.get()))
-                replicas_info = replicated->tryGetReplicasInfo(cluster);
+            {
+                /// `cluster_for_parallel_replicas` is resolved by `Context::getCluster`, which prefers a
+                /// configured or discovered cluster over a `Replicated` database of the same name. When such a
+                /// cluster shadows the database, the resolved `cluster` is not the database's own cluster: its
+                /// replica names do not match the database's ZooKeeper nodes, so `tryGetReplicasInfo` would
+                /// report every replica inactive and the coordinator would collapse onto the local replica.
+                /// Only trust the database liveness when the resolved cluster really is this database's own
+                /// cluster (`system.clusters` likewise reports such configured clusters with unknown `is_active`).
+                const ClusterPtr database_cluster = all_groups ? replicated->tryGetAllGroupsCluster() : replicated->tryGetCluster();
+                if (database_cluster == cluster)
+                    replicas_info = replicated->tryGetReplicasInfo(cluster);
+            }
     }
 
     std::vector<bool> is_active;
