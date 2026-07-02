@@ -1,0 +1,47 @@
+-- Tags: distributed
+
+-- Regression test for https://github.com/ClickHouse/ClickHouse/issues/108874
+-- A text index on mapValues(map)/mapKeys(map) was used for a local MergeTree table and via
+-- cluster()/remote(), but silently NOT used when the same table was queried through a
+-- Distributed engine table with the analyzer. The Distributed table has no secondary indices in
+-- its own metadata, so FunctionToSubcolumnsPass rewrote mapValues(attributes) -> attributes.values
+-- on the initiator and serialized that form to the shards, where it no longer matched the index.
+-- force_data_skipping_indices makes the query throw INDEX_NOT_USED (code 277) if the index is not
+-- used, so a successful query with the correct count proves the index is used through every path.
+
+SET enable_full_text_index = 1;
+SET enable_analyzer = 1;
+SET optimize_functions_to_subcolumns = 1; -- default; the setting that triggered the bug
+
+DROP TABLE IF EXISTS logs;
+DROP TABLE IF EXISTS logs_dist;
+
+CREATE TABLE logs
+(
+    attributes Map(String, String),
+    INDEX attributes_vals_idx mapValues(attributes) TYPE text(tokenizer = 'array') GRANULARITY 1,
+    INDEX attributes_keys_idx mapKeys(attributes) TYPE text(tokenizer = 'array') GRANULARITY 1
+)
+ENGINE = MergeTree ORDER BY tuple();
+
+CREATE TABLE logs_dist AS logs
+ENGINE = Distributed('test_cluster_two_shards_localhost', currentDatabase(), logs, rand());
+
+INSERT INTO logs VALUES ({'ip': '192.168.1.1'});
+
+SELECT 'mapValues local',   count() FROM logs WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapValues cluster', count() FROM cluster('test_cluster_two_shards_localhost', currentDatabase(), logs) WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapValues dist',    count() FROM logs_dist WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+
+SELECT 'mapKeys local',   count() FROM logs WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+SELECT 'mapKeys cluster', count() FROM cluster('test_cluster_two_shards_localhost', currentDatabase(), logs) WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+SELECT 'mapKeys dist',    count() FROM logs_dist WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+
+DROP TABLE logs_dist;
+DROP TABLE logs;
