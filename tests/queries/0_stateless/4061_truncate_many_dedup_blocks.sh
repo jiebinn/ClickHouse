@@ -26,7 +26,7 @@ $CLICKHOUSE_CLIENT --query "
         ORDER BY k
         SETTINGS replicated_deduplication_window = 10000"
 
-$CLICKHOUSE_CLIENT --query "INSERT INTO truncate_many_dedup1 SELECT number FROM numbers(120) SETTINGS min_insert_block_size_rows=1, max_block_size=1"
+$CLICKHOUSE_CLIENT --query "INSERT INTO truncate_many_dedup1 SELECT number FROM numbers(120) ORDER BY ALL SETTINGS min_insert_block_size_rows=1, max_block_size=1"
 
 $CLICKHOUSE_CLIENT --query "SYSTEM SYNC REPLICA truncate_many_dedup2"
 
