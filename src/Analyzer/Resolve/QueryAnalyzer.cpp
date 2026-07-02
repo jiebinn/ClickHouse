@@ -1839,10 +1839,16 @@ void QueryAnalyzer::updateMatchedColumnsFromJoinUsing(
             Identifier explicit_identifier = matched_qualified_identifier;
             explicit_identifier.push_back(matched_column_node_typed.getColumnName());
             auto explicit_lookup = IdentifierLookup{explicit_identifier, IdentifierLookupContext::EXPRESSION};
-            IdentifierResolveContext explicit_resolve_settings;
-            explicit_resolve_settings.allow_to_check_cte = false;
-            explicit_resolve_settings.allow_to_check_database_catalog = false;
-            auto explicit_resolve_result = tryResolveIdentifier(explicit_lookup, scope, explicit_resolve_settings);
+
+            /// The qualifier is a table expression (the matcher already resolved it to one), so any
+            /// type change can only come from the join tree. Resolve against the nearest query scope's
+            /// join tree directly rather than through tryResolveIdentifier: the latter first consults
+            /// expression arguments and aliases, and a non-compound entry sharing the qualifier's name
+            /// throws there before the join tree is ever tried. For a scalar alias (`WITH 0 AS b`) that
+            /// throw is suppressed (the alias path passes can_be_not_found = allow_to_check_join_tree),
+            /// but a lambda argument goes through tryResolveIdentifierFromExpressionArguments, which does
+            /// not, so `arrayMap(b -> b.*, ...) FROM l JOIN r AS b USING (id)` used to fail here.
+            auto explicit_resolve_result = identifier_resolver.tryResolveIdentifierFromJoinTree(explicit_lookup, *nearest_query_scope);
             if (!explicit_resolve_result.resolved_identifier)
                 continue;
 

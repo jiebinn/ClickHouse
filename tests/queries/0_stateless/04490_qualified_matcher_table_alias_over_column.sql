@@ -26,6 +26,12 @@ SELECT a, b.* FROM (SELECT a FROM t1) AS l JOIN t2 AS b ON l.a = b.x ORDER BY a;
 -- Tuple-column expansion via a qualified matcher is unaffected.
 SELECT b.* FROM (SELECT (1, 'x') AS b);
 
+--- The USING join path is also unaffected
+SELECT b.* FROM t1 JOIN (SELECT x AS a, y FROM t2) AS b USING (a) ORDER BY a;
+SELECT arrayMap(b -> sipHash64(b.*), [1]) FROM t1 JOIN (SELECT x AS a, y FROM t2) AS b USING (a) ORDER BY a;
+SELECT arrayMap(b -> sipHash64(b.*), [1]) FROM t1 JOIN (SELECT x, y FROM t2) AS b ON t1.a = b.x ORDER BY b.x;
+WITH 0 AS b SELECT b.* FROM t1 JOIN (SELECT x AS a, y FROM t2) AS b USING (a) ORDER BY a;
+
 -- Guard: when the qualifier resolves to a compound (Tuple) column, the matcher keeps expanding that
 -- column's subcolumns even when the same name is also a table. The fix only changes the non-compound
 -- case, so this compound path must stay as-is (the compound column wins over the table).
