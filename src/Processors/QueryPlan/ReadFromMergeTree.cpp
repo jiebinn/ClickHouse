@@ -2864,35 +2864,6 @@ ReadFromMergeTree::AnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
         if (!distributed_index_analysis_enabled)
         {
             result.parts_with_ranges = MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(filter_context, res_parts, result.index_stats);
-
-            /// Lazily create the share so the planning-mode analyzer (`filterMarkRangesBySparsityInfo`)
-            /// can persist its decompressed offsets here, and the scan-side `MergeTreeReader`s can
-            /// then serve their sparse-column reads from memory.
-            if (settings[Setting::use_sparsity_info_for_pruning] == SparsityPruningMode::Planning && !result.sparse_offsets_share)
-                result.sparse_offsets_share = std::make_shared<SparseOffsetsShare>();
-
-            result.parts_with_ranges = MergeTreeDataSelectExecutor::filterMarkRangesBySparsityInfo(
-                result.parts_with_ranges, query_info_, mutations_snapshot, data, metadata_snapshot, context_, result.sparse_offsets_share.get(), log, result.index_stats);
-
-            /// Drop offsets the scan cannot consume any more: buckets for fully-pruned
-            /// parts, plus per-range entries that no surviving `MarkRange` overlaps.
-            if (result.sparse_offsets_share)
-            {
-                std::unordered_map<std::string, MarkRanges> surviving;
-                surviving.reserve(result.parts_with_ranges.size());
-                for (const auto & p : result.parts_with_ranges)
-                    surviving.emplace(p.data_part->getNameWithParent(), p.ranges);
-                result.sparse_offsets_share->retainSurvivingRanges(surviving);
-                if (result.sparse_offsets_share->empty())
-                    result.sparse_offsets_share.reset();
-            }
-
-            if (final_second_pass)
-            {
-                result.parts_with_ranges
-                    = findPKRangesForFinalAfterSkipIndex(primary_key, metadata_snapshot->getSortingKey(), result.parts_with_ranges, log);
-                add_index_stat_row_for_pk_expand = true;
-            }
         }
         else
         {
@@ -2979,6 +2950,36 @@ ReadFromMergeTree::AnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
                 [](const auto & a, const auto & b) { return a.part_index_in_query < b.part_index_in_query; });
 
             result.parts_with_ranges = std::move(result_parts_ranges);
+        }
+
+        /// Lazily create the share so the planning-mode analyzer (`filterMarkRangesBySparsityInfo`)
+        /// can persist its decompressed offsets here, and the scan-side `MergeTreeReader`s can
+        /// then serve their sparse-column reads from memory. Runs on both the local and the
+        /// distributed-index-analysis branches so `planning` mode always adds granule pruning.
+        if (settings[Setting::use_sparsity_info_for_pruning] == SparsityPruningMode::Planning && !result.sparse_offsets_share)
+            result.sparse_offsets_share = std::make_shared<SparseOffsetsShare>();
+
+        result.parts_with_ranges = MergeTreeDataSelectExecutor::filterMarkRangesBySparsityInfo(
+            result.parts_with_ranges, query_info_, mutations_snapshot, data, metadata_snapshot, context_, result.sparse_offsets_share.get(), log, result.index_stats);
+
+        /// Drop offsets the scan cannot consume any more: buckets for fully-pruned
+        /// parts, plus per-range entries that no surviving `MarkRange` overlaps.
+        if (result.sparse_offsets_share)
+        {
+            std::unordered_map<std::string, MarkRanges> surviving;
+            surviving.reserve(result.parts_with_ranges.size());
+            for (const auto & p : result.parts_with_ranges)
+                surviving.emplace(p.data_part->getNameWithParent(), p.ranges);
+            result.sparse_offsets_share->retainSurvivingRanges(surviving);
+            if (result.sparse_offsets_share->empty())
+                result.sparse_offsets_share.reset();
+        }
+
+        if (final_second_pass)
+        {
+            result.parts_with_ranges
+                = findPKRangesForFinalAfterSkipIndex(primary_key, metadata_snapshot->getSortingKey(), result.parts_with_ranges, log);
+            add_index_stat_row_for_pk_expand = true;
         }
 
         std::optional<size_t> condition_hash;
