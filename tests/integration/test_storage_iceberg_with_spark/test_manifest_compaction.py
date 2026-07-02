@@ -759,6 +759,34 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
     original_snapshot_ids = get_all_snapshot_ids(table_path)
     assert original_snapshot_ids, "expected the pre-compaction metadata to record snapshots"
 
+    # Capture each data file's original (data, file) sequence numbers so we can prove the rewrite
+    # preserves file_sequence_number rather than re-stamping it with the data sequence number.
+    def read_data_file_sequence_numbers(manifests):
+        by_path = {}
+        for manifest in manifests:
+            result = instance.query(
+                f"""
+                SELECT
+                    tupleElement(data_file, 'file_path') AS file_path,
+                    sequence_number,
+                    file_sequence_number,
+                    tupleElement(data_file, 'content') AS content
+                FROM file('{manifest}', Avro)
+                FORMAT TSV
+                """
+            ).strip()
+            if not result:
+                continue
+            for line in result.splitlines():
+                file_path, sequence_number, file_sequence_number, content = line.split("\t")
+                if int(content) != 0:  # data files only
+                    continue
+                by_path[file_path] = (sequence_number, file_sequence_number)
+        return by_path
+
+    original_seq_by_path = read_data_file_sequence_numbers(manifests_before)
+    assert original_seq_by_path, "expected to read data-file sequence numbers before compaction"
+
     instance.query(
         f"OPTIMIZE TABLE {TABLE_NAME} MANIFEST",
         settings={
@@ -778,6 +806,8 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
                 status,
                 snapshot_id,
                 sequence_number,
+                file_sequence_number,
+                tupleElement(data_file, 'file_path') AS file_path,
                 tupleElement(data_file, 'content') AS content
             FROM file('{manifest}', Avro)
             FORMAT TSV
@@ -786,7 +816,7 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
         if not result:
             continue
         for line in result.splitlines():
-            status, snapshot_id, sequence_number, content = line.split("\t")
+            status, snapshot_id, sequence_number, file_sequence_number, file_path, content = line.split("\t")
             if int(content) != 0:  # data files only
                 continue
             # A metadata-only rewrite carries files forward: entries are EXISTING (status 0), not
@@ -800,8 +830,23 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
                 f"entry snapshot_id {snapshot_id} should be an original adder, "
                 f"not a snapshot created by the compaction"
             )
-            # EXISTING entries require an explicit, preserved (non-null) data sequence number.
+            # EXISTING entries require explicit, preserved (non-null) data and file sequence numbers.
             assert sequence_number != "\\N", "sequence_number must be preserved (non-null)"
+            assert file_sequence_number != "\\N", "file_sequence_number must be preserved (non-null)"
+            # A manifest-only rewrite must keep the source entry's data and file sequence numbers
+            # unchanged, rather than re-stamping file_sequence_number with the data sequence number.
+            assert file_path in original_seq_by_path, (
+                f"data file {file_path} was not present before compaction"
+            )
+            original_sequence_number, original_file_sequence_number = original_seq_by_path[file_path]
+            assert sequence_number == original_sequence_number, (
+                f"data sequence_number for {file_path} changed from "
+                f"{original_sequence_number} to {sequence_number}"
+            )
+            assert file_sequence_number == original_file_sequence_number, (
+                f"file_sequence_number for {file_path} changed from "
+                f"{original_file_sequence_number} to {file_sequence_number}"
+            )
             entries_checked += 1
 
     assert entries_checked > 0, "no data-file entries found in consolidated manifest(s)"

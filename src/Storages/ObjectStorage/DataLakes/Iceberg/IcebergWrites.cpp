@@ -295,26 +295,18 @@ void generateManifestFile(
     const std::vector<DataFileEntryLineage> & per_file_entry_lineage,
     Poco::JSON::Object::Ptr schema_to_serialize)
 {
-    if (!data_file_formats.empty() && data_file_formats.size() != data_file_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "data_file_formats size ({}) does not match number of data files ({})",
-            data_file_formats.size(), data_file_names.size());
-    if (!per_file_statistics.empty() && per_file_statistics.size() != data_file_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "per_file_statistics size ({}) does not match number of data files ({})",
-            per_file_statistics.size(), data_file_names.size());
-    if (!data_file_sort_order_ids.empty() && data_file_sort_order_ids.size() != data_file_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "data_file_sort_order_ids size ({}) does not match number of data files ({})",
-            data_file_sort_order_ids.size(), data_file_names.size());
-    if (!per_file_entry_lineage.empty() && per_file_entry_lineage.size() != data_file_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "per_file_entry_lineage size ({}) does not match number of data files ({})",
-            per_file_entry_lineage.size(), data_file_names.size());
+    chassert(
+        data_file_formats.empty() || data_file_formats.size() == data_file_names.size(),
+        "data_file_formats size does not match number of data files");
+    chassert(
+        per_file_statistics.empty() || per_file_statistics.size() == data_file_names.size(),
+        "per_file_statistics size does not match number of data files");
+    chassert(
+        data_file_sort_order_ids.empty() || data_file_sort_order_ids.size() == data_file_names.size(),
+        "data_file_sort_order_ids size does not match number of data files");
+    chassert(
+        per_file_entry_lineage.empty() || per_file_entry_lineage.size() == data_file_names.size(),
+        "per_file_entry_lineage size does not match number of data files");
     Int32 version = metadata->getValue<Int32>(Iceberg::f_format_version);
     String schema_representation;
     if (version == 1)
@@ -405,8 +397,14 @@ void generateManifestFile(
                 ? *entry_lineage->sequence_number
                 : user_defined_sequence_number.value_or(new_snapshot->getValue<Int64>(Iceberg::f_metadata_sequence_number));
 
+            /// A manifest-only rewrite preserves the source entry's `file_sequence_number`, which can differ from the data
+            /// `sequence_number`; for a genuinely new file there is no lineage and it equals the data sequence number.
+            Int64 file_sequence_number = (entry_lineage && entry_lineage->file_sequence_number)
+                ? *entry_lineage->file_sequence_number
+                : sequence_number;
+
             set_versioned_field(sequence_number, Iceberg::f_sequence_number);
-            set_versioned_field(sequence_number, Iceberg::f_file_sequence_number);
+            set_versioned_field(file_sequence_number, Iceberg::f_file_sequence_number);
         }
         avro::GenericRecord & data_file = manifest.field(Iceberg::f_data_file).value<avro::GenericRecord>();
         if (version > 1)
@@ -569,7 +567,7 @@ void generateManifestList(
     const std::vector<ManifestListEntryExistingCounts> & existing_entry_counts,
     const std::unordered_set<String> & carry_forward_manifest_paths,
     const std::vector<Int64> & entry_partition_spec_ids,
-    const std::vector<ManifestListEntryPartitionSummary> & entry_partition_summaries)
+    const std::vector<std::vector<std::pair<Field, DataTypePtr>>> & entry_partition_summaries)
 {
     if (!per_entry_content_types.empty() && per_entry_content_types.size() != manifest_entry_names.size())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "per_entry_content_types size does not match manifest entries");
@@ -667,7 +665,7 @@ void generateManifestList(
                 partitions_field.selectBranch(1);
                 auto & summaries = partitions_field.value<avro::GenericArray>();
                 auto summary_schema = summaries.schema()->leafAt(0);
-                for (const auto & [partition_value, partition_type] : entry_partition_summaries[entry_idx].partition_fields)
+                for (const auto & [partition_value, partition_type] : entry_partition_summaries[entry_idx])
                 {
                     avro::GenericDatum summary_datum(summary_schema);
                     auto & summary_record = summary_datum.value<avro::GenericRecord>();

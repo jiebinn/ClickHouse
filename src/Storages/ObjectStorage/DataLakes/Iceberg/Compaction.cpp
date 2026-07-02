@@ -643,7 +643,7 @@ static bool writeConsolidatedManifestFile(
                 pd.file_formats.push_back(data_file->parsed_entry->file_format);
                 pd.file_sort_order_ids.push_back(data_file->parsed_entry->sort_order_id);
 
-                /// Preserve the entry's lineage, resolving inherited (null) snapshot-id and sequence number from the manifest, since EXISTING entries require both non-null.
+                /// Preserve the entry's lineage, resolving inherited (null) snapshot-id and sequence numbers from the manifest, since EXISTING entries require them non-null.
                 DataFileEntryLineage lineage;
                 lineage.added_snapshot_id = data_file->parsed_entry->parsed_snapshot_id;
                 if (!lineage.added_snapshot_id.has_value())
@@ -651,6 +651,10 @@ static bool writeConsolidatedManifestFile(
                 lineage.sequence_number = data_file->parsed_entry->parsed_sequence_number;
                 if (!lineage.sequence_number.has_value())
                     lineage.sequence_number = manifest_file.added_sequence_number;
+                /// `file_sequence_number` is preserved separately: it can differ from the data sequence number and, when null, inherits the manifest's sequence number.
+                lineage.file_sequence_number = data_file->parsed_entry->parsed_file_sequence_number;
+                if (!lineage.file_sequence_number.has_value())
+                    lineage.file_sequence_number = manifest_file.added_sequence_number;
                 pd.file_entry_lineage.push_back(lineage);
 
                 /// Carry the source file's per-column stats over verbatim, keeping bounds as the raw serialized bytes so they round-trip.
@@ -712,8 +716,8 @@ static bool writeConsolidatedManifestFile(
     std::vector<ManifestListEntryExistingCounts> existing_entry_counts;
     /// Parallel to consolidated_manifest_paths: each manifest's partition spec-id.
     std::vector<Int64> entry_partition_spec_ids;
-    /// Parallel to consolidated_manifest_paths: each manifest's partition value, used to recompute the manifest-list `partitions` summary.
-    std::vector<ManifestListEntryPartitionSummary> entry_partition_summaries;
+    /// Parallel to consolidated_manifest_paths: each manifest's partition fields (value + type), used to recompute the manifest-list `partitions` summary.
+    std::vector<std::vector<std::pair<Field, DataTypePtr>>> entry_partition_summaries;
 
     /// Cleanup for both commit conflict and exceptions; paths are tracked before writeObject so partially-created objects are removed (removeObjectIfExists tolerates missing objects).
     auto cleanup = [&]()
@@ -783,11 +787,11 @@ static bool writeConsolidatedManifestFile(
             entry_partition_spec_ids.push_back(pd.partition_spec_id);
 
             /// All files in this manifest share one partition value, so the summary's lower/upper bounds are exactly that value.
-            ManifestListEntryPartitionSummary partition_summary;
+            std::vector<std::pair<Field, DataTypePtr>> partition_summary;
             for (size_t i = 0; i < resolved_spec.partition_types.size(); ++i)
             {
                 Field partition_value = i < pd.partition_values.size() ? pd.partition_values[i] : Field{};
-                partition_summary.partition_fields.emplace_back(partition_value, resolved_spec.partition_types[i]);
+                partition_summary.emplace_back(partition_value, resolved_spec.partition_types[i]);
             }
             entry_partition_summaries.push_back(std::move(partition_summary));
 
@@ -1218,7 +1222,12 @@ void compactIcebergManifests(
             persistent_table_components.table_uuid);
 
         /// Validate the format version on the freshly-fetched metadata (before the threshold early-return), since the table may have been upgraded to v3 by another writer after this table object was created.
-        if (metadata_object->getValue<Int32>(Iceberg::f_format_version) >= 3)
+        const Int32 format_version = metadata_object->getValue<Int32>(Iceberg::f_format_version);
+        if (format_version < 2)
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "OPTIMIZE TABLE ... MANIFEST is supported only for Iceberg format_version 2.");
+        if (format_version >= 3)
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
                 "OPTIMIZE TABLE ... MANIFEST is not yet supported for Iceberg format-version 3: "

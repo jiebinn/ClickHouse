@@ -55,11 +55,12 @@ struct DataFileColumnStatistics
     std::vector<std::pair<Int32, String>> upper_bounds;
 };
 
-/// Per-file manifest-entry lineage (`added_snapshot_id` and `sequence_number`) carried over for a manifest-only rewrite.
+/// Per-file manifest-entry lineage (`added_snapshot_id`, data `sequence_number` and `file_sequence_number`) carried over for a manifest-only rewrite.
 struct DataFileEntryLineage
 {
     std::optional<Int64> added_snapshot_id;
     std::optional<Int64> sequence_number;
+    std::optional<Int64> file_sequence_number;
 };
 
 void generateManifestFile(
@@ -99,13 +100,6 @@ struct ManifestListEntryExistingCounts
     Int64 min_sequence_number = 0;
 };
 
-/// Partition tuple of a single-partition manifest, used to recompute the manifest-list `partitions` summary for a manifest-only rewrite.
-struct ManifestListEntryPartitionSummary
-{
-    /// One entry per partition field: its value and ClickHouse type (for byte encoding).
-    std::vector<std::pair<Field, DataTypePtr>> partition_fields;
-};
-
 void generateManifestList(
     const Iceberg::IcebergPathResolver & path_resolver,
     Poco::JSON::Object::Ptr metadata,
@@ -121,7 +115,7 @@ void generateManifestList(
     const std::vector<ManifestListEntryExistingCounts> & existing_entry_counts = {},
     const std::unordered_set<String> & carry_forward_manifest_paths = {},
     const std::vector<Int64> & entry_partition_spec_ids = {},
-    const std::vector<ManifestListEntryPartitionSummary> & entry_partition_summaries = {});
+    const std::vector<std::vector<std::pair<Field, DataTypePtr>>> & entry_partition_summaries = {});
 
 class IcebergStorageSink final : public SinkToStorage
 {
