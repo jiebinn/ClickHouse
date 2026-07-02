@@ -96,7 +96,7 @@ The username, however, is **volatile**. It is constructed as:
 JWT::<subject>::<claims_hash>
 ```
 
-The `<claims_hash>` is a hash derived from the `iss`, `sub`, and `aud` claims together with the `clickhouse:roles` and `clickhouse:grants` claims. The `iss` and `aud` claims participate **only** through this hash; they are no longer inlined into the visible username prefix. This keeps the name compact and readable when `iss`/`aud` are long opaque IDP URLs (for example, Microsoft Entra or Okta), while still guaranteeing that distinct `(iss, sub, aud)` tuples and distinct claim sets map to distinct, stable names.
+The `<claims_hash>` is a hash derived from the `iss`, `sub`, and `aud` claims together with the `clickhouse:roles` and `clickhouse:grants` claims. The `iss` and `aud` claims participate **only** through this hash; they are no longer inlined into the visible username prefix. This keeps the name compact and readable when `iss`/`aud` are long opaque IDP URLs (for example, Microsoft Entra or Okta), while still guaranteeing that distinct `(iss, sub, aud)` tuples and distinct `clickhouse:roles` / `clickhouse:grants` sets map to distinct, stable names. Claims that do not feed the hash (for example `iat`, `exp`, `nbf`, or unrelated custom claims) do not change the username.
 
 The `<claims_hash>` portion changes whenever the `clickhouse:roles` or `clickhouse:grants` claims change. This means that tokens with different role or grant sets produce different usernames even for the same identity.
 
