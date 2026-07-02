@@ -212,17 +212,10 @@ QueryPlan decorrelateQueryPlan(
         QueryPlan lhs_plan = context.correlated_query_plan.extractSubplan(node);
         QueryPlan rhs_plan;
 
-        /// The extracted inner subplan may have zero output columns. This happens when the inner
-        /// relation only contributes its cardinality: e.g. an EXISTS body reduced to a bare filter,
-        /// or a correlated scalar whose inner table provides only the predicate column (the
-        /// correlated column is attributed to the outer table, not the inner relation). Such a
-        /// zero-column relation loses its row count once it becomes the streamed side of a join,
-        /// because a Block derives its row count from its columns (Block::rows() == 0 with no
-        /// columns), so the decorrelation join would drop all rows and produce a wrong result.
-        /// Materialize a single placeholder column so the relation always carries a determinable
-        /// row count. It is materialized (not a bare constant) so it cannot be folded away, and it
-        /// is projected out downstream (buildExistsResultExpression / scalar result renaming /
-        /// aggregation), so it does not affect the result.
+        /// The inner subplan can have zero output columns when it only contributes cardinality (e.g. an
+        /// EXISTS body reduced to a bare filter). Such a relation loses its row count on the streamed side
+        /// of a join (Block::rows() == 0 with no columns), so the join would drop all rows. Add a
+        /// materialized placeholder column; it is projected out downstream and does not affect the result.
         if (lhs_plan.getCurrentHeader()->columns() == 0)
         {
             ActionsDAG marker_dag(lhs_plan.getCurrentHeader()->getNamesAndTypesList());
