@@ -247,6 +247,12 @@
             gap: 0.25rem;
             position: sticky;
             left: 0;
+            /* Raise the whole bar above #controls (a later sibling that is also `position:
+               sticky`, hence its own stacking context). Without this the connection drop-down
+               — nested in this bar's stacking context — would render behind the query editor,
+               which paints later. The bar and the editor never overlap otherwise, so this only
+               affects the open drop-down. */
+            z-index: 2;
             margin: -0.5rem 0 0.5rem 0; /* negative top bleeds into #main's top padding */
             /* No left padding: the bar's content edge already sits at #main's content
                edge, so the first tab lines up with the query editor and result tables.
@@ -428,6 +434,87 @@
         {
             background: var(--button-color);
             color: var(--button-text-color);
+        }
+
+        /* Holds the 🔑 button and its drop-down; pushed to the far right of the tab bar
+           so the connection settings sit in the top-right corner of the main area.
+           `position: relative` is the containing block for the absolutely positioned
+           drop-down below. */
+        #connection-menu
+        {
+            margin-left: auto;
+            align-self: flex-end;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        /* Styled like the [+] button so the whole tab bar reads as one row of controls. */
+        #connection-key
+        {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            font-size: 100%;
+            line-height: 1;
+            background: var(--element-background-color);
+            border: 1px solid var(--border-color);
+            border-bottom: none; /* sits on the strip line like the tabs (no second line) */
+        }
+
+        #connection-key[hidden]
+        {
+            display: none;
+        }
+
+        #connection-key:hover, #connection-key:focus
+        {
+            background: var(--button-color);
+        }
+
+        /* The drop-down panel with the connection parameters. Anchored to the right edge
+           of the 🔑 button and floating above the content below it. */
+        #connection-dropdown
+        {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            z-index: 3;
+            margin-top: 0.25rem;
+            padding: 0.75rem;
+            width: min(90vw, 34rem);
+            /* The page background, so the inputs look exactly as they do in the inline top bar
+               (a field on the page color, delineated by its own border) rather than blending
+               into a same-colored panel. The border and shadow below set the panel apart from
+               the content it floats over. */
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0.25rem 1rem var(--shadow-color);
+        }
+
+        #connection-dropdown[hidden]
+        {
+            display: none;
+        }
+
+        /* Inside the drop-down the connection inputs keep their inline row layout — the same
+           `#inputs` element is relocated here, so its status dot and event handlers keep working
+           unchanged. The url field is rebalanced so the user/password fields stay usable at the
+           panel's narrower width. */
+        #connection-dropdown #inputs
+        {
+            width: 100%;
+        }
+
+        #connection-dropdown #url
+        {
+            width: 60%;
+        }
+
+        #connection-dropdown #user, #connection-dropdown #password
+        {
+            width: calc(20% + 1px);
         }
 
         .menu-icon
@@ -1371,6 +1458,10 @@
         <div id="tab-bar" hidden>
             <div id="tabs"></div>
             <button id="tab-add" type="button" title="New query (open a new tab)">+</button>
+            <div id="connection-menu">
+                <button id="connection-key" type="button" title="Connection settings" aria-expanded="false" hidden>🔑</button>
+                <div id="connection-dropdown" hidden></div>
+            </div>
         </div>
         <form id="controls">
             <div id="inputs">
@@ -4935,6 +5026,58 @@ appendTextareaResizer();
 const tab_bar_elem = document.getElementById('tab-bar');
 const tabs_elem = document.getElementById('tabs');
 
+/// The connection parameters (url/user/password) live in the `#inputs` element. When the tab
+/// bar is shown they clutter the top of every tab, so we relocate that same element into a
+/// drop-down behind a 🔑 button in the top-right corner. Relocating the existing element (rather
+/// than duplicating the inputs) keeps every reference and event listener bound to it valid.
+const inputs_elem = document.getElementById('inputs');
+const controls_elem = document.getElementById('controls');
+const connection_key_elem = document.getElementById('connection-key');
+const connection_dropdown_elem = document.getElementById('connection-dropdown');
+
+function openConnectionDropdown() {
+    connection_dropdown_elem.hidden = false;
+    connection_key_elem.setAttribute('aria-expanded', 'true');
+}
+
+function closeConnectionDropdown() {
+    connection_dropdown_elem.hidden = true;
+    connection_key_elem.setAttribute('aria-expanded', 'false');
+}
+
+/// Place the `#inputs` element either inline in `#controls` (no tab bar) or inside the
+/// drop-down behind the 🔑 button (tab bar shown). Called from `renderTabBar` whenever the
+/// tab bar's visibility is recomputed.
+function syncConnectionUI() {
+    const tabsShown = !tab_bar_elem.hidden;
+    connection_key_elem.hidden = !tabsShown;
+    if (tabsShown) {
+        if (inputs_elem.parentElement !== connection_dropdown_elem) {
+            connection_dropdown_elem.appendChild(inputs_elem);
+        }
+    } else {
+        /// Restore the inline position (first child of the form) and make sure the drop-down
+        /// is closed so a later reappearance of the tab bar starts collapsed.
+        if (inputs_elem.parentElement !== controls_elem) {
+            controls_elem.insertBefore(inputs_elem, controls_elem.firstChild);
+        }
+        closeConnectionDropdown();
+    }
+}
+
+connection_key_elem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (connection_dropdown_elem.hidden) openConnectionDropdown(); else closeConnectionDropdown();
+});
+
+/// Clicks inside the drop-down (typing in the inputs) must not close it; a click anywhere
+/// else does.
+connection_dropdown_elem.addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => closeConnectionDropdown());
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !connection_dropdown_elem.hidden) closeConnectionDropdown();
+});
+
 /// Generate the next default title: "Query A" .. "Query Z", "Query AA", ...
 /// Skips titles already in use so closing/reopening doesn't produce duplicates.
 function nextDefaultTitle() {
@@ -5122,6 +5265,7 @@ function renderTabBar() {
     /// (rather than merely `result != null`) also ignores any stale/fabricated result
     /// snapshot that an older build may have persisted to IndexedDB.
     tab_bar_elem.hidden = (tabs.length <= 1 && !(active && active.result && active.result.ran));
+    syncConnectionUI();
 
     tabs_elem.textContent = '';
     for (const tab of tabs) {
