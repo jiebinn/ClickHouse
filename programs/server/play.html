@@ -4286,6 +4286,10 @@ function checkCredentials() {
                 updateServerInfoVisibility();
             } else {
                 [user_elem, password_elem].forEach(e => { e.classList.remove('ok'); e.classList.add('fail'); });
+                /// The credentials didn't work — surface the connection settings so they can be
+                /// fixed. Only relevant when they live in the drop-down (tab bar shown); inline
+                /// (single tab) they are already visible, so there is nothing to open.
+                if (!connection_key_elem.hidden) { openConnectionDropdown(); }
             }
         }
     });
