@@ -443,24 +443,30 @@
         #connection-menu
         {
             margin-left: auto;
+            /* Cancel the tab bar's 0.5rem right padding so the key's right edge lines up with
+               the query editor and result tables (the right edge of #main's content). */
+            margin-right: -0.5rem;
             align-self: flex-end;
             position: relative;
             flex-shrink: 0;
         }
 
-        /* Styled like the [+] button so the whole tab bar reads as one row of controls. */
+        /* A borderless, background-less button: just the 🔑 glyph aligned to the right edge. */
         #connection-key
         {
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 0.25rem 0.6rem;
+            justify-content: flex-end;
+            /* No right padding: the glyph sits flush at the right edge of the page. */
+            padding: 0.25rem 0 0.25rem 0.6rem;
             cursor: pointer;
             font-size: 100%;
             line-height: 1;
-            background: var(--element-background-color);
-            border: 1px solid var(--border-color);
-            border-bottom: none; /* sits on the strip line like the tabs (no second line) */
+            background: none;
+            border: none;
+            /* On active, brighten the emoji itself rather than painting a button background. */
+            filter: brightness(0.85);
+            transition: filter 0.1s;
         }
 
         #connection-key[hidden]
@@ -470,7 +476,7 @@
 
         #connection-key:hover, #connection-key:focus
         {
-            background: var(--button-color);
+            filter: brightness(1.15);
         }
 
         /* The drop-down panel with the connection parameters. Anchored to the right edge
@@ -481,7 +487,6 @@
             top: 100%;
             right: 0;
             z-index: 3;
-            margin-top: 0.25rem;
             padding: 0.75rem;
             width: min(90vw, 34rem);
             /* The page background, so the inputs look exactly as they do in the inline top bar
@@ -498,23 +503,46 @@
             display: none;
         }
 
-        /* Inside the drop-down the connection inputs keep their inline row layout — the same
-           `#inputs` element is relocated here, so its status dot and event handlers keep working
-           unchanged. The url field is rebalanced so the user/password fields stay usable at the
-           panel's narrower width. */
+        /* Inside the drop-down the same relocated `#inputs` element is laid out in two stories:
+           the url (host) fills the first row, user and password share the second. `flex-wrap`
+           plus a 100% basis on the url forces the wrap; the negative top margin on the second
+           row overlaps the url's bottom border so there is a single seam and no vertical gap
+           (mirroring the horizontal -1px overlap the inputs already use side by side).
+           `position: relative` makes `#inputs` the containing block for the status dot. */
         #connection-dropdown #inputs
         {
+            display: flex;
+            flex-wrap: wrap;
             width: 100%;
+            position: relative;
         }
 
         #connection-dropdown #url
         {
-            width: 60%;
+            flex: 1 1 100%;
+            width: auto;
         }
 
         #connection-dropdown #user, #connection-dropdown #password
         {
-            width: calc(20% + 1px);
+            flex: 1 1 0;
+            width: auto;
+            margin-top: -1px; /* overlap the url's bottom border: one seam, no gap */
+        }
+
+        #connection-dropdown #user
+        {
+            margin-left: 0;
+        }
+
+        /* The connection-status dot sits at the right end of the url (first) row. The inline
+           layout relies on its static position after the url input; in the wrapped two-story
+           layout that position moves to the next row, so pin it explicitly instead. */
+        #connection-dropdown #url_status
+        {
+            top: 0;
+            right: 0;
+            transform: none;
         }
 
         .menu-icon
