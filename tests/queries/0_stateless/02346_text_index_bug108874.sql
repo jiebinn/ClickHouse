@@ -43,6 +43,28 @@ SELECT 'mapKeys cluster', count() FROM cluster('test_cluster_two_shards_localhos
 SELECT 'mapKeys dist',    count() FROM logs_dist WHERE has(mapKeys(attributes), 'ip')
     SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
 
+-- Wrapper storages over a Distributed table. StorageDistributed opts out of
+-- supportsOptimizationToSubcolumns(), but a wrapper that ties the capability to
+-- supportsSubcolumns() (the IStorage default) re-enables the mapValues -> subcolumn rewrite on
+-- the initiator, so the shard query loses the index again. StorageMaterializedView must forward
+-- the capability to its target table, and StorageMerge must fail closed if any child opts out.
+
+-- Materialized view whose target is the Distributed table; query the view itself.
+CREATE MATERIALIZED VIEW logs_mv TO logs_dist AS SELECT attributes FROM logs;
+SELECT 'mapValues mv-over-dist', count() FROM logs_mv WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapKeys mv-over-dist',   count() FROM logs_mv WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+
+-- Merge table over the Distributed child.
+CREATE TABLE logs_merge AS logs ENGINE = Merge(currentDatabase(), '^logs_dist$');
+SELECT 'mapValues merge-over-dist', count() FROM logs_merge WHERE has(mapValues(attributes), '192.168.1.1')
+    SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SELECT 'mapKeys merge-over-dist',   count() FROM logs_merge WHERE has(mapKeys(attributes), 'ip')
+    SETTINGS force_data_skipping_indices = 'attributes_keys_idx';
+
+DROP TABLE logs_merge;
+DROP TABLE logs_mv;
 DROP TABLE logs_dist;
 DROP TABLE logs;
 
