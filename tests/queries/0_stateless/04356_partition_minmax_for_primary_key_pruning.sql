@@ -93,3 +93,38 @@ SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10
 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000) SETTINGS use_partition_minmax_for_primary_key_pruning = 0;
 SELECT count() FROM t_pk_minmax_reverse_loaded WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000) SETTINGS use_primary_key = 0, use_partition_pruning = 0, use_skip_indexes = 0;
 DROP TABLE t_pk_minmax_reverse_loaded;
+
+-- F) The optimization is applied on both primary-key index-analysis representations
+--    (`use_lightweight_primary_key_index_analysis`) when the suffix column is kept in the in-memory index. The
+--    sparse representation (the default) tightens the suffix with the partition minmax during the
+--    hyperrectangle enumeration, so it prunes the same granules as the full representation, fewer than with the
+--    optimization off, and loses no rows.
+DROP TABLE IF EXISTS t_pk_minmax_paths_loaded;
+CREATE TABLE t_pk_minmax_paths_loaded (event_time UInt32, id UInt32)
+ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
+SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 1;
+INSERT INTO t_pk_minmax_paths_loaded SELECT number % 100, number % 10 FROM numbers(100);
+
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 0, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
+SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000) SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000) SETTINGS use_lightweight_primary_key_index_analysis = 0, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT count() FROM t_pk_minmax_paths_loaded WHERE (id = 0 AND event_time = 10) OR (id = 5 AND event_time > 1000) SETTINGS use_primary_key = 0, use_partition_pruning = 0, use_skip_indexes = 0;
+DROP TABLE t_pk_minmax_paths_loaded;
+
+-- G) When a key column used by the filter is dropped from the in-memory index but bounded by the partition
+--    minmax, the sparse representation extends its analysed prefix to cover that column and applies the bound
+--    as a constant range across the whole part. With `use_lightweight_primary_key_index_analysis = 1` the
+--    pruning therefore matches the full representation and no rows are lost.
+DROP TABLE IF EXISTS t_pk_minmax_paths_dropped;
+CREATE TABLE t_pk_minmax_paths_dropped (event_time UInt32, id UInt32)
+ENGINE = MergeTree PARTITION BY intDiv(event_time, 1000) ORDER BY (id, event_time)
+SETTINGS index_granularity = 1, add_minmax_index_for_numeric_columns = 0, primary_key_ratio_of_unique_prefix_values_to_skip_suffix_columns = 0.01;
+INSERT INTO t_pk_minmax_paths_dropped SELECT number % 100, number % 10 FROM numbers(100);
+
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000)) WHERE explain LIKE '%Condition%' OR explain LIKE '%Parts%' OR explain LIKE '%Granules%' OR explain LIKE '%Keys%' OR explain LIKE '%Search Algorithm%' OR explain LIKE '%Min-Max%' OR explain LIKE '%Partition%' OR explain LIKE '%PrimaryKey%' SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 0;
+SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000) SETTINGS use_lightweight_primary_key_index_analysis = 1, use_partition_minmax_for_primary_key_pruning = 1;
+SELECT count() FROM t_pk_minmax_paths_dropped WHERE (id = 0 AND event_time = 10) OR (id >= 3 AND event_time > 1000) SETTINGS use_primary_key = 0, use_partition_pruning = 0, use_skip_indexes = 0;
+DROP TABLE t_pk_minmax_paths_dropped;
