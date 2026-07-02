@@ -11,11 +11,14 @@
 -- built once over the union of both join sides' parts and then redistributed per source, so a PK
 -- band that only contains parts from the other side leaves an empty layer for this source. With a
 -- reverse primary key that layer is read via `read({}, ReadType::InReverseOrder)`. Without the guard
--- this query aborts; with it, it succeeds.
+-- this query aborts; with it, it returns the correct rows.
 --
--- `FORMAT Null` is required: wrapping the read in an order-independent aggregate (e.g. `count()`)
--- lets `RemoveRedundantSorting` drop the inner `ORDER BY`, after which the plan reads in
--- `ReadType::Default` and the reverse-order path is never hit. `optimize_read_in_order` and
+-- The ordered output of the exact guarded query is asserted directly (the 50 shared keys, DESC), not
+-- via an order-independent aggregate such as `count()`. Two reasons: the top-level `ORDER BY k DESC`
+-- must survive so the read stays on the reverse-order path (an aggregate wrapper would let
+-- `RemoveRedundantSorting` drop the sort and the plan would read in `ReadType::Default`), and checking
+-- the rows themselves catches a regression that silently loses or duplicates rows through
+-- `read({}, ReadType::InReverseOrder)`, not just one that throws. `optimize_read_in_order` and
 -- `query_plan_read_in_order` are pinned because the test runner randomizes the former: with either
 -- off, `read_in_order` is not set and the guarded path is skipped.
 
@@ -40,7 +43,8 @@ INSERT INTO stid_2635_r SELECT number FROM numbers(50);
 INSERT INTO stid_2635_r SELECT number + 1000 FROM numbers(200);
 
 -- This query reaches `readByLayers` -> `read({}, ReadType::InReverseOrder)` for the empty left
--- layer. It aborted with the empty-pipe LOGICAL_ERROR before the guard.
+-- layer. It aborted with the empty-pipe LOGICAL_ERROR before the guard. Its ordered output (the 50
+-- shared keys, descending) is checked directly.
 SELECT k FROM stid_2635_l JOIN stid_2635_r USING (k)
 ORDER BY k DESC
 SETTINGS join_algorithm = 'full_sorting_merge',
@@ -51,12 +55,7 @@ SETTINGS join_algorithm = 'full_sorting_merge',
          read_in_order_use_virtual_row = 1,
          enable_join_runtime_filters = 0,
          query_plan_join_swap_table = false,
-         max_threads = 8
-FORMAT Null;
-
--- The query above ran without aborting; the result itself is checked here (50 matching keys).
-SELECT 'shard_join_reverse', count()
-FROM (SELECT k FROM stid_2635_l JOIN stid_2635_r USING (k));
+         max_threads = 8;
 
 DROP TABLE stid_2635_l;
 DROP TABLE stid_2635_r;
