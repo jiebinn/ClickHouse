@@ -1246,7 +1246,7 @@ static ColumnPtr readByteMapFromArrowColumn(const std::shared_ptr<arrow::Chunked
     return nullmap_column;
 }
 
-static ColumnWithTypeAndName readColumnWithGeoData(const std::shared_ptr<arrow::ChunkedArray> & arrow_column, const String & column_name, GeoColumnMetadata geo_metadata)
+static ColumnWithTypeAndName readColumnWithGeoData(const std::shared_ptr<arrow::ChunkedArray> & arrow_column, const String & column_name, GeoColumnMetadata geo_metadata, bool precise_float_parsing)
 {
     DataTypePtr type = getGeoDataType(geo_metadata.type);
     MutableColumnPtr column = type->createColumn();
@@ -1290,7 +1290,7 @@ static ColumnWithTypeAndName readColumnWithGeoData(const std::shared_ptr<arrow::
                     result_object = parseWKBFormat(in_buffer);
                     break;
                 case GeoEncoding::WKT:
-                    result_object = parseWKTFormat(in_buffer);
+                    result_object = parseWKTFormat(in_buffer, precise_float_parsing);
                     break;
             }
             appendObjectToGeoColumn(result_object, geo_metadata.type, *column);
@@ -1822,11 +1822,11 @@ static ColumnWithTypeAndName readNonNullableColumnFromArrowColumn(
 
             if (geo_metadata && settings.allow_geoparquet_parser)
             {
-                return readColumnWithGeoData(arrow_column, column_name, *geo_metadata);
+                return readColumnWithGeoData(arrow_column, column_name, *geo_metadata, settings.format_settings.precise_float_parsing);
             }
             if (type_hint && type_hint->getName() == "Geometry" && settings.allow_geoparquet_parser)
             {
-                return readColumnWithGeoData(arrow_column, column_name, GeoColumnMetadata{GeoEncoding::WKB, GeoType::Mixed});
+                return readColumnWithGeoData(arrow_column, column_name, GeoColumnMetadata{GeoEncoding::WKB, GeoType::Mixed}, settings.format_settings.precise_float_parsing);
             }
             return readColumnWithStringData<arrow::BinaryArray>(arrow_column, column_name);
         }
