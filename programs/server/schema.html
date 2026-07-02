@@ -712,8 +712,18 @@ if (passFromUrl) {
 /// Browser Credential Management API: remember the entered credentials so the browser
 /// can offer to save and later autofill them — same as `play.html`. Guarded because
 /// `PasswordCredential` exists only in Chromium-based browsers.
+///
+/// Persist only for a same-origin target. `PasswordCredential` is scoped to the page origin,
+/// not to the backend named in `#url` (its `name` field is a display label, not an isolation
+/// key). Storing a cross-origin login here would let the browser autofill it on a later plain
+/// visit; because the page then auto-loads the same-origin default (`isSameOriginTarget` at the
+/// bottom of the script), those remembered credentials would be POSTed to this page's own server
+/// instead of the cross-origin one they belong to. `play.html` can store unconditionally because
+/// it never auto-contacts a server on open; `/schema` does, so it must not persist a credential
+/// that its own auto-load could later misdirect. This is the same `isSameOriginTarget` invariant
+/// that already gates the page-load auto-load and the paste probe.
 function storeCredentials() {
-    if (window.PasswordCredential && $('password').value) {
+    if (window.PasswordCredential && $('password').value && isSameOriginTarget($('url').value)) {
         try {
             navigator.credentials.store(new PasswordCredential({
                 id: $('user').value,
