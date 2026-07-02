@@ -1,3 +1,6 @@
+-- Tags: no-darwin
+-- no-darwin: the fast float parser (precise_float_parsing = 0) rounds to different least-significant digits on Darwin.
+
 -- precise_float_parsing must apply to input-format and literal parsing, not only to toFloat*/CAST.
 -- Regressions: CSV/input formats, VALUES numeric literals, and scientific notation.
 -- The default is the precise (closest-representable) parser; precise_float_parsing = 0 restores
