@@ -217,33 +217,42 @@ function parseTestResults(jsonData) {
           test.links = result.links;
         }
 
-        // Extract CIDB links and other labels from unified ext.labels (or legacy ext.hlabels).
-        // Non-cidb labels (e.g. `issue`, `retry_ok`) mirror how CI attributes a failure:
-        // an `issue` label means CI matched a tracking issue; `retry_ok` etc. are the flags an
-        // infrastructure tracking issue matches on via `Failure flags:`.
+        // Extract CIDB links and other labels, mirroring ci/praktika/json.html `normalizeLabels`:
+        // `ext.labels` entries are either bare strings (legacy) or {name, link} objects, and
+        // `ext.hlabels` entries are [name, link] pairs; all are merged by name (a link wins over a
+        // bare occurrence). Non-cidb labels (e.g. `issue`, `retry_ok`) mirror how CI attributes a
+        // failure: an `issue` label means CI matched a tracking issue; `retry_ok` etc. are the flags
+        // an infrastructure issue matches on via `Failure flags:`.
         if (result.ext) {
-          const cidbLinks = [];
-          const labels = [];
+          const byName = new Map();
+          const upsert = (name, link) => {
+            if (!name) return;
+            const prev = byName.get(name) || {};
+            byName.set(name, { name, link: link || prev.link });
+          };
           if (Array.isArray(result.ext.labels)) {
-            for (const label of result.ext.labels) {
-              if (label && typeof label === 'object' && label.name) {
-                if (label.name === 'cidb' && label.link) {
-                  cidbLinks.push(label.link);
-                } else if (label.name !== 'cidb') {
-                  labels.push(label.link ? `${label.name} (${label.link})` : label.name);
-                }
+            for (const item of result.ext.labels) {
+              if (typeof item === 'string') {
+                upsert(item);
+              } else if (item && typeof item === 'object' && item.name) {
+                upsert(item.name, item.link);
               }
             }
           }
           if (Array.isArray(result.ext.hlabels)) {
-            for (const hlabel of result.ext.hlabels) {
-              if (Array.isArray(hlabel) && hlabel[0]) {
-                if (hlabel[0] === 'cidb' && hlabel[1]) {
-                  cidbLinks.push(hlabel[1]);
-                } else if (hlabel[0] !== 'cidb') {
-                  labels.push(hlabel[1] ? `${hlabel[0]} (${hlabel[1]})` : hlabel[0]);
-                }
+            for (const item of result.ext.hlabels) {
+              if (Array.isArray(item) && item[0]) {
+                upsert(item[0], item[1]);
               }
+            }
+          }
+          const cidbLinks = [];
+          const labels = [];
+          for (const { name, link } of byName.values()) {
+            if (name === 'cidb') {
+              if (link) cidbLinks.push(link);
+            } else {
+              labels.push(link ? `${name} (${link})` : name);
             }
           }
           if (cidbLinks.length > 0) {
