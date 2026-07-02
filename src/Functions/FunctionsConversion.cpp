@@ -1930,16 +1930,13 @@ FunctionCast::WrapperType FunctionCast::createColumnToVariantWrapper(const DataT
     /// in state representation, its constructor collapses them by name to a single variant type.
     /// If our source column carries the other state representation, we must cast it to the destination
     /// variant type before storing it as a subcolumn, otherwise serialization would interpret the bytes
-    /// using the wrong layout and crash.
+    /// using the wrong layout and crash. The source type was matched to the destination variant by name,
+    /// so any remaining inequality is such a hidden representation difference (it may be nested inside
+    /// Array/Map/Tuple); prepareUnpackDictionaries converts it and recurses into nested types.
     const auto & target_variant_type = to_variant.getVariants()[*variant_discr_opt];
-    const auto * from_agg_type = typeid_cast<const DataTypeAggregateFunction *>(from_nested_type.get());
-    const auto * target_variant_agg_type = typeid_cast<const DataTypeAggregateFunction *>(target_variant_type.get());
     WrapperType to_target_variant_type_cast;
-    if (from_agg_type && target_variant_agg_type && from_agg_type->equalsIgnoringVariant(*target_variant_type)
-        && !from_nested_type->equals(*target_variant_type))
-    {
+    if (!from_nested_type->equals(*target_variant_type))
         to_target_variant_type_cast = prepareUnpackDictionaries(from_nested_type, target_variant_type);
-    }
 
     return [variant_discr = *variant_discr_opt,
             cast_to_variant_type_wrapper = std::move(to_target_variant_type_cast),
@@ -2112,8 +2109,22 @@ FunctionCast::WrapperType FunctionCast::createStringToDynamicThroughParsingWrapp
 
 FunctionCast::WrapperType FunctionCast::createVariantToDynamicWrapper(const DataTypeVariant & from_variant_type, const DataTypeDynamic & dynamic_type) const
 {
-    /// First create extended Variant with shared variant type and cast this Variant to it.
-    auto variants_for_dynamic = from_variant_type.getVariants();
+    /// A Dynamic column identifies its stored types by their name and re-resolves the type from that name
+    /// (e.g. in dynamicElement or the -Merge combinator). Two distinct types can share the same name:
+    /// AggregateFunction has a hidden state representation (Aggregation vs Window) that is not encoded in
+    /// its name. If we stored a Window-representation state under its name, a later read would resolve the
+    /// name to the canonical (Aggregation) representation and interpret the bytes with the wrong layout and
+    /// crash. So the Dynamic must hold each type in its canonical (name-resolved) representation. Build the
+    /// storage Variant from those canonical types; the Variant to Variant cast below converts any subcolumn
+    /// whose representation differs (it recurses into Array/Map/Tuple).
+    auto source_variants = from_variant_type.getVariants();
+    DataTypes variants_for_dynamic;
+    variants_for_dynamic.reserve(source_variants.size() + 1);
+    for (const auto & source_variant : source_variants)
+    {
+        auto canonical_variant = DataTypeFactory::instance().tryGet(source_variant->getName());
+        variants_for_dynamic.push_back(canonical_variant && !canonical_variant->equals(*source_variant) ? canonical_variant : source_variant);
+    }
     size_t number_of_variants = variants_for_dynamic.size();
     variants_for_dynamic.push_back(ColumnDynamic::getSharedVariantDataType());
     const auto & variant_type_for_dynamic = std::make_shared<DataTypeVariant>(variants_for_dynamic);
