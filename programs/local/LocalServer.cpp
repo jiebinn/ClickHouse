@@ -220,6 +220,7 @@ namespace ServerSetting
     extern const ServerSettingsBool memory_worker_use_cgroup;
     extern const ServerSettingsDouble memory_worker_rss_speculative_reserve_ratio;
     extern const ServerSettingsBool memory_worker_dynamic_hard_limit;
+    extern const ServerSettingsBool os_collect_psi_metrics;
     extern const ServerSettingsString allowed_disks_for_table_engines;
     extern const ServerSettingsUInt32 listen_backlog;
     extern const ServerSettingsBool listen_try;
@@ -688,7 +689,9 @@ void LocalServer::startServers(const ServerType & server_type)
             /* heavy_metrics_update_period_seconds= */ 120,
             metrics_func,
             /* update_jemalloc_epoch_= */ false,
-            /* update_rss_= */ false);
+            /* update_rss_= */ false,
+            /* collect_psi_metrics_= */ global_context->getServerSettings()[ServerSetting::os_collect_psi_metrics]
+        );
     }
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;

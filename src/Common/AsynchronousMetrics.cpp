@@ -47,7 +47,6 @@ namespace DB
 namespace ServerSetting
 {
     extern const ServerSettingsUInt64 os_cpu_busy_time_threshold;
-    extern const ServerSettingsBool os_collect_psi_metrics;
 }
 
 namespace ErrorCodes
@@ -132,6 +131,7 @@ AsynchronousMetrics::AsynchronousMetrics(
     const ProtocolServerMetricsFunc & protocol_server_metrics_func_,
     bool update_jemalloc_epoch_,
     bool update_rss_,
+    bool collect_psi_metrics_,
     const ContextPtr & context_)
     : update_period(update_period_seconds)
     , log(getLogger("AsynchronousMetrics"))
@@ -184,7 +184,7 @@ AsynchronousMetrics::AsynchronousMetrics(
 
     openFileIfExists("/proc/meminfo", meminfo);
 
-    if (context->getServerSettings()[ServerSetting::os_collect_psi_metrics])
+    if (collect_psi_metrics_)
     {
         openFileIfExists("/proc/pressure/memory", memory_pressure);
         openFileIfExists("/proc/pressure/cpu", cpu_pressure);
