@@ -58,6 +58,13 @@ DEFAULT_CHECKS = [
     ("Check external links (warnings)", f"{LYCHEE} --mode external ."),
 ]
 
+# Link/file resolution for the translated locale trees. Kept out of
+# DEFAULT_CHECKS because the Praktika job runs it only when a PR touches the
+# locale folders (they are large and change independently, via the GT
+# translation bot); the standalone driver below runs it unconditionally for full
+# local coverage. Both import this so the command is defined once.
+LOCALE_LINKS_CHECK = ("Check locale links", f"{LYCHEE} --mode locale-links .")
+
 
 def run(cmd, **kw):
     print("+ " + " ".join(shlex.quote(c) for c in cmd), flush=True)
@@ -156,8 +163,10 @@ def main(argv=None):
             raise ValueError(f"Invalid --replace '{spec}'. Expected SRC:DEST.")
         replace(parts[0], resolve_replace_dest(docs_root, parts[1]))
 
+    # The driver has no PR diff, so it runs the locale check unconditionally
+    # (full coverage); the Praktika job gates it on locale-folder changes.
     results = [(name, run_check(docs_root, name, command))
-               for name, command in DEFAULT_CHECKS]
+               for name, command in [*DEFAULT_CHECKS, LOCALE_LINKS_CHECK]]
 
     print("\n=== Summary ===", flush=True)
     for name, ok in results:
