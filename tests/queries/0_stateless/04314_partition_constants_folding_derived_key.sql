@@ -6,6 +6,7 @@
 -- disabled below so the EXPLAIN reflects only the primary key effect.
 
 SET enable_analyzer = 1;
+SET explain_query_plan_default = 'legacy';
 
 DROP TABLE IF EXISTS t_derived_key;
 CREATE TABLE t_derived_key (d Date, b UInt64)
