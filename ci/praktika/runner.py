@@ -588,6 +588,23 @@ class Runner:
             result.set_status(Result.Status.OK)
         return result
 
+    @staticmethod
+    def _skip_missing_optional_artifact(artifact, artifact_path) -> bool:
+        """Whether a providing artifact that matched no file may be skipped.
+
+        An optional artifact may legitimately be absent (e.g. the non-blocking
+        LLVM coverage merge crashed on a corrupt .profraw and produced no
+        .profdata). Skip it with a warning instead of reddening a job whose
+        tests all passed. A non-optional missing artifact is still an error.
+        """
+        if artifact.optional:
+            print(
+                f"WARNING: optional artifact [{artifact.name}:{artifact_path}] "
+                f"produced no file - skipping upload"
+            )
+            return True
+        return False
+
     def _post_run(
         self, result, workflow, job, run_exit_code,
     ) -> bool:
@@ -630,10 +647,17 @@ class Runner:
                         artifact_paths = [artifact.path]
                     for artifact_path in artifact_paths:
                         try:
-                            assert Shell.check(
-                                f"ls -l {artifact_path}", verbose=True
-                            ), f"Artifact {artifact_path} not found"
-                            for file_path in glob.glob(artifact_path):
+                            matched = glob.glob(artifact_path)
+                            if not matched:
+                                if self._skip_missing_optional_artifact(
+                                    artifact, artifact_path
+                                ):
+                                    continue
+                                raise FileNotFoundError(
+                                    f"Artifact {artifact_path} not found"
+                                )
+                            Shell.check(f"ls -l {artifact_path}", verbose=True)
+                            for file_path in matched:
                                 link = S3.copy_file_to_s3(
                                     s3_path=s3_path,
                                     local_path=file_path,

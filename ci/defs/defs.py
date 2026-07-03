@@ -578,6 +578,12 @@ class ArtifactConfigs:
         path=[
             "./*.profdata",
         ],
+        # The coverage merge (llvm-profdata) runs non-blocking and can produce no
+        # .profdata (e.g. it crashes on a corrupt .profraw). A missing batch is
+        # tolerated by the downstream LLVM Coverage aggregation, which globs
+        # whatever .profdata files exist, so a missing file must not redden a
+        # coverage job whose tests all passed.
+        optional=True,
     ).parametrize(names=LLVM_ARTIFACTS_LIST)
 
     llvm_coverage_info_file = Artifact.Config(
