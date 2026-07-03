@@ -44,6 +44,11 @@ struct AIParamSpec
     bool inherit_from_collection = false;
 };
 
+/// Small, short-lived config containers (a handful of entries, not user-data-scaled), so the
+/// default allocator is fine and a memory-tracking variant would add nothing.
+using AIParamSpecs = std::vector<AIParamSpec>; // STYLE_CHECK_ALLOW_STD_CONTAINERS
+using AIParamValues = std::map<String, Field, std::less<>>; // STYLE_CHECK_ALLOW_STD_CONTAINERS
+
 class FunctionBaseAI : public IFunction
 {
 public:
@@ -96,7 +101,7 @@ public:
     struct AIParams
     {
         AINamedCollectionConfig collection;
-        std::map<String, Field, std::less<>> values;
+        AIParamValues values;
 
         bool has(std::string_view key) const { return values.contains(key); }
 
@@ -119,11 +124,11 @@ public:
     static AIParams resolveAIParams(
         const ContextPtr & context,
         const ColumnsWithTypeAndName & arguments,
-        const std::vector<AIParamSpec> & spec,
+        const AIParamSpecs & spec,
         const String & default_credentials);
 
     /// Parameters common to every AI function. Function-specific params are appended by `functionParams`.
-    static std::vector<AIParamSpec> commonParams();
+    static AIParamSpecs commonParams();
 
     /// Exponential backoff delay capped at one minute, so adversarial values of
     /// `ai_function_retry_initial_delay_ms` or `ai_function_max_retries` cannot produce a multi-hour
@@ -145,7 +150,7 @@ protected:
 
     /// Function-specific parameters accepted in the trailing `Map(String, String)` argument, on top
     /// of `commonParams`. Each entry carries its own default (or is required). Default: none.
-    virtual std::vector<AIParamSpec> functionParams() const { return {}; }
+    virtual AIParamSpecs functionParams() const { return {}; }
 
     /// Performs additional validation of the input arguments.
     virtual void checkSanityBeforeExecuteImpl(const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const {}
@@ -164,7 +169,7 @@ protected:
 
 private:
     /// Full parameter spec for this function: `commonParams` followed by `functionParams`.
-    std::vector<AIParamSpec> allParams() const;
+    AIParamSpecs allParams() const;
 };
 
 }

@@ -110,7 +110,7 @@ public:
 
     /// Parameters accepted in the trailing `Map(String, String)` argument. `aiEmbed` does not inherit
     /// `FunctionBaseAI`, so it declares its own spec (no `max_tokens`, which embeddings do not use).
-    static std::vector<AIParamSpec> embeddingParams()
+    static AIParamSpecs embeddingParams()
     {
         return {
             {"credentials", AIParamKind::String, std::nullopt},

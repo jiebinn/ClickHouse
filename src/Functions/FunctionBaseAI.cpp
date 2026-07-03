@@ -105,7 +105,7 @@ Field parseAIParamValue(AIParamKind kind, const String & raw, std::string_view n
         case AIParamKind::UInt:
         {
             /// Special UInt64 handling to avoid potential overflow
-            UInt64 value;
+            UInt64 value = 0;
             ReadBufferFromString buf(raw);
             if (!tryReadIntText<ReadIntTextCheckOverflow::CHECK_OVERFLOW>(value, buf) || !buf.eof())
                 throw Exception(ErrorCodes::BAD_ARGUMENTS,
@@ -152,7 +152,7 @@ bool FunctionBaseAI::isStringToStringMap(const IDataType & type)
     return map_type && isString(map_type->getKeyType()) && isString(map_type->getValueType());
 }
 
-std::vector<AIParamSpec> FunctionBaseAI::commonParams()
+AIParamSpecs FunctionBaseAI::commonParams()
 {
     return {
         /// `credentials` is required, but falls back to the default-credentials setting (handled in resolveAIParams).
@@ -163,7 +163,7 @@ std::vector<AIParamSpec> FunctionBaseAI::commonParams()
     };
 }
 
-std::vector<AIParamSpec> FunctionBaseAI::allParams() const
+AIParamSpecs FunctionBaseAI::allParams() const
 {
     auto spec = commonParams();
     auto extra = functionParams();
@@ -174,7 +174,7 @@ std::vector<AIParamSpec> FunctionBaseAI::allParams() const
 namespace
 {
 
-const Field & getResolvedAIParam(const std::map<String, Field, std::less<>> & values, std::string_view key)
+const Field & getResolvedAIParam(const AIParamValues & values, std::string_view key)
 {
     auto it = values.find(key);
     chassert(it != values.end());
@@ -201,12 +201,12 @@ UInt64 FunctionBaseAI::AIParams::getUInt(std::string_view key) const
 FunctionBaseAI::AIParams FunctionBaseAI::resolveAIParams(
     const ContextPtr & context,
     const ColumnsWithTypeAndName & arguments,
-    const std::vector<AIParamSpec> & spec,
+    const AIParamSpecs & spec,
     const String & default_credentials)
 {
     /// The parameter map, when present, is the last argument (validated as a const Map(String, String)
     /// by getReturnTypeImpl). Read it into a plain string->string map.
-    std::map<String, String, std::less<>> map_values;
+    std::map<String, String, std::less<>> map_values; // STYLE_CHECK_ALLOW_STD_CONTAINERS
     if (!arguments.empty() && isStringToStringMap(*arguments.back().type))
     {
         const auto * map_const = typeid_cast<const ColumnConst *>(arguments.back().column.get());

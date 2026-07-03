@@ -46,7 +46,7 @@ private:
 
     String functionName() const override { return name; }
 
-    std::vector<AIParamSpec> functionParams() const override
+    AIParamSpecs functionParams() const override
     {
         return {
             {"temperature", AIParamKind::Float, Field(static_cast<Float64>(default_temp))},
