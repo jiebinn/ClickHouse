@@ -258,7 +258,7 @@ ProcessList::EntryPtr ProcessList::insert(
                         throw Exception(ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING, "Query with id = {} is already running.", client_info.current_query_id);
 
                     /// Ask queries to cancel. They will check this flag.
-                    running_query->second->is_killed.store(true, std::memory_order_relaxed);
+                    running_query->second->markKilled();
 
                     const auto replace_running_query_max_wait_ms = settings[Setting::replace_running_query_max_wait_ms].totalMilliseconds();
                     if (!replace_running_query_max_wait_ms || !have_space.wait_for(lock, std::chrono::milliseconds(replace_running_query_max_wait_ms),
@@ -267,7 +267,7 @@ ProcessList::EntryPtr ProcessList::insert(
                             running_query = user_process_list->second.queries.find(client_info.current_query_id);
                             if (running_query == user_process_list->second.queries.end())
                                 return true;
-                            running_query->second->is_killed.store(true, std::memory_order_relaxed);
+                            running_query->second->markKilled();
                             return false;
                         }))
                     {
@@ -573,6 +573,17 @@ void QueryStatus::ExecutorHolder::remove()
     executor = nullptr;
 }
 
+void QueryStatus::markKilled()
+{
+    is_killed.store(true, std::memory_order_relaxed);
+
+    /// The thread group outlives the process-list entry, so threads (e.g. an in-flight S3 request during
+    /// teardown) can still observe the cancellation after this entry has expired, even though the exact
+    /// reason is only available while the entry lives.
+    if (thread_group)
+        thread_group->is_query_canceled.store(true, std::memory_order_relaxed);
+}
+
 CancellationCode QueryStatus::cancelQuery(CancelReason reason, std::exception_ptr exception)
 {
     {
@@ -583,7 +594,7 @@ CancellationCode QueryStatus::cancelQuery(CancelReason reason, std::exception_pt
 
         LOG_TRACE(getLogger("ProcessList"), "Cancelling the query (reason: {})", reason);
 
-        is_killed = true;
+        markKilled();
         cancel_reason = reason;
         cancellation_exception = exception;
     }

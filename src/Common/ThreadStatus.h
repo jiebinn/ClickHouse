@@ -92,6 +92,11 @@ public:
     ProfileEvents::Counters performance_counters{VariableContext::Process};
     MemoryTracker memory_tracker{VariableContext::Process};
 
+    /// Set once when the query is cancelled (KILL / timeout). Unlike the process-list element - which is
+    /// released during query teardown - the thread group lives as long as its threads, so this flag lets a
+    /// cancellation still be observed on the "process-list entry already expired" edge.
+    std::atomic<bool> is_query_canceled{false};
+
     struct SharedData
     {
         InternalProfileEventsQueueWeakPtr profile_queue_ptr;

@@ -134,6 +134,10 @@ protected:
     /// KILL was send to the query
     std::atomic<bool> is_killed { false };
 
+    /// Sets `is_killed` and mirrors the cancellation onto the thread group, which outlives the
+    /// process-list entry, so threads can still observe the cancellation after the entry has expired.
+    void markKilled();
+
     mutable std::mutex cancel_mutex;
     CancelReason cancel_reason { CancelReason::UNDEFINED };
     std::exception_ptr cancellation_exception TSA_GUARDED_BY(cancel_mutex);

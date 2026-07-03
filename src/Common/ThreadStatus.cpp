@@ -255,6 +255,10 @@ bool ThreadStatus::isQueryCanceled() const
     if (!thread_group)
         return false;
 
+    /// The durable flag survives the process-list entry, so cancellation is still reported during teardown.
+    if (thread_group->is_query_canceled.load(std::memory_order_relaxed))
+        return true;
+
     if (local_data.query_is_canceled_predicate)
         return local_data.query_is_canceled_predicate();
     return false;
