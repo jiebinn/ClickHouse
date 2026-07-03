@@ -1118,7 +1118,7 @@ StatementGenerator::FromSourceInfo StatementGenerator::joinedTableOrFunction(
             URLFunc * ufunc = tf->mutable_url();
             const SQLTable & tt = rg.pickRandomly(filterCollection<SQLTable>(has_table_lambda));
             const std::optional<String> & cluster = tt.getCluster();
-            const String outf = rg.pickRandomly(fc.out_formats);
+            const String outf = rg.pickRandomly((!this->allow_not_deterministic || rg.nextBool()) ? fc.in_out_formats : fc.out_formats);
             const std::optional<String> read_back = fc.formatToRead(outf);
             const String iinf = (read_back.has_value() && rg.nextBool()) ? read_back.value() : rg.pickRandomly(fc.in_formats);
 

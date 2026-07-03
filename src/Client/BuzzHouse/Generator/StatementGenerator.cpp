@@ -1076,7 +1076,7 @@ bool StatementGenerator::tableOrFunctionRef(
 
               TableFunction * tf = tof->mutable_tfunc();
               URLFunc * ufunc = tf->mutable_url();
-              const String outf = rg.pickRandomly(fc.out_formats);
+              const String outf = rg.pickRandomly((!this->allow_not_deterministic || rg.nextBool()) ? fc.in_out_formats : fc.out_formats);
               const std::optional<String> read_back = fc.formatToRead(outf);
               const String iinf = (read_back.has_value() && (!this->allow_not_deterministic || rg.nextBool()))
                   ? read_back.value()
@@ -3051,7 +3051,7 @@ void StatementGenerator::generateNextBackup(RandomGenerator & rg, BackupRestore 
     if (rg.nextBool())
     {
         /// Most of the times, use formats that can be read later
-        br->set_format(rg.pickRandomly(fc.out_formats));
+        br->set_format(rg.pickRandomly(rg.nextMediumNumber() < 91 ? fc.in_out_formats : fc.out_formats));
     }
 }
 

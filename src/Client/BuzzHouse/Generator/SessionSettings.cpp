@@ -1580,6 +1580,16 @@ static std::unordered_map<String, CHSetting> serverSettings2 = {
     {"skip_download_if_exceeds_query_cache", trueOrFalseSetting},
     {"skip_redundant_aliases_in_udf", trueOrFalseSettingNoOracle},
     {"skip_unavailable_shards", trueOrFalseSettingNoOracle},
+    {"skip_unavailable_shards_mode",
+     CHSetting(
+         [](RandomGenerator & rg, FuzzConfig &)
+         {
+             static const DB::Strings choices
+                 = {"'unavailable'", "'unavailable_or_table_missing'", "'unavailable_or_exception_before_processing'"};
+             return rg.pickRandomly(choices);
+         },
+         {},
+         false)},
     {"splitby_max_substrings_includes_remaining_string", trueOrFalseSettingNoOracle},
     {"stop_refreshable_materialized_views_on_startup", trueOrFalseSettingNoOracle},
     {"storage_file_read_method",

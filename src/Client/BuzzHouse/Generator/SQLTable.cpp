@@ -2009,10 +2009,11 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
     }
     if (!projection)
     {
-        const String prefix = usage == IndexUsage::HypotheticalIndex ? "hi" : "i";
-        const uint32_t counter = usage == IndexUsage::HypotheticalIndex ? t.hidx_counter : t.idx_counter;
+        const bool hypothetical = usage == IndexUsage::HypotheticalIndex;
+        const String prefix = hypothetical ? "hi" : "i";
+        uint32_t & counter = hypothetical ? t.hidx_counter : t.idx_counter;
 
-        idef->mutable_idx()->set_value(rg.nextIdentifier(prefix, counter, fc.allow_nasty_identifiers));
+        idef->mutable_idx()->set_value(rg.nextIdentifier(prefix, counter++, fc.allow_nasty_identifiers));
         if (rg.nextSmallNumber() < 7)
         {
             uint32_t granularity = 1;

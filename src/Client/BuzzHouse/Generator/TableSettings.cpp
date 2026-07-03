@@ -851,7 +851,17 @@ static std::unordered_map<String, CHSetting> distributedTableSettings
        {"fsync_after_insert", trueOrFalseSetting},
        {"fsync_directories", trueOrFalseSetting},
        {"max_delay_to_insert", highRangeNonZeroSetting},
-       {"skip_unavailable_shards", trueOrFalseSetting}};
+       {"skip_unavailable_shards", trueOrFalseSetting},
+       {"skip_unavailable_shards_mode",
+        CHSetting(
+            [](RandomGenerator & rg, FuzzConfig &)
+            {
+                static const DB::Strings choices
+                    = {"'unavailable'", "'unavailable_or_table_missing'", "'unavailable_or_exception_before_processing'"};
+                return rg.pickRandomly(choices);
+            },
+            {"'unavailable'", "'unavailable_or_table_missing'", "'unavailable_or_exception_before_processing'"},
+            false)}};
 
 static std::unordered_map<String, CHSetting> memoryTableSettings
     = {{"min_bytes_to_keep", CHSetting(bytesRange, {}, false)},
