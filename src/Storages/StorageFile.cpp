@@ -43,6 +43,9 @@
 #include <Disks/DiskObjectStorage/ObjectStorages/IObjectStorage.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Interpreters/Cache/QueryConditionCache.h>
+#include <Storages/MergeTree/MarkRange.h>
+#include <Common/Exception.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <Processors/Transforms/ExtractColumnsTransform.h>
@@ -77,6 +80,7 @@
 #include <filesystem>
 #include <shared_mutex>
 #include <algorithm>
+#include <unordered_set>
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/String.h>
@@ -1675,6 +1679,58 @@ Chunk StorageFileSource::generate()
                 object_with_metadata.emplace(current_path, std::move(md));
             }
 
+            /// Consult the Query Condition Cache. If a previous query with the same predicate already
+            /// determined that some row groups in this exact file version contain no matching rows,
+            /// restrict the reader to the surviving row groups (or skip the whole file). This mirrors
+            /// the object-storage read path (`StorageObjectStorageSource`). The file version token
+            /// (`current_file_cache_version`, part of `object_with_metadata`) is folded into the cache
+            /// key so an in-place rewrite yields a cache miss rather than stale results. Only formats
+            /// that expose bucket splitting (Parquet) ever populate the cache, so other formats miss.
+            FileBucketInfoPtr buckets_to_read;
+            QueryConditionCachePtr query_condition_cache;
+            if (object_with_metadata.has_value() && format_filter_info && format_filter_info->condition_hash)
+                query_condition_cache = getContext()->getQueryConditionCache();
+
+            if (query_condition_cache)
+            {
+                const String cache_file_key = current_path + "::" + *current_file_cache_version;
+                auto matching_marks = query_condition_cache->read(
+                    storage->getStorageID().uuid, cache_file_key, *format_filter_info->condition_hash);
+                if (matching_marks.has_value())
+                {
+                    const auto & marks = *matching_marks;
+                    std::vector<size_t> matching_row_groups;
+                    for (size_t i = 0; i < marks.size(); ++i)
+                        if (marks[i])
+                            matching_row_groups.push_back(i);
+
+                    LOG_DEBUG(
+                        getLogger("StorageFile"),
+                        "Query condition cache has dropped {}/{} row groups for condition {} in file {}.",
+                        marks.size() - matching_row_groups.size(),
+                        marks.size(),
+                        format_filter_info->filter_actions_dag->dumpNames(),
+                        current_path);
+
+                    if (matching_row_groups.empty())
+                    {
+                        /// The whole file is known not to match the condition — skip it entirely.
+                        read_buf.reset();
+                        continue;
+                    }
+
+                    if (auto file_bucket_info = FormatFactory::instance().getFileBucketInfo(storage->format_name))
+                    {
+                        buckets_to_read = file_bucket_info->filterByMatchingRowGroups(matching_row_groups);
+                        if (!buckets_to_read)
+                        {
+                            read_buf.reset();
+                            continue;
+                        }
+                    }
+                }
+            }
+
             if (object_with_metadata.has_value())
             {
                 input_format = FormatFactory::instance().getInputWithMetadata(
@@ -1711,6 +1767,7 @@ Chunk StorageFileSource::generate()
                     need_only_count);
             }
 
+            input_format->setBucketsToRead(buckets_to_read);
             input_format->setSerializationHints(serialization_hints);
 
             if (need_only_count)
@@ -1785,6 +1842,58 @@ Chunk StorageFileSource::generate()
             addNumRowsToCache(current_path, total_rows_in_file);
 
         total_rows_in_file = 0;
+
+        /// Populate the Query Condition Cache with the row groups that produced no matching rows,
+        /// so subsequent queries with the same predicate can skip them. Mirrors the write path in
+        /// `StorageObjectStorageSource`. Gated on a real local file (version token available) and a
+        /// deterministic single-output predicate (`condition_hash`). Only Parquet reports matched
+        /// buckets; other formats return `nullopt` here and are silently skipped.
+        if (input_format && current_file_cache_version.has_value()
+            && format_filter_info && format_filter_info->condition_hash)
+        {
+            try
+            {
+                auto buckets_opt = input_format->getMatchedBuckets();
+                if (buckets_opt.has_value())
+                {
+                    const auto & matched_groups = buckets_opt->first;
+                    size_t total_groups = buckets_opt->second;
+
+                    std::unordered_set<size_t> matched_set(matched_groups.begin(), matched_groups.end());
+                    MarkRanges unmatched_ranges;
+                    for (size_t i = 0; i < total_groups; ++i)
+                    {
+                        if (!matched_set.contains(i))
+                        {
+                            if (!unmatched_ranges.empty() && unmatched_ranges.back().end == i)
+                                unmatched_ranges.back().end++;
+                            else
+                                unmatched_ranges.push_back({UInt64(i), UInt64(i + 1)});
+                        }
+                    }
+
+                    if (!unmatched_ranges.empty())
+                    {
+                        if (auto query_condition_cache = getContext()->getQueryConditionCache())
+                        {
+                            const String cache_file_key = current_path + "::" + *current_file_cache_version;
+                            query_condition_cache->write(
+                                storage->getStorageID().uuid,
+                                cache_file_key,
+                                *format_filter_info->condition_hash,
+                                format_filter_info->filter_actions_dag->dumpNames(),
+                                unmatched_ranges,
+                                total_groups,
+                                /*has_final_mark=*/false);
+                        }
+                    }
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(getLogger("StorageFile"), "Failed to write to query condition cache");
+            }
+        }
 
         /// Close file prematurely if stream was ended.
         reader.reset();
