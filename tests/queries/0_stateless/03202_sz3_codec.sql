@@ -383,6 +383,55 @@ LIMIT 10;
 
 DROP TABLE tab;
 
+SELECT 'Test multi-element tuple';
+-- A pure-float tuple is compressed with SZ3 on *every* element. Regression guard: the writers used to reset
+-- the previous stream's codec to the default codec whenever a new lossy stream was created. Because tuple
+-- element streams are enumerated in order, this stored every element except the last one with the default
+-- (lossless) codec, while the SZ3 declaration was still accepted - a silent contract violation. Here each
+-- element must be lossily compressed (its decoded values differ from the originals) and still round-trip
+-- within the error bound, in both wide and compact parts.
+
+DROP TABLE IF EXISTS tab_wide;
+DROP TABLE IF EXISTS tab_compact;
+
+CREATE TABLE tab_wide (
+    key          UInt64,
+    uncompressed Tuple(Float64, Float64),
+    compressed   Tuple(Float64, Float64) CODEC(SZ3('ALGO_INTERP', 'REL', 0.01))
+) ENGINE = MergeTree ORDER BY key SETTINGS min_bytes_for_wide_part = 0, min_rows_for_wide_part = 0;
+
+CREATE TABLE tab_compact (
+    key          UInt64,
+    uncompressed Tuple(Float64, Float64),
+    compressed   Tuple(Float64, Float64) CODEC(SZ3('ALGO_INTERP', 'REL', 0.01))
+) ENGINE = MergeTree ORDER BY key SETTINGS min_bytes_for_wide_part = 1e9, min_rows_for_wide_part = 1e9;
+
+INSERT INTO tab_wide
+    SELECT number, (v, w), (v, w)
+    FROM (SELECT number, sin(number * number * number) * number AS v, number * sqrt(number) AS w FROM numbers(300));
+INSERT INTO tab_compact
+    SELECT number, (v, w), (v, w)
+    FROM (SELECT number, sin(number * number * number) * number AS v, number * sqrt(number) AS w FROM numbers(300));
+
+SELECT '-- wide: every element is lossily compressed and within the error bound';
+SELECT
+    countIf(tupleElement(uncompressed, 1) != tupleElement(compressed, 1)) > 0 AS elem1_lossy,
+    countIf(tupleElement(uncompressed, 2) != tupleElement(compressed, 2)) > 0 AS elem2_lossy,
+    max(abs(tupleElement(uncompressed, 1) - tupleElement(compressed, 1))) <= 0.02 * (max(tupleElement(uncompressed, 1)) - min(tupleElement(uncompressed, 1))) AS elem1_within_error,
+    max(abs(tupleElement(uncompressed, 2) - tupleElement(compressed, 2))) <= 0.02 * (max(tupleElement(uncompressed, 2)) - min(tupleElement(uncompressed, 2))) AS elem2_within_error
+FROM tab_wide;
+
+SELECT '-- compact: every element is lossily compressed and within the error bound';
+SELECT
+    countIf(tupleElement(uncompressed, 1) != tupleElement(compressed, 1)) > 0 AS elem1_lossy,
+    countIf(tupleElement(uncompressed, 2) != tupleElement(compressed, 2)) > 0 AS elem2_lossy,
+    max(abs(tupleElement(uncompressed, 1) - tupleElement(compressed, 1))) <= 0.02 * (max(tupleElement(uncompressed, 1)) - min(tupleElement(uncompressed, 1))) AS elem1_within_error,
+    max(abs(tupleElement(uncompressed, 2) - tupleElement(compressed, 2))) <= 0.02 * (max(tupleElement(uncompressed, 2)) - min(tupleElement(uncompressed, 2))) AS elem2_within_error
+FROM tab_compact;
+
+DROP TABLE tab_wide;
+DROP TABLE tab_compact;
+
 SELECT 'SZ3 is lossy and cannot be used where the column data type is unknown';
 -- The marks, the primary key and the default compression codec are applied without a specific column, so the
 -- codec is built without a data type. A lossy codec there would silently corrupt non-floating-point data, so it

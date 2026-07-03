@@ -78,8 +78,6 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
 
 void MergeTreeDataPartWriterCompact::addStreams(const NameAndTypePair & name_and_type, const ASTPtr & effective_codec_desc)
 {
-    CompressedStreamPtr prev_stream;
-
     ISerialization::StreamCallback callback = [&](const auto & substream_path)
     {
         chassert(!substream_path.empty());
@@ -120,13 +118,12 @@ void MergeTreeDataPartWriterCompact::addStreams(const NameAndTypePair & name_and
             it = streams_by_codec.emplace(codec_id, std::make_shared<CompressedStream>(plain_hashing, compression_codec)).first;
         }
 
-        /// If previous stream is not null it means it was Array offsets stream.
-        /// Can't apply lossy compression for offsets.
-        if (prev_stream && prev_stream != it->second && prev_stream->compressed_buf.getCodec()->isLossyCompression())
-            prev_stream->compressed_buf.setCodec(CompressionCodecFactory::instance().getDefaultCodec());
-
+        /// No lossy codec is ever assigned to a structural substream (`Array` offsets, null map, ...): the
+        /// only lossy codec, `SZ3`, is non-generic, and structural substreams take the generic-only branch
+        /// above (`isSpecialCompressionAllowed` == false), which drops it. So every stream that carries a
+        /// lossy codec is a genuine float data stream that must keep it - in particular each element of a
+        /// pure-float `Tuple`.
         compressed_streams.emplace(stream_name, it->second);
-        prev_stream = it->second;
     };
 
     ISerialization::EnumerateStreamsSettings enumerate_settings;
