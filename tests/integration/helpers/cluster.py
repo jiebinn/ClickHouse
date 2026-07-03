@@ -4241,7 +4241,13 @@ class ClickHouseCluster:
             bufsize=0,
         )
 
-    def shutdown(self, kill=True, ignore_fatal=False, ignore_logical_errors=False):
+    def shutdown(
+        self,
+        kill=True,
+        ignore_fatal=False,
+        ignore_logical_errors=False,
+        ignore_sanitizer=False,
+    ):
         sanitizer_assert_instance = None
         failure_logs = []
 
@@ -4267,7 +4273,7 @@ class ClickHouseCluster:
                     exit_code = res["StatusCode"]
                     logging.info(f"The server {name} exited with code: {exit_code}")
 
-                if instance.contains_in_log(
+                if not ignore_sanitizer and instance.contains_in_log(
                     SANITIZER_SIGN, from_host=True, filename="stderr.log"
                 ):
                     sanitizer_assert_instance = instance.grep_in_log(
@@ -5425,7 +5431,7 @@ class ClickHouseInstance:
             if pid is None:
                 logging.debug("No clickhouse process running. Start new one.")
                 exec_id = self.exec_in_container(
-                    ["bash", "-c", self.clickhouse_start_command],
+                    ["bash", "-c", self.clickhouse_start_command_in_daemon],
                     user=str(os.getuid()),
                     detach=True,
                     use_cli=False,
