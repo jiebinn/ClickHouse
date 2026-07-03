@@ -83,6 +83,13 @@ void MySQLSettings::loadFromQueryContext(ContextPtr context, ASTStorage & storag
     if (!context->hasQueryContext())
         return;
 
+    /// Do not override a value that was already supplied explicitly for this engine instance - via a
+    /// named collection or the engine's own `SETTINGS` - with the query-context (session) value. The
+    /// query-context bridge only fills in the value when the engine did not set it, so that an explicit
+    /// per-engine opt-out keeps precedence over a conflicting session `SET mysql_datatypes_support_level`.
+    if (impl->isChanged("mysql_datatypes_support_level"))
+        return;
+
     const Settings & settings = context->getQueryContext()->getSettingsRef();
 
     if (settings[Setting::mysql_datatypes_support_level].value != (*impl)[MySQLSetting::mysql_datatypes_support_level].value)

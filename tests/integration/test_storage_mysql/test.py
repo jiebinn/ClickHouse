@@ -1164,6 +1164,28 @@ def test_mysql_geometry(started_cluster):
     # The value reads back as raw WKB `String` without an exception (before the fix this threw).
     assert len(node1.query(f"SELECT ls FROM {table_function_query}").strip()) > 0
 
+    # Regression test (named-collection precedence): a named collection carrying an explicit
+    # `mysql_datatypes_support_level` opt-out keeps precedence over a conflicting session
+    # `SET mysql_datatypes_support_level`. The `mysql_no_geo_types` collection disables `geometry`, so a
+    # `LINESTRING` column is inferred as `String` even though the session enables `geometry`, and the
+    # session value is not frozen into `SHOW CREATE`. Before the fix the query-context bridge overwrote
+    # the named-collection value with the session value (and persisted it into the table definition).
+    node1.query("DROP TABLE IF EXISTS test_geometry_nc")
+    node1.query(
+        "CREATE TABLE test_geometry_nc Engine=MySQL(mysql_no_geo_types)",
+        settings={
+            "mysql_datatypes_support_level": "decimal,datetime64,date2Date32,geometry"
+        },
+    )
+    assert (
+        node1.query("SELECT toTypeName(ls) FROM test_geometry_nc LIMIT 1").strip()
+        == "String"
+    )
+    assert "mysql_datatypes_support_level" not in node1.query(
+        "SHOW CREATE TABLE test_geometry_nc"
+    )
+    node1.query("DROP TABLE IF EXISTS test_geometry_nc")
+
     drop_mysql_table(conn, table_name)
     conn.close()
 
