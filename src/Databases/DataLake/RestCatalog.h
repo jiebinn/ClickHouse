@@ -49,7 +49,7 @@ public:
 
     bool empty() const override;
 
-    DB::Names getTables() const override;
+    CatalogTables getTables() const override;
 
     bool existsTable(const std::string & namespace_name, const std::string & table_name) const override;
 

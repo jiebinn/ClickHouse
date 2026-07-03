@@ -772,17 +772,30 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIterator(
     bool skip_not_loaded) const
 {
     Tables tables;
-    DB::Names iceberg_tables;
+    DataLake::CatalogTables catalog_tables;
 
     /// Do not throw here, because this might be, for example, a query to system.tables.
     /// It must not fail on case of some datalake error.
     try
     {
-        iceberg_tables = getCatalog()->getTables();
+        catalog_tables = getCatalog()->getTables();
     }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    /// Skip tables ClickHouse cannot read (e.g. Delta Lake tables or raw data files in
+    /// mixed-format catalogs like Glue/Unity) and apply the requested name filter once,
+    /// so this stays consistent with getLightweightTablesIterator (used for SHOW TABLES).
+    DB::Names iceberg_tables;
+    for (const auto & catalog_table : catalog_tables)
+    {
+        if (!catalog_table.is_readable)
+            continue;
+        if (filter_by_table_name && !filter_by_table_name(catalog_table.name))
+            continue;
+        iceberg_tables.push_back(catalog_table.name);
     }
 
     auto & pool = Context::getGlobalContextInstance()->getIcebergCatalogThreadpool();
@@ -791,9 +804,6 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIterator(
     std::vector<std::future<StoragePtr>> futures;
     for (const auto & table_name : iceberg_tables)
     {
-        if (filter_by_table_name && !filter_by_table_name(table_name))
-            continue;
-
         try
         {
             promises.emplace_back(std::make_shared<std::promise<StoragePtr>>());
@@ -846,9 +856,6 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIterator(
     size_t future_index = 0;
     for (const auto & table_name : iceberg_tables)
     {
-        if (filter_by_table_name && !filter_by_table_name(table_name))
-            continue;
-
         auto table_ptr = futures[future_index].get();
         if (table_ptr)
         {
@@ -865,25 +872,30 @@ std::vector<LightWeightTableDetails> DatabaseDataLake::getLightweightTablesItera
     const FilterByNameFunction & filter_by_table_name,
     bool /*skip_not_loaded*/) const
 {
-    DB::Names iceberg_tables;
+    DataLake::CatalogTables catalog_tables;
     std::vector<LightWeightTableDetails> result;
 
     /// Do not throw here, because this might be, for example, a query to system.tables.
     /// It must not fail on case of some datalake error.
     try
     {
-        iceberg_tables = getCatalog()->getTables();
+        catalog_tables = getCatalog()->getTables();
     }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
 
-    for (const auto & table_name : iceberg_tables)
+    for (const auto & catalog_table : catalog_tables)
     {
-        if (filter_by_table_name && !filter_by_table_name(table_name))
+        /// Skip tables ClickHouse cannot read (e.g. Delta Lake tables or raw data files in
+        /// mixed-format catalogs like Glue/Unity), so SHOW TABLES / system.tables stay
+        /// consistent with getTablesIterator without a per-table metadata fetch.
+        if (!catalog_table.is_readable)
             continue;
-        result.emplace_back(table_name);
+        if (filter_by_table_name && !filter_by_table_name(catalog_table.name))
+            continue;
+        result.emplace_back(catalog_table.name);
     }
 
     return result;
@@ -898,10 +910,15 @@ VectorWithMemoryTracking<String> DatabaseDataLake::getAllTableNames(ContextPtr /
     /// must not fail even when the catalog is temporarily unreachable.
     try
     {
-        Names tables = getCatalog()->getTables();
+        DataLake::CatalogTables tables = getCatalog()->getTables();
         result.reserve(tables.size());
         for (auto & table : tables)
-            result.push_back(std::move(table));
+        {
+            /// Only suggest tables ClickHouse can actually read.
+            if (!table.is_readable)
+                continue;
+            result.push_back(std::move(table.name));
+        }
     }
     catch (...)
     {

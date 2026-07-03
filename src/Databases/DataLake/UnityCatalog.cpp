@@ -38,6 +38,31 @@ static const auto TEMPORARY_CREDENTIALS_ENDPOINT = "temporary-table-credentials"
 static const std::unordered_set<std::string> READABLE_TABLES = {"TABLE_DELTA", "TABLE_DELTA_EXTERNAL"};
 static const auto READABLE_DATA_SOURCE_FORMAT = "DELTA";
 
+/// A Unity table is readable by ClickHouse only if it is a DeltaLake table. The
+/// `securable_kind`, `data_source_format` and `storage_location` fields are present in
+/// both the bulk tables listing and the per-table response, so this single check keeps
+/// the listing (`getTablesForSchema`) consistent with `tryGetTableMetadata`, which marks
+/// non-Delta tables (views, foreign tables, ...) as not readable.
+static bool isReadableUnityTable(const Poco::JSON::Object::Ptr & table)
+{
+    if (!hasValueAndItsNotNone("storage_location", table))
+        return false;
+
+    const bool has_securable_kind = hasValueAndItsNotNone("securable_kind", table);
+    const bool has_data_source_format = hasValueAndItsNotNone("data_source_format", table);
+
+    if (has_securable_kind && !READABLE_TABLES.contains(table->get("securable_kind").extract<String>()))
+        return false;
+
+    if (has_data_source_format && table->get("data_source_format").extract<String>() != READABLE_DATA_SOURCE_FORMAT)
+        return false;
+
+    if (!has_securable_kind && !has_data_source_format)
+        return false;
+
+    return true;
+}
+
 struct UnityCatalogFullSchemaName
 {
     std::string catalog_name;
@@ -76,9 +101,9 @@ bool UnityCatalog::empty() const
     return true;
 }
 
-DB::Names UnityCatalog::getTables() const
+CatalogTables UnityCatalog::getTables() const
 {
-    DB::Names result;
+    CatalogTables result;
 
     auto all_schemas = getSchemas("");
     for (const auto & schema : all_schemas)
@@ -301,14 +326,14 @@ bool UnityCatalog::existsTable(const std::string & schema_name, const std::strin
     }
 }
 
-DB::Names UnityCatalog::getTablesForSchema(const std::string & schema, size_t limit) const
+CatalogTables UnityCatalog::getTablesForSchema(const std::string & schema, size_t limit) const
 {
     Poco::URI::QueryParameters params;
     params.push_back({"catalog_name", warehouse});
     params.push_back({"schema_name", schema});
     params.push_back({"max_results", DB::toString(limit)});
 
-    DB::Names tables;
+    CatalogTables tables;
     do
     {
         String json_str;
@@ -331,7 +356,10 @@ DB::Names UnityCatalog::getTablesForSchema(const std::string & schema, size_t li
                 const auto current_table_json = tables_object->get(static_cast<int>(i)).extract<Poco::JSON::Object::Ptr>();
                 const auto table_name = current_table_json->get("name").extract<String>();
 
-                tables.push_back(schema + "." + table_name);
+                tables.push_back(CatalogTable{
+                    .name = schema + "." + table_name,
+                    .is_readable = isReadableUnityTable(current_table_json),
+                });
                 if (limit && tables.size() >= limit)
                     break;
             }

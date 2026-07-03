@@ -70,8 +70,9 @@ public:
     /// Some catalogs (Unity or Glue) may store not only Iceberg/DeltaLake tables but other kinds of "tables"
     /// as simple files or some in-memory tables, or even DataLake tables but in some private storages.
     /// ClickHouse can see these tables via catalog, but obviously cannot read them.
-    /// So we use these methods to identify such tables and show them in SHOW TABLES and
-    /// SHOW CREATE TABLE queries.
+    /// We use these methods to identify such tables so that they are hidden from table
+    /// listings (SHOW TABLES and system.tables), while SHOW CREATE TABLE can still describe
+    /// them (with engine `Other`).
     void setTableIsNotReadable(const std::string & reason)
     {
         if (is_default_readable_table)
@@ -122,6 +123,24 @@ private:
 };
 
 
+/// A table as returned by a catalog's bulk listing, without a per-table metadata fetch.
+struct CatalogTable
+{
+    /// Full name including namespace, e.g. "namespace.table".
+    std::string name;
+
+    /// Whether ClickHouse can read this table with the corresponding data lake engine
+    /// (Iceberg for Glue/REST/Hive, Delta for Unity, ...). Mixed-format catalogs (Glue,
+    /// Unity) determine this cheaply from the same bulk listing response; single-format
+    /// catalogs only ever list readable tables and leave it `true`. It lets the lightweight
+    /// listing path (SHOW TABLES / name-only system.tables) hide unreadable tables without
+    /// the per-table metadata fetch it is designed to avoid, staying consistent with the
+    /// full path. See ICatalog::setTableIsNotReadable.
+    bool is_readable = true;
+};
+
+using CatalogTables = std::vector<CatalogTable>;
+
 struct CatalogSettings
 {
     String storage_endpoint;
@@ -151,9 +170,11 @@ public:
     /// Does catalog have any tables?
     virtual bool empty() const = 0;
 
-    /// Fetch tables' names list.
-    /// Contains full namespaces in names.
-    virtual DB::Names getTables() const = 0;
+    /// Fetch the list of tables. Contains full namespaces in names.
+    /// Each entry carries an `is_readable` flag that mixed-format catalogs (Glue, Unity)
+    /// populate cheaply from the bulk listing response, so that unreadable tables can be
+    /// filtered out of listings without a per-table metadata fetch.
+    virtual CatalogTables getTables() const = 0;
 
     /// Check that a table exists in a given namespace.
     virtual bool existsTable(

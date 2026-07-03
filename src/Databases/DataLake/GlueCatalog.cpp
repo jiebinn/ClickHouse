@@ -92,6 +92,24 @@ namespace CurrentMetrics
 namespace DataLake
 {
 
+namespace
+{
+
+/// A Glue table is readable by ClickHouse only if it is an Iceberg table. The
+/// `table_type` parameter is present in both the bulk `GetTables` listing and
+/// the per-table `GetTable` response, so this single check keeps the listing
+/// (`getTablesForDatabase`) consistent with `tryGetTableMetadata`, which marks
+/// non-Iceberg tables (Delta Lake tables, raw data files, ...) as not readable.
+bool isReadableGlueTable(const Aws::Glue::Model::Table & table)
+{
+    const auto & parameters = table.GetParameters();
+    auto it = parameters.find("table_type");
+    const std::string table_type = it != parameters.end() ? it->second : "";
+    return Poco::toUpper(table_type) == "ICEBERG";
+}
+
+}
+
 GlueCatalog::GlueCatalog(
     const String & endpoint,
     DB::ContextPtr context_,
@@ -222,10 +240,10 @@ DataLake::ICatalog::Namespaces GlueCatalog::getDatabases(const std::string & pre
     return result;
 }
 
-DB::Names GlueCatalog::getTablesForDatabase(const std::string & db_name, size_t limit) const
+CatalogTables GlueCatalog::getTablesForDatabase(const std::string & db_name, size_t limit) const
 {
     LOG_TEST(log, "Getting tables for database '{}' with limit {}", db_name, limit);
-    DB::Names result;
+    CatalogTables result;
     Aws::Glue::Model::GetTablesRequest request;
     request.SetDatabaseName(db_name);
     if (limit != 0)
@@ -256,7 +274,10 @@ DB::Names GlueCatalog::getTablesForDatabase(const std::string & db_name, size_t 
 
                 if (limit != 0 && result.size() >= limit)
                     break;
-                result.push_back(db_name + "." + table.GetName());
+                result.push_back(CatalogTable{
+                    .name = db_name + "." + table.GetName(),
+                    .is_readable = isReadableGlueTable(table),
+                });
             }
             next_token = tables_result.GetNextToken();
         }
@@ -272,10 +293,10 @@ DB::Names GlueCatalog::getTablesForDatabase(const std::string & db_name, size_t 
     return result;
 }
 
-DB::Names GlueCatalog::getTables() const
+CatalogTables GlueCatalog::getTables() const
 {
     auto databases = getDatabases("");
-    DB::Names result;
+    CatalogTables result;
     for (const auto & database : databases)
     {
         auto tables_in_database = getTablesForDatabase(database);
@@ -314,7 +335,7 @@ bool GlueCatalog::tryGetTableMetadata(
         if (table_outcome.GetParameters().contains("table_type"))
             table_type = table_outcome.GetParameters().at("table_type");
 
-        if (Poco::toUpper(table_type) != "ICEBERG")
+        if (!isReadableGlueTable(table_outcome))
         {
             std::string message_part;
             if (!table_type.empty())

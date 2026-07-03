@@ -28,7 +28,7 @@ public:
 
     bool empty() const override;
 
-    DB::Names getTables() const override;
+    CatalogTables getTables() const override;
 
     bool existsTable(const std::string & schema_name, const std::string & table_name) const override;
 
@@ -62,7 +62,7 @@ private:
 
     DataLake::ICatalog::Namespaces getSchemas(const std::string & base_prefix, size_t limit = 0) const;
 
-    DB::Names getTablesForSchema(const std::string & schema, size_t limit = 0) const;
+    CatalogTables getTablesForSchema(const std::string & schema, size_t limit = 0) const;
     void getCredentials(const String & table_id, TableMetadata & metadata) const;
 
     Poco::JSON::Object::Ptr requestReadCredentials(const String & table_id) const;

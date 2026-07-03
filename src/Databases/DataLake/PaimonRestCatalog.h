@@ -85,7 +85,7 @@ public:
 
     bool empty() const override;
 
-    DB::Names getTables() const override;
+    CatalogTables getTables() const override;
 
     bool existsTable(const String & database_name, const String & table_name) const override;
 
