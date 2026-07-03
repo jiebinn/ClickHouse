@@ -3867,6 +3867,30 @@ let current_selection_num = 0;
 /// modifier click - Cmd on macOS, Ctrl elsewhere (on macOS `Ctrl+Click` is the secondary
 /// context-menu click, so it is not a new-tab gesture). The handler inspects the event to
 /// decide between replacing the current query and opening a new Web UI tab.
+///
+/// There is no browser-level test harness for `play.html`, so this gesture-routing and its
+/// paste guard are verified by hand. The committed manual matrix below is the behavior
+/// contract; re-run it when touching `set_query_or_run`, `openQueryInNewTab`/`activateTab`,
+/// or the `suppress_middleclick_paste` guard. Every case applies to a databases-panel table
+/// row and its bytes/rows/engine addenda alike, since they all route through the same
+/// `set_query_or_run` (below):
+///
+///   1. Plain left click on a not-yet-loaded query -> replaces the current tab's query
+///      (`query_area.value = value`); no new tab is created.
+///   2. Click the same row again while its query is already in the editor -> runs it
+///      (`postOne`), no new tab - and likewise for a second middle/modifier click, since
+///      opening an identical tab would be pointless.
+///   3. Middle click (button 1) -> opens the query in a new Web UI tab; on Linux/X11 the
+///      synthetic PRIMARY paste into the freshly focused editor is swallowed (the guard is
+///      armed around `query_area.focus()` in `activateTab`).
+///   4. Shift+click -> opens a new tab on every platform.
+///   5. Ctrl+click on Linux/Windows, or Cmd+click on macOS -> opens a new tab.
+///   6. Ctrl+click on macOS (the secondary/context-menu click) -> NOT a new-tab gesture;
+///      behaves like a plain click (replace, or run on the second click).
+///   7. A real keyboard paste (Ctrl+V, Cmd+V, or Shift+Insert) into the editor immediately
+///      after a middle-click new-tab open -> the pasted text is kept: the paste-shortcut
+///      `keydown` disarms the guard before its `paste` fires, so only the mouse-driven
+///      PRIMARY paste (which carries no keystroke) is ever swallowed.
 function onTableActivate(elem, handler) {
     elem.addEventListener('click', handler);
     elem.addEventListener('auxclick', e => {
