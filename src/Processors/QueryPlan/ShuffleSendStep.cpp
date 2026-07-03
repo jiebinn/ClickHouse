@@ -42,6 +42,12 @@ QueryPipelineBuilderPtr ShuffleSendStep::updatePipeline(QueryPipelineBuilders pi
     for (const auto & key_name : key_names)
         key_columns.push_back(stream_header->getPositionByName(key_name));
 
+    /// The scatter/resize mesh below creates num_streams * num_buckets connections in the pipeline.
+    /// Cap the number of scatter streams to keep the mesh small when the upstream is very wide.
+    const size_t max_scatter_streams = 16;
+    if (pipeline.getNumStreams() > max_scatter_streams)
+        pipeline.resize(max_scatter_streams);
+
     const size_t num_streams = pipeline.getNumStreams();
     chassert(num_streams > 0);
 
