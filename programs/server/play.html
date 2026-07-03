@@ -4970,6 +4970,45 @@ async function restoreFromHistory(state, token) {
 
 let query_area = document.getElementById('query');
 
+/// Duplicating a tab via a middle click focuses the query editor. On Linux/X11 the middle
+/// button additionally pastes the PRIMARY selection into the freshly-focused editor, appending
+/// clipboard junk after the duplicated query. The new-tab activation (`activateTab` with
+/// `guard_paste`) arms this flag right around that `query_area.focus()`, so we swallow exactly
+/// that one paste.
+///
+/// The guard must never eat a real keyboard paste. The X11 PRIMARY paste is mouse-driven and
+/// carries no keystroke, whereas a real keyboard paste - Ctrl+V / Cmd+V, or Shift+Insert on
+/// Linux/Windows - is always preceded by its own paste-shortcut `keydown`; disarming on that
+/// `keydown` (which fires before the resulting `paste`) keeps the discrimination independent of
+/// timing. So even if the user middle-clicks and immediately presses a paste shortcut on a platform
+/// where no PRIMARY paste ever arrives, their paste is preserved; the short post-focus fallback in
+/// `activateTab` only bounds how long a never-consumed guard can linger.
+///
+/// The guard is a single shared bit, so we keep the handle of its one fallback timer and cancel
+/// it whenever the guard is re-armed or consumed. Otherwise two overlapping middle-click opens
+/// (open A, then open B within the fallback window) would share the bit but leave two pending
+/// timeouts: A's stale timeout could clear the bit that B re-armed, before B's PRIMARY paste
+/// arrives, letting that paste land in the editor. Cancelling the previous timer on re-arm means
+/// an older open's timeout can never clear a newer open's guard.
+let suppress_middleclick_paste = false;
+let middleclick_paste_timeout = null;
+function disarmMiddleclickPaste() {
+    suppress_middleclick_paste = false;
+    clearTimeout(middleclick_paste_timeout);
+    middleclick_paste_timeout = null;
+}
+query_area.addEventListener('keydown', e => {
+    const keyboard_paste = ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V'))
+        || (e.shiftKey && e.key === 'Insert');
+    if (keyboard_paste) disarmMiddleclickPaste();
+});
+query_area.addEventListener('paste', e => {
+    if (suppress_middleclick_paste) {
+        e.preventDefault();
+        disarmMiddleclickPaste();
+    }
+});
+
 appendTextareaResizer();
 
 /// ===== Tabs =====================================================================
@@ -5064,7 +5103,7 @@ function invalidateInFlight() {
 /// Load a tab's content into the editor and re-render its stored result.
 /// Routed through `restoreFromHistory` so the syntax backdrop, params and run
 /// buttons resync (it dispatches an 'input' event), exactly like history navigation.
-async function activateTab(id) {
+async function activateTab(id, guard_paste = false) {
     const tab = tabs.find(t => t.id === id);
     if (!tab) return;
     activeTabId = id;
@@ -5079,7 +5118,20 @@ async function activateTab(id) {
     /// even when there is no result to render (restoreFromHistory skips this otherwise).
     document.documentElement.style.setProperty('--background-color-rotate', queryToColor(tab.query));
     renderTabBar();
+    /// A middle-click duplicate arms the X11 PRIMARY paste guard right around this focus, so
+    /// the paste Linux delivers to the freshly-focused editor is swallowed - and only that one.
+    /// Anchoring the guard here, rather than at the original `auxclick`, means a slow activation
+    /// can never let it expire before focus. It is cleared by the swallowed paste, by a real
+    /// paste-shortcut keydown (which must never be eaten - see `suppress_middleclick_paste`), or by
+    /// the short fallback below in case no paste fires at all (non-Linux, empty selection), so the
+    /// flag can never linger. Re-arming here cancels any previous open's pending fallback timer, so
+    /// an overlapping middle-click open cannot have its guard cleared by an earlier open's timeout.
+    if (guard_paste) {
+        clearTimeout(middleclick_paste_timeout);
+        suppress_middleclick_paste = true;
+    }
     query_area.focus();
+    if (guard_paste) middleclick_paste_timeout = setTimeout(disarmMiddleclickPaste, 250);
 }
 
 /// Switch tabs in response to a user click: capture the current tab, activate the
@@ -5109,8 +5161,9 @@ function addTab() {
 
 /// Duplicate a tab: copy its query and parameters into a new tab inserted right after the
 /// source, then switch to the copy. Triggered by a middle-click or Ctrl/Shift/Cmd+click on
-/// the title — the browser gesture for "open in a new tab".
-function duplicateTab(id) {
+/// the title — the browser gesture for "open in a new tab". `guard_paste` is set for a genuine
+/// middle click, so the activation swallows the X11 PRIMARY paste that follows focusing the editor.
+function duplicateTab(id, guard_paste = false) {
     const src = tabs.find(t => t.id === id);
     if (!src) return;
     markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
@@ -5123,7 +5176,7 @@ function duplicateTab(id) {
     const idx = tabs.findIndex(t => t.id === id);
     tabs.splice(idx + 1, 0, tab);
     activeTabId = tab.id;
-    activateTab(tab.id).then(syncHistory);
+    activateTab(tab.id, guard_paste).then(syncHistory);
     scheduleSave();
 }
 
@@ -5231,8 +5284,9 @@ function renderTabBar() {
             }
         });
         /// Middle-click does not raise a `click` event; it comes through as `auxclick` (button 1).
+        /// A genuine middle click needs the X11 PRIMARY paste guard (see `suppress_middleclick_paste`).
         el.addEventListener('auxclick', (e) => {
-            if (e.button === 1 && e.target === titleEl) { e.preventDefault(); duplicateTab(tab.id); }
+            if (e.button === 1 && e.target === titleEl) { e.preventDefault(); duplicateTab(tab.id, true); }
         });
         /// Suppress the middle-click autoscroll cursor over the title.
         el.addEventListener('mousedown', (e) => {
