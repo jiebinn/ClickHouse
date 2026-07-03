@@ -12,12 +12,14 @@ DROP DATABASE {CLICKHOUSE_DATABASE:Identifier};
 CREATE DATABASE {CLICKHOUSE_DATABASE:Identifier}
     ENGINE = Replicated('/clickhouse/{database}/04365_repl', 'shard1', 'replica1') FORMAT Null;
 
-INSERT INTO FUNCTION file('04365_data.tsv', 'TSV', 'id UInt64, value String')
+-- The data file lives in the shared user_files dir, so its name must be unique per test
+-- run or parallel copies clobber each other's file and fileCluster reads the union.
+INSERT INTO FUNCTION file({CLICKHOUSE_DATABASE:String} || '_04365_data.tsv', 'TSV', 'id UInt64, value String')
 SELECT number, toString(number) FROM numbers(5)
 SETTINGS engine_file_truncate_on_insert = 1;
 
 CREATE TABLE {CLICKHOUSE_DATABASE:Identifier}.t
     ENGINE = MergeTree() ORDER BY id
-    AS SELECT id, value FROM fileCluster('test_shard_localhost', '04365_data.tsv', 'TSV', 'id UInt64, value String') FORMAT Null;
+    AS SELECT id, value FROM fileCluster('test_shard_localhost', {CLICKHOUSE_DATABASE:String} || '_04365_data.tsv', 'TSV', 'id UInt64, value String') FORMAT Null;
 
 SELECT count(), sum(id) FROM {CLICKHOUSE_DATABASE:Identifier}.t;
