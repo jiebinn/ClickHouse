@@ -452,9 +452,16 @@ namespace
 
         void performSinglepartUpload()
         {
-            S3::PutObjectRequest request;
-            fillPutRequest(request);
-            processPutRequest(request);
+            bool fallback_to_multipart = false;
+            {
+                S3::PutObjectRequest request;
+                fillPutRequest(request);
+                fallback_to_multipart = processPutRequest(request);
+            }
+            /// request (and its in-memory body) is destroyed before the multipart fallback starts,
+            /// so the single-part body and the multipart per-part bodies are never resident together.
+            if (fallback_to_multipart)
+                performMultipartUpload();
         }
 
         void fillPutRequest(S3::PutObjectRequest & request)
@@ -477,7 +484,10 @@ namespace
             client_ptr->setKMSHeaders(request);
         }
 
-        void processPutRequest(S3::PutObjectRequest & request)
+        /// Returns true if the single-part upload failed with EntityTooLarge / InvalidRequest and the
+        /// caller should fall back to a multipart upload. The fallback is done by the caller (not here)
+        /// so the PutObject request and its in-memory body can be released first.
+        bool processPutRequest(S3::PutObjectRequest & request)
         {
             size_t max_retries = std::max<UInt64>(request_settings[S3RequestSetting::max_unexpected_write_error_retries].value, 1UL);
             for (size_t retries = 1;; ++retries)
@@ -507,7 +517,7 @@ namespace
                         dest_bucket,
                         dest_key,
                         object_size);
-                    break;
+                    return false;
                 }
 
                 if (outcome.GetError().GetExceptionName() == "EntityTooLarge" || outcome.GetError().GetExceptionName() == "InvalidRequest")
@@ -520,8 +530,7 @@ namespace
                         dest_bucket,
                         dest_key,
                         size);
-                    performMultipartUpload();
-                    break;
+                    return true;
                 }
 
                 if ((outcome.GetError().GetErrorType() == Aws::S3::S3Errors::NO_SUCH_KEY) && (retries < max_retries))
