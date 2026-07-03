@@ -888,6 +888,7 @@
         .table-name:hover ~ .table-addendum,
         .table > button .table-addendum:hover,
         .column-name:hover ~ .column-addendum,
+        .column-type:hover ~ .column-addendum,
         .table-column .column-addendum:hover
         {
             opacity: 1;
@@ -917,6 +918,7 @@
         body.suppress-balloons .table-name:hover ~ .table-addendum,
         body.suppress-balloons .table > button .table-addendum:hover,
         body.suppress-balloons .column-name:hover ~ .column-addendum,
+        body.suppress-balloons .column-type:hover ~ .column-addendum,
         body.suppress-balloons .table-column .column-addendum:hover
         {
             opacity: 0;
@@ -4143,7 +4145,10 @@ function renderColumns(columns_elem, data, database, table_name_str) {
         addendum.textContent = lines.join('\n');
         button.appendChild(addendum);
 
-        name_elem.addEventListener('mouseenter', () => positionColumnBalloon(column));
+        /// Position the balloon whenever the pointer enters the row button, so it opens from both
+        /// the name and the (often truncated) type text - which is exactly the element a user hovers
+        /// to read a long type - not only from the name span.
+        button.addEventListener('mouseenter', () => positionColumnBalloon(column));
         /// Show the balloon when the row is focused via keyboard navigation, too.
         button.addEventListener('focus', () => positionColumnBalloon(column));
 
