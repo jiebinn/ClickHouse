@@ -5123,6 +5123,8 @@ function startTitleEdit(tab, titleEl) {
     titleEl.contentEditable = 'true';
     titleEl.spellcheck = false;
     titleEl.classList.add('editing');
+    /// Drop the hover tooltip while typing so it does not linger with the old title.
+    titleEl.removeAttribute('title');
     /// Mark the tab so it drops its max-width and flexes to fit the title being typed.
     titleEl.closest('.tab').classList.add('editing');
 
@@ -5179,6 +5181,8 @@ function renderTabBar() {
         const titleEl = document.createElement('span');
         titleEl.className = 'tab-title';
         titleEl.textContent = tab.title;
+        /// Native tooltip so a title truncated by the width cap can still be read in full on hover.
+        titleEl.title = tab.title;
         el.appendChild(titleEl);
 
         const closeEl = document.createElement('span');
