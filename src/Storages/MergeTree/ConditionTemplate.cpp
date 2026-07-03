@@ -210,8 +210,11 @@ const Cond & ConditionTemplate<Cond>::generateForPartition(const MergeTreePartit
         Cond produced = generate(&specialized, specialized.getOutputs().front());
         return setSubstituted(partition_id, std::move(produced));
     }
-    catch (...) /// Ok. Substitution is done in best-effort way.
+    catch (const Exception &)
     {
+        /// Constant substitution is best-effort: only expected query-evaluation failures
+        /// (e.g. division by zero while folding a partition constant) are caught here, so we
+        /// fall back to the unsubstituted condition. Non-`Exception` errors are not swallowed.
         return generateUnsubstituted();
     }
 }
