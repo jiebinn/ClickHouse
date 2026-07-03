@@ -3,6 +3,7 @@ import time
 import pytest
 
 from helpers.cluster import ClickHouseCluster
+from helpers.database_disk import get_database_disk_name, replace_text_in_metadata
 
 cluster = ClickHouseCluster(__file__)
 node1 = cluster.add_instance(
@@ -324,17 +325,19 @@ def test_drop_database_replica_self_protection_with_trailing_slashes(started_clu
     )
     node1.query("DETACH DATABASE self_slash_db")
 
-    metadata_path = "/var/lib/clickhouse/metadata/self_slash_db.sql"
-    node1.exec_in_container(
-        [
-            "bash",
-            "-c",
-            "sed -i \"s#Replicated('{path}'#Replicated('{path}///'#\" {meta}".format(
-                path=db_path, meta=metadata_path
-            ),
-        ],
-        user="root",
+    # The metadata is edited through clickhouse-disks so the test also works under the
+    # "db disk" config, where database metadata lives on a remote disk rather than under
+    # /var/lib/clickhouse/metadata. The database definition file is metadata/<db>.sql.
+    metadata_path = "metadata/self_slash_db.sql"
+    replace_text_in_metadata(
+        node1,
+        metadata_path,
+        "Replicated('{path}'".format(path=db_path),
+        "Replicated('{path}///'".format(path=db_path),
     )
+    db_disk_name = get_database_disk_name(node1)
+    if db_disk_name != "default":
+        node1.query(f"SYSTEM CLEAR DISK METADATA CACHE {db_disk_name}")
     node1.query("ATTACH DATABASE self_slash_db")
 
     # The live database now has getZooKeeperPath() == "/clickhouse/databases/test/self_slash_db/".
@@ -349,9 +352,12 @@ def test_drop_database_replica_self_protection_with_trailing_slashes(started_clu
     # This database was reattached from hand-edited metadata with an unusable keeper path, so a plain
     # DROP ... SYNC would hang trying to reach keeper; detach and remove its metadata directly instead.
     node1.query("DETACH DATABASE self_slash_db")
+    disk_cmd_prefix = (
+        f"/usr/bin/clickhouse disks -C /etc/clickhouse-server/config.xml "
+        f"--disk {db_disk_name} --save-logs --query "
+    )
     node1.exec_in_container(
-        ["bash", "-c", "rm -f /var/lib/clickhouse/metadata/self_slash_db.sql"],
-        user="root",
+        ["bash", "-c", f"{disk_cmd_prefix} 'remove {metadata_path}'"]
     )
 
 
@@ -375,17 +381,19 @@ def test_drop_replica_self_protection_with_trailing_slashes(started_cluster):
         """)
     node1.query("DETACH TABLE self_slash_tbl")
 
-    metadata_path = "/var/lib/clickhouse/metadata/default/self_slash_tbl.sql"
-    node1.exec_in_container(
-        [
-            "bash",
-            "-c",
-            "sed -i \"s#test/self_slash_tbl'#test/self_slash_tbl///'#\" {meta}".format(
-                meta=metadata_path
-            ),
-        ],
-        user="root",
+    # The metadata is edited through clickhouse-disks so the test also works under the
+    # "db disk" config, where table metadata lives on a remote disk rather than under
+    # /var/lib/clickhouse/metadata. metadata_path points at the table definition file.
+    metadata_path = node1.query(
+        "SELECT metadata_path FROM system.detached_tables "
+        "WHERE database='default' AND table='self_slash_tbl'"
+    ).strip()
+    replace_text_in_metadata(
+        node1, metadata_path, "test/self_slash_tbl'", "test/self_slash_tbl///'"
     )
+    db_disk_name = get_database_disk_name(node1)
+    if db_disk_name != "default":
+        node1.query(f"SYSTEM CLEAR DISK METADATA CACHE {db_disk_name}")
     node1.query("ATTACH TABLE self_slash_tbl")
 
     # The live table now has getReplicaPath() == "/clickhouse/tables/test/self_slash_tbl//replicas/r1".
