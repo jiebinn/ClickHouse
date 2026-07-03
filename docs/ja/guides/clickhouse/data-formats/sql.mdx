@@ -28,7 +28,7 @@ FORMAT SQLInsert
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-これで、[dump.sql](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) ファイルを別のOLTPデータベースに読み込ませることができます:
+これで、[dump.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) ファイルを別のOLTPデータベースに読み込ませることができます:
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-デフォルトでは、ClickHouse は不明なカラムをスキップし ([input&#95;format&#95;skip&#95;unknown&#95;fields](/ja/reference/settings/formats#input_format_skip_unknown_fields) オプションで制御) 、ダンプ内で最初に見つかったテーブルのデータを処理します (複数のテーブルが 1 つのファイルにダンプされている場合) 。DDL ステートメントはスキップされます。MySQL ダンプからテーブルにデータを読み込むには ([mysql.sql](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql) ファイルを使用) :
+デフォルトでは、ClickHouse は不明なカラムをスキップし ([input&#95;format&#95;skip&#95;unknown&#95;fields](/ja/reference/settings/formats#input_format_skip_unknown_fields) オプションで制御) 、ダンプ内で最初に見つかったテーブルのデータを処理します (複数のテーブルが 1 つのファイルにダンプされている場合) 。DDL ステートメントはスキップされます。MySQL ダンプからテーブルにデータを読み込むには ([mysql.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql) ファイルを使用) :
 
 ```sql
 INSERT INTO some_data

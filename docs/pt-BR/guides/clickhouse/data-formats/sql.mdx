@@ -28,7 +28,7 @@ Os nomes das colunas podem ser omitidos ao desativar a opção [`output_format_s
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-Agora podemos alimentar outro banco de dados OLTP com o arquivo [dump.sql](/pt-BRhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql):
+Agora podemos alimentar outro banco de dados OLTP com o arquivo [dump.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql):
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-Por padrão, o ClickHouse ignora colunas desconhecidas (controlado pela opção [input&#95;format&#95;skip&#95;unknown&#95;fields](/pt-BR/reference/settings/formats#input_format_skip_unknown_fields)) e processa os dados da primeira tabela encontrada em um dump (caso várias tabelas tenham sido exportadas para um único arquivo). Instruções DDL serão ignoradas. Para carregar dados de um dump do MySQL em uma tabela (arquivo [mysql.sql](/pt-BRhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
+Por padrão, o ClickHouse ignora colunas desconhecidas (controlado pela opção [input&#95;format&#95;skip&#95;unknown&#95;fields](/pt-BR/reference/settings/formats#input_format_skip_unknown_fields)) e processa os dados da primeira tabela encontrada em um dump (caso várias tabelas tenham sido exportadas para um único arquivo). Instruções DDL serão ignoradas. Para carregar dados de um dump do MySQL em uma tabela (arquivo [mysql.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
 
 ```sql
 INSERT INTO some_data

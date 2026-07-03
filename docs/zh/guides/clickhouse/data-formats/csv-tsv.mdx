@@ -26,7 +26,7 @@ ENGINE = MergeTree
 ORDER BY tuple(month, path)
 ```
 
-要将 [CSV 文件](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) 中的数据导入 `sometable` 表，可以直接通过管道将该文件传给 clickhouse-client：
+要将 [CSV 文件](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) 中的数据导入 `sometable` 表，可以直接通过管道将该文件传给 clickhouse-client：
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT CSV" < data_small.csv
@@ -51,7 +51,7 @@ FORMAT CSV
   ### 带表头的 CSV 文件
 </div>
 
-假设我们的 [CSV 文件带有表头](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv)：
+假设我们的 [CSV 文件带有表头](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv)：
 
 ```bash
 head data-small-headers.csv
@@ -109,7 +109,7 @@ SELECT count(*) FROM file('data-small.csv', CSV)
 └─────────┘
 ```
 
-该[file](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)有 1k 行，但由于我们要求跳过前 10 行，因此 ClickHouse 只加载了 990 行。
+该[file](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)有 1k 行，但由于我们要求跳过前 10 行，因此 ClickHouse 只加载了 990 行。
 
 <Tip>
   使用 `file()` 函数时，如果使用的是 ClickHouse Cloud，则需要在文件所在的机器上通过 `clickhouse client` 运行这些命令。另一种方式是使用 [`clickhouse-local`](/zh/concepts/features/tools-and-utilities/clickhouse-local) 在本地查看文件。
@@ -168,7 +168,7 @@ SELECT * FROM file('nulls.csv')
   ## TSV (制表符分隔) 文件
 </div>
 
-制表符分隔格式广泛用作数据交换格式。要将 [TSV 文件](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) 中的数据加载到 ClickHouse，请使用 [TabSeparated](/zh/reference/formats/TabSeparated/TabSeparated) 格式：
+制表符分隔格式广泛用作数据交换格式。要将 [TSV 文件](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) 中的数据加载到 ClickHouse，请使用 [TabSeparated](/zh/reference/formats/TabSeparated/TabSeparated) 格式：
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT TabSeparated" < data_small.tsv
@@ -326,7 +326,7 @@ FORMAT CSVWithNamesAndTypes
 "2016_Greater_Western_Sydney_Giants_season","2017-05-01",86
 ```
 
-这种格式会包含两行表头——一行是列名，另一行是列类型。这样 ClickHouse (以及其他应用) 在从[此类文件](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv)加载数据时，就能识别列类型：
+这种格式会包含两行表头——一行是列名，另一行是列类型。这样 ClickHouse (以及其他应用) 在从[此类文件](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv)加载数据时，就能识别列类型：
 
 ```sql
 DESCRIBE file('data_csv_types.csv', CSVWithNamesAndTypes)
@@ -364,7 +364,7 @@ SET format_custom_row_between_delimiter = ',';
 SET format_custom_escaping_rule = 'Quoted';
 ```
 
-现在我们可以从这个自定义格式的[file](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt)中加载数据：
+现在我们可以从这个自定义格式的[file](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt)中加载数据：
 
 ```sql
 SELECT *

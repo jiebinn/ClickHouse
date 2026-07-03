@@ -26,7 +26,7 @@ ENGINE = MergeTree
 ORDER BY tuple(month, path)
 ```
 
-[CSVファイル](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)から`sometable`テーブルにデータをインポートするには、ファイルを直接`clickhouse-client`にパイプします。
+[CSVファイル](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)から`sometable`テーブルにデータをインポートするには、ファイルを直接`clickhouse-client`にパイプします。
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT CSV" < data_small.csv
@@ -51,7 +51,7 @@ FORMAT CSV
   ### ヘッダー付きCSVファイル
 </div>
 
-この[CSVファイルにはヘッダーが含まれています](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv):
+この[CSVファイルにはヘッダーが含まれています](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv):
 
 ```bash
 head data-small-headers.csv
@@ -109,7 +109,7 @@ SELECT count(*) FROM file('data-small.csv', CSV)
 └─────────┘
 ```
 
-この[file](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)には 1k 行ありますが、最初の 10 行をスキップするよう指定したため、ClickHouse が読み込んだのは 990 行のみです。
+この[file](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv)には 1k 行ありますが、最初の 10 行をスキップするよう指定したため、ClickHouse が読み込んだのは 990 行のみです。
 
 <Tip>
   `file()` 関数を使用する場合、ClickHouse Cloud では、ファイルが存在するマシン上で `clickhouse client` を使ってコマンドを実行する必要があります。別の方法として、[`clickhouse-local`](/ja/concepts/features/tools-and-utilities/clickhouse-local) を使用してローカルでファイルを確認することもできます。
@@ -168,7 +168,7 @@ SELECT * FROM file('nulls.csv')
   ## TSV (タブ区切り) ファイル
 </div>
 
-タブ区切りのデータフォーマットは、データ交換用フォーマットとして広く使われています。[TSV file](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) から ClickHouse にデータを読み込むには、[TabSeparated](/ja/reference/formats/TabSeparated/TabSeparated) フォーマットを使用します。
+タブ区切りのデータフォーマットは、データ交換用フォーマットとして広く使われています。[TSV file](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) から ClickHouse にデータを読み込むには、[TabSeparated](/ja/reference/formats/TabSeparated/TabSeparated) フォーマットを使用します。
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT TabSeparated" < data_small.tsv
@@ -326,7 +326,7 @@ FORMAT CSVWithNamesAndTypes
 "2016_Greater_Western_Sydney_Giants_season","2017-05-01",86
 ```
 
-このフォーマットには、2 つのヘッダー行が含まれます。1 つはカラム名、もう 1 つはカラムの型です。これにより、ClickHouse (および他のアプリケーション) は、[このようなファイル](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv) からデータを読み込む際にカラムの型を識別できます。
+このフォーマットには、2 つのヘッダー行が含まれます。1 つはカラム名、もう 1 つはカラムの型です。これにより、ClickHouse (および他のアプリケーション) は、[このようなファイル](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv) からデータを読み込む際にカラムの型を識別できます。
 
 ```sql
 DESCRIBE file('data_csv_types.csv', CSVWithNamesAndTypes)
@@ -364,7 +364,7 @@ SET format_custom_row_between_delimiter = ',';
 SET format_custom_escaping_rule = 'Quoted';
 ```
 
-これで、独自フォーマットの[ファイル](/jahttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt)からデータを読み込めます。
+これで、独自フォーマットの[ファイル](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt)からデータを読み込めます。
 
 ```sql
 SELECT *

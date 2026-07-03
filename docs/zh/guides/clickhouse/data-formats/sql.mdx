@@ -28,7 +28,7 @@ FORMAT SQLInsert
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-现在我们可以将 [dump.sql](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) 文件导入另一个 OLTP 数据库：
+现在我们可以将 [dump.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) 文件导入另一个 OLTP 数据库：
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-默认情况下，ClickHouse 会跳过未知列 (由 [input&#95;format&#95;skip&#95;unknown&#95;fields](/zh/reference/settings/formats#input_format_skip_unknown_fields) 选项控制) ，并处理转储文件中找到的第一张表的数据 (如果单个文件中包含多个表的转储) 。DDL 语句会被跳过。要将 MySQL 转储中的数据加载到表中 ([mysql.sql](/zhhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql) 文件) ：
+默认情况下，ClickHouse 会跳过未知列 (由 [input&#95;format&#95;skip&#95;unknown&#95;fields](/zh/reference/settings/formats#input_format_skip_unknown_fields) 选项控制) ，并处理转储文件中找到的第一张表的数据 (如果单个文件中包含多个表的转储) 。DDL 语句会被跳过。要将 MySQL 转储中的数据加载到表中 ([mysql.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql) 文件) ：
 
 ```sql
 INSERT INTO some_data

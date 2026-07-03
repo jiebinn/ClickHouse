@@ -28,7 +28,7 @@ Se pueden omitir los nombres de las columnas desactivando la opción [`output_fo
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-Ahora podemos cargar el archivo [dump.sql](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) en otra base de datos OLTP:
+Ahora podemos cargar el archivo [dump.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) en otra base de datos OLTP:
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-De forma predeterminada, ClickHouse omitirá las columnas desconocidas (según la opción [input&#95;format&#95;skip&#95;unknown&#95;fields](/es/reference/settings/formats#input_format_skip_unknown_fields)) y procesará los datos de la primera tabla que encuentre en un volcado (en caso de que se hayan volcado varias tablas en un solo archivo). Se omitirán las sentencias DDL. Para cargar datos de un volcado de MySQL en una tabla (archivo [mysql.sql](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
+De forma predeterminada, ClickHouse omitirá las columnas desconocidas (según la opción [input&#95;format&#95;skip&#95;unknown&#95;fields](/es/reference/settings/formats#input_format_skip_unknown_fields)) y procesará los datos de la primera tabla que encuentre en un volcado (en caso de que se hayan volcado varias tablas en un solo archivo). Se omitirán las sentencias DDL. Para cargar datos de un volcado de MySQL en una tabla (archivo [mysql.sql](https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
 
 ```sql
 INSERT INTO some_data
