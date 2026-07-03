@@ -14,6 +14,12 @@
 
                     Installed by both the AST fuzzer and the stress test, since the stress
                     test ignores `no-*` build tags and runs the fuzzer over every query.
+
+                    `max_parser_backtracks` needs the explicit value below: its default was
+                    `0` before it was introduced, so `compatibility` with an old enough version
+                    (e.g. the `compatibility='21.9'` the stress runner randomizes) reverts it to
+                    `0`, which the `<min>1</min>` here would then reject on every query. Setting
+                    it explicitly marks it as changed, so `compatibility` leaves it alone.
                 -->
                 <max_ast_depth>
                     <min>1</min>
@@ -36,6 +42,9 @@
                     <max>500000</max>
                 </max_expanded_ast_elements>
             </constraints>
+
+            <!-- See the note above: keep it changed so `compatibility` can't revert it to 0. -->
+            <max_parser_backtracks>1000000</max_parser_backtracks>
         </default>
     </profiles>
 </clickhouse>
