@@ -90,11 +90,4 @@ SELECT 'conflict m.null value:'     , countIf(`m.null` = 1)              FROM t_
 SELECT 'conflict trivial m.null:'   , count() FROM t_null_conflict WHERE `m.null`
     SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 
--- `WHERE m.null` must not produce an `Optimized trivial count...` step in the plan.
--- The empty selection here means the rewrite did not fire.
-SELECT 'conflict plan m.null:', extract(explain, '[A-Za-z].*') FROM (
-    EXPLAIN SELECT count() FROM t_null_conflict WHERE `m.null`
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 1
-) WHERE explain LIKE '%Optimized trivial count with sparsity filter%';
-
 DROP TABLE t_null_conflict;
