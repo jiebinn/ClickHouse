@@ -3,6 +3,7 @@
 #include <Common/CurrentThread.h>
 #include <Common/ThreadGroupSwitcher.h>
 #include <unordered_set>
+#include <boost/functional/hash.hpp>
 #include <boost/rational.hpp> /// For calculations related to sampling coefficients.
 
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
@@ -12,7 +13,6 @@
 #include <Storages/MergeTree/MergeTreeIndexMinMax.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeSelectProcessor.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
@@ -79,7 +79,6 @@ namespace DB
 namespace Setting
 {
     extern const SettingsBool per_part_index_stats;
-    extern const SettingsBool allow_experimental_query_deduplication;
     extern const SettingsUInt64 allow_experimental_parallel_reading_from_replicas;
     extern const SettingsString force_data_skipping_indices;
     extern const SettingsBool force_index_by_date;
@@ -115,10 +114,10 @@ namespace ErrorCodes
     extern const int ARGUMENT_OUT_OF_BOUND;
     extern const int CANNOT_PARSE_TEXT;
     extern const int TOO_MANY_ROWS;
-    extern const int DUPLICATED_PART_UUIDS;
     extern const int INCORRECT_DATA;
     extern const int SAMPLING_NOT_SUPPORTED;
     extern const int ILLEGAL_STREAM;
+    extern const int NOT_IMPLEMENTED;
 }
 
 
@@ -127,6 +126,18 @@ MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(const MergeTreeData & d
     , data_settings(data.getSettings(projection ? &projection->settings_changes : nullptr))
     , log(getLogger(data.getLogName() + " (SelectExecutor)"))
 {
+    /// Reading a projection part bypasses the parent table's delete-bitmap filter, so
+    /// logically-deleted rows would resurface. This is the single point every projection
+    /// read passes through (optimizer estimate/read and the explicit projection table
+    /// function), so fail closed here regardless of how the combination came to exist
+    /// (CREATE/ALTER reject it, but SECONDARY_CREATE/ATTACH still load it).
+    if (projection)
+    {
+        auto metadata_snapshot = data.getInMemoryMetadataPtr(nullptr, /*bypass_metadata_cache=*/true);
+        if (metadata_snapshot->hasUniqueKey())
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                "UNIQUE KEY tables do not support reading via projections");
+    }
 }
 
 size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
@@ -643,32 +654,18 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPartition(
             fmt::join(partition_columns_names, ", "));
     }
 
-    auto query_context = context->hasQueryContext() ? context->getQueryContext() : context;
     QueryStatusPtr query_status = context->getProcessListElement();
 
     PartFilterCounters part_filter_counters;
-    if (query_context->getSettingsRef()[Setting::allow_experimental_query_deduplication])
-        res = selectPartsToReadWithUUIDFilter(
-            parts,
-            part_values,
-            data.getPinnedPartUUIDs(),
-            minmax_idx_condition,
-            minmax_columns_types,
-            partition_pruner,
-            max_block_numbers_to_read,
-            query_context,
-            part_filter_counters,
-            log);
-    else
-        res = selectPartsToRead(
-            parts,
-            part_values,
-            minmax_idx_condition,
-            minmax_columns_types,
-            partition_pruner,
-            max_block_numbers_to_read,
-            part_filter_counters,
-            query_status);
+    res = selectPartsToRead(
+        parts,
+        part_values,
+        minmax_idx_condition,
+        minmax_columns_types,
+        partition_pruner,
+        max_block_numbers_to_read,
+        part_filter_counters,
+        query_status);
 
     index_stats.emplace_back(ReadFromMergeTree::IndexStat{
         .type = ReadFromMergeTree::IndexType::None,
@@ -1374,6 +1371,7 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
     RangesInDataParts & parts_with_ranges,
     const SelectQueryInfo & select_query_info,
     const std::optional<VectorSearchParameters> & vector_search_parameters,
+    const std::optional<TopKFilterInfo> & top_k_filter_info,
     const MergeTreeData::MutationsSnapshotPtr & mutations_snapshot,
     const ContextPtr & context,
     LoggerPtr log)
@@ -1395,9 +1393,21 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
         size_t granules_dropped = 0;
     };
 
-    auto drop_mark_ranges = [&](const ActionsDAG::Node * dag)
+    auto drop_mark_ranges = [&](const ActionsDAG::Node * dag, bool apply_top_k_salt)
     {
-        UInt64 condition_hash = dag->getHash();
+        /// `size_t` (not `UInt64`) so `boost::hash_combine` binds on platforms where
+        /// they differ (e.g. Apple, where `size_t` is `unsigned long` but `UInt64` is `unsigned long long`).
+        size_t condition_hash = dag->getHash();
+
+        /// Mirror the salting done by `updateQueryConditionCache` on the WHERE write path: when the
+        /// read goes through a TopK filter, the cached granule decisions are valid only for the same
+        /// TopK plan, so the WHERE cache key must be partitioned by the TopK parameters. The PREWHERE
+        /// write path in `MergeTreeSelectProcessor::read` does not (yet) apply this salt, so we must
+        /// not apply it on the PREWHERE read path either — otherwise the keys diverge and the lookup
+        /// always misses.
+        if (apply_top_k_salt && top_k_filter_info)
+            boost::hash_combine(condition_hash, top_k_filter_info->condition_hash);
+
         Stats stats;
         for (auto it = parts_with_ranges.begin(); it != parts_with_ranges.end();)
         {
@@ -1490,7 +1500,7 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
         {
             if (outputs->result_name == prewhere_info->prewhere_column_name)
             {
-                auto stats = drop_mark_ranges(outputs);
+                auto stats = drop_mark_ranges(outputs, /*apply_top_k_salt=*/ false);
                 LOG_DEBUG(log,
                         "Query condition cache has dropped {}/{} granules for PREWHERE condition {}.",
                         stats.granules_dropped,
@@ -1504,7 +1514,7 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
     if (const auto & filter_actions_dag = select_query_info.filter_actions_dag)
     {
         const auto * output = filter_actions_dag->getOutputs().front();
-        auto stats = drop_mark_ranges(output);
+        auto stats = drop_mark_ranges(output, /*apply_top_k_salt=*/ true);
         LOG_DEBUG(log,
                 "Query condition cache has dropped {}/{} granules for WHERE condition {}.",
                 stats.granules_dropped,
@@ -2118,10 +2128,44 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                         if (check_in_range(result_exact_range, BoolMask::consider_only_can_be_false).can_be_false)
                         {
                             /// key_condition.matchesExactContinuousRange returned true, but the
-                            /// range doesn't seem to be continuous. Something's broken.
+                            /// range doesn't seem to be continuous. Something's broken - most likely a
+                            /// function reported inaccurate monotonicity (see the issue below).
+                            ///
+                            /// Log every participating condition (the key condition as well as the optional
+                            /// _part_offset and total-offset conditions), the part and the offending mark ranges
+                            /// before throwing, so the occurrence (typically found by a stress test or the fuzzer)
+                            /// is actionable. check_in_range combines all useful conditions, so any of them could
+                            /// be the culprit - in particular, a bad _part_offset / total-offset condition can trip
+                            /// this branch while the primary key_condition is empty or unrelated.
+                            /// The thrown message is deliberately kept constant: CI derives the failure's name
+                            /// from the exception's format string, so the details go to the log instead of the
+                            /// message to keep failures grouped under a single stable name.
                             /// TODO: Remove the #ifndef and always throw after
                             ///       https://github.com/ClickHouse/ClickHouse/issues/90461 is fixed.
 #ifndef NDEBUG
+                            auto describe_condition = [](const KeyCondition & condition)
+                            {
+                                return fmt::format("(relaxed: {}): {}", condition.isRelaxed(), condition.toString());
+                            };
+
+                            String conditions_description = fmt::format(
+                                "key condition (useful: {}) {}", key_condition_useful, describe_condition(key_condition));
+                            if (part_offset_condition_useful)
+                                conditions_description += fmt::format("; part offset condition {}", describe_condition(*part_offset_condition));
+                            if (total_offset_condition_useful)
+                                conditions_description += fmt::format("; total offset condition {}", describe_condition(*total_offset_condition));
+
+                            LOG_ERROR(
+                                log,
+                                "Inconsistent KeyCondition behavior: matchesExactContinuousRange() reported an exact "
+                                "continuous range, but the mark range [{}, {}) (exact subrange [{}, {})) of part {} is "
+                                "not exactly continuous. This is most likely caused by a function reporting inaccurate "
+                                "monotonicity (see https://github.com/ClickHouse/ClickHouse/issues/90461). "
+                                "Participating conditions: {}",
+                                result_range.begin, result_range.end,
+                                result_exact_range.begin, result_exact_range.end,
+                                part_name,
+                                conditions_description);
                             throw Exception(ErrorCodes::LOGICAL_ERROR, "Inconsistent KeyCondition behavior");
 #endif
                         }
@@ -2236,7 +2280,7 @@ std::pair<MarkRanges, RangesInDataPartReadHints> MergeTreeDataSelectExecutor::fi
     if (index_helper->isTextIndex())
     {
         MergeTreeIndexGranulePtr granule;
-        reader.read(0, condition.get(), granule);
+        reader.read(0, condition.get(), granule, all_match ? nullptr : &ranges);
         auto & granule_text = assert_cast<MergeTreeIndexGranuleText &>(*granule);
 
         for (const auto & range : ranges)
@@ -2330,7 +2374,7 @@ std::pair<MarkRanges, RangesInDataPartReadHints> MergeTreeDataSelectExecutor::fi
             {
                 if (index_mark != index_range.begin || !granule || last_index_mark != index_range.begin)
                 {
-                    reader.read(index_mark, condition.get(), granule);
+                    reader.read(index_mark, condition.get(), granule, /*readable_ranges=*/ nullptr);
                 }
 
                 if (index_helper->isVectorSimilarityIndex())
@@ -2449,116 +2493,6 @@ RangesInDataParts MergeTreeDataSelectExecutor::selectPartsToRead(
         res_parts.push_back(prev_part);
     }
     return res_parts;
-}
-
-RangesInDataParts MergeTreeDataSelectExecutor::selectPartsToReadWithUUIDFilter(
-    const RangesInDataParts & parts,
-    const std::optional<std::unordered_set<String>> & part_values,
-    MergeTreeData::PinnedPartUUIDsPtr pinned_part_uuids,
-    const std::optional<KeyCondition> & minmax_idx_condition,
-    const DataTypes & minmax_columns_types,
-    const std::optional<PartitionPruner> & partition_pruner,
-    const PartitionIdToMaxBlock * max_block_numbers_to_read,
-    ContextPtr query_context,
-    PartFilterCounters & counters,
-    LoggerPtr log)
-{
-    /// process_parts prepare parts that have to be read for the query,
-    /// returns false if duplicated parts' UUID have been met
-    auto select_parts = [&](const RangesInDataParts & in_parts, RangesInDataParts & selected_parts) -> bool
-    {
-        auto ignored_part_uuids = query_context->getIgnoredPartUUIDs();
-        std::unordered_set<UUID> temp_part_uuids;
-
-        for (const auto & prev_part : in_parts)
-        {
-            const auto & part_or_projection = prev_part.data_part;
-            const auto * part = part_or_projection->isProjectionPart() ? part_or_projection->getParentPart() : part_or_projection.get();
-            size_t num_granules = part_or_projection->index_granularity->getMarksCountWithoutFinal();
-
-            if (part_values && !part_values->contains(part->name))
-                continue;
-
-            if (part->isEmpty())
-                continue;
-
-            if (max_block_numbers_to_read)
-            {
-                auto blocks_iterator = max_block_numbers_to_read->find(part->info.getPartitionId());
-                if (blocks_iterator == max_block_numbers_to_read->end() || part->info.max_block > blocks_iterator->second)
-                    continue;
-            }
-
-            /// Skip the part if its uuid is meant to be excluded
-            if (part->uuid != UUIDHelpers::Nil && ignored_part_uuids->has(part->uuid))
-                continue;
-
-            counters.num_initial_selected_parts += 1;
-            counters.num_initial_selected_granules += num_granules;
-
-            /// hyperrectangle must come from the part whose metadata built the condition.
-            if (minmax_idx_condition && !minmax_idx_condition->checkInHyperrectangle(part_or_projection->getMinMaxIndex()->hyperrectangle, minmax_columns_types).can_be_true)
-                continue;
-
-            counters.num_parts_after_minmax += 1;
-            counters.num_granules_after_minmax += num_granules;
-
-            if (partition_pruner)
-            {
-                if (partition_pruner->canBePruned(*part))
-                    continue;
-            }
-
-            counters.num_parts_after_partition_pruner += 1;
-            counters.num_granules_after_partition_pruner += num_granules;
-
-            /// populate UUIDs and exclude ignored parts if enabled
-            if (part->uuid != UUIDHelpers::Nil && pinned_part_uuids->contains(part->uuid))
-            {
-                auto result = temp_part_uuids.insert(part->uuid);
-                if (!result.second)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Found a part with the same UUID on the same replica.");
-            }
-
-            selected_parts.push_back(prev_part);
-        }
-
-        if (!temp_part_uuids.empty())
-        {
-            auto duplicates = query_context->getPartUUIDs()->add(std::vector<UUID>{temp_part_uuids.begin(), temp_part_uuids.end()});
-            if (!duplicates.empty())
-            {
-                /// on a local replica with prefer_localhost_replica=1 if any duplicates appeared during the first pass,
-                /// adding them to the exclusion, so they will be skipped on second pass
-                query_context->getIgnoredPartUUIDs()->add(duplicates);
-                return false;
-            }
-        }
-
-        return true;
-    };
-
-    /// Process parts that have to be read for a query.
-    RangesInDataParts filtered_parts = {};
-    auto needs_retry = !select_parts(parts, filtered_parts);
-
-    /// If any duplicated part UUIDs met during the first step, try to ignore them in second pass.
-    /// This may happen when `prefer_localhost_replica` is set and "distributed" stage runs in the same process with "remote" stage.
-    if (needs_retry)
-    {
-        LOG_DEBUG(log, "Found duplicate uuids locally, will retry part selection without them");
-
-        counters = PartFilterCounters();
-
-        auto initial_filtered_parts = filtered_parts;
-        filtered_parts = {};
-
-        /// Second attempt didn't help, throw an exception
-        if (!select_parts(initial_filtered_parts, filtered_parts))
-            throw Exception(ErrorCodes::DUPLICATED_PART_UUIDS, "Found duplicate UUIDs while processing query.");
-    }
-
-    return filtered_parts;
 }
 
 /// Read and return index granules from a minmax index.
