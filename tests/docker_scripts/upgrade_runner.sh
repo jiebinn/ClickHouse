@@ -429,6 +429,14 @@ cp /var/log/clickhouse-server/clickhouse-server.upgrade.log /test_output/clickho
 #       Filtered via regex in the secondary pipe below to require the PostgreSQL connection-pool / cleaner-task
 #       context AND the connection-failure symptom together, so real PostgreSQL regressions (auth, protocol,
 #       query errors) are not masked.
+#       The same leftover `DatabasePostgreSQL` engine reaches the same unreachable host through two more code
+#       paths that also log the benign connection failure, so they are filtered the same way:
+#       `DatabasePostgreSQL::getTablesIterator` (a `system.tables` scan reads the leftover engine and probes
+#       the pool; it deliberately swallows the error and logs it via `tryLogCurrentException`), and
+#       `AsyncLoader::worker` (the post-upgrade startup asynchronously loads the leftover engine and logs the
+#       same `POSTGRESQL_CONNECTION_FAILURE` (Code: 614) exception). Both matchers require the PostgreSQL
+#       code-path context AND the connection-failure symptom (the `AsyncLoader` one additionally pins the
+#       PostgreSQL-specific `Code: 614`) so non-PostgreSQL async-load or table-iteration errors are not masked.
 # The MySQL matchers below filter the same class of benign connection failure from a `DatabaseMySQL` engine
 #       that `04210_show_remote_databases_in_system_tables` also creates
 #       (`ENGINE = MySQL('192.0.2.1:3306', ...)`, the same unreachable RFC 5737 host). On the post-upgrade
@@ -523,6 +531,8 @@ rg -Fav -e "Code: 236. DB::Exception: Cancelled merging parts" \
     | grep -av -e "Value passed to 'throwIf' function is non-zero" \
     | grep -av -e "PostgreSQLConnectionPool: Connection error" \
     | grep -av -e "DatabasePostgreSQL::removeOutdatedTables.*Connection to .* failed" \
+    | grep -av -e "DatabasePostgreSQL::getTablesIterator.*Connection to .* failed" \
+    | grep -av -e "AsyncLoader::worker.*Code: 614.*Connection to .* failed" \
     | grep -av -e "mysqlxx::Pool.*Failed to connect to MySQL" \
     | grep -av -e "Application: Connection to mysql failed" \
     | grep -av -e "DatabaseMySQL.*Connections to mysql failed" \
