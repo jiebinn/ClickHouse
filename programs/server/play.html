@@ -2199,6 +2199,10 @@ class QueryResultElement extends HTMLElement
         let is_null = (value === null);
         let is_link = false;
 
+        /// Mark the cell from the original value, so categorical coloring can skip real NULLs
+        /// without relying on the rendered glyph (a string value equal to `_NULL_TEXT` is data).
+        if (is_null) { td.dataset.isNull = ''; }
+
         let text;
         if (is_null)
         {
@@ -2593,9 +2597,12 @@ class QueryResultElement extends HTMLElement
             {
                 const cell = row.cells[col_idx];
                 if (!cell) { continue; }
+                /// Empty strings and NULLs carry no category, so leave them uncolored. NULL is
+                /// detected from the original value (marked in `_renderCell`), not the rendered
+                /// glyph, so a real string value equal to the NULL glyph still gets a color.
+                if (cell.dataset.isNull !== undefined) { continue; }
                 const text = (cell.querySelector('.cell-content') || cell).innerText;
-                /// Empty strings and NULLs carry no category, so leave them uncolored.
-                if (text === '' || text === QueryResultElement._NULL_TEXT) { continue; }
+                if (text === '') { continue; }
                 const hue = this._hashHue(text);
                 cell.style.background = `oklch(var(--viz-cell-lightness) var(--viz-cell-chroma) ${hue})`;
             }
