@@ -882,6 +882,43 @@ SETTINGS disk = disk(type = cache,
     assert removed >= cached
 
 
+cache_dynamic_resize_config = """
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <hdd_blob>
+                <type>local_blob_storage</type>
+                <path>/</path>
+            </hdd_blob>
+            <cache_dynamic_resize>
+                <type>cache</type>
+                <disk>hdd_blob</disk>
+                <max_size>{}</max_size>
+                <max_elements>{}</max_elements>
+                <max_file_segment_size>10</max_file_segment_size>
+                <boundary_alignment>10</boundary_alignment>
+                <path>./cache_dynamic_reload/</path>
+            </cache_dynamic_resize>
+            <cache_dynamic_resize_disabled>
+                <type>cache</type>
+                <disk>hdd_blob</disk>
+                <max_size>{}</max_size>
+                <max_elements>{}</max_elements>
+                <max_file_segment_size>10</max_file_segment_size>
+                <boundary_alignment>10</boundary_alignment>
+                <allow_dynamic_cache_resize>0</allow_dynamic_cache_resize>
+                <path>./cache_dynamic_reload_disabled/</path>
+            </cache_dynamic_resize_disabled>
+        </disks>
+    </storage_configuration>
+    <filesystem_cache_log>
+            <database>system</database>
+            <table>filesystem_cache_log</table>
+    </filesystem_cache_log>
+</clickhouse>
+"""
+
+
 def test_dynamic_resize(cluster):
     node = cluster.instances["cache_dynamic_resize"]
     cache_name = "cache_dynamic_resize"
