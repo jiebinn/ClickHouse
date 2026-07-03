@@ -5142,7 +5142,14 @@ connection_key_elem.addEventListener('click', (e) => {
 connection_dropdown_elem.addEventListener('click', (e) => e.stopPropagation());
 document.addEventListener('click', () => closeConnectionDropdown());
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !connection_dropdown_elem.hidden) closeConnectionDropdown();
+    if (e.key === 'Escape' && !connection_dropdown_elem.hidden) {
+        /// Closing hides the subtree that may own focus (a connection input). Return focus to
+        /// the 🔑 button — as the download menu does with its trigger — so keyboard users keep a
+        /// visible focus target and the next Tab continues from the tab bar, not the page top.
+        const refocus = connection_dropdown_elem.contains(document.activeElement);
+        closeConnectionDropdown();
+        if (refocus) connection_key_elem.focus();
+    }
 });
 
 /// Generate the next default title: "Query A" .. "Query Z", "Query AA", ...
