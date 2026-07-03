@@ -49,4 +49,14 @@ $CLICKHOUSE_CLIENT --inline-insert-data --query "INSERT INTO test_inline_insert 
 $CLICKHOUSE_CLIENT --send_table_structure_on_insert_with_inline_data 0 --query "INSERT INTO test_inline_insert FORMAT TSV
 101	inline_b" <<<"201	stdin_b" |& grep -F -c 'Processing inline insert data with both inlined and external data (from stdin or infile) is not supported'
 
+# Path-sensitive assertion for the `async_insert = 0` combination: the positive cases above
+# only prove that rows are inserted, which would still pass if the client regressed to the
+# legacy local-parsing path. The inline-vs-external rejection only fires when the inline path
+# is actually taken (`is_inline_insert_data == true`), so these cases prove that the explicit
+# inline choice still wins over `async_insert = 0` rather than silently falling back.
+$CLICKHOUSE_CLIENT --async_insert 0 --inline-insert-data --query "INSERT INTO test_inline_insert FORMAT TSV
+102	inline_c" <<<"202	stdin_c" |& grep -F -c 'Processing inline insert data with both inlined and external data (from stdin or infile) is not supported'
+$CLICKHOUSE_CLIENT --async_insert 0 --send_table_structure_on_insert_with_inline_data 0 --query "INSERT INTO test_inline_insert FORMAT TSV
+103	inline_d" <<<"203	stdin_d" |& grep -F -c 'Processing inline insert data with both inlined and external data (from stdin or infile) is not supported'
+
 $CLICKHOUSE_CLIENT --query "DROP TABLE test_inline_insert"
