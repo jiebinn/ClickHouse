@@ -1621,7 +1621,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             }
         }
 
-        auto zookeeper = getContext()->getZooKeeper();
+        auto zookeeper = getContext()->getDefaultOrAuxiliaryZooKeeper(query.zk_name);
 
         bool looks_like_table_path = zookeeper->exists(query.replica_zk_path + "/replicas") ||
                                      zookeeper->exists(query.replica_zk_path + "/dropped");
