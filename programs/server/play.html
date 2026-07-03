@@ -4072,6 +4072,20 @@ function positionColumnBalloon(column) {
     visible_balloon = addendum;
 }
 
+/// Quote an identifier (database, table, or column name) for safe embedding in a query.
+/// ClickHouse's double-quoted identifiers accept both C-style backslash escapes and SQL-style
+/// doubling, so escape any backslash and double any embedded quote. A name such as `a"b` or
+/// `a\b` then round-trips as a valid `SELECT` instead of producing broken SQL.
+function quoteIdentifier(name) {
+    return '"' + String(name).replace(/\\/g, '\\\\').replace(/"/g, '""') + '"';
+}
+
+/// Quote a string literal for the same reason (used where a name is matched as a value, e.g.
+/// `WHERE database = '...'`): escape any backslash and double any embedded single quote.
+function quoteString(value) {
+    return "'" + String(value).replace(/\\/g, '\\\\').replace(/'/g, "''") + "'";
+}
+
 /// Build the column rows (name + type + size bar + hover balloon) into `columns_elem`.
 function renderColumns(columns_elem, data, database, table_name_str) {
     if (data.length == 0) {
@@ -4134,7 +4148,7 @@ function renderColumns(columns_elem, data, database, table_name_str) {
         button.addEventListener('focus', () => positionColumnBalloon(column));
 
         column.appendChild(button);
-        column.addEventListener('click', e => setQueryOrRun(e, `SELECT "${col.name}" FROM "${database}"."${table_name_str}" LIMIT 100`));
+        column.addEventListener('click', e => setQueryOrRun(e, `SELECT ${quoteIdentifier(col.name)} FROM ${quoteIdentifier(database)}.${quoteIdentifier(table_name_str)} LIMIT 100`));
         columns_elem.appendChild(column);
     }
 }
@@ -4293,7 +4307,7 @@ async function loadTables(server_address, user, password, database, container, s
 
         const set_query_or_run = setQueryOrRun;
 
-        const show_table_properties = e => set_query_or_run(e, `SELECT * FROM system.tables WHERE database = '${database}' AND table = '${elem.table}'`);
+        const show_table_properties = e => set_query_or_run(e, `SELECT * FROM system.tables WHERE database = ${quoteString(database)} AND table = ${quoteString(elem.table)}`);
 
         if (+elem.total_bytes) {
             let bytes_elem = document.createElement('span');
@@ -4312,7 +4326,7 @@ async function loadTables(server_address, user, password, database, container, s
         let engine_elem = document.createElement('span');
         engine_elem.textContent = elem.engine;
         engine_elem.className = 'table-addendum-elem';
-        engine_elem.addEventListener('click', e => set_query_or_run(e, `SHOW TABLE "${database}"."${elem.table}"`));
+        engine_elem.addEventListener('click', e => set_query_or_run(e, `SHOW TABLE ${quoteIdentifier(database)}.${quoteIdentifier(elem.table)}`));
         table_addendum.append(engine_elem);
 
         /// Make the balloon links reachable from the keyboard (Right arrow from the row).
@@ -4326,7 +4340,7 @@ async function loadTables(server_address, user, password, database, container, s
         /// selector works; it is position:fixed, so it is not clipped by the button overflow.
         table_link.appendChild(table_addendum);
         table.appendChild(table_link);
-        table.addEventListener('click', e => set_query_or_run(e, `SELECT * FROM "${database}"."${elem.table}" LIMIT 100`));
+        table.addEventListener('click', e => set_query_or_run(e, `SELECT * FROM ${quoteIdentifier(database)}.${quoteIdentifier(elem.table)} LIMIT 100`));
         tables_elem.appendChild(table);
     }
 
