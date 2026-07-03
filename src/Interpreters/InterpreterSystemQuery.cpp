@@ -93,6 +93,7 @@
 #include <Common/logger_useful.h>
 #include <Common/typeid_cast.h>
 #include <Common/SystemAllocatedMemoryHolder.h>
+#include <Common/ZooKeeper/ZooKeeper.h>
 #include <base/sleep.h>
 
 #include "config.h"
@@ -1885,7 +1886,20 @@ std::optional<String> InterpreterSystemQuery::getDetachedDatabaseFromKeeperPath(
         info.level = 0;
         replica_name = getContext()->getMacros()->expand(replica_name, info);
 
-        if (engine_zookeeper_path != query_.replica_zk_path)
+        if (engine_zookeeper_path.empty())
+            continue;
+
+        /// The raw engine argument may carry an auxiliary keeper prefix ("aux:/path"), so extract the
+        /// keeper name and normalize the path exactly like the parser and DatabaseReplicated do, then
+        /// match on BOTH. Comparing the raw argument against the already-normalized query path would
+        /// both false-match a default-keeper database at the same path (blocking a valid auxiliary-keeper
+        /// drop) and never match a detached auxiliary-keeper database (silently failing this guard).
+        String engine_zookeeper_name = zkutil::extractZooKeeperName(engine_zookeeper_path);
+        engine_zookeeper_path = zkutil::extractZooKeeperPath(engine_zookeeper_path, /*check_starts_with_slash*/ false);
+        while (engine_zookeeper_path.size() > 1 && engine_zookeeper_path.back() == '/')
+            engine_zookeeper_path.pop_back();
+
+        if (engine_zookeeper_name != query_.zk_name || engine_zookeeper_path != query_.replica_zk_path)
             continue;
 
         String full_replica_name

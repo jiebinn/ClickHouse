@@ -248,3 +248,63 @@ def test_drop_replica_from_zkpath_not_blocked_by_default_keeper_table(started_cl
     node2.start_clickhouse()
     drop_table([node1, node2], "test_shared_default")
     drop_table([node1, node2], "test_shared_aux")
+
+
+def test_drop_database_replica_from_zkpath_not_blocked_by_detached_default_keeper_db(
+    started_cluster,
+):
+    # SYSTEM DROP DATABASE REPLICA ... FROM ZKPATH 'aux:/path' WITH TABLES scans local
+    # detached database metadata to avoid dropping a replica that still exists locally.
+    # That scan must be keeper-aware: a detached database on the DEFAULT keeper with the
+    # same path string must not block a drop targeting that path on an AUXILIARY keeper.
+    db_path = "/clickhouse/databases/test/detached_default_db"
+    node1.query("DROP DATABASE IF EXISTS detached_default_db SYNC")
+
+    node1.query(
+        "CREATE DATABASE detached_default_db "
+        "ENGINE = Replicated('{path}', 'shard1', 'r1')".format(path=db_path)
+    )
+    node1.query("DETACH DATABASE detached_default_db")
+
+    # The detached database lives on the default keeper; targeting the same path on
+    # zookeeper_aux is a different znode, so the guard must not report it. Before the
+    # guard became keeper-aware the raw metadata path matched purely on the string and
+    # this drop was wrongly rejected with "There is a detached database".
+    err = node1.query_and_get_error(
+        "SYSTEM DROP DATABASE REPLICA 'r1' FROM SHARD 'shard1' "
+        "FROM ZKPATH 'zookeeper_aux:{path}' WITH TABLES".format(path=db_path)
+    )
+    assert "There is a detached database" not in err
+
+    node1.query("ATTACH DATABASE detached_default_db")
+    node1.query("DROP DATABASE IF EXISTS detached_default_db SYNC")
+
+
+def test_drop_database_replica_from_zkpath_blocked_by_detached_auxiliary_keeper_db(
+    started_cluster,
+):
+    # The mirror case: a detached database that lives on the AUXILIARY keeper must be
+    # recognized by the guard. Its metadata stores the raw engine argument with the
+    # 'zookeeper_aux:' prefix, so before the guard normalized it the detached auxiliary
+    # database never matched and the local detached replica could be dropped anyway.
+    db_path = "/clickhouse/databases/test/detached_aux_db"
+    node1.query("DROP DATABASE IF EXISTS detached_aux_db SYNC")
+
+    node1.query(
+        "CREATE DATABASE detached_aux_db "
+        "ENGINE = Replicated('zookeeper_aux:{path}', 'shard1', 'r1')".format(
+            path=db_path
+        )
+    )
+    node1.query("DETACH DATABASE detached_aux_db")
+
+    # Same keeper and same path as the detached database: the guard must protect it and
+    # reject the drop with "There is a detached database".
+    err = node1.query_and_get_error(
+        "SYSTEM DROP DATABASE REPLICA 'r1' FROM SHARD 'shard1' "
+        "FROM ZKPATH 'zookeeper_aux:{path}' WITH TABLES".format(path=db_path)
+    )
+    assert "There is a detached database" in err
+
+    node1.query("ATTACH DATABASE detached_aux_db")
+    node1.query("DROP DATABASE IF EXISTS detached_aux_db SYNC")
