@@ -1845,15 +1845,15 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
 
                         if (tc == SQLTypeClass::ARRAY)
                         {
-                            tp = dynamic_cast<const ArrayType *>(tp)->subtype.get();
+                            tp = static_cast<const ArrayType *>(tp)->subtype.get();
                         }
                         else if (tc == SQLTypeClass::NULLABLE)
                         {
-                            tp = dynamic_cast<const Nullable *>(tp)->subtype.get();
+                            tp = static_cast<const Nullable *>(tp)->subtype.get();
                         }
                         else if (tc == SQLTypeClass::LOWCARDINALITY)
                         {
-                            tp = dynamic_cast<const LowCardinality *>(tp)->subtype.get();
+                            tp = static_cast<const LowCardinality *>(tp)->subtype.get();
                         }
                         else
                         {
@@ -1867,11 +1867,11 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
                 /// LowCardinality(Nullable)) string column is a deterministic BAD_ARGUMENTS.
                 if (tp->getTypeClass() == SQLTypeClass::LOWCARDINALITY)
                 {
-                    tp = dynamic_cast<const LowCardinality *>(tp)->subtype.get();
+                    tp = static_cast<const LowCardinality *>(tp)->subtype.get();
                 }
                 else if (tp->getTypeClass() == SQLTypeClass::ARRAY)
                 {
-                    tp = dynamic_cast<const ArrayType *>(tp)->subtype.get();
+                    tp = static_cast<const ArrayType *>(tp)->subtype.get();
                 }
                 return tp->getTypeClass() == SQLTypeClass::STRING;
             });
