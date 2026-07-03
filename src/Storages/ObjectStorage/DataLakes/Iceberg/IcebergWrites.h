@@ -44,9 +44,6 @@ namespace DB
 
 String removeEscapedSlashes(const String & json_str);
 
-/// Serializes a Poco JSON value to text, undoing the `\/` escaping that Poco unconditionally applies
-/// to forward slashes (see `removeEscapedSlashes`). Use this instead of hand-rolling the
-/// Poco stringification + `removeEscapedSlashes` sequence.
 String stringifyJSON(const Poco::Dynamic::Var & json, unsigned indent = 0);
 
 void generateManifestFile(

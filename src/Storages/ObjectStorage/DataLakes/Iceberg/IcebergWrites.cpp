@@ -44,8 +44,6 @@
 #include <base/types.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <sys/stat.h>
-#include <Schema.hh>
-#include <Types.hh>
 #include <Poco/Dynamic/Var.h>
 #include <Poco/JSON/Array.h>
 #include <Common/Exception.h>
@@ -66,8 +64,10 @@
 #include <Encoder.hh>
 #include <Generic.hh>
 #include <GenericDatum.hh>
+#include <Schema.hh>
 #include <Specific.hh>
 #include <Stream.hh>
+#include <Types.hh>
 #include <ValidSchema.hh>
 
 #include <Poco/JSON/Object.h>
@@ -255,12 +255,6 @@ static void extendSchemaForPartitions(
 
 namespace
 {
-/// Assigns a value into a record field whose optionality depends on the Iceberg format version.
-/// An optional field is an Avro union `["null", T]`; in that case the value goes into the non-null
-/// branch. A required field is a plain scalar. We detect which case applies from the compiled schema
-/// rather than the version number, so the same helper works no matter which version makes the field
-/// optional. The datum type follows the C++ type of `value`; Avro encodes by datum type, so e.g. an
-/// `int` written into a `long` field is wire-compatible.
 void setVersionedField(avro::GenericRecord & rec, const auto & value, const String & field_name)
 {
     size_t field_index = rec.fieldIndex(field_name);
@@ -279,8 +273,6 @@ void setVersionedField(avro::GenericRecord & rec, const auto & value, const Stri
     }
 }
 
-/// Returns the schema object from the `schemas` list whose `schema-id` equals the table's `current-schema-id`.
-/// The position in the list is not necessarily equal to the id, so we must match by `schema-id`.
 Poco::JSON::Object::Ptr getCurrentSchema(const Poco::JSON::Object::Ptr & metadata)
 {
     Int32 current_schema_id = metadata->getValue<Int32>(Iceberg::f_current_schema_id);
