@@ -10,3 +10,9 @@ SELECT toStartOfInterval(reinterpret(toInt64(9223372036854775806), 'DateTime64(9
 
 -- Microsecond interval with scale=9 (nanoseconds)
 SELECT toStartOfInterval(reinterpret(toInt64(9223372036854775806), 'DateTime64(9, \'UTC\')'), toIntervalMicrosecond(1));
+
+-- Three-argument overload: a negative origin makes the internal difference exceed Int64, which must throw instead of overflowing
+SELECT toStartOfInterval(reinterpret(toInt64(9223372036854775806), 'DateTime64(6, \'UTC\')'), toIntervalMillisecond(1), reinterpret(toInt64(-2), 'DateTime64(6, \'UTC\')')); -- { serverError DECIMAL_OVERFLOW }
+
+-- Three-argument overload with an extreme time and the epoch origin has a well-defined result
+SELECT toStartOfInterval(reinterpret(toInt64(9223372036854775806), 'DateTime64(6, \'UTC\')'), toIntervalMillisecond(1), toDateTime64('1970-01-01 00:00:00', 6, 'UTC'));
