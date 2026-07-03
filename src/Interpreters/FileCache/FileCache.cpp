@@ -1571,7 +1571,7 @@ struct EvictionBatch
     EvictionCandidatesPtr candidates;
     IFileCachePriority::InvalidatedEntriesInfos invalidated_entries;
 };
-using EvictionBatchPtr = std::unique_ptr<EvictionBatch>;
+using EvictionBatchPtr = std::shared_ptr<EvictionBatch>;
 }
 
 void FileCache::freeSpaceRatioKeepingThreadFunc()
@@ -1660,10 +1660,9 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
     auto status = IFileCachePriority::CollectStatus::SUCCESS;
 
     const size_t queue_capacity = std::max<size_t>(2 * keep_up_free_space_eviction_threads, 2);
-    /// Stages done by a single main thread and N evicting thread:
-    /// 1. Main thread iterates eviction candidates and pushes to candidates_to_evict.
-    /// 2. Evicting thread pops from removal queue, evicts and pushes to pending_finalization_queue for finalization.
-    /// 3. Main thread also pops from removed queue and finalizes removal.
+    /// Pipeline: the collector (this thread) pushes candidate batches to pending_eviction_queue;
+    /// N removers evict them (delete files) and forward to pending_finalization_queue, which the
+    /// collector drains and finalizes.
     ConcurrentBoundedQueue<EvictionBatchPtr> pending_eviction_queue(queue_capacity);
     ConcurrentBoundedQueue<EvictionBatchPtr> pending_finalization_queue(queue_capacity);
 
@@ -1683,7 +1682,11 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
         EvictionBatchPtr batch;
         while (blocking ? pending_finalization_queue.pop(batch) : pending_finalization_queue.tryPop(batch))
         {
-            /// The batch leaves the pipeline regardless of the outcome below.
+            /// Subtract the full footprint, failures included: at this point we know what failed, and
+            /// those bytes are still in `current_size` (their queue entries were never invalidated),
+            /// so dropping them from `in_flight` puts them back into the projection and the next pass
+            /// re-targets them. While a batch is in flight its failures are unknown, so the projection
+            /// is optimistic for at most one iteration; the periodic reschedule self-corrects.
             in_flight_size -= batch->candidates->bytes();
             in_flight_elements -= batch->candidates->size();
             try
@@ -1732,7 +1735,10 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
                         }
                         if (!pending_finalization_queue.push(std::move(batch)))
                         {
-                            /// Queue if finished, nothing will come anymore.
+                            /// Unreachable: the queue is finished only by the last remover to exit,
+                            /// and a remover inside push() is still counted in `running_removers`.
+                            /// If reached, the batch destructor invalidates the evicted entries.
+                            chassert(false);
                             break;
                         }
                     }
@@ -1777,7 +1783,7 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
             LOG_TRACE(log, "Collecting eviction candidates to keep free space ({}), in flight: {}/{} (size/elements)",
                       eviction_info->toString(), in_flight_size, in_flight_elements);
 
-            auto batch = std::make_unique<EvictionBatch>();
+            auto batch = std::make_shared<EvictionBatch>();
             batch->candidates = std::make_unique<EvictionCandidates>(getOnBackgroundEvictCallback());
             FileCacheReserveStat stat;
             main_priority->collectCandidatesForEviction(
@@ -1809,8 +1815,22 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
             const size_t batch_bytes = batch->candidates->bytes();
 
             /// Keep finalizing while waiting for room, so removers never block on a full queue.
-            while (!pending_eviction_queue.tryPush(std::move(batch), 10))
-                finalize_removed(/* blocking */false);
+            constexpr size_t push_timeout_ms = 10;
+            constexpr size_t max_push_attempts = 1000;
+            bool pushed = false;
+            for (size_t attempt = 0; !pushed && attempt < max_push_attempts; ++attempt)
+            {
+                pushed = pending_eviction_queue.tryPush(batch, push_timeout_ms);
+                if (!pushed)
+                    finalize_removed(/* blocking */false);
+            }
+            if (!pushed)
+            {
+                /// Should not happen: removers only delete files, which cannot take this long.
+                chassert(false);
+                status = IFileCachePriority::CollectStatus::CANNOT_EVICT;
+                break;
+            }
 
             in_flight_size += batch_bytes;
             in_flight_elements += batch_size;
