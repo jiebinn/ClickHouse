@@ -619,11 +619,11 @@ Possible values:
 - Any positive integer.
 - `0` (disable deduplication).
 
-    A deduplication mechanism is used, similar to replicated tables (see
-    [replicated_deduplication_window](#replicated_deduplication_window) setting): the deduplication
-    hash sum covers the whole inserted block. The hash sums are written to
-    a local file on a disk rather than to ClickHouse Keeper.
-    )", 0) \
+A deduplication mechanism is used, similar to replicated tables (see
+[replicated_deduplication_window](#replicated_deduplication_window) setting): the deduplication
+hash sum covers the whole inserted block. The hash sums are written to
+a local file on a disk rather than to ClickHouse Keeper.
+)", 0) \
     DECLARE(UInt64, max_parts_to_merge_at_once, 100, R"(
 Max amount of parts which can be merged at once (0 - disabled). Doesn't affect
 OPTIMIZE FINAL query.
@@ -1143,8 +1143,8 @@ ClickHouse Keeper. Hash sums are stored only for the most recent
 `replicated_deduplication_window` blocks. The oldest hash sums are removed from
 ClickHouse Keeper.
 
-    The hash sum covers the whole inserted block, so an insert is deduplicated only when its
-    entire data matches a previous insert (a retry), not per individual part.
+The hash sum covers the whole inserted block, so an insert is deduplicated only when its
+entire data matches a previous insert (a retry), not per individual part.
 
 A large number for `replicated_deduplication_window` slows down `Inserts` because more
 entries need to be compared.
@@ -1166,31 +1166,31 @@ The time is relative to the time of the most recent record, not to the wall
 time. If it's the only record it will be stored forever.
 )", 0) \
     DECLARE(UInt64, replicated_deduplication_window_for_async_inserts, 10000, R"(
-    Legacy setting retained for mixed-version rolling upgrades. New inserts deduplicate with the
-    unified hash governed by `replicated_deduplication_window`; this setting now only bounds how many
-    legacy async-insert hashes are kept in the `async_blocks` directory in ClickHouse Keeper, which is
-    still written by older replicas during a rolling upgrade and cleaned up by the current leader.
-    A value of `0` retains none of them — the next cleanup pass removes every entry — so keep the
-    default (or a larger value) to preserve the legacy async deduplication window during the upgrade.
-    )", 0) \
+Legacy setting retained for mixed-version rolling upgrades. New inserts deduplicate with the
+unified hash governed by `replicated_deduplication_window`; this setting now only bounds how many
+legacy async-insert hashes are kept in the `async_blocks` directory in ClickHouse Keeper, which is
+still written by older replicas during a rolling upgrade and cleaned up by the current leader.
+A value of `0` retains none of them — the next cleanup pass removes every entry — so keep the
+default (or a larger value) to preserve the legacy async deduplication window during the upgrade.
+)", 0) \
     DECLARE(UInt64, replicated_deduplication_window_seconds_for_async_inserts, 7 * 24 * 60 * 60 /* one week */, R"(
-    Legacy setting retained for mixed-version rolling upgrades. Together with
-    `replicated_deduplication_window_for_async_inserts` it bounds how long legacy async-insert hashes
-    are kept in the `async_blocks` directory in ClickHouse Keeper (written by older replicas during a
-    rolling upgrade and cleaned up by the current leader). New inserts use
-    `replicated_deduplication_window_seconds`.
-    )", 0) \
+Legacy setting retained for mixed-version rolling upgrades. Together with
+`replicated_deduplication_window_for_async_inserts` it bounds how long legacy async-insert hashes
+are kept in the `async_blocks` directory in ClickHouse Keeper (written by older replicas during a
+rolling upgrade and cleaned up by the current leader). New inserts use
+`replicated_deduplication_window_seconds`.
+)", 0) \
     DECLARE(Milliseconds, deduplication_hashes_cache_update_wait_ms, 100, R"(
-    How long each insert iteration waits for the in-memory `deduplication_hashes` cache to refresh to a
-    newer version before re-checking it for already-inserted blocks. The cache mirrors the
-    `deduplication_hashes` directory in ClickHouse Keeper so inserts can detect duplicates without a
-    Keeper round-trip.
-    )", 0) \
+How long each insert iteration waits for the in-memory `deduplication_hashes` cache to refresh to a
+newer version before re-checking it for already-inserted blocks. The cache mirrors the
+`deduplication_hashes` directory in ClickHouse Keeper so inserts can detect duplicates without a
+Keeper round-trip.
+)", 0) \
     DECLARE(Milliseconds, async_block_ids_cache_update_wait_ms, 100, R"(
-    Deprecated alias of `deduplication_hashes_cache_update_wait_ms`, kept for one release for backward
-    compatibility. It is honored only when `deduplication_hashes_cache_update_wait_ms` is left at its
-    default; this setting will be removed in a future release.
-    )", 0) \
+Deprecated alias of `deduplication_hashes_cache_update_wait_ms`, kept for one release for backward
+compatibility. It is honored only when `deduplication_hashes_cache_update_wait_ms` is left at its
+default; this setting will be removed in a future release.
+)", 0) \
     DECLARE(UInt64, max_replicated_logs_to_keep, 1000, R"(
 How many records may be in the ClickHouse Keeper log if there is inactive
 replica. An inactive replica becomes lost when when this number exceed.
