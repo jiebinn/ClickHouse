@@ -305,7 +305,7 @@ void AggregateFunctionTuple::addBatchSinglePlaceNotNull( /// NOLINT
     }
 }
 
-void AggregateFunctionTuple::merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const
+void AggregateFunctionTuple::mergeImpl(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const
 {
     for (size_t i = 0; i < num_elements; ++i)
         nested_functions[i]->merge(place + state_offsets[i], rhs + state_offsets[i], arena);
