@@ -3819,8 +3819,10 @@ let current_selection_num = 0;
 
 /// Wire up a click-like activation on a table row or its addendum. Besides an ordinary left
 /// click, we also honor the gestures that conventionally open a link in a new tab: a middle
-/// click (which fires `auxclick`, not `click`) or a Shift/Ctrl/Cmd click. The handler inspects
-/// the event to decide between replacing the current query and opening a new Web UI tab.
+/// click (which fires `auxclick`, not `click`), a Shift+click, or the platform's new-tab
+/// modifier click - Cmd on macOS, Ctrl elsewhere (on macOS `Ctrl+Click` is the secondary
+/// context-menu click, so it is not a new-tab gesture). The handler inspects the event to
+/// decide between replacing the current query and opening a new Web UI tab.
 function onTableActivate(elem, handler) {
     elem.addEventListener('click', handler);
     elem.addEventListener('auxclick', e => {
@@ -3918,13 +3920,16 @@ async function loadTables(server_address, user, password, database, container, s
         const set_query_or_run = (e, value) => {
             if (query_area.value == value) {
                 /// A second click on an already-loaded query runs it - regardless of whether it
-                /// was a plain, middle, or Shift/Ctrl click (opening yet another identical tab
+                /// was a plain, middle, or modifier click (opening yet another identical tab
                 /// would be pointless).
                 postOne();
-            } else if (e.button === 1 || e.shiftKey || e.ctrlKey || e.metaKey) {
-                /// Middle click or Shift/Ctrl/Cmd click - the gestures that open a link in a new
-                /// tab - open the query in a new Web UI tab instead of replacing the current one.
-                /// Only a genuine middle click (button 1) needs the X11 PRIMARY paste guard.
+            } else if (e.button === 1 || e.shiftKey || (isMac ? e.metaKey : e.ctrlKey)) {
+                /// Middle click, Shift+click, or the platform's new-tab modifier click (Cmd on
+                /// macOS, Ctrl elsewhere) - the gestures that open a link in a new tab - open the
+                /// query in a new Web UI tab instead of replacing the current one. On macOS
+                /// `Ctrl+Click` is the secondary (context-menu) click, so it is deliberately not
+                /// treated as a new-tab gesture. Only a genuine middle click (button 1) needs the
+                /// X11 PRIMARY paste guard.
                 openQueryInNewTab(value, e.button === 1);
             } else {
                 query_area.value = value;
