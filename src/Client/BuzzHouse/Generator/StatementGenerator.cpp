@@ -3340,7 +3340,8 @@ void StatementGenerator::generateNextQuery(RandomGenerator & rg, const bool in_p
     SQLMask[static_cast<size_t>(SQLOp::ShowStatement)] = !in_parallel;
     SQLMask[static_cast<size_t>(SQLOp::CreatePolicy)]
         = !in_parallel && static_cast<uint32_t>(policies.size()) < this->fc.max_policies && collectionHas<SQLTable>(attached_tables);
-    SQLMask[static_cast<size_t>(SQLOp::CreateHypotheticalIndex)] = collectionHas<SQLTable>(attached_tables_for_create_hypothetical_index);
+    SQLMask[static_cast<size_t>(SQLOp::CreateHypotheticalIndex)]
+        = totalHypotheticalIndexes() < this->fc.max_hypotheticals && collectionHas<SQLTable>(attached_tables_for_create_hypothetical_index);
     SQLGen.setEnabled(SQLMask);
 
     switch (static_cast<SQLOp>(SQLGen.nextOp())) /// drifts over time

@@ -1879,14 +1879,16 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
             break;
         case IndexType::IDX_sparse_grams: {
             /// sparse_grams(min_ngram_length, max_ngram_length[, min_cutoff_length], size_in_bytes, num_hash_functions, seed)
-            const uint32_t min_ngram = rg.randomInt<uint32_t>(1, 8);
+            /// The tokenizer requires 3 <= min_ngram_length <= [min_cutoff_length <=] max_ngram_length <= 100
+            const uint32_t min_ngram = rg.randomInt<uint32_t>(3, 8);
+            const uint32_t max_ngram = min_ngram + rg.randomInt<uint32_t>(0, 8);
 
             idef->add_params()->set_ival(min_ngram);
-            idef->add_params()->set_ival(min_ngram + rg.randomInt<uint32_t>(0, 8));
+            idef->add_params()->set_ival(max_ngram);
             if (rg.nextBool())
             {
                 /// Optional min_cutoff_length
-                idef->add_params()->set_ival(rg.randomInt<uint32_t>(0, 16));
+                idef->add_params()->set_ival(rg.randomInt<uint32_t>(min_ngram, max_ngram));
             }
             idef->add_params()->set_ival(rg.randomInt<uint32_t>(1, 1000));
             idef->add_params()->set_ival(rg.randomInt<uint32_t>(1, 5));
@@ -1930,17 +1932,19 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
             else if (has_paren && (nt == "sparseGrams" || nt == "sparse_grams"))
             {
                 /// sparseGrams[(min_length[, max_length[, min_cutoff_length]])]
+                /// The tokenizer requires 3 <= min_length <= [min_cutoff_length <=] max_length <= 100
                 const uint32_t nextra = rg.randomInt<uint32_t>(0, 3);
+                const uint32_t min_length = rg.randomInt<uint32_t>(3, 8);
+                const uint32_t max_length = min_length + rg.randomInt<uint32_t>(0, 8);
+                const uint32_t next_args[3] = {min_length, max_length, rg.randomInt<uint32_t>(min_length, max_length)};
 
                 for (uint32_t i = 0; i < nextra; i++)
                 {
-                    std::uniform_int_distribution<uint32_t> next_dist(0, rg.nextBool() ? 100 : 1000);
-
                     if (i != 0)
                     {
                         buf += ", ";
                     }
-                    buf += std::to_string(next_dist(rg.generator));
+                    buf += std::to_string(next_args[i]);
                 }
             }
             buf += has_paren ? ")" : "";

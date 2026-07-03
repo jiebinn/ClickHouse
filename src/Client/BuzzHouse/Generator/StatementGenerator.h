@@ -896,10 +896,16 @@ public:
     const std::function<bool(const SQLDictionary &)> attached_dictionaries = [](const SQLDictionary & d) { return d.isAttached(); };
     const std::function<bool(const SQLTable &)> has_mergeable_tables
         = [](const SQLTable & t) { return t.isAttached() && t.isMergeTreeFamily(true) && t.can_run_merges; };
-    /// Hypothetical (WHAT-IF) indexes are only supported on MergeTree family tables
-    const std::function<bool(const SQLTable &)> attached_tables_for_create_hypothetical_index = [&conf = this->fc](const SQLTable & t)
+    /// Hypothetical (WHAT-IF) indexes are only supported on MergeTree family tables whose
+    /// `StorageID` resolves to a non-nil UUID: tables in `Ordinary` and `Shared` databases
+    /// (including the default database on cloud runs) have none, and the interpreter rejects
+    /// them with `NOT_IMPLEMENTED`
+    const std::function<bool(const SQLTable &)> attached_tables_for_create_hypothetical_index
+        = [&cloud = this->supports_cloud_features](const SQLTable & t)
     {
-        return t.isAttached() && t.isMergeTreeFamily(true) && static_cast<uint32_t>(t.hypothetical_indexes.size()) < conf.max_hypotheticals;
+        const bool has_table_uuid = t.db ? (!t.db->isOrdinaryDatabase() && !t.db->isSharedDatabase()) : !cloud;
+
+        return t.isAttached() && t.isMergeTreeFamily(true) && has_table_uuid;
     };
     const std::function<bool(const SQLTable &)> attached_tables_for_drop_hypothetical_index
         = [](const SQLTable & t) { return t.isAttached() && !t.hypothetical_indexes.empty(); };
