@@ -5094,6 +5094,7 @@ const tabs_elem = document.getElementById('tabs');
 /// query), matching the inline single-tab layout.
 const inputs_elem = document.getElementById('inputs');
 const controls_elem = document.getElementById('controls');
+const connection_menu_elem = document.getElementById('connection-menu');
 const connection_key_elem = document.getElementById('connection-key');
 const connection_dropdown_elem = document.getElementById('connection-dropdown');
 
@@ -5133,14 +5134,25 @@ function syncConnectionUI() {
 }
 
 connection_key_elem.addEventListener('click', (e) => {
+    /// Keep the toggle click from reaching the result-selection handler on `document`.
     e.stopPropagation();
     if (connection_dropdown_elem.hidden) openConnectionDropdown(); else closeConnectionDropdown();
 });
 
-/// Clicks inside the drop-down (typing in the inputs) must not close it; a click anywhere
-/// else does.
+/// A click inside the drop-down (e.g. typing in the inputs) must neither close it nor clear the
+/// result selection, so keep it from bubbling to `document`.
 connection_dropdown_elem.addEventListener('click', (e) => e.stopPropagation());
-document.addEventListener('click', () => closeConnectionDropdown());
+
+/// Close the drop-down on a click anywhere outside `#connection-menu` (which holds the 🔑 button
+/// and the drop-down). Test the target in the capture phase instead of relying on the click
+/// bubbling to `document`: several outside controls in this file (the download menu, the
+/// databases-panel toggles, the terminal toggle, the tab-close button, the per-column toggles)
+/// call `stopPropagation()` in their own bubble-phase click handlers, so a bubbling listener
+/// would never see those clicks and the popover would stay open. A capture-phase listener runs
+/// before all of them, so every outside interaction dismisses it.
+document.addEventListener('click', (e) => {
+    if (!connection_menu_elem.contains(e.target)) closeConnectionDropdown();
+}, true);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !connection_dropdown_elem.hidden) {
         /// Closing hides the subtree that may own focus (a connection input). Return focus to
