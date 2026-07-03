@@ -3816,6 +3816,27 @@ let load_tables_request_nums = new WeakMap();
 /// `a` and then `b` before `a` finishes loading, the highlight must end up on `b` regardless
 /// of which load's query returns first - otherwise a slower earlier open would steal it back.
 let current_selection_num = 0;
+
+/// Wire up a click-like activation on a table row or its addendum. Besides an ordinary left
+/// click, we also honor the gestures that conventionally open a link in a new tab: a middle
+/// click (which fires `auxclick`, not `click`) or a Shift/Ctrl/Cmd click. The handler inspects
+/// the event to decide between replacing the current query and opening a new Web UI tab.
+function onTableActivate(elem, handler) {
+    elem.addEventListener('click', handler);
+    elem.addEventListener('auxclick', e => {
+        if (e.button !== 1) return;
+        /// Cancel the middle click's native paste and arm the guard on the query editor, since
+        /// opening a new tab focuses it and Linux/X11 would otherwise paste the primary selection
+        /// into it. Cleared shortly after in case no paste fires (non-Linux, empty selection).
+        e.preventDefault();
+        suppress_middleclick_paste = true;
+        setTimeout(() => { suppress_middleclick_paste = false; }, 500);
+        handler(e);
+    });
+    /// Suppress the browser's middle-click autoscroll so the gesture only opens a new tab.
+    elem.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
+}
+
 async function loadTables(server_address, user, password, database, container, set_current = true, is_current = null) {
     const request_num = (load_tables_request_nums.get(container) || 0) + 1;
     load_tables_request_nums.set(container, request_num);
@@ -3897,8 +3918,14 @@ async function loadTables(server_address, user, password, database, container, s
 
         const set_query_or_run = (e, value) => {
             if (query_area.value == value) {
-                /// Double click will run the query.
+                /// A second click on an already-loaded query runs it - regardless of whether it
+                /// was a plain, middle, or Shift/Ctrl click (opening yet another identical tab
+                /// would be pointless).
                 postOne();
+            } else if (e.button === 1 || e.shiftKey || e.ctrlKey || e.metaKey) {
+                /// Middle click or Shift/Ctrl/Cmd click - the gestures that open a link in a new
+                /// tab - open the query in a new Web UI tab instead of replacing the current one.
+                openQueryInNewTab(value);
             } else {
                 query_area.value = value;
                 query_area.dispatchEvent(new Event('input'));
@@ -3914,20 +3941,20 @@ async function loadTables(server_address, user, password, database, container, s
             let bytes_elem = document.createElement('span');
             bytes_elem.className = 'table-addendum-elem';
             bytes_elem.textContent = formatReadableBytes(elem.total_bytes) + '\n';
-            bytes_elem.addEventListener('click', show_table_properties);
+            onTableActivate(bytes_elem, show_table_properties);
             table_addendum.append(bytes_elem);
         }
         if (+elem.total_rows) {
             let rows_elem = document.createElement('span');
             rows_elem.className = 'table-addendum-elem';
             rows_elem.textContent = formatReadableRows(elem.total_rows) + ' rows\n';
-            rows_elem.addEventListener('click', show_table_properties);
+            onTableActivate(rows_elem, show_table_properties);
             table_addendum.append(rows_elem);
         }
         let engine_elem = document.createElement('span');
         engine_elem.textContent = elem.engine;
         engine_elem.className = 'table-addendum-elem';
-        engine_elem.addEventListener('click', e => set_query_or_run(e, `SHOW TABLE "${database}"."${elem.table}"`));
+        onTableActivate(engine_elem, e => set_query_or_run(e, `SHOW TABLE "${database}"."${elem.table}"`));
         table_addendum.append(engine_elem);
 
         /// Make the balloon links reachable from the keyboard (Right arrow from the row).
@@ -3941,7 +3968,7 @@ async function loadTables(server_address, user, password, database, container, s
         /// selector works; it is position:fixed, so it is not clipped by the button overflow.
         table_link.appendChild(table_addendum);
         table.appendChild(table_link);
-        table.addEventListener('click', e => set_query_or_run(e, `SELECT * FROM "${database}"."${elem.table}" LIMIT 100`));
+        onTableActivate(table, e => set_query_or_run(e, `SELECT * FROM "${database}"."${elem.table}" LIMIT 100`));
         tables_elem.appendChild(table);
     }
 
@@ -4926,6 +4953,19 @@ async function restoreFromHistory(state, token) {
 
 let query_area = document.getElementById('query');
 
+/// Opening a table in a new tab via a middle click focuses the query editor. On Linux/X11 the
+/// middle button additionally pastes the PRIMARY selection into the freshly-focused editor,
+/// appending clipboard junk after the query we just set. `onTableActivate` arms this flag for
+/// such a gesture so we can swallow exactly that one paste; a real Ctrl+V is never affected
+/// (the flag is only ever set for the brief moment around a middle-click new-tab open).
+let suppress_middleclick_paste = false;
+query_area.addEventListener('paste', e => {
+    if (suppress_middleclick_paste) {
+        e.preventDefault();
+        suppress_middleclick_paste = false;
+    }
+});
+
 appendTextareaResizer();
 
 /// ===== Tabs =====================================================================
@@ -5046,6 +5086,20 @@ function addTab() {
     tabs.push(tab);
     activeTabId = tab.id;
     /// A brand new tab has no result; clear the editor and result area.
+    activateTab(tab.id).then(syncHistory);
+    scheduleSave();
+}
+
+/// Like `addTab`, but the new tab starts pre-filled with `query` and becomes active.
+/// Used by the databases panel when a table is opened with a new-tab gesture (middle
+/// click or Shift/Ctrl/Cmd click).
+function openQueryInNewTab(query) {
+    markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
+    captureActiveTab();
+    refreshCurrentHistoryEntry(getActiveTab());
+    const tab = makeTab(undefined, query);
+    tabs.push(tab);
+    activeTabId = tab.id;
     activateTab(tab.id).then(syncHistory);
     scheduleSave();
 }
