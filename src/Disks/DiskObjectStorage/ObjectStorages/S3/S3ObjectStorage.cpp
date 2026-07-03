@@ -690,16 +690,38 @@ void S3ObjectStorage::applyNewSettings(
 
     auto modified_settings = std::make_unique<S3Settings>(*s3_settings.get());
 
-    /// Apply global <s3> endpoint settings first (lowest priority).
-    if (auto endpoint_settings = context->getStorageS3Settings().getSettings(uri.uri.toString(), context->getUserName()))
+    auto apply_endpoint_settings = [&]
     {
-        modified_settings->auth_settings.updateIfChanged(endpoint_settings->auth_settings);
-        modified_settings->request_settings.updateIfChanged(endpoint_settings->request_settings);
-    }
+        if (auto endpoint_settings = context->getStorageS3Settings().getSettings(uri.uri.toString(), context->getUserName()))
+        {
+            modified_settings->auth_settings.updateIfChanged(endpoint_settings->auth_settings);
+            modified_settings->request_settings.updateIfChanged(endpoint_settings->request_settings);
+        }
+    };
 
-    /// Apply disk config settings on top (higher priority than global <s3> section).
-    modified_settings->auth_settings.updateIfChanged(settings_from_config->auth_settings);
-    modified_settings->request_settings.updateIfChanged(settings_from_config->request_settings);
+    auto apply_config_settings = [&]
+    {
+        modified_settings->auth_settings.updateIfChanged(settings_from_config->auth_settings);
+        modified_settings->request_settings.updateIfChanged(settings_from_config->request_settings);
+    };
+
+    if (for_disk_s3)
+    {
+        /// For a disk, `config_prefix` is the disk's own `<storage_configuration>` section, which is
+        /// more specific than the global `<s3>` section, so the disk config takes priority over the
+        /// endpoint settings matched from `<s3>`.
+        apply_endpoint_settings();
+        apply_config_settings();
+    }
+    else
+    {
+        /// For object storage backing `S3`/`S3Queue` engine tables, `config_prefix` is the global
+        /// top-level `<s3>` section, which is less specific than the URL-scoped endpoint settings.
+        /// Apply it first so the endpoint settings win, matching the resolution order used at table
+        /// creation in `S3StorageParsedArguments::fromAST` (global `<s3>` first, endpoint on top).
+        apply_config_settings();
+        apply_endpoint_settings();
+    }
 
     modified_settings->request_settings.proxy_resolver = DB::ProxyConfigurationResolverProvider::getFromOldSettingsFormat(
         ProxyConfiguration::protocolFromString(uri.uri.getScheme()), config_prefix, config);
