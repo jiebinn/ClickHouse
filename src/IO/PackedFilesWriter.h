@@ -62,10 +62,9 @@ public:
     /// Returns calculated index of written files.
     /// The caller can provide files order hint to optimize the order of files in the archive. The files listed in the hint
     /// Will be written first in the archive in the specified order, and the rest of the files will be written after them.
-    /// @version defaults to v0 so existing consumers stay byte-identical; skip-index passes v1.
-    PackedFilesIO::Index finalize(CommitDataFunc commit_func, const Strings & files_order_hint = {}, UInt8 version = PackedFilesIO::VERSION_WITHOUT_UNCOMPRESSED_SIZE);
+    PackedFilesIO::Index finalize(CommitDataFunc commit_func, const Strings & files_order_hint, UInt8 version);
     /// Returns a pair of (packed files index, need to fsync the archive)
-    std::pair<PackedFilesIO::Index, bool> finalize(WriteBuffer & out, const Strings & files_order_hint = {}, UInt8 version = PackedFilesIO::VERSION_WITHOUT_UNCOMPRESSED_SIZE);
+    std::pair<PackedFilesIO::Index, bool> finalize(WriteBuffer & out, const Strings & files_order_hint, UInt8 version);
 
     /// Applies changes of files metadata both to the @written_files and @index.
     void applyMetadataChanges(PackedFilesIO::Index & index);
@@ -92,7 +91,7 @@ public:
         bool is_applied = false;
     };
 
-    static void writePackedIndex(WriteBuffer & out, const PackedFilesIO::Index & index, UInt8 version = PackedFilesIO::VERSION_WITHOUT_UNCOMPRESSED_SIZE);
+    static void writePackedIndex(WriteBuffer & out, const PackedFilesIO::Index & index, UInt8 version);
 
 private:
     static size_t getSizeOfHeader();

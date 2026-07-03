@@ -30,7 +30,7 @@ PackedFilesIO::Index PackedFilesReader::readIndex(ReadBuffer & in)
     UInt8 version = 0;
     readIntBinary(version, in);
 
-    if (version > PackedFilesIO::VERSION)
+    if (version > PackedFilesIO::MAX_VERSION)
         throw Exception(ErrorCodes::UNKNOWN_FORMAT_VERSION,
             "Unknown format ({}) of packed data", std::to_string(version));
 

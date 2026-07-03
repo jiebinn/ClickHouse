@@ -10,10 +10,10 @@ namespace DB
 namespace PackedFilesIO
 {
 
-/// Highest version the reader understands (readIndex rejects greater). Version is chosen per
-/// archive by the writer, not globally: skp_idx.packed writes v1 to carry uncompressed_size,
-/// statistics.packed keeps writing v0.
-static constexpr UInt8 VERSION = 1;
+/// Version is chosen per archive by the writer, not globally: skp_idx.packed writes v1 to carry
+/// uncompressed_size, statistics.packed keeps writing v0. MAX_VERSION is only the read-side
+/// ceiling (readIndex rejects greater); writers must pass one of the explicit versions below.
+static constexpr UInt8 MAX_VERSION = 1;
 static constexpr UInt8 VERSION_WITHOUT_UNCOMPRESSED_SIZE = 0;
 static constexpr UInt8 VERSION_WITH_UNCOMPRESSED_SIZE = 1;
 static constexpr auto ARCHIVE_EXTENSION = ".packed";

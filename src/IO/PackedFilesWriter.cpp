@@ -252,8 +252,8 @@ std::pair<PackedFilesIO::Index, bool> PackedFilesWriter::finalize(WriteBuffer & 
 
 size_t PackedFilesWriter::getSizeOfHeader()
 {
-    /// 2 fields: version, number of files.
-    return sizeof(PackedFilesIO::VERSION) + sizeof(UInt64);
+    /// 2 fields: version (UInt8), number of files (UInt64).
+    return sizeof(UInt8) + sizeof(UInt64);
 }
 
 void PackedFilesWriter::FakeWriteBufferFromFile::nextImpl()
