@@ -353,3 +353,51 @@ def test_drop_database_replica_self_protection_with_trailing_slashes(started_clu
         ["bash", "-c", "rm -f /var/lib/clickhouse/metadata/self_slash_db.sql"],
         user="root",
     )
+
+
+def test_drop_replica_self_protection_with_trailing_slashes(started_cluster):
+    # The table-level self-protection guard must be robust to trailing slashes too.
+    # getReplicaPath() is built from getZooKeeperPath(), which strips only a single trailing slash, so a
+    # table whose engine argument has several ("/path///" keeps "/path//replicas/r"), while the query path
+    # is fully collapsed to "/path/replicas/r". Without canonicalizing the table side the guard compares
+    # "/path//replicas/r" != "/path/replicas/r", returns early, and a self-targeting SYSTEM DROP REPLICA
+    # slips past the protection and destructively removes the local replica.
+    #
+    # Such a table can only be produced from on-disk metadata (a plain CREATE collapses the path via a
+    # second normalization), so we detach, rewrite the metadata with extra slashes, and reattach.
+    node2.start_clickhouse()
+    drop_table([node1, node2], "self_slash_tbl")
+
+    node1.query("""
+            CREATE TABLE self_slash_tbl(a Int32)
+            ENGINE = ReplicatedMergeTree('/clickhouse/tables/test/self_slash_tbl', 'r1')
+            ORDER BY a;
+        """)
+    node1.query("DETACH TABLE self_slash_tbl")
+
+    metadata_path = "/var/lib/clickhouse/metadata/default/self_slash_tbl.sql"
+    node1.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "sed -i \"s#test/self_slash_tbl'#test/self_slash_tbl///'#\" {meta}".format(
+                meta=metadata_path
+            ),
+        ],
+        user="root",
+    )
+    node1.query("ATTACH TABLE self_slash_tbl")
+
+    # The live table now has getReplicaPath() == "/clickhouse/tables/test/self_slash_tbl//replicas/r1".
+    # A self-targeting drop of its own replica (query path collapses to the same path without the extra
+    # slashes) must be rejected as a local table, not silently allowed to remove the local replica.
+    err = node1.query_and_get_error(
+        "SYSTEM DROP REPLICA 'r1' FROM ZKPATH '/clickhouse/tables/test/self_slash_tbl///'"
+    )
+    assert "There is a local table" in err
+
+    # The local replica must still be present in ZooKeeper (it was not destructively dropped).
+    zk = cluster.get_kazoo_client("zoo1")
+    assert zk.exists("/clickhouse/tables/test/self_slash_tbl/replicas/r1") is not None
+
+    drop_table([node1, node2], "self_slash_tbl")

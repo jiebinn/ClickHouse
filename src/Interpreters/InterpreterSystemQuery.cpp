@@ -1614,9 +1614,17 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
                 {
+                    /// Canonicalize the local table path the same way the parser canonicalizes the query path.
+                    /// getReplicaPath() is built from getZooKeeperPath(), which strips only a single trailing
+                    /// slash, so a table created from "/a///" metadata keeps "/a//replicas/..." and would slip
+                    /// past this self-protection guard against a query path collapsed to "/a/replicas/...".
+                    const String local_replica_path
+                        = fs::path(zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(
+                              storage_replicated->getZooKeeperPath(), /*check_starts_with_slash*/ false))
+                        / "replicas" / storage_replicated->getReplicaName();
                     /// Match the keeper too: a table on a different keeper with the same path string is a
                     /// different znode, so it must not block a drop targeting query.zk_name.
-                    if (storage_replicated->getReplicaPath() == remote_replica_path
+                    if (local_replica_path == remote_replica_path
                         && storage_replicated->getZooKeeperName() == query.zk_name)
                         throw Exception(ErrorCodes::TABLE_WAS_NOT_DROPPED,
                                         "There is a local table {}, which has the same table path in ZooKeeper. "
