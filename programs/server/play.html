@@ -5115,6 +5115,10 @@ function closeConnectionDropdown() {
 /// tab bar's visibility is recomputed.
 function syncConnectionUI() {
     const tabsShown = !tab_bar_elem.hidden;
+    /// Capture whether the 🔑 button owns focus before the next line may hide it: hiding a focused
+    /// element strands keyboard focus, so on the drop-down→inline transition we hand focus to a
+    /// visible control below (the mirror of the inline→drop-down handoff).
+    const keyHadFocus = document.activeElement === connection_key_elem;
     connection_key_elem.hidden = !tabsShown;
     if (tabsShown) {
         if (inputs_elem.parentElement !== connection_dropdown_elem) {
@@ -5135,6 +5139,10 @@ function syncConnectionUI() {
             controls_elem.insertBefore(inputs_elem, controls_elem.firstChild);
         }
         closeConnectionDropdown();
+        /// The `#connection-key` button was just hidden; if it owned focus, hand focus to the
+        /// now-visible inline `url` input — the first connection field the button gated — so
+        /// keyboard focus stays visible and the next Tab continues from the connection row.
+        if (keyHadFocus) url_elem.focus();
     }
     /// The url input's width differs between the inline bar and the drop-down, so the point at
     /// which the hostname reaches the version/uptime indicator changes: recompute its visibility.
