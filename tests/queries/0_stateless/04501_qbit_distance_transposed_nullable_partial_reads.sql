@@ -69,3 +69,20 @@ SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 3) FRO
 SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 3) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 DROP TABLE qbit_strided;
+
+
+-- The optimization rewrites the reference vector to a plain Array and drops the precision/used_dims arguments, so it
+-- always produces a Float64 / Nullable(Float64) result. If a special-typed reference vector (e.g. Dynamic) makes the
+-- original call have a different result type, the pass must leave the query unoptimized instead of raising a logical
+-- error. Reproduces a fuzzer-found crash: dotProductTransposed(vec, <Dynamic>, precision) over a QBit table column.
+
+DROP TABLE IF EXISTS qbit_dynamic_ref;
+CREATE TABLE qbit_dynamic_ref (id UInt32, vec Nullable(QBit(Float32, 4))) ENGINE = Memory;
+INSERT INTO qbit_dynamic_ref VALUES (1, [1, 2, 3, 4]), (2, NULL), (3, [0.5, 0.5, 0.5, 0.5]), (4, NULL), (5, [9, 8, 7, 6]);
+
+SELECT '-- Dynamic reference vector: the optimization must bail (result stays Dynamic) and must not raise a logical error';
+SELECT DISTINCT toTypeName(dotProductTransposed(vec, CAST([1., 2., 3., 4.], 'Dynamic'), 4)) FROM qbit_dynamic_ref SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(dotProductTransposed(vec, CAST([1., 2., 3., 4.], 'Dynamic'), 4)::Nullable(Float64), 3) FROM qbit_dynamic_ref ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(dotProductTransposed(vec, CAST([1., 2., 3., 4.], 'Dynamic'), 4)::Nullable(Float64), 3) FROM qbit_dynamic_ref ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+
+DROP TABLE qbit_dynamic_ref;

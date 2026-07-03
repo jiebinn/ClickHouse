@@ -84,3 +84,15 @@ Nullable(Float64)
 2	\N
 3	33.526
 4	\N
+-- Dynamic reference vector: the optimization must bail (result stays Dynamic) and must not raise a logical error
+Dynamic
+1	18
+2	\N
+3	0
+4	\N
+5	20
+1	18
+2	\N
+3	0
+4	\N
+5	20

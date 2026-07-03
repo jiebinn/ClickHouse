@@ -16,11 +16,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
-
 namespace Setting
 {
 extern const SettingsBool optimize_qbit_distance_function_reads;
@@ -197,19 +192,23 @@ public:
             new_args.push_back(cast_function);
         }
 
-        /// Re-resolve function with new arguments
+        /// Re-resolve function with new arguments. Keep the original arguments so the rewrite can be reverted if it
+        /// would change the result type.
+        auto original_arguments = function_node->getArguments().getNodes();
         function_node->getArguments().getNodes() = std::move(new_args);
         auto function_builder = FunctionFactory::instance().get(function_name, getContext());
         function_node->resolveAsFunction(function_builder->build(function_node->getArgumentColumns()));
 
+        /// The rewritten form always yields a Float64 / Nullable(Float64) result: it casts the reference vector to a
+        /// plain Array and drops the precision and used_dims arguments. If the original call has some other result type
+        /// - for example because an argument such as the reference vector carries a special type like Dynamic or Variant
+        /// that propagates through the function - applying the optimization would silently change the result type. In
+        /// that case revert to the original arguments and leave the query unoptimized instead.
         if (!function_node->getResultType()->equals(*original_result_type))
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "{} query tree node does not have a valid source node after running DistanceTransposedPartialReadsPass. Before: {}, "
-                "after: {}",
-                node->getNodeTypeName(),
-                original_result_type->getName(),
-                function_node->getResultType()->getName());
+        {
+            function_node->getArguments().getNodes() = std::move(original_arguments);
+            function_node->resolveAsFunction(function_builder->build(function_node->getArgumentColumns()));
+        }
     }
 };
 
