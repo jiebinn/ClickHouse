@@ -459,6 +459,22 @@ DROP TABLE tab_alter_codec;
 CREATE TABLE tab_ttl_codec (d Date, x Float64) ENGINE = MergeTree ORDER BY tuple()
     TTL d + INTERVAL 1 DAY RECOMPRESS CODEC(SZ3); -- { serverError BAD_ARGUMENTS }
 
+SELECT 'A lossy TTL recompression codec is accepted with allow_suspicious_ttl_expressions and the table still loads on ATTACH';
+-- The rejection above is a create-time sanity check. It is skipped for a table that is created on purpose with
+-- `allow_suspicious_ttl_expressions`, and, crucially, on the metadata-load path (ATTACH) regardless of that setting:
+-- otherwise a table stored on an earlier version would become unloadable and prevent the server from starting after
+-- an upgrade. This mirrors how column codecs are validated (relaxed on attach). The ATTACH below succeeds even after
+-- the setting used to create the table is turned off again.
+DROP TABLE IF EXISTS tab_ttl_codec_attach;
+SET allow_suspicious_ttl_expressions = 1;
+CREATE TABLE tab_ttl_codec_attach (d Date, x Float64) ENGINE = MergeTree ORDER BY tuple()
+    TTL d + INTERVAL 1 DAY RECOMPRESS CODEC(SZ3);
+DETACH TABLE tab_ttl_codec_attach;
+SET allow_suspicious_ttl_expressions = 0;
+ATTACH TABLE tab_ttl_codec_attach;
+SELECT count() FROM tab_ttl_codec_attach;
+DROP TABLE tab_ttl_codec_attach;
+
 SELECT 'A compression block size that is not a multiple of the float width is rejected';
 -- SZ3 compresses whole values. `CompressedWriteBuffer` chunks the column stream into compressed blocks by the
 -- `max_compress_block_size` byte count, so a value is split across two blocks when that setting is not a
