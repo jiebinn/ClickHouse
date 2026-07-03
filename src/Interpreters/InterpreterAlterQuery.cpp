@@ -557,13 +557,17 @@ BlockIO InterpreterAlterQuery::executeToDatabase(const ASTAlterQuery & alter)
 
 bool InterpreterAlterQuery::isRowExistsLightweightDeleteMarker(const StoragePtr & storage, const ContextPtr & context_)
 {
-    /// `_row_exists` is the hidden lightweight-delete marker only when it is not an ordinary physical
-    /// column of the table (on e.g. a `Memory` table it can be a real column). A null storage
-    /// (non-local ON CLUSTER target) fails closed -> treated as a regular column.
+    /// `_row_exists` is the hidden lightweight-delete marker only on storages that register it as a
+    /// virtual column (the MergeTree family). Testing merely for the absence of a physical `_row_exists`
+    /// column is too broad: on e.g. a `Memory` table `_row_exists` is not the marker, yet has no
+    /// physical column either, so a user could `ADD COLUMN _row_exists, UPDATE _row_exists = 0` and edit
+    /// a real physical column with only `ALTER DELETE`. `isVirtualColumn` is true only when `_row_exists`
+    /// is a registered virtual and not shadowed by a real column, which precisely identifies the marker.
+    /// A null storage (non-local ON CLUSTER target) fails closed -> treated as a regular column.
     if (!storage)
         return false;
     const auto metadata_snapshot = storage->getInMemoryMetadataPtr(context_, false);
-    return !metadata_snapshot->getColumns().hasPhysical(RowExistsColumn::name);
+    return metadata_snapshot->isVirtualColumn(RowExistsColumn::name);
 }
 
 AccessRightsElements InterpreterAlterQuery::getRequiredAccess(const StoragePtr & storage) const

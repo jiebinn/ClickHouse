@@ -12,7 +12,7 @@ user_del="${CLICKHOUSE_DATABASE}_del_04328"
 user_upd="${CLICKHOUSE_DATABASE}_upd_04328"
 
 $CLICKHOUSE_CLIENT -q "
-DROP TABLE IF EXISTS tab, tab_lw, tab_mem;
+DROP TABLE IF EXISTS tab, tab_lw, tab_mem, tab_mem2;
 DROP USER IF EXISTS $user_del, $user_upd;
 
 CREATE TABLE tab (id UInt32, val UInt32) ENGINE = MergeTree ORDER BY id;
@@ -27,12 +27,19 @@ INSERT INTO tab_lw SELECT number, number FROM numbers(10);
 CREATE TABLE tab_mem (id UInt32, \`_row_exists\` UInt8) ENGINE = Memory;
 INSERT INTO tab_mem SELECT number, 1 FROM numbers(10);
 
+-- A Memory table with no \`_row_exists\` column, to exercise the ADD COLUMN + UPDATE escalation guard:
+-- \`_row_exists\` is not the hidden marker here, so adding it and setting it to 0 in one ALTER must not
+-- be shortcut to ALTER DELETE.
+CREATE TABLE tab_mem2 (id UInt32) ENGINE = Memory;
+INSERT INTO tab_mem2 SELECT number FROM numbers(10);
+
 -- One user has only ALTER DELETE, the other has only ALTER UPDATE.
 -- Both can read, so the predicate columns are accessible.
 CREATE USER $user_del IDENTIFIED WITH plaintext_password BY 'password';
 GRANT SELECT, ALTER DELETE ON $CLICKHOUSE_DATABASE.tab TO $user_del;
 GRANT SELECT, ALTER DELETE ON $CLICKHOUSE_DATABASE.tab_lw TO $user_del;
 GRANT SELECT, ALTER DELETE ON $CLICKHOUSE_DATABASE.tab_mem TO $user_del;
+GRANT SELECT, ALTER ADD COLUMN, ALTER DELETE ON $CLICKHOUSE_DATABASE.tab_mem2 TO $user_del;
 
 CREATE USER $user_upd IDENTIFIED WITH plaintext_password BY 'password';
 GRANT SELECT, ALTER UPDATE ON $CLICKHOUSE_DATABASE.tab TO $user_upd;
@@ -93,7 +100,15 @@ echo "-- physical _row_exists column (Memory): _row_exists = 0 is an ordinary up
 check_access "$user_del" "ALTER TABLE tab_mem UPDATE _row_exists = 0 WHERE id = 1"
 check_access "$user_upd" "ALTER TABLE tab_mem UPDATE _row_exists = 0 WHERE id = 1"
 
+# Escalation guard: the marker state is computed once on the pre-ALTER table, so on a Memory table with
+# no `_row_exists` a user could `ADD COLUMN _row_exists, UPDATE _row_exists = 0` and edit the freshly
+# added physical column. `_row_exists` is not a virtual marker on Memory, so the UPDATE segment stays a
+# real update needing ALTER UPDATE; ADD COLUMN alone stays permitted for the ALTER DELETE user.
+echo "-- escalation guard (Memory, no _row_exists marker): ADD COLUMN alone OK; ADD COLUMN + UPDATE _row_exists = 0 needs ALTER UPDATE"
+check_access "$user_del" "ALTER TABLE tab_mem2 ADD COLUMN \`re_probe\` UInt8 DEFAULT 1"
+check_access "$user_del" "ALTER TABLE tab_mem2 ADD COLUMN \`_row_exists\` UInt8 DEFAULT 1, UPDATE \`_row_exists\` = 0 WHERE id = 1"
+
 $CLICKHOUSE_CLIENT -q "
-DROP TABLE IF EXISTS tab, tab_lw, tab_mem;
+DROP TABLE IF EXISTS tab, tab_lw, tab_mem, tab_mem2;
 DROP USER IF EXISTS $user_del, $user_upd;
 "
