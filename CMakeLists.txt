@@ -394,6 +394,28 @@ if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE")
     set(DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gdwarf-aranges")
 endif ()
 
+# Compress the DWARF debug sections (`.debug_*`) with zlib (`-gz`) to reduce the on-disk size of
+# object files and binaries - in a Debug build the debug info dominates disk usage. This is enabled
+# by default for Debug builds only. ClickHouse's built-in symbolizer (`src/Common/Dwarf.cpp`)
+# transparently decompresses `SHF_COMPRESSED` sections, so runtime stack-trace symbolization keeps
+# working (source file, line, and inlined frames are preserved).
+if (OS_LINUX AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
+    set (COMPRESS_DEBUG_SECTIONS_DEFAULT ON)
+else ()
+    set (COMPRESS_DEBUG_SECTIONS_DEFAULT OFF)
+endif ()
+
+option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections with zlib (-gz)" ${COMPRESS_DEBUG_SECTIONS_DEFAULT})
+
+if (COMPRESS_DEBUG_SECTIONS AND OS_LINUX AND NOT DISABLE_ALL_DEBUG_SYMBOLS)
+    # Compress debug sections in object files (shrinks the build directory) ...
+    set (DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gz=zlib")
+    # ... and keep them compressed in the linked binaries.
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+    set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+    set (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+endif ()
+
 # Disable omit frame pointer compiler optimization using -fno-omit-frame-pointer
 option(DISABLE_OMIT_FRAME_POINTER "Disable omit frame pointer compiler optimization" OFF)
 

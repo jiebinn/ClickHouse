@@ -23,6 +23,7 @@
   */
 
 #include <functional>
+#include <list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -187,6 +188,13 @@ private:
 #if defined(OS_DARWIN)
     std::shared_ptr<const MachO> macho_; /// NOLINT
 #endif
+
+    // Backing storage for sections that were decompressed on the fly (see `decompressSection`),
+    // used when the binary is built with `-gz` (compressed `.debug_*` sections). Declared before
+    // the section views below so that it is constructed first (members are initialized in
+    // declaration order, and the constructor's initializer list calls `getSection`). `std::list`
+    // gives stable element addresses, so the `std::string_view`s pointing into it stay valid.
+    mutable std::list<std::string> decompressed_sections_;
 
     // DWARF section made up of chunks, each prefixed with a length header.
     // The length indicates whether the chunk is DWARF-32 or DWARF-64, which
@@ -463,6 +471,12 @@ private:
 
     // Get an ELF section by name, return true if found
     std::string_view getSection(const char * name) const;
+
+    // Decompress a section that has the `SHF_COMPRESSED` flag (produced by building with `-gz`).
+    // `compressed` is the raw section content, starting with the ELF compression header.
+    // The returned view points into a buffer owned by `decompressed_sections_` and stays valid for
+    // the lifetime of this `Dwarf`. Returns {} if the section cannot be decompressed.
+    std::string_view decompressSection(std::string_view compressed) const;
 
     CompilationUnit getCompilationUnit(uint64_t offset) const;
     // Finds the Compilation Unit starting at offset.

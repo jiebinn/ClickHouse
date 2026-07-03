@@ -19,7 +19,11 @@
 /** This file was edited for ClickHouse.
   */
 
+#include <cstdint>
 #include <cstring>
+
+#include <zlib.h>
+#include <zstd.h>
 
 #include <Common/Elf.h>
 #include <Common/Dwarf.h>
@@ -494,9 +498,77 @@ std::string_view Dwarf::getSection(const char * name) const
         return {};
 
     if (elf_section->header.flags & SectionHeaderFlag::COMPRESSED)
-        return {};
+        return decompressSection({elf_section->begin(), elf_section->size()});
 
     return { elf_section->begin(), elf_section->size()};
+}
+
+namespace
+{
+
+// ELF section compression header (`Elf64_Chdr`), located at the beginning of a section that has the
+// `SHF_COMPRESSED` flag. Defined locally to avoid depending on the platform `<elf.h>` (this file is
+// also compiled on macOS). ClickHouse only supports 64-bit ELF, so the 64-bit layout is assumed.
+struct __attribute__((__packed__)) ElfCompressionHeader
+{
+    uint32_t type; // ELFCOMPRESS_ZLIB = 1, ELFCOMPRESS_ZSTD = 2
+    uint32_t reserved;
+    uint64_t size; // Size of the uncompressed data.
+    uint64_t addralign; // Alignment of the uncompressed data.
+};
+
+constexpr uint32_t ELFCOMPRESS_ZLIB = 1;
+constexpr uint32_t ELFCOMPRESS_ZSTD = 2;
+
+}
+
+std::string_view Dwarf::decompressSection(std::string_view compressed) const
+{
+    if (compressed.size() < sizeof(ElfCompressionHeader))
+        return {};
+
+    ElfCompressionHeader header;
+    memcpy(&header, compressed.data(), sizeof(header));
+
+    const char * payload = compressed.data() + sizeof(header);
+    const size_t payload_size = compressed.size() - sizeof(header);
+    const size_t uncompressed_size = header.size;
+
+    std::string out;
+    try
+    {
+        // A corrupt header can request an absurd allocation; degrade gracefully instead of letting
+        // the symbolizer throw (it runs while handling other exceptions and fatal signals).
+        out.resize(uncompressed_size);
+    }
+    catch (...)
+    {
+        return {};
+    }
+
+    if (header.type == ELFCOMPRESS_ZLIB)
+    {
+        uLongf dest_len = static_cast<uLongf>(uncompressed_size);
+        int rc = uncompress(
+            reinterpret_cast<Bytef *>(out.data()), &dest_len,
+            reinterpret_cast<const Bytef *>(payload), static_cast<uLong>(payload_size));
+        if (rc != Z_OK || dest_len != uncompressed_size)
+            return {};
+    }
+    else if (header.type == ELFCOMPRESS_ZSTD)
+    {
+        size_t rc = ZSTD_decompress(out.data(), uncompressed_size, payload, payload_size);
+        if (ZSTD_isError(rc) || rc != uncompressed_size)
+            return {};
+    }
+    else
+    {
+        // Unknown compression algorithm.
+        return {};
+    }
+
+    decompressed_sections_.push_back(std::move(out));
+    return decompressed_sections_.back();
 }
 
 // static
