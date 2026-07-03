@@ -646,7 +646,7 @@ static std::vector<bool> getActiveReplicasForParallelReplicas(const ContextPtr &
         const String & catalog_cluster_name = SharedDatabaseCatalog::instance().getClusterName();
         if (cluster_name == catalog_cluster_name
             || cluster_name == SharedDatabaseCatalog::ALL_GROUPS_CLUSTER_PREFIX + catalog_cluster_name)
-            replicas_info = SharedDatabaseCatalog::instance().tryGetReplicasInfo(cluster);
+            replicas_info = SharedDatabaseCatalog::instance().getClusterWithReplicasInfo(cluster_name).second;
     }
 #endif
     if (replicas_info.replicas.empty())
