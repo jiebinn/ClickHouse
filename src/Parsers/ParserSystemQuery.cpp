@@ -217,15 +217,30 @@ enum class SystemQueryTargetType : uint8_t
             if (!ParserStringLiteral{}.parse(pos, path_ast, expected))
                 return false;
             String zk_path = path_ast->as<ASTLiteral &>().value.safeGet<String>();
-            /// Canonicalize the keeper path the same way the interpreter does (extract keeper name, strip the
-            /// prefix, collapse all trailing slashes), then reject empty/root-only paths.
-            if (!zk_path.empty())
-            {
-                res->zk_name = zkutil::extractZooKeeperName(zk_path);
-                res->replica_zk_path = zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(zk_path, /*check_starts_with_slash*/ false);
-            }
-            if (res->replica_zk_path.find_first_not_of('/') == String::npos)
+
+            /// Reject empty/root-only keeper paths at parse time (see #109217). For "", "/", "//",
+            /// "aux:/", "aux://" the fully collapsed keeper path is empty/root, so the malformed query
+            /// is caught here instead of building a lossy AST that fails the debug round-trip self-check.
+            /// (Short-circuit: for an empty literal the helper would throw a less specific message.)
+            if (zk_path.empty()
+                || zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(zk_path, /*check_starts_with_slash*/ false)
+                       .find_first_not_of('/') == String::npos)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path in DROP REPLICA is empty or refers to the root");
+
+            res->zk_name = zkutil::extractZooKeeperName(zk_path);
+
+            /// Store the drop path with the legacy one-slash normalization (strip one trailing slash
+            /// here, extractZooKeeperPath strips one more) so it matches how tables and Replicated
+            /// databases store their keeper path (TableZnodeInfo::resolve / DatabaseReplicated). Fully
+            /// collapsing here would make a remote-replica drop of an object created with a trailing
+            /// slash probe the wrong znode. The self-protection guards collapse both sides instead.
+            String legacy_path = zk_path;
+            if (legacy_path.back() == '/')
+                legacy_path.pop_back();
+            res->replica_zk_path = zkutil::extractZooKeeperPath(legacy_path, /*check_starts_with_slash*/ false);
+
+            /// Keep the raw literal for formatting so the AST round-trips losslessly (formatImpl prints
+            /// full_replica_zk_path; the interpreter uses the normalized replica_zk_path for the drop).
             res->full_replica_zk_path = std::move(zk_path);
         }
         else
