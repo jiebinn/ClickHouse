@@ -163,7 +163,7 @@ EOL
                 <!-- A fuzzed huge max_threads saturates the global thread pool, starving
                      the server-liveness probe and delaying query cancellation. Cap it. -->
                 <max_threads>
-                    <max>256</max>
+                    <max>128</max>
                 </max_threads>
 
                 <!-- Don't waste cycles testing the old interpreter. Spend time in the analyzer instead -->
