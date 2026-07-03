@@ -1,0 +1,6 @@
+# Files in this directory are documentation data assets served by Mintlify at
+# /assets/..., not build artifacts. The repository-root .gitignore ignores
+# `*.log` and `*.bin` (C++ build output); re-include them here so download
+# links such as /assets/error.log and /assets/proto.bin resolve on the site.
+!*.log
+!*.bin
