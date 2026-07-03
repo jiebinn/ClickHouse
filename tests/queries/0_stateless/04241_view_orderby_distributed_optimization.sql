@@ -450,6 +450,45 @@ DROP USER definer_limit_04241;
 DROP USER definer_offset_04241;
 DROP USER definer_alias_04241;
 
+-- `FINAL` applied to the view in the outer query: pushdown must be disabled.
+-- `FINAL` selects which rows the view exposes (collapsing duplicates in the
+-- underlying MergeTree family), but the pushed-down inner `ORDER BY`/`LIMIT` is
+-- rebuilt from the view's stored definition, which carries no `FINAL`, so it
+-- would order and truncate the pre-collapse row set below the point where
+-- `FINAL` applies and could return the wrong top-N.
+SELECT 'FINAL disables pushdown:',
+    (SELECT count() = 0 FROM (EXPLAIN SELECT id FROM test_view_04241 FINAL ORDER BY ts DESC LIMIT 10)
+     WHERE explain LIKE '%Merge sorted streams%') AS no_merge_sort;
+
+SELECT 'FINAL result count:', count() FROM (
+    SELECT id FROM test_view_04241 FINAL ORDER BY ts DESC LIMIT 10
+);
+
+-- `SAMPLE` applied to the view in the outer query: pushdown must be disabled for
+-- the same reason — `SAMPLE` restricts the view to a pseudo-random subset, so
+-- pushing `ORDER BY`/`LIMIT` into the unsampled inner query would order and
+-- truncate the full row set instead of the sampled subset.
+DROP TABLE IF EXISTS test_local_sample_04241;
+DROP TABLE IF EXISTS test_distributed_sample_04241;
+DROP VIEW IF EXISTS test_view_sample_04241;
+
+CREATE TABLE test_local_sample_04241 (id UInt64, ts UInt64)
+    ENGINE = MergeTree() ORDER BY id SAMPLE BY id;
+INSERT INTO test_local_sample_04241 SELECT number, number FROM numbers(100);
+
+CREATE TABLE test_distributed_sample_04241 AS test_local_sample_04241
+    ENGINE = Distributed(test_cluster_two_shards_localhost, currentDatabase(), test_local_sample_04241, id);
+
+CREATE VIEW test_view_sample_04241 AS SELECT id, ts FROM test_distributed_sample_04241;
+
+SELECT 'SAMPLE disables pushdown:',
+    (SELECT count() = 0 FROM (EXPLAIN SELECT id FROM test_view_sample_04241 SAMPLE 0.1 ORDER BY ts DESC LIMIT 10)
+     WHERE explain LIKE '%Merge sorted streams%') AS no_merge_sort;
+
+DROP VIEW test_view_sample_04241;
+DROP TABLE test_distributed_sample_04241;
+DROP TABLE test_local_sample_04241;
+
 DROP TABLE test_join_04241;
 DROP VIEW test_view_04241;
 DROP TABLE test_distributed_04241;

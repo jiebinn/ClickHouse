@@ -67,3 +67,6 @@ view SETTINGS prefer_column_name_to_alias disables pushdown:	1
 definer profile limit disables pushdown:	1
 definer profile offset disables pushdown:	1
 definer profile prefer_column_name_to_alias disables pushdown:	1
+FINAL disables pushdown:	1
+FINAL result count:	10
+SAMPLE disables pushdown:	1

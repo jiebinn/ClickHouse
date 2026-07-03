@@ -875,6 +875,24 @@ void pushOrderByIntoView(
     if (storage->getStorageID().database_name == "_table_function")
         return;
 
+    /// `SAMPLE` / `FINAL` applied to the view in the outer query (e.g.
+    /// `SELECT id FROM v FINAL ORDER BY ts DESC LIMIT 10`) select which rows the
+    /// view exposes: `SAMPLE` restricts it to a pseudo-random subset and `FINAL`
+    /// collapses duplicates in the underlying MergeTree family. The pushed-down
+    /// inner `ORDER BY`/`LIMIT` is rebuilt from the view's stored definition,
+    /// which carries neither modifier, so it would sort and truncate the full,
+    /// unsampled, non-final row set below the point where the modifier applies
+    /// and could return the wrong top-N. Skip the pushdown whenever the view
+    /// table expression carries such modifiers (mirrors the guard used for the
+    /// trivial-count optimization above).
+    if (const auto * table_node = table_expression->as<TableNode>();
+        table_node && table_node->getTableExpressionModifiers().has_value()
+        && (table_node->getTableExpressionModifiers()->hasFinal()
+            || table_node->getTableExpressionModifiers()->hasSampleSizeRatio()
+            || table_node->getTableExpressionModifiers()->hasSampleOffsetRatio()
+            || table_node->getTableExpressionModifiers()->hasStream()))
+        return;
+
     const auto * outer = select_query_info.query_tree->as<QueryNode>();
     if (!outer || !outer->hasOrderBy())
         return;
