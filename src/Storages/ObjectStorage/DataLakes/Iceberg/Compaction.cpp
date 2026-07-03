@@ -456,7 +456,7 @@ static bool writeConsolidatedManifestFile(
     {
         Poco::JSON::Object::Ptr spec;
         std::vector<String> partition_columns;
-        std::vector<DataTypePtr> partition_types;
+        DataTypes partition_types;
     };
     std::unordered_map<Int32, ResolvedPartitionSpec> resolved_specs;
     auto resolve_partition_spec = [&](Int32 spec_id) -> const ResolvedPartitionSpec &
