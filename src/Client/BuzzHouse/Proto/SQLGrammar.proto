@@ -805,13 +805,9 @@ message FileFunc {
     required FName fname = 1;
     optional Cluster cluster = 2;
     required string path = 3;
-    oneof file_func_oneof {
-        string informat = 4;
-        string outformat = 5;
-        string inoutformat = 6;
-    }
-    optional Expr structure = 7;
-    optional string fcomp = 8;
+    optional string format = 4;
+    optional Expr structure = 5;
+    optional string fcomp = 6;
 }
 
 message FormatFunc {
@@ -934,12 +930,8 @@ message URLFunc {
     required FName fname = 1;
     optional Cluster cluster = 2;
     required string uurl = 3;
-    oneof url_func_oneof {
-        string informat = 4;
-        string outformat = 5;
-        string inoutformat = 6;
-    }
-    optional Expr structure = 7;
+    optional string format = 4;
+    optional Expr structure = 5;
 }
 
 message SQLTableFuncCall {
@@ -2538,10 +2530,7 @@ message BackupRestore {
         ASYNC = 2;
     }
     optional SyncOrAsync sync = 8;
-    oneof backup_format_oneof {
-        string informat = 9;
-        string outformat = 10;
-    }
+    optional string format = 9;
 }
 
 message SnapshotQuery {
@@ -2571,11 +2560,8 @@ message Kill {
         TEST = 3;
     }
     optional KillOption option = 4;
-    oneof kill_format_oneof {
-        string informat = 5;
-        string outformat = 6;
-    }
-    optional SettingValues setting_values = 7;
+    optional string format = 5;
+    optional SettingValues setting_values = 6;
 }
 
 message ShowObject {

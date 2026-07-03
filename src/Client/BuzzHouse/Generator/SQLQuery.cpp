@@ -367,7 +367,7 @@ void StatementGenerator::setTableFunction(RandomGenerator & rg, const TableFunct
             ffunc->set_path(t.getTablePath(rg, this->allow_not_deterministic));
             if (t.file_format.has_value())
             {
-                ffunc->set_inoutformat(t.file_format.value());
+                ffunc->set_format(t.file_format.value());
             }
             if (t.file_comp.has_value() || rg.nextSmallNumber() < 5)
             {
@@ -391,7 +391,7 @@ void StatementGenerator::setTableFunction(RandomGenerator & rg, const TableFunct
             ufunc->set_uurl(t.getTablePath(rg, this->allow_not_deterministic));
             if (t.file_format.has_value())
             {
-                ufunc->set_inoutformat(t.file_format.value());
+                ufunc->set_format(t.file_format.value());
             }
             structure = rg.nextMediumNumber() < 96 ? ufunc->mutable_structure() : nullptr;
             if (structure)
@@ -1150,7 +1150,7 @@ StatementGenerator::FromSourceInfo StatementGenerator::joinedTableOrFunction(
             ufunc->set_uurl(std::move(url));
             if (rg.nextMediumNumber() < 91)
             {
-                ufunc->set_outformat(outf);
+                ufunc->set_format(outf);
             }
             ufunc->mutable_structure()->mutable_lit_val()->set_string_lit(std::move(buf));
             addRandomHTTPHeaders(rg, tf);

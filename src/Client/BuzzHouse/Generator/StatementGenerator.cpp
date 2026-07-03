@@ -1119,7 +1119,7 @@ bool StatementGenerator::tableOrFunctionRef(
               ufunc->set_uurl(std::move(url));
               if (rg.nextMediumNumber() < 91)
               {
-                  ufunc->set_outformat(outf);
+                  ufunc->set_format(outf);
               }
               ufunc->mutable_structure()->mutable_lit_val()->set_string_lit(std::move(buf));
               addRandomHTTPHeaders(rg, tf);
@@ -3051,7 +3051,7 @@ void StatementGenerator::generateNextBackup(RandomGenerator & rg, BackupRestore 
     if (rg.nextBool())
     {
         /// Most of the times, use formats that can be read later
-        br->set_outformat(rg.pickRandomly(fc.out_formats));
+        br->set_format(rg.pickRandomly(fc.out_formats));
     }
 }
 
@@ -3122,7 +3122,7 @@ void StatementGenerator::generateNextRestore(RandomGenerator & rg, BackupRestore
     {
         const std::optional<String> read_back = fc.formatToRead(backup.out_format.value());
 
-        br->set_informat(read_back.has_value() && rg.nextBool() ? read_back.value() : rg.pickRandomly(fc.in_formats));
+        br->set_format(read_back.has_value() && rg.nextBool() ? read_back.value() : rg.pickRandomly(fc.in_formats));
     }
 }
 
@@ -4254,9 +4254,9 @@ void StatementGenerator::updateGeneratorFromSingleQuery(const SingleSQLQuery & s
                 CatalogBackup newb = this->snapshots.at(snap_number);
 
                 newb.bout.CopyFrom(br.out());
-                if (br.has_outformat())
+                if (br.has_format())
                 {
-                    newb.out_format = br.outformat();
+                    newb.out_format = br.format();
                 }
                 this->backups[backup_number] = std::move(newb);
             }
@@ -4267,9 +4267,9 @@ void StatementGenerator::updateGeneratorFromSingleQuery(const SingleSQLQuery & s
             const BackupRestoreElement & bre = br.backup_element();
 
             newb.bout.CopyFrom(br.out());
-            if (br.has_outformat())
+            if (br.has_format())
             {
-                newb.out_format = br.outformat();
+                newb.out_format = br.format();
             }
             if (bre.has_all())
             {

@@ -1031,7 +1031,7 @@ void QueryOracle::generateExportQuery(
         gen.columnPathRef(entry, sel->add_result_columns()->mutable_etc()->mutable_col()->mutable_path());
     }
     gen.entries.clear();
-    ff->set_outformat(rg.pickRandomly(can_test_oracle_result ? QueryOracle::oracleFormats : fc.out_formats));
+    ff->set_format(rg.pickRandomly(can_test_oracle_result ? QueryOracle::oracleFormats : fc.out_formats));
     if (rg.nextSmallNumber() < 4)
     {
         ff->set_fcomp(rg.pickRandomly(compressionMethods));
@@ -1448,7 +1448,7 @@ void QueryOracle::generateImportQuery(
     InsertFromFile * iff = nins->mutable_insert_file();
     const Insert & oins = sq2.single_query().explain().inner_query().insert();
     const FileFunc & ff = oins.tof().tfunc().file();
-    const std::optional<String> read_back = fc.formatToRead(ff.outformat());
+    const std::optional<String> read_back = fc.formatToRead(ff.format());
     const String inf = !read_back.has_value() || (!can_test_oracle_result && rg.nextSmallNumber() < 4) ? rg.pickRandomly(fc.in_formats)
                                                                                                        : read_back.value();
 
@@ -1612,7 +1612,7 @@ void QueryOracle::generateOracleSelectQuery(RandomGenerator & rg, const PeerQuer
         const auto err = std::filesystem::remove(qcfile);
         UNUSED(err);
         ff->set_path(qsfile.generic_string());
-        ff->set_outformat(outf);
+        ff->set_format(outf);
         ff->set_fname(FileFunc_FName::FileFunc_FName_file);
         sel = query = sparen->mutable_select();
     }

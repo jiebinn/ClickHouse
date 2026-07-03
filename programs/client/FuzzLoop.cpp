@@ -105,10 +105,12 @@ bool Client::tryToReconnect(const uint32_t max_reconnection_attempts, const uint
 
         return false;
     }
+#if USE_BUZZHOUSE
     /// A new session was established: server-side session-scoped state is gone,
     /// so let the fuzzer drop its bookkeeping of it.
     if (!was_connected && after_fuzz_reconnect)
         after_fuzz_reconnect();
+#endif
     return true;
 }
 

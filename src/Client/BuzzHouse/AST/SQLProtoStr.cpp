@@ -1899,20 +1899,10 @@ CONV_FN(FileFunc, ff)
         ClusterToString(ret, false, ff.cluster());
     }
     appendSQLStringLiteral(ret, ff.path());
-    if (ff.has_informat())
+    if (ff.has_format())
     {
         ret += ", ";
-        appendSQLStringLiteral(ret, ff.informat());
-    }
-    else if (ff.has_outformat())
-    {
-        ret += ", ";
-        appendSQLStringLiteral(ret, ff.outformat());
-    }
-    else if (ff.has_inoutformat())
-    {
-        ret += ", ";
-        appendSQLStringLiteral(ret, ff.inoutformat());
+        appendSQLStringLiteral(ret, ff.format());
     }
     if (ff.has_structure())
     {
@@ -2295,20 +2285,10 @@ CONV_FN(URLFunc, url)
         ClusterToString(ret, false, url.cluster());
     }
     appendSQLStringLiteral(ret, url.uurl());
-    if (url.has_informat())
+    if (url.has_format())
     {
         ret += ", ";
-        appendSQLStringLiteral(ret, url.informat());
-    }
-    else if (url.has_outformat())
-    {
-        ret += ", ";
-        appendSQLStringLiteral(ret, url.outformat());
-    }
-    else if (url.has_inoutformat())
-    {
-        ret += ", ";
-        appendSQLStringLiteral(ret, url.inoutformat());
+        appendSQLStringLiteral(ret, url.format());
     }
     if (url.has_structure())
     {
@@ -5571,15 +5551,10 @@ CONV_FN(BackupRestore, backup)
         ret += " ";
         ret += BackupRestore_SyncOrAsync_Name(backup.sync());
     }
-    if (backup.has_informat())
+    if (backup.has_format())
     {
         ret += " FORMAT ";
-        ret += backup.informat();
-    }
-    else if (backup.has_outformat())
-    {
-        ret += " FORMAT ";
-        ret += backup.outformat();
+        ret += backup.format();
     }
 }
 
@@ -5626,15 +5601,10 @@ CONV_FN(Kill, kil)
         ret += " ";
         ret += Kill_KillOption_Name(kil.option());
     }
-    if (kil.has_informat())
+    if (kil.has_format())
     {
         ret += " FORMAT ";
-        ret += kil.informat();
-    }
-    else if (kil.has_outformat())
-    {
-        ret += " FORMAT ";
-        ret += kil.outformat();
+        ret += kil.format();
     }
     if (kil.has_setting_values())
     {
