@@ -130,6 +130,7 @@ namespace ErrorCodes
 {
     extern const int UNSUPPORTED_METHOD;
     extern const int INVALID_SETTING_VALUE;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(
@@ -212,6 +213,12 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(
     is_parallel_replicas_initiator_with_projection_support = is_parallel_replicas_initiator_with_projection_support_;
 
     make_distributed_plan = from[Setting::make_distributed_plan];
+
+    /// make_distributed_plan and parallel replicas are two independent distributed execution
+    /// mechanisms that cannot be combined.
+    if (make_distributed_plan && from[Setting::allow_experimental_parallel_reading_from_replicas] > 0)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
+            "make_distributed_plan does not support parallel replicas, disable the `enable_parallel_replicas` setting");
 
     /// The implicit count/minmax projection counts a whole part from metadata; a distributed read
     /// buckets the part, so the projection would be counted once per bucket and multiply the result.
