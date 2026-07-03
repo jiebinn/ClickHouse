@@ -1,0 +1,14 @@
+first query result (expect 0):
+0
+second query result (expect 0):
+0
+first query was a cache miss (expect 1):
+1
+first query was not a cache hit (expect 0):
+0
+second query was a cache hit (expect 1):
+1
+matching predicate, run 1 (expect 1):
+1
+matching predicate, run 2 (expect 1):
+1
