@@ -1505,10 +1505,16 @@ class PaimonTableGenerator(LakeTableGenerator):
             ("compaction.min.file-num", "compaction.max.file-num"),
             ("num-sorted-run.compaction-trigger", "num-sorted-run.stop-trigger"),
         ):
-            if min_key in properties and max_key in properties:
+            has_min, has_max = min_key in properties, max_key in properties
+            if has_min and has_max:
                 lo, hi = int(properties[min_key]), int(properties[max_key])
                 if lo > hi:
                     properties[max_key] = str(lo)
+            elif has_max:
+                # Only the max is set: Paimon's default min can exceed it (e.g.
+                # snapshot.num-retained.min defaults to 10 > a chosen max of 5), which
+                # fails validation, so add an explicit min no larger than the chosen max.
+                properties[min_key] = str(random.randint(1, int(properties[max_key])))
         return properties
 
     def generate_table_properties_impl(
