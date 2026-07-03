@@ -2686,6 +2686,7 @@ void IMergeTreeDataPart::calculateSecondaryIndicesSizesOnDisk() const
     /// getFileSize transparently serve virtual files from skp_idx.packed for names that aren't
     /// real on-disk files.
     const auto & storage_ref = getDataPartStorage();
+    const auto read_settings = storage.getContext()->getReadSettings();
 
     for (auto & index_description : secondary_indices_descriptions)
     {
@@ -2727,20 +2728,20 @@ void IMergeTreeDataPart::calculateSecondaryIndicesSizesOnDisk() const
                 {
                     const auto size = storage_ref.getFileSize(virtual_file);
                     substream_size.data_compressed = size;
-                    /// data_uncompressed is approximated as compressed size for packed substreams:
-                    /// the archive's per-virtual-file index records only the on-disk (compressed)
-                    /// size, and the uncompressed count is lost once `MergeTreeWriterStream` is
-                    /// destroyed. The undercount matters in one place behaviorally:
-                    /// `ReadFromMergeTree::get_indexes_size` gates `distributed_index_analysis`
-                    /// activation on `data_uncompressed`, so a packed skip index that compresses
-                    /// well (`set` / `bloom_filter` over strings) may not cross
-                    /// `distributed_index_analysis_min_indexes_bytes_to_activate` and distributed
-                    /// index analysis won't trigger. The fallback is the normal query plan, not
-                    /// a wrong result. Elsewhere `data_uncompressed` only feeds telemetry in
-                    /// `system.data_skipping_indices` / `system.parts`. To remove this
-                    /// approximation entirely, add `uncompressed_size` to
-                    /// `PackedFilesIO::Index` entries and bump the archive format version.
-                    substream_size.data_uncompressed = size;
+                    if (MergeTreeIndexSubstream::isCompressed(index_substream.type))
+                    {
+                        /// Packed substream: skp_idx.packed records only the compressed size per
+                        /// virtual file (the non-packed path above reads the uncompressed size
+                        /// from checksums.txt). It's not stored anywhere else, so read it from the
+                        /// block headers; it must be precise for `distributed_index_analysis`
+                        /// sizing in `ReadFromMergeTree::get_indexes_size`.
+                        auto buf = storage_ref.readFile(virtual_file, read_settings, size);
+                        substream_size.data_uncompressed = getDecompressedSizeFromCompressedFile(*buf);
+                    }
+                    else
+                    {
+                        substream_size.data_uncompressed = size;
+                    }
                 }
             }
 

@@ -78,4 +78,9 @@ public:
     CompressionCodecPtr codec;
 };
 
+/// Total decompressed size of a compressed file, computed by walking block headers only; the
+/// compressed payload of each block is skipped, never decompressed. Recovers the uncompressed
+/// size of a packed skip-index substream, which the packed archive index does not record.
+size_t getDecompressedSizeFromCompressedFile(ReadBuffer & in);
+
 }
