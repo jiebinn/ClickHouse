@@ -1392,7 +1392,6 @@ KeyCondition::KeyCondition(
     {
         has_filter = (filter_dag.predicate != nullptr);
         rpn.emplace_back(RPNElement::FUNCTION_UNKNOWN);
-        rpn.back().marked_relaxed_for_compatibility = true;
         return;
     }
 
@@ -1405,7 +1404,6 @@ KeyCondition::KeyCondition(
     {
         has_filter = false;
         rpn.emplace_back(RPNElement::FUNCTION_UNKNOWN);
-        rpn.back().marked_relaxed_for_compatibility = true;
         return;
     }
 
@@ -1413,11 +1411,7 @@ KeyCondition::KeyCondition(
 
     RPNBuilder<RPNElement> builder(filter_dag.predicate, context, [&](const RPNBuilderTreeNode & node, RPNElement & out)
     {
-        if (extractAtomFromTree(node, info, out))
-            return true;
-
-        out.marked_relaxed_for_compatibility = true;
-        return false;
+        return extractAtomFromTree(node, info, out);
     });
 
     rpn = std::move(builder).extractRPN();
@@ -1435,11 +1429,14 @@ KeyCondition::KeyCondition(
     , date_time_overflow_behavior_ignore(date_time_overflow_behavior_ignore_)
 {}
 
-bool KeyCondition::legacyContainsRelaxedRPN() const
+bool KeyCondition::isRelaxed() const
 {
     return std::any_of(rpn.begin(), rpn.end(), [](const auto & elem)
     {
-        return elem.relaxed || elem.marked_relaxed_for_compatibility;
+        return elem.relaxed
+            || elem.function == RPNElement::FUNCTION_UNKNOWN
+            || ((elem.function == RPNElement::FUNCTION_IN_SET || elem.function == RPNElement::FUNCTION_NOT_IN_SET)
+                && elem.set_index->size() > 1);
     });
 }
 
@@ -2629,12 +2626,6 @@ bool KeyCondition::tryPrepareSetIndexForIn(
     if (adjusted_indexes_mapping.size() < set_types.size())
         out.relaxed = true;
 
-    /// Multi-value sets are exact at the atom level, but the historical condition-level
-    /// relaxed flag treated them as relaxed because the selected key range can have gaps.
-    if (out.set_index->size() > 1)
-        out.marked_relaxed_for_compatibility = true;
-
-
     return true;
 }
 
@@ -2719,12 +2710,6 @@ bool KeyCondition::tryPrepareSetIndexForHas(
     ///    which is not equivalent.
     if (adjusted_indexes_mapping.size() < set_types.size())
         out.relaxed = true;
-
-    /// Multi-value sets are exact at the atom level, but the historical condition-level
-    /// relaxed flag treated them as relaxed because the selected key range can have gaps.
-    if (out.set_index->size() > 1)
-        out.marked_relaxed_for_compatibility = true;
-
 
     return true;
 }
@@ -3983,7 +3968,6 @@ void KeyCondition::findHyperrectanglesForArgumentsOfSpaceFillingCurves()
             {
                 /// If we didn't find a space-filling curve - replace the condition to unknown.
                 new_rpn.emplace_back();
-                new_rpn.back().marked_relaxed_for_compatibility = true;
                 continue;
             }
 
@@ -4994,7 +4978,7 @@ bool KeyCondition::extractPlainRanges(Ranges & ranges) const
         /// `FUNCTION_IS_NULL`, `FUNCTION_IS_NOT_NULL`, ...) and any future atom that introduces
         /// relaxation handling. Operator elements (`FUNCTION_AND`, `FUNCTION_OR`, `FUNCTION_NOT`,
         /// `ALWAYS_TRUE`, `ALWAYS_FALSE`) are never set as relaxed; relaxation propagates through them
-        /// via their child atoms (see the comment on `KeyCondition::relaxed` in `KeyCondition.h`).
+        /// via their child atoms (see the comment on `KeyCondition::isRelaxed` in `KeyCondition.h`).
         if (element.relaxed)
             return false;
 
@@ -5309,7 +5293,7 @@ BoolMask KeyCondition::checkInHyperrectangle(
             /// For example, for `match(...)`, a false negative here (i.e. `can_be_false` is false) would make
             /// `not match(...)` set `can_be_true = false`, causing us to skip the granule, which would be incorrect.
             /// Therefore, we must set `can_be_false = true` to be safe.
-            /// Additionally, when `KeyCondition::legacyContainsRelaxedRPN()` is true, the caller should ignore `can_be_false` anyway.
+            /// Additionally, when `KeyCondition::isRelaxed()` is true, the caller should ignore `can_be_false` anyway.
             if (element.relaxed)
                 rpn_stack.back().can_be_false = true;
 
@@ -5582,7 +5566,7 @@ BoolMask KeyCondition::checkInHyperrectangle(
             }
 
             /// If the condition is relaxed, the `can_be_false` branch is no longer reliable; it may have false negatives.
-            /// Additionally, when `KeyCondition::legacyContainsRelaxedRPN()` is true, the caller should ignore `can_be_false` anyway.
+            /// Additionally, when `KeyCondition::isRelaxed()` is true, the caller should ignore `can_be_false` anyway.
             /// Therefore, we must set `can_be_false = true` to be safe.
             if (element.relaxed)
                 rpn_stack.back().can_be_false = true;
