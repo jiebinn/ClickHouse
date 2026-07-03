@@ -4960,14 +4960,17 @@ let query_area = document.getElementById('query');
 /// exactly that one paste.
 ///
 /// The guard must never eat a real keyboard paste. The X11 PRIMARY paste is mouse-driven and
-/// carries no keystroke, whereas a real Ctrl+V / Cmd+V is always preceded by its own paste-shortcut
-/// `keydown`; disarming on that `keydown` (which fires before the resulting `paste`) keeps the
-/// discrimination independent of timing. So even if the user middle-clicks and immediately presses
-/// Ctrl+V on a platform where no PRIMARY paste ever arrives, their paste is preserved; the short
-/// post-focus fallback in `activateTab` only bounds how long a never-consumed guard can linger.
+/// carries no keystroke, whereas a real keyboard paste - Ctrl+V / Cmd+V, or Shift+Insert on
+/// Linux/Windows - is always preceded by its own paste-shortcut `keydown`; disarming on that
+/// `keydown` (which fires before the resulting `paste`) keeps the discrimination independent of
+/// timing. So even if the user middle-clicks and immediately presses a paste shortcut on a platform
+/// where no PRIMARY paste ever arrives, their paste is preserved; the short post-focus fallback in
+/// `activateTab` only bounds how long a never-consumed guard can linger.
 let suppress_middleclick_paste = false;
 query_area.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) suppress_middleclick_paste = false;
+    const keyboard_paste = ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V'))
+        || (e.shiftKey && e.key === 'Insert');
+    if (keyboard_paste) suppress_middleclick_paste = false;
 });
 query_area.addEventListener('paste', e => {
     if (suppress_middleclick_paste) {
