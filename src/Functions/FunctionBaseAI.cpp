@@ -152,6 +152,8 @@ bool FunctionBaseAI::isRetriableProviderError(std::exception_ptr exception)
     }
     catch (...)
     {
+        /// Ok: any other exception is a deterministic and non-retrieable error, e.g. a malformed
+        /// provider response, bad configuration, JSON parse failure, etc.
         return false;
     }
 }
