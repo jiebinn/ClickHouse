@@ -921,7 +921,7 @@ class IcebergTableGenerator(LakeTableGenerator):
         spark: SparkSession,
         table: SparkTable,
     ) -> str:
-        next_option = random.randint(1, 17)
+        next_option = random.randint(1, 16)
 
         if next_option == 1:
             res = f"CALL `{table.catalog_name}`.system.remove_orphan_files(table => '{table.get_namespace_path()}'"
@@ -1037,10 +1037,9 @@ class IcebergTableGenerator(LakeTableGenerator):
             refs = ["main", f"b_{random.randint(1, 3)}"]
             random.shuffle(refs)
             return f"CALL `{table.catalog_name}`.system.fast_forward(table => '{table.get_namespace_path()}', branch => '{refs[0]}', to => '{refs[1]}')"
-        if next_option == 15:
-            # Pairs with the `write.wap.enabled` property; without a staged WAP write
-            # the call fails, which still exercises the procedure's error handling
-            return f"CALL `{table.catalog_name}`.system.publish_changes(table => '{table.get_namespace_path()}', wap_id => '{random.randint(1, 1000)}')"
+        # `publish_changes` was intentionally dropped: it only succeeds for a wap_id staged by an
+        # earlier write with `spark.wap.id` set, which this generator never does, so every call
+        # failed with an unknown WAP ID. Restore it once WAP writes can be staged under a tracked id.
         # Call rewrite_data_files when there is no other option
         zorder = False
         next_strategy = random.choice(["sort", "binpack"])

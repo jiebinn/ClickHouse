@@ -476,6 +476,39 @@ Field QueryFuzzer::getRandomField(int type)
                 default: return std::numeric_limits<UInt256>::max();
             }
         }
+        case 11: {
+            /// Genuine Bool field (Field(bool) sets which = Types::Bool), not folded into an integer.
+            return Field(fuzz_rand() % 2 == 0);
+        }
+        case 12: {
+            /// Array of random scalars (elements kept scalar to bound nesting depth).
+            Array arr;
+            const size_t n = fuzz_rand() % 4;
+            for (size_t i = 0; i < n; ++i)
+                arr.push_back(getRandomField(fuzz_rand() % 11));
+            return arr;
+        }
+        case 13: {
+            /// Tuple of random scalars.
+            Tuple tup;
+            const size_t n = fuzz_rand() % 4 + 1;
+            for (size_t i = 0; i < n; ++i)
+                tup.push_back(getRandomField(fuzz_rand() % 11));
+            return tup;
+        }
+        case 14: {
+            /// Map with the canonical [(key, value), ...] structure.
+            Map map;
+            const size_t n = fuzz_rand() % 3;
+            for (size_t i = 0; i < n; ++i)
+            {
+                Tuple kv;
+                kv.push_back(getRandomField(fuzz_rand() % 11));
+                kv.push_back(getRandomField(fuzz_rand() % 11));
+                map.push_back(std::move(kv));
+            }
+            return map;
+        }
         default: chassert(false); return Null{};
     }
 }
@@ -488,9 +521,14 @@ Field QueryFuzzer::fuzzField(Field field)
 
     int type_index = -1;
 
-    if (type == Field::Types::Int64 || type == Field::Types::UInt64 || type == Field::Types::Bool)
+    if (type == Field::Types::Int64 || type == Field::Types::UInt64)
     {
         type_index = 0;
+    }
+    else if (type == Field::Types::Bool)
+    {
+        /// Keep Bool as Bool (getRandomField case 11) instead of folding it into an integer.
+        type_index = 11;
     }
     else if (type == Field::Types::Int128 || type == Field::Types::UInt128 || type == Field::Types::Int256 || type == Field::Types::UInt256)
     {
@@ -529,8 +567,9 @@ Field QueryFuzzer::fuzzField(Field field)
         if (fuzz_rand() % 20 == 0)
         {
             // Change type sometimes, but not often, because it mostly leads to
-            // boring errors.
-            type_index = fuzz_rand() % 11;
+            // boring errors. The range spans 0..14, so a scalar can also be
+            // promoted to Bool (11) or a container (Array 12 / Tuple 13 / Map 14).
+            type_index = fuzz_rand() % 15;
         }
         return getRandomField(type_index);
     }
@@ -928,6 +967,10 @@ void QueryFuzzer::fuzzOrderByElement(ASTOrderByElement * elem)
                     elem->setFillTo(make_intrusive<ASTLiteral>(Int64(fuzz_rand() % 100) - 50));
                 if (fuzz_rand() % 2 == 0)
                     elem->setFillStep(make_intrusive<ASTLiteral>(Int64(fuzz_rand() % 5) - 2));
+                /// STALENESS must be positive; zero, negative and reversed values exercise
+                /// FillingTransform's validation of the WITH FILL ... STALENESS bound.
+                if (fuzz_rand() % 2 == 0)
+                    elem->setFillStaleness(make_intrusive<ASTLiteral>(Int64(fuzz_rand() % 10) - 2));
             }
             break;
         case 7:
@@ -3619,10 +3662,12 @@ void QueryFuzzer::fuzzJoinType(ASTTableJoin * table_join)
         }
     }
 
-    /// Convert any join to PASTE JOIN: no ON/USING, no strictness/locality/NATURAL.
+    /// Convert any join to a conditionless join (PASTE / CROSS / COMMA): these carry no
+    /// ON/USING, strictness, locality or NATURAL, so clear all of them.
     if (fuzz_rand() % 50 == 0)
     {
-        table_join->kind = JoinKind::Paste;
+        static const std::vector<JoinKind> conditionless_kinds = {JoinKind::Paste, JoinKind::Cross, JoinKind::Comma};
+        table_join->kind = conditionless_kinds[fuzz_rand() % conditionless_kinds.size()];
         table_join->strictness = JoinStrictness::Unspecified;
         table_join->locality = JoinLocality::Unspecified;
         table_join->is_natural = false;
@@ -4498,6 +4543,19 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
             auto sample_node = make_intrusive<ASTSampleRatio>(r);
             table_expr->sample_size = sample_node;
             table_expr->children.push_back(sample_node);
+
+            /// Occasionally also add SAMPLE k OFFSET m
+            if (fuzz_rand() % 3 == 0)
+            {
+                static const std::vector<std::pair<UInt64, UInt64>> offset_ratios = {{0, 1}, {1, 10}, {1, 2}, {2, 10}, {9, 10}};
+                const auto & [onum, oden] = offset_ratios[fuzz_rand() % offset_ratios.size()];
+                ASTSampleRatio::Rational off;
+                off.numerator = onum;
+                off.denominator = oden;
+                auto offset_node = make_intrusive<ASTSampleRatio>(off);
+                table_expr->sample_offset = offset_node;
+                table_expr->children.push_back(offset_node);
+            }
         }
 
         fuzz(table_expr->children);
@@ -4575,7 +4633,8 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                 if (fuzz_rand() % 20 == 0)
                 {
                     /// Add or remove a single aggregate combinator suffix
-                    static const Strings combinators = {"If", "Array", "State", "SimpleState", "Merge", "ForEach", "ArgMin", "ArgMax"};
+                    static const Strings combinators
+                        = {"If", "Array", "State", "SimpleState", "Merge", "ForEach", "ArgMin", "ArgMax", "Map"};
                     const String & combo = combinators[fuzz_rand() % combinators.size()];
                     if (endsWith(fn->name, combo))
                     {
@@ -4586,22 +4645,30 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                     }
                     else
                     {
-                        fn->name += combo;
-                        if (fn->arguments)
+                        auto applyCombinator = [&](const String & c)
                         {
-                            /// When adding If: append a random predicate as the extra condition argument
-                            if (combo == "If")
+                            fn->name += c;
+                            if (fn->arguments)
                             {
-                                if (ASTPtr cond = generatePredicate())
-                                    fn->arguments->children.push_back(std::move(cond));
+                                /// When adding If: append a random predicate as the extra condition argument
+                                if (c == "If")
+                                {
+                                    if (ASTPtr cond = generatePredicate())
+                                        fn->arguments->children.push_back(std::move(cond));
+                                }
+                                /// When adding ArgMin/ArgMax: append a random column-like as the key argument
+                                else if (c == "ArgMin" || c == "ArgMax")
+                                {
+                                    if (ASTPtr key = getRandomColumnLike())
+                                        fn->arguments->children.push_back(std::move(key));
+                                }
                             }
-                            /// When adding ArgMin/ArgMax: append a random column-like as the key argument
-                            else if (combo == "ArgMin" || combo == "ArgMax")
-                            {
-                                if (ASTPtr key = getRandomColumnLike())
-                                    fn->arguments->children.push_back(std::move(key));
-                            }
-                        }
+                        };
+                        applyCombinator(combo);
+                        /// Occasionally stack a second combinator (e.g. produce -ArrayIf / -MergeState)
+                        /// deliberately instead of relying on accumulation across fuzzing iterations.
+                        if (fuzz_rand() % 4 == 0)
+                            applyCombinator(combinators[fuzz_rand() % combinators.size()]);
                     }
                 }
                 if (fuzz_rand() % 20 == 0)
@@ -4622,6 +4689,15 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                     if (!found)
                         fn->name += orVariants[fuzz_rand() % orVariants.size()];
                 }
+            }
+            /// Fuzz parametric-aggregate parameters toward boundary values, e.g. the level of
+            /// quantile(0.9) or the k of topK(k). Child recursion mutates the argument literals
+            /// but the parameter list (the first `(...)`) is otherwise only column-shuffled.
+            if (fn->parameters && fuzz_rand() % 20 == 0)
+            {
+                for (auto & p : fn->parameters->children)
+                    if (auto * lit = p->as<ASTLiteral>())
+                        lit->value = fuzzField(lit->value);
             }
             fn->setNullsAction(fuzzNullsAction(fn->getNullsAction()));
         }
@@ -4911,6 +4987,23 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
             select->setExpression(ASTSelectQuery::Expression::GROUP_BY, getRandomExpressionList(select->select()->children.size()));
         }
 
+        /// Toggle GROUP BY ALL. It is mutually exclusive with an explicit key list and with the
+        /// ROLLUP/CUBE/GROUPING SETS modifiers, so drop those when enabling it.
+        if (fuzz_rand() % 100 == 0)
+        {
+            select->group_by_all = !select->group_by_all;
+            if (select->group_by_all)
+            {
+                select->setExpression(ASTSelectQuery::Expression::GROUP_BY, {});
+                select->group_by_with_grouping_sets = false;
+                select->group_by_with_rollup = false;
+                select->group_by_with_cube = false;
+            }
+        }
+        /// Toggle the internal "constant keys" GROUP BY flag (GROUP BY over only constant expressions).
+        if (fuzz_rand() % 200 == 0)
+            select->group_by_with_constant_keys = !select->group_by_with_constant_keys;
+
         if (select->where().get())
         {
             if (fuzz_rand() % 50 == 0)
@@ -5047,6 +5140,9 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                                                  : Field(static_cast<UInt64>(fuzz_rand() % 1001));
                 select->setExpression(ASTSelectQuery::Expression::LIMIT_BY_OFFSET, make_intrusive<ASTLiteral>(val));
             }
+            /// Toggle LIMIT BY ALL (limits by every selected column instead of an explicit list)
+            if (fuzz_rand() % 50 == 0)
+                select->setIsLimitByAll(!select->isLimitByAll());
         }
         fuzzColumnLikeExpressionList(select->limitBy().get());
 
@@ -5063,6 +5159,38 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
             {
                 /// Remove one window definition (exercises dangling window-name references)
                 window_children.erase(window_children.begin() + fuzz_rand() % window_children.size());
+            }
+        }
+        /// Add a brand-new named window definition (the block above only ever drops/removes
+        /// windows). Also synthesizes a WINDOW clause when none exists. The definition is
+        /// re-fuzzed by the ASTWindowDefinition dispatch during the recursive fuzz() below.
+        if (fuzz_rand() % 50 == 0)
+        {
+            auto def = make_intrusive<ASTWindowDefinition>();
+            if (fuzz_rand() % 2 == 0)
+            {
+                if (auto part = getRandomExpressionList(0))
+                {
+                    def->partition_by = part;
+                    def->children.push_back(def->partition_by);
+                }
+            }
+            fuzzWindowDefinition(*def);
+
+            auto elem = make_intrusive<ASTWindowListElement>();
+            elem->name = "w_fuzz_" + std::to_string(alias_counter++);
+            elem->definition = def;
+            elem->children.push_back(elem->definition);
+
+            if (select->window())
+            {
+                select->window()->children.push_back(std::move(elem));
+            }
+            else
+            {
+                auto list = make_intrusive<ASTExpressionList>();
+                list->children.push_back(std::move(elem));
+                select->setExpression(ASTSelectQuery::Expression::WINDOW, std::move(list));
             }
         }
 
@@ -5202,6 +5330,24 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
     }
     else if (auto * alter_cmd = typeid_cast<ASTAlterCommand *>(ast.get()))
     {
+        /// Replace a raw-pointer member expression (order_by/sample_by/ttl/...) that is also owned
+        /// in `children`: swap the child slot and repoint the member so the two stay in sync.
+        /// The new node is fuzzed by the recursive fuzz(alter_cmd->children) at the end of this branch.
+        auto replaceCommandMember = [&](IAST *& member, ASTPtr new_node)
+        {
+            if (!member || !new_node)
+                return;
+            for (auto & child : alter_cmd->children)
+            {
+                if (child.get() == member)
+                {
+                    child = new_node;
+                    member = child.get();
+                    return;
+                }
+            }
+        };
+
         switch (alter_cmd->type)
         {
             case ASTAlterCommand::DELETE:
@@ -5366,6 +5512,28 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                     static const Strings real_execute_commands = {"expire_snapshots", "remove_orphan_files"};
                     alter_cmd->execute_command_name = pickRandomly(fuzz_rand, real_execute_commands);
                 }
+                break;
+            case ASTAlterCommand::MODIFY_ORDER_BY:
+            case ASTAlterCommand::MODIFY_SAMPLE_BY:
+                /// Occasionally swap the whole key expression for a random one. Child recursion only
+                /// mutates the existing expression's insides; this replaces the whole key, and invalid
+                /// keys (non-deterministic, wrong type) exercise the key-validation paths.
+                if (fuzz_rand() % 20 == 0)
+                    replaceCommandMember(
+                        alter_cmd->type == ASTAlterCommand::MODIFY_ORDER_BY ? alter_cmd->order_by : alter_cmd->sample_by,
+                        getRandomColumnLike());
+                break;
+            case ASTAlterCommand::MODIFY_TTL:
+                /// Swap the whole TTL expression; a bare column is an invalid TTL (needs Date/DateTime)
+                /// and hits the TTL-expression validation path.
+                if (fuzz_rand() % 20 == 0)
+                    replaceCommandMember(alter_cmd->ttl, getRandomColumnLike());
+                break;
+            case ASTAlterCommand::MODIFY_COMMENT:
+                /// Swap the comment string in place (empty/nasty comments exercise metadata handling).
+                if (alter_cmd->comment && fuzz_rand() % 20 == 0)
+                    if (auto * lit = alter_cmd->comment->as<ASTLiteral>())
+                        lit->value = fuzzField(lit->value);
                 break;
             default: break;
         }
