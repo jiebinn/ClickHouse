@@ -852,32 +852,39 @@ void ExpressionActions::execute(
         }
     }
 
-    if (project_inputs)
-    {
-        block.clear();
-    }
-    else if (allow_duplicates_in_input)
-    {
-        /// This case is the same as when the input is projected
-        /// since we do not need any input columns.
-        block.clear();
-    }
-    else
-    {
-        ::sort(execution_context.inputs_pos.rbegin(), execution_context.inputs_pos.rend());
-        for (auto input : execution_context.inputs_pos)
-            if (input >= 0)
-                block.erase(input);
-    }
-
     Block res;
+    res.reserve(result_positions.size() + block.columns());
 
+    /// Note: `result_positions` may reference the same column position more than once
+    /// (e.g. when an output node is requested twice), so keep copying here rather than moving.
     for (auto pos : result_positions)
         if (execution_context.columns[pos].column)
             res.insert(execution_context.columns[pos]);
 
-    for (auto && item : block)
-        res.insert(std::move(item));
+    /// Carry through the input columns that were not consumed as action inputs.
+    /// `project_inputs`/`allow_duplicates_in_input` drop all inputs; otherwise keep the ones whose
+    /// block position was not bound to a required input (i.e. is not present in `inputs_pos`).
+    ///
+    /// Previously the consumed inputs were removed with `Block::erase` one by one. Each such erase is
+    /// O(columns) (a vector shift plus a full rescan of `index_by_name` to fix up positions), so the
+    /// loop was O(columns^2) overall — pathological for very wide inputs, e.g. the hundreds of QBit
+    /// bit-plane sub-columns fed into a single `*DistanceTransposed` call. Build the surviving columns
+    /// in a single pass instead, without ever mutating `block`'s name index.
+    if (!project_inputs && !allow_duplicates_in_input)
+    {
+        std::vector<bool> consumed(block.columns(), false);
+        for (auto input : execution_context.inputs_pos)
+            if (input >= 0)
+                consumed[input] = true;
+
+        size_t pos = 0;
+        for (auto && item : block)
+        {
+            if (!consumed[pos])
+                res.insert(std::move(item));
+            ++pos;
+        }
+    }
 
     block.swap(res);
 
