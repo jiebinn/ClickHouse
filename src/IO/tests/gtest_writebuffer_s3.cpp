@@ -239,7 +239,7 @@ struct Client : DB::S3::Client
     static DB::S3::PocoHTTPClientConfiguration GetClientConfiguration()
     {
         DB::RemoteHostFilter remote_host_filter;
-        return DB::S3::ClientFactory::instance().createClientConfiguration(
+        auto configuration = DB::S3::ClientFactory::instance().createClientConfiguration(
             "some-region",
             remote_host_filter,
             /* s3_max_redirects = */ 100,
@@ -250,6 +250,12 @@ struct Client : DB::S3::Client
             /* for_disk_s3 = */ false,
             /* opt_disk_name = */ {},
             /* request_throttler = */ {});
+        /// createClientConfiguration leaves retryStrategy unset; ClientFactory::create() normally
+        /// fills it in. This mock builds DB::S3::Client directly, bypassing the factory, so replicate
+        /// that here -- otherwise chassert(client_configuration.retryStrategy) in Client::doRequest
+        /// aborts every request in debug/sanitizer builds.
+        configuration.retryStrategy = std::make_shared<DB::S3::Client::RetryStrategy>(configuration.retry_strategy);
+        return configuration;
     }
 
     void setInjectionModel(std::shared_ptr<MockS3::InjectionModel> injections_)
@@ -458,6 +464,31 @@ struct UploadPartFailIngection: InjectionModel
     {
         return Aws::Client::AWSError<Aws::Client::CoreErrors>(Aws::Client::CoreErrors::VALIDATION, "FailInjection", "UploadPartFailIngection", false);
     }
+};
+
+/// Fails the first `fail_times` CompleteMultipartUpload calls with the un-typed MinIO `InvalidPart`
+/// eventual-consistency error, then lets the real mock store handle the rest. The AWS SDK cannot map
+/// <Code>InvalidPart</Code> to a typed model error, so it produces UNKNOWN as the error type and keeps
+/// the raw code only in the exception name -- exactly the shape WriteBufferFromS3 must recognise to
+/// retry (see AWSErrorMarshaller::Marshall).
+struct CompleteMPUInvalidPartOnceIngection : InjectionModel
+{
+    explicit CompleteMPUInvalidPartOnceIngection(size_t fail_times_) : fail_times(fail_times_) {}
+
+    std::optional<Aws::S3::Model::CompleteMultipartUploadOutcome> call(const Aws::S3::Model::CompleteMultipartUploadRequest & /*request*/) override
+    {
+        if (calls++ >= fail_times)
+            return std::nullopt;
+        return Aws::Client::AWSError<Aws::Client::CoreErrors>(
+            Aws::Client::CoreErrors::UNKNOWN,
+            "InvalidPart",
+            "One or more of the specified parts could not be found. The part may not have been uploaded, "
+            "or the specified entity tag may not match the part's entity tag.",
+            false);
+    }
+
+    size_t fail_times;
+    size_t calls = 0;
 };
 
 struct BaseSyncPolicy
@@ -831,6 +862,32 @@ TEST_P(SyncAsync, ExceptionOnCompleteMPU) {
             throw;
         }
       }, DB::S3Exception);
+}
+
+/// A transient MinIO `InvalidPart` on CompleteMultipartUpload must be retried, not surfaced as a
+/// hard failure. Regression test for the `Code: 499 ... InvalidPart` flake at hits_s3 fixture load.
+/// The injection fails the first completion attempt with `InvalidPart` (UNKNOWN type, name only),
+/// then succeeds; the write must finalize and store the object. Without the retry-predicate fix in
+/// WriteBufferFromS3::completeMultipartUpload the first failure is thrown straight through and this
+/// test fails.
+TEST_P(SyncAsync, CompleteMPURetriesInvalidPart) {
+    setInjectionModel(std::make_shared<MockS3::CompleteMPUInvalidPartOnceIngection>(/* fail_times= */ 1));
+
+    getSettings()[Setting::s3_max_single_part_upload_size] = 0; // no single part
+    getSettings()[Setting::s3_min_upload_part_size] = 1; // small parts are ok
+
+    auto buffer = getWriteBuffer("complete_mpu_invalid_part_retry");
+    buffer->write('A');
+
+    getAsyncPolicy().setAutoExecute(true);
+    buffer->finalize();
+
+    /// The completion was attempted twice: once failing with InvalidPart, once succeeding.
+    EXPECT_EQ(client->counters.multiUploadComplete, 2u);
+    EXPECT_EQ(client->counters.multiUploadAbort, 0u);
+
+    auto & bStore = client->store->GetBucketStore(bucket);
+    EXPECT_EQ(bStore.objects["complete_mpu_invalid_part_retry"].size(), 1u);
 }
 
 TEST_P(SyncAsync, ExceptionOnUploadPart) {
