@@ -445,7 +445,7 @@ SELECT toTime64('23:59:59.999', 3) + toDate32('2024-07-15') AS dt, toTypeName(dt
 
 ### AT TIME ZONE and AT LOCAL {#at-time-zone}
 
-The postfix operators `AT TIME ZONE` and `AT LOCAL` convert a `DateTime` or `DateTime64` value to a different timezone. They are syntactic sugar for the existing [`toTimeZone`](/sql-reference/functions/date-time-functions#toTimeZone) function:
+The postfix operators `AT TIME ZONE` and `AT LOCAL` convert a `DateTime` or `DateTime64` value to a different timezone. They are syntactic sugar for the existing [`toTimeZone`](/sql-reference/functions/date-time-functions#totimezone) function:
 
 | Syntax | Equivalent |
 |---|---|
@@ -495,7 +495,7 @@ SELECT TIMESTAMP '2001-02-16 20:38:40' AT LOCAL;
 
 **See Also**
 
-- [`toTimeZone`](/sql-reference/functions/date-time-functions#toTimeZone)
+- [`toTimeZone`](/sql-reference/functions/date-time-functions#totimezone)
 - [`timeZone`](/sql-reference/functions/date-time-functions#timezone)
 
 ## Logical AND Operator {#logical-and-operator}

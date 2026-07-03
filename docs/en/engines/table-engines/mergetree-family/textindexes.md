@@ -189,7 +189,7 @@ Text indexes can be built on top of text data in any language and character set.
 For non-ASCII text, the `asciiCJK` tokenizer is recommended as it correctly handles Unicode word boundaries including CJK characters.
 :::
 
-<a id="preprocessor-argument-optional"></a>**Preprocessor argument (optional)**. The preprocessor refers to an expression which is applied to the input string before tokenization.
+**Preprocessor argument (optional)**. The preprocessor refers to an expression which is applied to the input string before tokenization.
 
 Typical use cases for the preprocessor argument include
 1. Lower/upper-casing, or case folding to enable case-insensitive matching, e.g., [lower](/sql-reference/functions/string-functions.md/#lower), [lowerUTF8](/sql-reference/functions/string-functions.md/#lowerUTF8), [caseFoldUTF8](/sql-reference/functions/string-functions.md/#caseFoldUTF8).
@@ -291,7 +291,7 @@ ORDER BY tuple();
 SELECT count() FROM tab WHERE hasAllTokens(mapKeys(map), 'foo');
 ```
 
-<a id="postprocessor-argument-optional"></a>**Postprocessor argument (optional)**. The postprocessor refers to an expression which is applied to each output token after tokenization.
+**Postprocessor argument (optional)**. The postprocessor refers to an expression which is applied to each output token after tokenization.
 
 Unlike the preprocessor, which transforms the entire input string before the tokenizer splits it into tokens, the postprocessor operates on the tokens themselves, one at a time.
 This is the natural place for transformations that are inherently token-level.
@@ -312,7 +312,7 @@ Typical use cases for the postprocessor argument include:
    Both approaches can be combined: the preprocessor strips the timestamp while the postprocessor normalizes or filters the remaining tokens (e.g., lowercase + drop severity words like `ERROR` or `INFO`).
 3. **Stemming**. Mapping each token to its stem improves search recall by matching morphological variants that share the same root.
    For example, with English stemming "running", "runs", and "run" all stem to "run", so a query for any of these variants matches all of them.
-   ClickHouse provides a built-in [stem](/sql-reference/functions/nlp-functions.md#stem) function for several languages.
+   ClickHouse provides a built-in [stem](/sql-reference/functions/string-functions.md/#stem) function for several languages.
    Example: `stem(str, 'en')`
 4. **Case normalization**. Lower- or upper-casing tokens to enable case-insensitive matching, e.g. [lower](/sql-reference/functions/string-functions.md/#lower), [lowerUTF8](/sql-reference/functions/string-functions.md/#lowerUTF8).
    For lower-and upper casing, we recommend a preprocessor instead of a postprocessor.

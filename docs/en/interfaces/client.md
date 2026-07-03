@@ -8,8 +8,8 @@ doc_type: 'reference'
 ---
 
 import Image from '@theme/IdealImage';
-import cloud_connect_button from '@site/static/images/_snippets/cloud-connect-button.webp';
-import connection_details_native from '@site/static/images/_snippets/connection-details-native.webp';
+import cloud_connect_button from '@site/static/images/_snippets/cloud-connect-button.png';
+import connection_details_native from '@site/static/images/_snippets/connection-details-native.png';
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
