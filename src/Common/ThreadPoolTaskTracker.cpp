@@ -20,6 +20,8 @@ struct TaskTracker::FinalTaskState
     std::promise<void> promise;
     TaskTracker::Callback callback;
     bool was_run = false;
+    /// Set when the scheduler throws before enqueue; the destructor surfaces it instead of a synthesized error.
+    std::exception_ptr schedule_error;
 
     explicit FinalTaskState(TaskTracker::Callback && callback_)
         : callback(std::move(callback_))
@@ -49,20 +51,24 @@ struct TaskTracker::FinalTaskState
         if (was_run)
             return;
 
-        /// The task was droped without running. Release the callback and satisfy the promise.
+        /// The task never ran: the scheduler threw before enqueue, or the pool dropped the queued job
+        /// while shutting down. Release the callback and satisfy the promise, same as run().
         {
             SCOPE_EXIT_SAFE({ [[maybe_unused]] auto released = std::move(callback); });
         }
-        std::exception_ptr eptr;
-        try
+        std::exception_ptr eptr = schedule_error;
+        if (!eptr)
         {
-            eptr = std::make_exception_ptr(
-                Exception(ErrorCodes::CANNOT_SCHEDULE_TASK, "Final task was dropped before execution (thread pool is shutting down)"));
-        }
-        catch (...)
-        {
-            // make_exception_ptr may throw under memory pressure.
-            eptr = std::current_exception();
+            try
+            {
+                eptr = std::make_exception_ptr(
+                    Exception(ErrorCodes::CANNOT_SCHEDULE_TASK, "Final task was dropped before execution (thread pool is shutting down)"));
+            }
+            catch (...)
+            {
+                // make_exception_ptr may throw under memory pressure.
+                eptr = std::current_exception();
+            }
         }
 
         promise.set_exception(eptr);
@@ -105,10 +111,9 @@ void TaskTracker::scheduleFinalTask(std::shared_ptr<FinalTaskState> state)
     }
     catch (...)
     {
-        /// Scheduler threw before job was enqueued. Make waitAll() surface
-        /// CANNOT_SCHEDULE_TASK rather than a broken-promise error.
-        state->was_run = true;
-        state->promise.set_exception(std::current_exception());
+        /// Scheduler threw before enqueue. Record the error and leave was_run false so ~FinalTaskState
+        /// releases the callback and satisfies the promise (surfacing this error), like the drop case.
+        state->schedule_error = std::current_exception();
     }
 }
 

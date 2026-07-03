@@ -1,6 +1,8 @@
 #include <Common/ThreadPoolTaskTracker.h>
 #include <Common/setThreadName.h>
 
+#include <string_view>
+
 #include <gtest/gtest.h>
 
 namespace CurrentMetrics
@@ -360,6 +362,41 @@ TEST(TaskTrackerAddFinal, FinalTaskDroppedAfterEnqueueSurfacesCannotScheduleTask
 
     /// The final callback never ran -- it was dropped before execution.
     EXPECT_FALSE(final_ran.load());
+
+    tracker.safeWaitAll();
+}
+
+/// On the scheduler-throw path waitAll() must surface the scheduler's real exception -- code
+/// CANNOT_SCHEDULE_TASK AND its original message -- not a masking success, not a broken-promise
+/// std::future_error, and not the synthesized "dropped before execution" message the queued-drop case
+/// uses. This pins the schedule_error bridge: the destructor prefers the recorded scheduler exception
+/// over synthesizing its own, so the real cause reaches the waiter.
+TEST(TaskTrackerAddFinal, FinalTaskScheduleFailureSurfacesSchedulerException)
+{
+    auto calls = std::make_shared<std::atomic<size_t>>(0);
+    /// The first (and only) schedule is the final task -- the scheduler throws before enqueue.
+    TaskTracker tracker(throwingOnNthSchedule(calls, /*throw_on_call=*/1), /*max_tasks_inflight=*/0, makeTestLogger());
+    ASSERT_TRUE(tracker.isAsync());
+
+    tracker.addFinal([] {});
+
+    try
+    {
+        tracker.waitAll();
+        FAIL() << "waitAll() did not throw -- the scheduling failure was masked as success";
+    }
+    catch (const std::future_error & e)
+    {
+        FAIL() << "final task future left with a broken promise: " << e.what();
+    }
+    catch (const Exception & e)
+    {
+        EXPECT_EQ(e.code(), ErrorCodes::CANNOT_SCHEDULE_TASK) << e.what();
+        /// The scheduler's own message must survive, proving the recorded scheduler exception is
+        /// surfaced rather than a locally synthesized one.
+        EXPECT_NE(std::string_view(e.what()).find("scheduler refused the task"), std::string_view::npos)
+            << "scheduler-throw path lost the scheduler's exception; got: " << e.what();
+    }
 
     tracker.safeWaitAll();
 }
