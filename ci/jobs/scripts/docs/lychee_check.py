@@ -164,6 +164,11 @@ def write_locale_config(docs_root, dest):
             if line.lstrip().startswith("include_fragments"):
                 continue
             lines.append(line)
+            if line.rstrip() == "exclude = [":
+                # Contact emails that GT mangled into "links" (translation prose,
+                # not navigation). The locale pass validates page links only.
+                lines.append('  "@clickhouse\\\\.com",\n')
+                lines.append('  "@yandex-team\\\\.com",\n')
     with open(os.path.join(dest, name), "w") as fout:
         fout.writelines(lines)
     return name
