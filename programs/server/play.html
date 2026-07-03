@@ -3565,6 +3565,12 @@ async function getServerStatus(server_address, user, password) {
 /// databases (those that still exist).
 let opened_databases = new Set();
 
+/// The database the user selected in the database panel. When set, it is passed as the
+/// default database (`&database=`) for queries run from the editor, so unqualified table
+/// names resolve against it. It is cleared when the connection settings change (see
+/// `resetConnectionScopedState`), since it refers to a database on the previous connection.
+let selected_database = null;
+
 let load_databases_request_num = 0;
 async function loadDatabases(server_address, user, password) {
     ++load_databases_request_num;
@@ -3897,6 +3903,8 @@ async function loadTables(server_address, user, password, database, container, s
         let current_elem = container.parentElement.querySelector('.current');
         if (current_elem) current_elem.classList.remove('current');
         container.firstChild.classList.add('current');
+        /// Use the selected database as the default database for editor queries.
+        selected_database = database;
     }
     let tables_elem = container.querySelector('.tables');
     while (tables_elem.firstChild) tables_elem.removeChild(tables_elem.firstChild);
@@ -4253,6 +4261,9 @@ async function postImpl(posted_request_num, query, targetResultEl, abortControll
     /// We will put the result in the query cache, so it can be used when download is initiated later.
     /// But we don't use cached results, so the results that we get here, are always fresh.
     url += '&use_query_cache=1&enable_reads_from_query_cache=0&enable_writes_to_query_cache=1&query_cache_ttl=600&query_cache_nondeterministic_function_handling=save&query_cache_system_table_handling=ignore';
+
+    /// If the user selected a database in the panel, use it as the default database.
+    if (selected_database) url += '&database=' + encodeURIComponent(selected_database);
 
     for (const [name, value] of Object.entries(paramValuesSnapshot))
     {
@@ -6787,6 +6798,7 @@ function resetConnectionScopedState() {
     completionWords = [];
     closeCompletions();
     opened_databases.clear();
+    selected_database = null;
     /// A panel that is already open keeps showing the previous connection's databases, and every
     /// row handler closes over the url/user/password captured when the list was loaded, so
     /// clicking a row (or its refresh button) would keep querying the previous server. Close the
@@ -7982,6 +7994,7 @@ document.getElementById('download-button').addEventListener('click', async funct
         '&http_response_headers=' + encodeURIComponent(`{'Content-Disposition':'attachment; filename="result.${encodeURIComponent(extension)}"'}`);
     if (user) url += '&user=' + encodeURIComponent(user);
     if (password) url += '&password=' + encodeURIComponent(password);
+    if (selected_database) url += '&database=' + encodeURIComponent(selected_database);
 
     for (const [name, value] of Object.entries(last_params_for_download))
     {
