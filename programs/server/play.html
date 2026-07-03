@@ -5118,7 +5118,15 @@ function syncConnectionUI() {
     connection_key_elem.hidden = !tabsShown;
     if (tabsShown) {
         if (inputs_elem.parentElement !== connection_dropdown_elem) {
+            /// If focus is inside `#inputs` when the tab bar first appears (e.g. the user pressed
+            /// Enter in url/user/password to run the first query — reachable because those fields
+            /// keep `form="controls"` and submit implicitly), moving the subtree into the hidden
+            /// drop-down would strand focus on a hidden element. Move focus to the now-visible 🔑
+            /// button first — as the Escape handler does — so keyboard users keep a visible focus
+            /// target and the inputs stay one key press away behind that button.
+            const refocus = inputs_elem.contains(document.activeElement);
             connection_dropdown_elem.appendChild(inputs_elem);
+            if (refocus) connection_key_elem.focus();
         }
     } else {
         /// Restore the inline position (first child of the form) and make sure the drop-down
