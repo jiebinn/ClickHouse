@@ -52,9 +52,12 @@ exclude = [
   "youtube\\.com",
   # pg_clickhouse reference has many stale upstream anchors — fix separately
   "pg_clickhouse",
-  # <TrackedLink href={'/examples/...-dashboard.json'}> download buttons: the
-  # JSON dashboards are served at runtime from the site root, not present in the
-  # repo, and the JSX `{'...'}` href is not a resolvable offline path anyway.
+  # ClickStack/managed-postgres dashboard download buttons use a JSX expression
+  # href: `<TrackedLink href={'https://.../examples/<name>-dashboard.json'}>`.
+  # lychee cannot parse the `{'...'}` JSX wrapper and mangles it into a bogus
+  # relative link (`{'https://...'}`), so it false-positives regardless of the
+  # URL. The URLs are valid external S3 links (verified separately); exclude the
+  # pattern so the JSX wrapper is not misread as a broken local path.
   "-dashboard\\.json",
   # Connection strings in docker-compose / config examples, not links.
   "mongodb://",
