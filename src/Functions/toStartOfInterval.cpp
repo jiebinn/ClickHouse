@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Functions/DateTimeTransforms.h>
+#include <base/arithmeticOverflow.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
@@ -30,6 +31,7 @@ namespace ErrorCodes
 {
     extern const int ARGUMENT_OUT_OF_BOUND;
     extern const int BAD_ARGUMENTS;
+    extern const int DECIMAL_OVERFLOW;
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -279,8 +281,14 @@ private:
                 /// the other argument types. For small intervals ToStartOfInterval converts the difference to the
                 /// interval unit scale and returns the floored offset in that scale; for large intervals it returns
                 /// a whole number of interval units.
+                Int64 time_diff = 0;
+                if (common::subOverflow(time_arg, origin, time_diff))
+                    throw Exception(ErrorCodes::DECIMAL_OVERFLOW,
+                        "The difference between the time argument ({}) and the origin ({}) of function {} does not fit into Int64",
+                        time_arg, origin, getName());
+
                 Int64 offset = ToStartOfInterval<unit>::execute(
-                    time_arg - origin, num_units, time_zone, is_small_interval ? scale_multiplier : result_scale, origin);
+                    time_diff, num_units, time_zone, is_small_interval ? scale_multiplier : result_scale, origin);
 
                 /// For large intervals the offset is a whole number of seconds or days, convert it to the result scale.
                 offset *= (!is_small_interval) ? result_scale : 1;
