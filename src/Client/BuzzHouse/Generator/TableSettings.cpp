@@ -1155,10 +1155,15 @@ void loadFuzzerTableSettings(const FuzzConfig & fc)
             },
             {},
             false);
+        /// Data lake storage settings don't support inline `disk(...)` definitions, only disk names, because
+        /// `DataLakeStorageSettings::loadFromQuery` applies the changes without converting the AST-backed
+        /// field into a created disk like `MergeTreeSettings` does, giving `BAD_GET` exceptions
+        const auto & disk_name_setting
+            = CHSetting([&](RandomGenerator & rg, FuzzConfig &) { return "'" + rg.pickRandomly(fc.disks).name + "'"; }, {}, false);
         mergeTreeTableSettings.insert({{"disk", disk_setting}});
         logTableSettings.insert({{"disk", disk_setting}});
-        dataLakeSettings.insert({{"disk", disk_setting}});
-        paimonSettings.insert({{"disk", disk_setting}});
+        dataLakeSettings.insert({{"disk", disk_name_setting}});
+        paimonSettings.insert({{"disk", disk_name_setting}});
         allDatabaseSettings.insert({{"disk", disk_setting}});
     }
     if (fc.enable_fault_injection_settings)

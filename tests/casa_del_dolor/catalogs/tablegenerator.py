@@ -1389,6 +1389,20 @@ class PaimonTableGenerator(LakeTableGenerator):
                 "deletion-vectors.bitmap64",
             ):
                 properties.pop(key, None)
+        if properties.get("merge-engine") == "first-row":
+            # Paimon rejects a sequence field on the 'first-row' merge engine, and only
+            # 'none' and 'lookup' changelog producers are supported with it
+            properties.pop("sequence.field", None)
+            if properties.get("changelog-producer") not in (None, "none", "lookup"):
+                properties["changelog-producer"] = random.choice(["none", "lookup"])
+        if (
+            properties.get("deletion-vectors.enabled") == "true"
+            and properties.get("changelog-producer") == "full-compaction"
+        ):
+            # Deletion vectors mode is only supported for none/input/lookup changelog producers
+            properties["changelog-producer"] = random.choice(
+                ["none", "input", "lookup"]
+            )
         if (
             "deletion-vectors.bitmap64" in properties
             and properties.get("deletion-vectors.enabled") != "true"
