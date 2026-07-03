@@ -5005,6 +5005,19 @@ function uniqueTitle(desired, excludeId) {
     }
 }
 
+/// Title for a duplicated tab: the source title with a " N" suffix, N starting at 1 and
+/// incrementing until the result is free (titles must stay unique — see `uniqueTitle`).
+/// An existing trailing numeric suffix on the source is stripped first, so duplicating
+/// "Query A 2" yields "Query A 3" rather than "Query A 2 1".
+function duplicateTitle(title) {
+    const base = title.replace(/ \d+$/, '');
+    const taken = new Set(tabs.map(t => t.title));
+    for (let i = 1; ; ++i) {
+        const candidate = base + ' ' + i;
+        if (!taken.has(candidate)) return candidate;
+    }
+}
+
 function makeTab(title, query) {
     return {
         id: 't' + (++tabSeq),
@@ -5090,6 +5103,26 @@ function addTab() {
     tabs.push(tab);
     activeTabId = tab.id;
     /// A brand new tab has no result; clear the editor and result area.
+    activateTab(tab.id).then(syncHistory);
+    scheduleSave();
+}
+
+/// Duplicate a tab: copy its query and parameters into a new tab inserted right after the
+/// source, then switch to the copy. Triggered by a middle-click or Ctrl/Shift/Cmd+click on
+/// the title — the browser gesture for "open in a new tab".
+function duplicateTab(id) {
+    const src = tabs.find(t => t.id === id);
+    if (!src) return;
+    markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
+    /// Fold live editor edits into the (possibly source) tab first, so the copy reflects them.
+    captureActiveTab();
+    refreshCurrentHistoryEntry(getActiveTab());
+
+    const tab = makeTab(duplicateTitle(src.title), src.query);
+    tab.params = { ...src.params };
+    const idx = tabs.findIndex(t => t.id === id);
+    tabs.splice(idx + 1, 0, tab);
+    activeTabId = tab.id;
     activateTab(tab.id).then(syncHistory);
     scheduleSave();
 }
@@ -5189,11 +5222,21 @@ function renderTabBar() {
 
         el.addEventListener('click', (e) => {
             if (e.target === closeEl) { e.stopPropagation(); closeTab(tab.id); return; }
+            /// Ctrl/Shift/Cmd+click on the title duplicates the tab (browser "open in new tab" gesture).
+            if (e.target === titleEl && (e.ctrlKey || e.shiftKey || e.metaKey)) { e.preventDefault(); duplicateTab(tab.id); return; }
             if (tab.id === activeTabId) {
                 if (e.target === titleEl) startTitleEdit(tab, titleEl);
             } else {
                 switchToTab(tab.id);
             }
+        });
+        /// Middle-click does not raise a `click` event; it comes through as `auxclick` (button 1).
+        el.addEventListener('auxclick', (e) => {
+            if (e.button === 1 && e.target === titleEl) { e.preventDefault(); duplicateTab(tab.id); }
+        });
+        /// Suppress the middle-click autoscroll cursor over the title.
+        el.addEventListener('mousedown', (e) => {
+            if (e.button === 1 && e.target === titleEl) e.preventDefault();
         });
         el.addEventListener('keydown', (e) => {
             /// Ignore keys coming from the inline title editor (so Space/Enter type normally).
