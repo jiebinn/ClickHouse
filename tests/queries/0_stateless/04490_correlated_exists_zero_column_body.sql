@@ -4,6 +4,8 @@
 -- body. Such a relation used to lose its row count on the streamed side of the decorrelation join,
 -- so EXISTS became false for every outer row (and a correlated scalar returned NULL).
 
+-- Correlated subqueries require the analyzer; force it so the test also runs under the old-analyzer CI config.
+SET enable_analyzer = 1;
 SET allow_experimental_correlated_subqueries = 1;
 
 DROP TABLE IF EXISTS users_04490;
