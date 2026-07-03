@@ -1163,6 +1163,12 @@ String StatementGenerator::getTableStructure(RandomGenerator & rg, const SQLTabl
     const bool allCols = this->allow_not_deterministic && rg.nextSmallNumber() < 4;
 
     flatTableColumnPath(to_remote_entries, t.cols, [&](const SQLColumn & c) { return allCols || c.canBeInserted(); });
+    if (this->remote_entries.empty())
+    {
+        /// The model may have no insertable columns, e.g. a lake table whose only column kept a default
+        /// modifier the external catalog can't express. Don't return an empty structure string, use all columns
+        flatTableColumnPath(to_remote_entries, t.cols, [](const SQLColumn &) { return true; });
+    }
     std::shuffle(this->remote_entries.begin(), this->remote_entries.end(), rg.generator);
     for (const auto & entry : this->remote_entries)
     {

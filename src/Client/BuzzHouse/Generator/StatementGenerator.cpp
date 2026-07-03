@@ -1035,6 +1035,13 @@ bool StatementGenerator::tableOrFunctionRef(
     const bool allCols = rg.nextMediumNumber() < 4;
 
     flatTableColumnPath(skip_nested_node | flat_nested, t.cols, [&](const SQLColumn & c) { return allCols || c.canBeInserted(); });
+    if (this->entries.empty())
+    {
+        /// The model may have no insertable columns, e.g. a lake table whose only column kept a default
+        /// modifier the external catalog can't express, so the server-side column is plain. An empty
+        /// column list generates degenerate inserts like `SELECT  FROM numbers(8)`, so use all columns
+        flatTableColumnPath(skip_nested_node | flat_nested, t.cols, [](const SQLColumn &) { return true; });
+    }
     std::shuffle(this->entries.begin(), this->entries.end(), rg.generator);
     rg.pickWeighted(
         {{cluster_func,

@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import string
+import sys
 import threading
 import traceback
 from pyspark.sql import Row, SparkSession
@@ -239,12 +240,21 @@ class LakeDataGenerator:
         # otherwise finite, keep ranges reasonable to avoid overflow when casting to FloatType
         return float(lo) + (float(hi) - float(lo)) * random.random()
 
+    # Control characters, NUL, quotes, escapes, RTL override, ZWJ, combining accent,
+    # multi-byte and surrogate-pair characters
+    NASTY_ALPHABET = "\x00\x01\x07\x08\x0b\x0c\x1b\x7f\t\n\r'\"`\\́‍‮漂亮😉"
+
     def _rand_string(self, nlen):
-        if random.randint(1, 2) == 1:
+        r = random.randint(1, 100)
+        if r <= 50:
             next_str = random.choice(SOME_STRINGS)
             if len(next_str) <= nlen:
                 return next_str
-        alphabet = string.ascii_letters + string.digits + " _-"
+        alphabet = (
+            LakeDataGenerator.NASTY_ALPHABET
+            if r > 90
+            else string.ascii_letters + string.digits + " _-"
+        )
         return "".join(random.choice(alphabet) for _ in range(nlen))
 
     def _rand_binary(self, nlen):
@@ -277,13 +287,21 @@ class LakeDataGenerator:
         int_digits = precision - scale
         # Largest integer part allowed (e.g., p=5,s=2 -> int_digits=3 -> up to 999)
         max_int = 10**int_digits - 1
-        int_part = self._rand_int(0, max(0, max_int))
-        frac_part = self._rand_int(0, 10**scale - 1) if scale > 0 else 0
-        sign = -1 if random.random() < 0.5 else 1
-        if scale > 0:
-            s = f"{sign*int_part}.{frac_part:0{scale}d}"
+        if random.randint(1, 100) <= 10:
+            # All-9s extreme at full precision
+            int_part = max(0, max_int)
+            frac_part = 10**scale - 1 if scale > 0 else 0
         else:
-            s = f"{sign*int_part}"
+            int_part = self._rand_int(0, max(0, max_int))
+            frac_part = self._rand_int(0, 10**scale - 1) if scale > 0 else 0
+        if scale > 0:
+            s = f"{int_part}.{frac_part:0{scale}d}"
+        else:
+            s = f"{int_part}"
+        # Apply the sign to the assembled string: `sign * int_part` loses it whenever
+        # int_part is 0, so e.g. DECIMAL(p, p) values were never negative
+        if random.random() < 0.5:
+            s = "-" + s
         return Decimal(s)
 
     INT_LIMITS = {
@@ -300,14 +318,46 @@ class LakeDataGenerator:
         if isinstance(dtype, BooleanType):
             return self._rand_bool()
         if isinstance(dtype, (ByteType, ShortType, IntegerType, LongType)):
-            # Try reduced limits
-            if random.randint(1, 2) == 1:
-                return self._rand_int(-100, 100)
             next_limits = LakeDataGenerator.INT_LIMITS[type(dtype)]
+            r = random.randint(1, 100)
+            if r <= 10:
+                # Exact boundaries are almost never hit by uniform draws, but they are
+                # what stresses readers and narrowing casts
+                return random.choice(
+                    [
+                        next_limits[0],
+                        next_limits[0] + 1,
+                        -1,
+                        0,
+                        1,
+                        next_limits[1] - 1,
+                        next_limits[1],
+                    ]
+                )
+            # Try reduced limits
+            if r <= 55:
+                return self._rand_int(-100, 100)
             return self._rand_int(next_limits[0], next_limits[1])
         if isinstance(dtype, FloatType):
+            if random.randint(1, 100) <= 5:
+                # float32 boundaries and denormals; also values that overflow on
+                # Float64 -> Float32 narrowing
+                return random.choice(
+                    [3.4028235e38, -3.4028235e38, 1.17549435e-38, 1.4e-45, -1.4e-45]
+                )
             return float(self._rand_float(-1e5, 1e5))
         if isinstance(dtype, DoubleType):
+            if random.randint(1, 100) <= 5:
+                # float64 boundaries and denormals
+                return random.choice(
+                    [
+                        sys.float_info.max,
+                        -sys.float_info.max,
+                        sys.float_info.min,
+                        5e-324,
+                        -5e-324,
+                    ]
+                )
             return float(self._rand_float(-1e9, 1e9))
         if isinstance(dtype, DecimalType):
             return self._rand_decimal(dtype.precision, dtype.scale)
@@ -379,6 +429,11 @@ class LakeDataGenerator:
                 nr = null_rate if f.nullable else 0.0
                 obj[f.name] = self._random_value_for_type(f.dataType, nr)
             return Row(**obj)
+        # Surface missing branches (e.g. a new Spark version adding a type) instead
+        # of silently degrading to strings
+        self.logger.warning(
+            f"No value generator for Spark type {dtype}, falling back to a random string"
+        )
         return self._rand_string(
             random.randint(
                 self._thread_local._min_str_len, self._thread_local._max_str_len
@@ -526,6 +581,16 @@ class LakeDataGenerator:
         key = random.choice(list(table.flat_columns().keys()))
         return f"{key} IS{random.choice(['', ' NOT'])} NULL"
 
+    @staticmethod
+    def _float_literal(v: float, sql_type: str) -> str:
+        """Spark parses bare `nan`/`inf` tokens as column references, so special
+        values must go through a quoted-string cast."""
+        if math.isnan(v):
+            return f"CAST('NaN' AS {sql_type})"
+        if math.isinf(v):
+            return f"CAST('{'Infinity' if v > 0 else '-Infinity'}' AS {sql_type})"
+        return f"CAST({v!r} AS {sql_type})"
+
     def _sql_scalar_literal(self, dtype: DataType):
         """A SQL literal for a scalar type, or None for container/variant types
         whose literals are impractical to spell out inline."""
@@ -534,9 +599,9 @@ class LakeDataGenerator:
         if isinstance(dtype, (ByteType, ShortType, IntegerType, LongType)):
             return str(self._rand_int(-100, 100))
         if isinstance(dtype, FloatType):
-            return f"CAST({float(self._rand_float(-1e5, 1e5))!r} AS FLOAT)"
+            return self._float_literal(float(self._rand_float(-1e5, 1e5)), "FLOAT")
         if isinstance(dtype, DoubleType):
-            return repr(float(self._rand_float(-1e9, 1e9)))
+            return self._float_literal(float(self._rand_float(-1e9, 1e9)), "DOUBLE")
         if isinstance(dtype, DecimalType):
             return (
                 f"CAST('{self._rand_decimal(dtype.precision, dtype.scale)}'"
@@ -551,9 +616,9 @@ class LakeDataGenerator:
             return f"'{s}'"
         if isinstance(dtype, DateType):
             return f"DATE '{self._rand_date().isoformat()}'"
-        if isinstance(dtype, TimestampType) or (
-            HAS_TIMESTAMP_NTZ and isinstance(dtype, TimestampNTZType)
-        ):
+        if HAS_TIMESTAMP_NTZ and isinstance(dtype, TimestampNTZType):
+            return f"TIMESTAMP_NTZ '{self._rand_timestamp().strftime('%Y-%m-%d %H:%M:%S.%f')}'"
+        if isinstance(dtype, TimestampType):
             return (
                 f"TIMESTAMP '{self._rand_timestamp().strftime('%Y-%m-%d %H:%M:%S.%f')}'"
             )
@@ -758,7 +823,9 @@ class LakeDataGenerator:
                 next_table_generator = LakeTableGenerator.get_next_generator(
                     table.lake_format
                 )
-                self.logger.info(f"Running SQL procedure on {table.get_table_full_path()}")
+                self.logger.info(
+                    f"Running SQL procedure on {table.get_table_full_path()}"
+                )
                 stmt = next_table_generator.generate_extra_statement(spark, table)
                 if stmt:
                     self.run_query(spark, stmt)
@@ -767,7 +834,9 @@ class LakeDataGenerator:
                 next_table_generator = LakeTableGenerator.get_next_generator(
                     table.lake_format
                 )
-                self.logger.info(f"Running ALTER statement on {table.get_table_full_path()}")
+                self.logger.info(
+                    f"Running ALTER statement on {table.get_table_full_path()}"
+                )
                 stmt = next_table_generator.generate_alter_table_statements(
                     spark, table
                 )

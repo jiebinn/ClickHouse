@@ -430,29 +430,19 @@ class IcebergTableGenerator(LakeTableGenerator):
         if random.randint(1, 2) == 1:
             return self.generate_common_alter_statements(spark, table)
 
-        next_operation = random.randint(1, 12)
+        next_operation = random.randint(1, 14)
         tpath = table.get_table_full_path()
 
         if next_operation <= 2:
             # Add or drop partition field
             partition_clauses = self.add_partition_clauses(table)
-            random.shuffle(partition_clauses)
-            random_subset = random.sample(
-                partition_clauses, k=random.randint(1, min(3, len(partition_clauses)))
-            )
-            return f"ALTER TABLE {tpath} {random.choice(['ADD', 'DROP'])} PARTITION FIELD {random.choice(list(random_subset))}"
+            if partition_clauses:
+                return f"ALTER TABLE {tpath} {random.choice(['ADD', 'DROP'])} PARTITION FIELD {random.choice(partition_clauses)}"
         elif next_operation <= 4:
             # Replace partition field
             partition_clauses = self.add_partition_clauses(table)
-            random.shuffle(partition_clauses)
-            random_subset1 = random.sample(
-                partition_clauses, k=random.randint(1, min(3, len(partition_clauses)))
-            )
-            random.shuffle(partition_clauses)
-            random_subset2 = random.sample(
-                partition_clauses, k=random.randint(1, min(3, len(partition_clauses)))
-            )
-            return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {random.choice(list(random_subset1))} WITH {random.choice(list(random_subset2))}"
+            if partition_clauses:
+                return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {random.choice(partition_clauses)} WITH {random.choice(partition_clauses)}"
         elif next_operation <= 6:
             # Set ORDER BY
             if random.randint(1, 2) == 1:
@@ -475,6 +465,22 @@ class IcebergTableGenerator(LakeTableGenerator):
                     return f"ALTER TABLE {tpath} ALTER COLUMN {col} FIRST;"
                 other = random.choice([c for c in cols if c != col])
                 return f"ALTER TABLE {tpath} ALTER COLUMN {col} AFTER {other};"
+        elif next_operation <= 14:
+            # Branch / tag DDL (branch names match the ones `insert_into_branch` writes to)
+            kind = random.choice(["BRANCH", "TAG"])
+            name = (
+                f"b_{random.randint(1, 3)}"
+                if kind == "BRANCH"
+                else f"tag_{random.randint(1, 1000)}"
+            )
+            if random.randint(1, 3) == 1:
+                return f"ALTER TABLE {tpath} DROP {kind} IF EXISTS {name}"
+            res = f"ALTER TABLE {tpath} CREATE {kind} IF NOT EXISTS {name}"
+            if random.randint(1, 3) == 1:
+                res += f" RETAIN {random.randint(1, 30)} DAYS"
+            if kind == "BRANCH" and random.randint(1, 3) == 1:
+                res += f" WITH SNAPSHOT RETENTION {random.randint(1, 5)} SNAPSHOTS"
+            return res
         return ""
 
     def set_basic_properties(self) -> dict[str, str]:
@@ -488,20 +494,30 @@ class IcebergTableGenerator(LakeTableGenerator):
 
     def add_partition_clauses(self, table: SparkTable) -> list[str]:
         res = []
+        timestamp_types = (sp.TimestampType,) + (
+            (sp.TimestampNTZType,) if hasattr(sp, "TimestampNTZType") else ()
+        )
         flattened_columns = table.flat_columns()
         for k, val in flattened_columns.items():
+            # Iceberg cannot partition by container types
+            if isinstance(val, (sp.ArrayType, sp.MapType, sp.StructType)):
+                continue
             res.append(k)
+            is_timestamp = isinstance(val, timestamp_types)
             if (
-                isinstance(val, sp.TimestampType)
+                is_timestamp
                 or isinstance(val, sp.DateType)
                 or random.randint(0, 9) == 0
             ):
                 res.append(f"year({k})")
                 res.append(f"month({k})")
                 res.append(f"day({k})")
-                res.append(f"hour({k})")
-            res.append(f"bucket({random.randint(0, 1000)}, {k})")
-            res.append(f"truncate({random.randint(0, 1000)}, {k})")
+                # `hour` is invalid on DATE columns
+                if is_timestamp or not isinstance(val, sp.DateType):
+                    res.append(f"hour({k})")
+            # bucket count and truncate width must be positive
+            res.append(f"bucket({random.randint(1, 1000)}, {k})")
+            res.append(f"truncate({random.randint(1, 1000)}, {k})")
             # void() always yields null partition values (the transform Iceberg
             # uses to retire a partition field); valid in the Spark SQL spec.
             res.append(f"void({k})")
@@ -539,8 +555,10 @@ class IcebergTableGenerator(LakeTableGenerator):
             # Sometimes skip columns to create more variety in partitioning and properties
             if not first and not table.deterministic and random.randint(1, 11) == 1:
                 continue
-            # Convert columns
+            # Convert columns. Consume the top-level field's ID before converting:
+            # the conversion allocates IDs for nested elements from the same counter
             next_field_id = self.type_mapper.field_id
+            self.type_mapper.increment()
             next_ch_type = val["type"]
             if not table.deterministic and random.randint(1, 5) == 1:
                 next_ch_type = self.type_mapper.generate_random_clickhouse_type(
@@ -558,7 +576,6 @@ class IcebergTableGenerator(LakeTableGenerator):
                     required=not nullable,
                 )
             )
-            self.type_mapper.increment()
             first = False
         nschema = Schema(*fields)
 
@@ -822,8 +839,10 @@ class IcebergTableGenerator(LakeTableGenerator):
                             [1048576, 2097152, 4194304, 8388608]
                         )  # 1MB, 2MB, 4MB, 8MB
                     ),
+                    # No 'brotli': it needs org.apache.hadoop.io.compress.BrotliCodec,
+                    # an external jar that is not on the Spark classpath
                     "write.parquet.compression-codec": lambda: random.choice(
-                        ["zstd", "brotli", "lz4", "gzip", "snappy", "uncompressed"]
+                        ["zstd", "lz4", "gzip", "snappy", "uncompressed"]
                     ),
                     "write.parquet.compression-level": lambda: str(
                         random.randint(1, 9)
@@ -902,7 +921,7 @@ class IcebergTableGenerator(LakeTableGenerator):
         spark: SparkSession,
         table: SparkTable,
     ) -> str:
-        next_option = random.randint(1, 15)
+        next_option = random.randint(1, 17)
 
         if next_option == 1:
             res = f"CALL `{table.catalog_name}`.system.remove_orphan_files(table => '{table.get_namespace_path()}'"
@@ -960,6 +979,8 @@ class IcebergTableGenerator(LakeTableGenerator):
             res = f"CALL `{table.catalog_name}`.system.rewrite_manifests(table => '{table.get_namespace_path()}'"
             if random.randint(1, 2) == 1:
                 res += f", use_caching => {random.choice(['true', 'false'])}"
+            if random.randint(1, 4) == 1:
+                res += f", spec_id => {random.randint(0, 2)}"
             res += ")"
             return res
         if next_option == 4:
@@ -967,6 +988,9 @@ class IcebergTableGenerator(LakeTableGenerator):
             timestamps = self.get_timestamps(spark, table)
             if len(timestamps) > 0 and random.randint(1, 2) == 1:
                 res += f", older_than => TIMESTAMP '{random.choice(timestamps)}'"
+            snapshots = self.get_snapshots(spark, table)
+            if len(snapshots) > 0 and random.randint(1, 3) == 1:
+                res += f", snapshot_ids => ARRAY({random.choice(snapshots)})"
             if random.randint(1, 2) == 1:
                 res += f", stream_results => {random.choice(['true', 'false'])}"
             if random.randint(1, 2) == 1:
@@ -1008,6 +1032,15 @@ class IcebergTableGenerator(LakeTableGenerator):
         timestamps = self.get_timestamps(spark, table)
         if len(timestamps) > 0 and next_option in (12, 13):
             return f"CALL `{table.catalog_name}`.system.rollback_to_timestamp(table => '{table.get_namespace_path()}', timestamp => TIMESTAMP '{random.choice(timestamps)}')"
+        if next_option == 14:
+            # Fast-forward between main and the branches `insert_into_branch` writes to
+            refs = ["main", f"b_{random.randint(1, 3)}"]
+            random.shuffle(refs)
+            return f"CALL `{table.catalog_name}`.system.fast_forward(table => '{table.get_namespace_path()}', branch => '{refs[0]}', to => '{refs[1]}')"
+        if next_option == 15:
+            # Pairs with the `write.wap.enabled` property; without a staged WAP write
+            # the call fails, which still exercises the procedure's error handling
+            return f"CALL `{table.catalog_name}`.system.publish_changes(table => '{table.get_namespace_path()}', wap_id => '{random.randint(1, 1000)}')"
         # Call rewrite_data_files when there is no other option
         zorder = False
         next_strategy = random.choice(["sort", "binpack"])
@@ -1098,9 +1131,10 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
 
     def add_partition_clauses(self, table: SparkTable) -> list[str]:
         res = []
-        # No partition by subcolumns in delta
-        for k in table.columns.keys():
-            res.append(k)
+        # No partition by subcolumns in delta, and no partitioning by container types
+        for k, sc in table.columns.items():
+            if not isinstance(sc.spark_type, (sp.ArrayType, sp.MapType, sp.StructType)):
+                res.append(k)
         return res
 
     def add_generated_col(
@@ -1167,9 +1201,10 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
                 [f"{i}" for i in range(1, 8)]
             ),
             "delta.checkpointPolicy": lambda: random.choice(["classic", "v2"]),
-            # Parquet compression
+            # Parquet compression. No 'lzo': it needs the separately-installed
+            # hadoop-lzo codec, which is not on the Spark classpath
             "spark.sql.parquet.compression.codec": lambda: random.choice(
-                ["snappy", "gzip", "lzo", "lz4", "zstd", "uncompressed"]
+                ["snappy", "gzip", "lz4", "zstd", "uncompressed"]
             ),
             # Statistics columns
             "delta.dataSkippingNumIndexedCols": lambda: str(
@@ -1288,14 +1323,22 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
         spark: SparkSession,
         table: SparkTable,
     ) -> str:
-        next_option = random.randint(1, 7)
+        next_option = random.randint(1, 9)
 
         if next_option == 1:
             # Vacuum
-            return f"VACUUM {table.get_table_full_path()} RETAIN 0 HOURS;"
+            res = f"VACUUM {table.get_table_full_path()}"
+            if random.randint(1, 2) == 1:
+                res += f" RETAIN {random.choice([0, 1, 168])} HOURS"
+            if random.randint(1, 4) == 1:
+                res += " DRY RUN"
+            return res + ";"
         if next_option == 2:
             # Optimize
             res = f"OPTIMIZE {table.get_table_full_path()}"
+            if random.randint(1, 4) == 1:
+                # FULL recompacts clustered tables; it stands alone
+                return res + " FULL;"
             if random.randint(1, 3) == 1:
                 flat_cols = list(table.flat_columns().keys())
                 col = random.choice(flat_cols)
@@ -1334,6 +1377,23 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
         if next_option == 7:
             # Generate manifest
             return f"GENERATE symlink_format_manifest FOR TABLE {table.get_table_full_path()};"
+        if next_option == 8:
+            # Rewrite files with soft-deleted rows (purges deletion vectors)
+            return f"REORG TABLE {table.get_table_full_path()} APPLY (PURGE);"
+        if next_option == 9:
+            # Change liquid clustering keys after creation
+            if random.randint(1, 3) == 1:
+                return f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY NONE;"
+            cluster_cols = [
+                path
+                for path, dtype in table.flat_columns().items()
+                if not isinstance(dtype, (sp.ArrayType, sp.MapType, sp.StructType))
+                and not table.columns[path.split(".", 1)[0]].generated
+            ]
+            if cluster_cols:
+                random.shuffle(cluster_cols)
+                chosen = cluster_cols[: random.randint(1, min(4, len(cluster_cols)))]
+                return f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY ({','.join(chosen)});"
         return ""
 
 
@@ -1356,8 +1416,10 @@ class PaimonTableGenerator(LakeTableGenerator):
 
     def add_partition_clauses(self, table: SparkTable) -> list[str]:
         res = []
-        for k in table.columns.keys():
-            res.append(k)
+        # No partitioning by container types
+        for k, sc in table.columns.items():
+            if not isinstance(sc.spark_type, (sp.ArrayType, sp.MapType, sp.StructType)):
+                res.append(k)
         return res
 
     def add_generated_col(
@@ -1515,7 +1577,7 @@ class PaimonTableGenerator(LakeTableGenerator):
         spark: SparkSession,
         table: SparkTable,
     ) -> str:
-        next_option = random.randint(1, 5)
+        next_option = random.randint(1, 9)
 
         if next_option == 1:
             return f"CALL `{table.catalog_name}`.sys.compact(table => '{table.get_namespace_path()}');"
@@ -1528,4 +1590,27 @@ class PaimonTableGenerator(LakeTableGenerator):
             return f"CALL `{table.catalog_name}`.sys.repair(table => '{table.get_namespace_path()}');"
         if next_option == 5:
             return f"CALL `{table.catalog_name}`.sys.remove_orphan_files(table => '{table.get_namespace_path()}');"
+        if next_option == 6:
+            # Rollback — executed here so the in-memory model can be refreshed
+            # afterward (rollback can undo schema-mutating alters)
+            version = random.choice(
+                [str(random.randint(1, 10)), f"tag_{random.randint(1, 1000)}"]
+            )
+            spark.sql(
+                f"CALL `{table.catalog_name}`.sys.rollback(table => '{table.get_namespace_path()}', version => '{version}')"
+            )
+            self._refresh_table_model(spark, table)
+            return ""
+        if next_option == 7:
+            return f"CALL `{table.catalog_name}`.sys.delete_tag(table => '{table.get_namespace_path()}', tag => 'tag_{random.randint(1, 1000)}');"
+        if next_option == 8:
+            branch = f"b_{random.randint(1, 3)}"
+            if random.randint(1, 2) == 1:
+                res = f"CALL `{table.catalog_name}`.sys.create_branch(table => '{table.get_namespace_path()}', branch => '{branch}'"
+                if random.randint(1, 2) == 1:
+                    res += f", tag => 'tag_{random.randint(1, 1000)}'"
+                return res + ");"
+            return f"CALL `{table.catalog_name}`.sys.delete_branch(table => '{table.get_namespace_path()}', branch => '{branch}');"
+        if next_option == 9:
+            return f"CALL `{table.catalog_name}`.sys.expire_partitions(table => '{table.get_namespace_path()}', expiration_time => '{random.choice(['1 h', '1 d', '7 d'])}');"
         return ""
