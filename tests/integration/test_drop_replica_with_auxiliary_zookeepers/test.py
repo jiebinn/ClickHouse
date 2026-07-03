@@ -250,40 +250,6 @@ def test_drop_replica_from_zkpath_not_blocked_by_default_keeper_table(started_cl
     drop_table([node1, node2], "test_shared_aux")
 
 
-def test_drop_database_replica_blocked_by_local_db_with_trailing_slashes(
-    started_cluster,
-):
-    # The self-protection guard for an ATTACHED local Replicated database must collapse
-    # trailing slashes the same way the parser does. DatabaseReplicated strips only a
-    # single trailing slash in its constructor, so `Replicated('/path//', ...)` keeps
-    # getZooKeeperPath() == '/path/', while the parser normalizes the query ZKPATH down to
-    # '/path'. Before the guard collapsed the leftover slash the paths mismatched, the guard
-    # was skipped, and `SYSTEM DROP DATABASE REPLICA ... FROM ZKPATH '/path//'` destructively
-    # dropped the still-attached local replica instead of being rejected.
-    db_path = "/clickhouse/databases/test/local_db_slashes"
-    node1.query("DROP DATABASE IF EXISTS local_db_slashes SYNC")
-
-    node1.query(
-        "CREATE DATABASE local_db_slashes "
-        "ENGINE = Replicated('{path}//', 'shard1', 'r1')".format(path=db_path)
-    )
-
-    # The database is attached and lives at this exact path on the default keeper, so the
-    # drop must be rejected with "There is a local database"; the '//' spelling must not
-    # slip past the guard and drop the local replica.
-    err = node1.query_and_get_error(
-        "SYSTEM DROP DATABASE REPLICA 'r1' FROM SHARD 'shard1' "
-        "FROM ZKPATH '{path}//'".format(path=db_path)
-    )
-    assert "There is a local database" in err
-
-    # The local database's replica znode must still be intact.
-    zk = cluster.get_kazoo_client("zoo1")
-    assert zk.exists(db_path + "/replicas/shard1|r1") is not None
-
-    node1.query("DROP DATABASE IF EXISTS local_db_slashes SYNC")
-
-
 def test_drop_database_replica_from_zkpath_not_blocked_by_detached_default_keeper_db(
     started_cluster,
 ):
@@ -342,3 +308,51 @@ def test_drop_database_replica_from_zkpath_blocked_by_detached_auxiliary_keeper_
 
     node1.query("ATTACH DATABASE detached_aux_db")
     node1.query("DROP DATABASE IF EXISTS detached_aux_db SYNC")
+
+
+def test_drop_database_replica_self_protection_with_trailing_slashes(started_cluster):
+    # The self-protection guard for a LIVE local database must be robust to trailing slashes.
+    # getZooKeeperPath() only strips a single trailing slash, so a database whose engine argument
+    # has several ("/path///" keeps "/path/"), while the query path is fully collapsed to "/path".
+    # Without canonicalizing both sides the guard compares "/path/" != "/path", returns early, and a
+    # self-targeting SYSTEM DROP DATABASE REPLICA slips past the protection for the local replica.
+    #
+    # Such a database can only be produced from on-disk metadata (a plain CREATE collapses the path
+    # via a second normalization), so we detach, rewrite the metadata with extra slashes, and reattach.
+    db_path = "/clickhouse/databases/test/self_slash_db"
+    node1.query("DROP DATABASE IF EXISTS self_slash_db SYNC")
+    node1.query(
+        "CREATE DATABASE self_slash_db "
+        "ENGINE = Replicated('{path}', 'shard1', 'r1')".format(path=db_path)
+    )
+    node1.query("DETACH DATABASE self_slash_db")
+
+    metadata_path = "/var/lib/clickhouse/metadata/self_slash_db.sql"
+    node1.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "sed -i \"s#Replicated('{path}'#Replicated('{path}///'#\" {meta}".format(
+                path=db_path, meta=metadata_path
+            ),
+        ],
+        user="root",
+    )
+    node1.query("ATTACH DATABASE self_slash_db")
+
+    # The live database now has getZooKeeperPath() == "/clickhouse/databases/test/self_slash_db/".
+    # A self-targeting drop of its own replica (query path collapses to the same path without the
+    # trailing slash) must be rejected as a local database, not silently allowed.
+    err = node1.query_and_get_error(
+        "SYSTEM DROP DATABASE REPLICA 'r1' FROM SHARD 'shard1' "
+        "FROM ZKPATH '{path}'".format(path=db_path)
+    )
+    assert "There is a local database" in err
+
+    # This database was reattached from hand-edited metadata with an unusable keeper path, so a plain
+    # DROP ... SYNC would hang trying to reach keeper; detach and remove its metadata directly instead.
+    node1.query("DETACH DATABASE self_slash_db")
+    node1.exec_in_container(
+        ["bash", "-c", "rm -f /var/lib/clickhouse/metadata/self_slash_db.sql"],
+        user="root",
+    )

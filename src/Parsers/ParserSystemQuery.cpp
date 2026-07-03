@@ -217,17 +217,13 @@ enum class SystemQueryTargetType : uint8_t
             if (!ParserStringLiteral{}.parse(pos, path_ast, expected))
                 return false;
             String zk_path = path_ast->as<ASTLiteral &>().value.safeGet<String>();
-            /// Normalize the keeper path the same way the interpreter does, then reject empty/root-only paths.
+            /// Canonicalize the keeper path the same way the interpreter does (extract keeper name, strip the
+            /// prefix, collapse all trailing slashes), then reject empty/root-only paths.
             if (!zk_path.empty())
             {
                 res->zk_name = zkutil::extractZooKeeperName(zk_path);
-                res->replica_zk_path = zkutil::extractZooKeeperPath(zk_path, /*check_starts_with_slash*/ false);
+                res->replica_zk_path = zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(zk_path, /*check_starts_with_slash*/ false);
             }
-            /// extractZooKeeperPath strips only a single trailing slash, so collapse any remaining ones:
-            /// the interpreter concatenates replica_zk_path + "/replicas", and a leftover trailing slash
-            /// would probe "...//replicas" and miss the real node.
-            while (res->replica_zk_path.size() > 1 && res->replica_zk_path.back() == '/')
-                res->replica_zk_path.pop_back();
             if (res->replica_zk_path.find_first_not_of('/') == String::npos)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path in DROP REPLICA is empty or refers to the root");
             res->full_replica_zk_path = std::move(zk_path);

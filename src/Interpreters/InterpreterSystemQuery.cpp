@@ -1895,9 +1895,7 @@ std::optional<String> InterpreterSystemQuery::getDetachedDatabaseFromKeeperPath(
         /// both false-match a default-keeper database at the same path (blocking a valid auxiliary-keeper
         /// drop) and never match a detached auxiliary-keeper database (silently failing this guard).
         String engine_zookeeper_name = zkutil::extractZooKeeperName(engine_zookeeper_path);
-        engine_zookeeper_path = zkutil::extractZooKeeperPath(engine_zookeeper_path, /*check_starts_with_slash*/ false);
-        while (engine_zookeeper_path.size() > 1 && engine_zookeeper_path.back() == '/')
-            engine_zookeeper_path.pop_back();
+        engine_zookeeper_path = zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(engine_zookeeper_path, /*check_starts_with_slash*/ false);
 
         if (engine_zookeeper_name != query_.zk_name || engine_zookeeper_path != query_.replica_zk_path)
             continue;
@@ -1925,14 +1923,11 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
                                        const fs::path & query_replica_zk_path_, const String & query_zk_name_)
     {
         /// When a ZKPATH is given, a database on a different keeper (or path) is a different znode and must
-        /// not block a drop targeting query_zk_name_.
-        /// DatabaseReplicated collapses only a single trailing slash in its constructor, while the parser
-        /// collapses all of them in query_replica_zk_path_. Normalize the database path the same way before
-        /// comparing, otherwise a `Replicated('/path//', ...)` database keeps a leftover trailing slash, this
-        /// guard mismatches, and the local replica gets destructively dropped.
-        String replicated_zk_path = replicated->getZooKeeperPath();
-        while (replicated_zk_path.size() > 1 && replicated_zk_path.back() == '/')
-            replicated_zk_path.pop_back();
+        /// not block a drop targeting query_zk_name_. Canonicalize the database path the same way the parser
+        /// canonicalizes the query path: getZooKeeperPath() only strips a single trailing slash, so a database
+        /// created from "/a///" metadata keeps "/a/" and would otherwise slip past this self-protection guard.
+        const String replicated_zk_path
+            = zkutil::extractZooKeeperPathAndCollapseTrailingSlashes(replicated->getZooKeeperPath(), /*check_starts_with_slash*/ false);
         if (!query_replica_zk_path_.empty()
             && (fs::path(replicated_zk_path) != query_replica_zk_path_
                 || replicated->getZooKeeperName() != query_zk_name_))
