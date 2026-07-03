@@ -475,6 +475,24 @@ ATTACH TABLE tab_ttl_codec_attach;
 SELECT count() FROM tab_ttl_codec_attach;
 DROP TABLE tab_ttl_codec_attach;
 
+SELECT 'Legacy error-bound-mode aliases (ABS_OR_REL, NORM) stay loadable for backward compatibility';
+-- The original experimental SZ3 codec parsed the error-bound mode string directly through `SZ3::EB_MAP`, so it
+-- accepted every mode name, including 'ABS_OR_REL' and 'NORM' (L2 norm). Column codecs are reparsed on metadata
+-- load (including on ATTACH, where sanity checks are relaxed), so a table stored on such an earlier build must
+-- stay loadable after an upgrade rather than making the server fail to start. Both modes are still implemented
+-- by the compressor, so they also round-trip within the error bound. The DETACH/ATTACH below exercises the
+-- metadata-load path that reparses the stored codec.
+DROP TABLE IF EXISTS tab_legacy_mode;
+CREATE TABLE tab_legacy_mode (
+    a Float64 CODEC(SZ3('ALGO_INTERP', 'ABS_OR_REL', 0.001)),
+    b Float64 CODEC(SZ3('ALGO_INTERP', 'NORM', 0.001))
+) ENGINE = MergeTree ORDER BY tuple();
+INSERT INTO tab_legacy_mode VALUES (1.5, 2.5);
+DETACH TABLE tab_legacy_mode;
+ATTACH TABLE tab_legacy_mode;
+SELECT abs(a - 1.5) <= 0.1, abs(b - 2.5) <= 0.1 FROM tab_legacy_mode;
+DROP TABLE tab_legacy_mode;
+
 SELECT 'A compression block size that is not a multiple of the float width is rejected';
 -- SZ3 compresses whole values. `CompressedWriteBuffer` chunks the column stream into compressed blocks by the
 -- `max_compress_block_size` byte count, so a value is split across two blocks when that setting is not a

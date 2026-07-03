@@ -376,6 +376,15 @@ static SZ3::EB getSZ3ErrorBoundMode(const String & error_bound_mode)
         return SZ3::EB_PSNR;
     if (error_bound_mode == "ABS_AND_REL")
         return SZ3::EB_ABS_AND_REL;
+    /// Legacy aliases: the original experimental SZ3 codec parsed the mode string directly through
+    /// `SZ3::EB_MAP`, so it also accepted `NORM` (L2 norm) and `ABS_OR_REL`. Column codecs are reparsed
+    /// on metadata load (including `ATTACH`, where sanity checks are relaxed), so a table created on an
+    /// earlier build with one of these modes must stay loadable after an upgrade. Both are still
+    /// implemented by `doCompressData`, so they keep working; they are just not advertised above.
+    if (error_bound_mode == "NORM")
+        return SZ3::EB_L2NORM;
+    if (error_bound_mode == "ABS_OR_REL")
+        return SZ3::EB_ABS_OR_REL;
     throw Exception(
         ErrorCodes::ILLEGAL_CODEC_PARAMETER,
         "Unsupported error bound mode '{}' for codec 'SZ3'. Supported modes are "
