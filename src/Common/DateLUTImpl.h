@@ -429,6 +429,19 @@ private:
         return static_cast<DateOrTime>(rounded_towards_zero - d);
     }
 
+    /// Add `offset` to `base`, saturating at the boundaries of `Time` instead of overflowing (which is
+    /// undefined behavior). Interval rounding reconstructs the result as `date + offset`; for arguments far
+    /// outside any valid date range this sum can step just past the type boundary even though both operands
+    /// are individually representable. The result for such out-of-range values is meaningless anyway, so we
+    /// saturate to the nearest boundary.
+    static Time addSaturating(Time base, Time offset)
+    {
+        Time res = 0;
+        if (unlikely(__builtin_add_overflow(base, offset, &res)))
+            return offset < 0 ? std::numeric_limits<Time>::min() : std::numeric_limits<Time>::max();
+        return res;
+    }
+
     template <typename DateOrTime, typename Divisor>
     DateOrTime roundDown(DateOrTime x, Divisor divisor) const
     {
@@ -1492,7 +1505,13 @@ public:
           * the intervals can be shortened or prolonged to the amount of transition.
           */
 
-        UInt64 seconds = hours * 3600;
+        /// `hours` is only validated to be positive by the caller, so an extreme interval count can make
+        /// `hours * 3600` wrap. When it wraps to exactly zero (e.g. `toIntervalHour(4611686018427387904)`),
+        /// the division by `seconds` below would be undefined behaviour. Saturate the divisor instead; the
+        /// rounding result for such meaningless interval counts is discarded anyway.
+        UInt64 seconds = 0;
+        if (unlikely(__builtin_mul_overflow(hours, static_cast<UInt64>(3600), &seconds)))
+            seconds = std::numeric_limits<UInt64>::max();
 
         if constexpr (may_be_out_of_lut_range<DateOrTime>)
             if (unlikely(isOutOfLUTRange(t)))
@@ -1527,7 +1546,7 @@ public:
             time = time / seconds * seconds;
         }
 
-        Time res = values.date + time;
+        Time res = addSaturating(values.date, time);
         if constexpr (std::is_unsigned_v<DateOrTime> || std::is_same_v<DateOrTime, DayNum>)
         {
             if (unlikely(res < 0))
@@ -1541,7 +1560,16 @@ public:
     template <typename DateOrTime>
     DateOrTime toStartOfMinuteInterval(DateOrTime t, UInt64 minutes) const
     {
-        Int64 divisor = 60 * minutes;
+        /// `minutes` is only validated to be positive by the caller, so an extreme interval count can make
+        /// `60 * minutes` wrap, exactly as in `toStartOfHourInterval`. `INTERVAL 4611686018427387904 MINUTE`
+        /// wraps the product to exactly zero, which would then divide by zero in `roundDownToMultiple` (or in
+        /// the reconstruction below) before producing a result. Saturate the divisor to the maximum instead;
+        /// the rounding result for such meaningless interval counts is discarded anyway.
+        UInt64 product = 0;
+        if (unlikely(__builtin_mul_overflow(minutes, static_cast<UInt64>(60), &product)
+                     || product > static_cast<UInt64>(std::numeric_limits<Int64>::max())))
+            product = static_cast<UInt64>(std::numeric_limits<Int64>::max());
+        Int64 divisor = static_cast<Int64>(product);
 
         /// Checked before the fast path below: historical (pre-1900) offsets can have a sub-minute component,
         /// so for out-of-range values the fast path would round to a UTC boundary instead of the local one.
