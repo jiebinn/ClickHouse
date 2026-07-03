@@ -4094,7 +4094,11 @@ static ColumnConst::Ptr deserializeConstant(
     }
 
     auto column = type.createColumn();
-    type.getDefaultSerialization()->deserializeBinary(*column, in, FormatSettings{});
+    /// Default-constructed FormatSettings would apply its own default type-complexity limit; carry the
+    /// caller-resolved limit so types embedded in Dynamic/JSON constants honor the same guard as the rest of the plan.
+    FormatSettings format_settings;
+    format_settings.binary.max_binary_type_complexity = max_type_complexity;
+    type.getDefaultSerialization()->deserializeBinary(*column, in, format_settings);
     return ColumnConst::create(std::move(column), 0);
 }
 
