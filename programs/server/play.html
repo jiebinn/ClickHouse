@@ -3825,12 +3825,11 @@ function onTableActivate(elem, handler) {
     elem.addEventListener('click', handler);
     elem.addEventListener('auxclick', e => {
         if (e.button !== 1) return;
-        /// Cancel the middle click's native paste and arm the guard on the query editor, since
-        /// opening a new tab focuses it and Linux/X11 would otherwise paste the primary selection
-        /// into it. Cleared shortly after in case no paste fires (non-Linux, empty selection).
+        /// Cancel the middle click's native paste at the click site. The X11 PRIMARY paste that
+        /// would otherwise land in the query editor is guarded separately, around the actual
+        /// `query_area.focus()` in the new-tab path (see `activateTab`), so the guard cannot
+        /// expire before a slow activation focuses the editor.
         e.preventDefault();
-        suppress_middleclick_paste = true;
-        setTimeout(() => { suppress_middleclick_paste = false; }, 500);
         handler(e);
     });
     /// Suppress the browser's middle-click autoscroll so the gesture only opens a new tab.
@@ -3925,7 +3924,8 @@ async function loadTables(server_address, user, password, database, container, s
             } else if (e.button === 1 || e.shiftKey || e.ctrlKey || e.metaKey) {
                 /// Middle click or Shift/Ctrl/Cmd click - the gestures that open a link in a new
                 /// tab - open the query in a new Web UI tab instead of replacing the current one.
-                openQueryInNewTab(value);
+                /// Only a genuine middle click (button 1) needs the X11 PRIMARY paste guard.
+                openQueryInNewTab(value, e.button === 1);
             } else {
                 query_area.value = value;
                 query_area.dispatchEvent(new Event('input'));
@@ -4955,9 +4955,11 @@ let query_area = document.getElementById('query');
 
 /// Opening a table in a new tab via a middle click focuses the query editor. On Linux/X11 the
 /// middle button additionally pastes the PRIMARY selection into the freshly-focused editor,
-/// appending clipboard junk after the query we just set. `onTableActivate` arms this flag for
-/// such a gesture so we can swallow exactly that one paste; a real Ctrl+V is never affected
-/// (the flag is only ever set for the brief moment around a middle-click new-tab open).
+/// appending clipboard junk after the query we just set. The new-tab activation (`activateTab`
+/// with `guard_paste`) arms this flag right around that `query_area.focus()`, so we swallow
+/// exactly that one paste; a real Ctrl+V is never affected (the flag is only armed for the brief
+/// moment around a middle-click new-tab open, and is cleared by the paste itself or, if none
+/// fires, a short post-focus fallback).
 let suppress_middleclick_paste = false;
 query_area.addEventListener('paste', e => {
     if (suppress_middleclick_paste) {
@@ -5047,7 +5049,7 @@ function invalidateInFlight() {
 /// Load a tab's content into the editor and re-render its stored result.
 /// Routed through `restoreFromHistory` so the syntax backdrop, params and run
 /// buttons resync (it dispatches an 'input' event), exactly like history navigation.
-async function activateTab(id) {
+async function activateTab(id, guard_paste = false) {
     const tab = tabs.find(t => t.id === id);
     if (!tab) return;
     activeTabId = id;
@@ -5062,7 +5064,15 @@ async function activateTab(id) {
     /// even when there is no result to render (restoreFromHistory skips this otherwise).
     document.documentElement.style.setProperty('--background-color-rotate', queryToColor(tab.query));
     renderTabBar();
+    /// A middle-click new-tab open arms the X11 PRIMARY paste guard right around this focus, so
+    /// the paste Linux delivers to the freshly-focused editor is swallowed - and only that one.
+    /// Anchoring the guard here, rather than at the original `auxclick`, means a slow activation
+    /// can never let it expire before focus. It is cleared by the paste itself, or by a short
+    /// fallback below in case no paste fires (non-Linux, empty selection) so a later real Ctrl+V
+    /// is never swallowed.
+    if (guard_paste) suppress_middleclick_paste = true;
     query_area.focus();
+    if (guard_paste) setTimeout(() => { suppress_middleclick_paste = false; }, 250);
 }
 
 /// Switch tabs in response to a user click: capture the current tab, activate the
@@ -5092,15 +5102,16 @@ function addTab() {
 
 /// Like `addTab`, but the new tab starts pre-filled with `query` and becomes active.
 /// Used by the databases panel when a table is opened with a new-tab gesture (middle
-/// click or Shift/Ctrl/Cmd click).
-function openQueryInNewTab(query) {
+/// click or Shift/Ctrl/Cmd click). `guard_paste` is set for a genuine middle click, so
+/// the activation swallows the X11 PRIMARY paste that follows focusing the editor.
+function openQueryInNewTab(query, guard_paste = false) {
     markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
     captureActiveTab();
     refreshCurrentHistoryEntry(getActiveTab());
     const tab = makeTab(undefined, query);
     tabs.push(tab);
     activeTabId = tab.id;
-    activateTab(tab.id).then(syncHistory);
+    activateTab(tab.id, guard_paste).then(syncHistory);
     scheduleSave();
 }
 
