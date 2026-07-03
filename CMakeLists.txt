@@ -477,7 +477,11 @@ if (ENABLE_THINLTO AND NOT ENABLE_TESTS AND NOT SANITIZE)
         # CFI vtable visibility is still satisfied for in-binary types because
         # `-fwhole-program-vtables` and `-Wl,--lto-whole-program-visibility` (set above) cause
         # the linker to treat all vtables as internal to the binary.
-        set (CFI_FLAGS "-fsanitize=cfi-vcall,cfi-derived-cast -fno-sanitize-recover=cfi -fvisibility=default")
+        #
+        # `-fno-sanitize-trap=cfi` puts CFI in diagnostic mode: a violation prints a UBSan-style
+        # type/location report instead of trapping with a bare SIGSEGV, which is what makes
+        # WeeklyCFI failures triageable. `-fno-sanitize-recover=cfi` then aborts after the report.
+        set (CFI_FLAGS "-fsanitize=cfi-vcall,cfi-derived-cast -fno-sanitize-trap=cfi -fno-sanitize-recover=cfi -fvisibility=default")
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CFI_FLAGS}")
         set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO} ${CFI_FLAGS}")
     endif ()
