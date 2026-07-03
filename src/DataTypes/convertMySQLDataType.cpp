@@ -257,7 +257,13 @@ DataTypePtr convertMySQLDataType(MultiEnum<MySQLDataTypesSupport> type_support, 
             break;
 
         case enum_field_types::MYSQL_TYPE_GEOMETRY:
-            res = DataTypeFactory::instance().get("Point");
+            /// A query result set reports `MYSQL_TYPE_GEOMETRY` for a value of any spatial subtype
+            /// (`POINT`, `LINESTRING`, `POLYGON`, ...) without exposing which one it is, so the concrete
+            /// ClickHouse geometric type cannot be inferred here. Guessing `Point` makes reading any
+            /// non-`Point` value throw at read time (`Only Point data type is supported`), so the value is
+            /// left as the raw WKB `String` fallback instead. The concrete-type mapping controlled by
+            /// `mysql_datatypes_support_level` is applied only where MySQL exposes the concrete column type
+            /// (the table-name path, via the string overload above).
             break;
 
         case enum_field_types::MYSQL_TYPE_NULL:

@@ -66,7 +66,9 @@ namespace ErrorCodes
 namespace
 {
 /// Infer the structure of a result of a user-provided query by executing it with a `LIMIT 0` on the MySQL side.
-ColumnsDescription doQueryResultStructure(mysqlxx::PoolWithFailover & pool_, const String & select_query, const ContextPtr & context_);
+ColumnsDescription doQueryResultStructure(
+    mysqlxx::PoolWithFailover & pool_, const String & select_query, const ContextPtr & context_,
+    MultiEnum<MySQLDataTypesSupport> type_support);
 }
 
 StorageMySQL::StorageMySQL(
@@ -129,7 +131,7 @@ ColumnsDescription StorageMySQL::getTableStructureFromData(
     MultiEnum<MySQLDataTypesSupport> type_support)
 {
     if (table_or_query.isQuery())
-        return doQueryResultStructure(pool_, table_or_query.getQuery(), context_);
+        return doQueryResultStructure(pool_, table_or_query.getQuery(), context_, type_support);
 
     const auto & table = table_or_query.getTableName();
     const auto & settings = context_->getSettingsRef();
@@ -735,7 +737,9 @@ SETTINGS enable_compression = 1;
 
 namespace
 {
-ColumnsDescription doQueryResultStructure(mysqlxx::PoolWithFailover & pool_, const String & select_query, const ContextPtr & context_)
+ColumnsDescription doQueryResultStructure(
+    mysqlxx::PoolWithFailover & pool_, const String & select_query, const ContextPtr & context_,
+    MultiEnum<MySQLDataTypesSupport> type_support)
 {
     /// Wrap the query in a derived table and run it with `LIMIT 0` to obtain the result columns metadata
     /// without fetching any rows. The wrapping mirrors how the data is read later (see buildQueryForExternalDatabaseSubquery),
@@ -757,7 +761,7 @@ ColumnsDescription doQueryResultStructure(mysqlxx::PoolWithFailover & pool_, con
         columns.add(ColumnDescription(
             query_result.getFieldName(i),
             convertMySQLDataType(
-                settings[Setting::mysql_datatypes_support_level],
+                type_support,
                 field,
                 settings[Setting::external_table_functions_use_nulls])));
     }

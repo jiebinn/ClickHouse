@@ -1147,6 +1147,23 @@ def test_mysql_geometry(started_cluster):
     )
     node1.query("DROP TABLE IF EXISTS test_geometry_no_geo")
 
+    # Regression test (query-backed inference): a MySQL source defined over a *query* rather than a
+    # table name infers its columns from the query result-set metadata, which reports every spatial
+    # value as the generic `MYSQL_TYPE_GEOMETRY` without exposing the concrete subtype. It must not be
+    # guessed as `Point` - that made reading a non-`Point` value such as this `LINESTRING` throw
+    # `Only Point data type is supported` at read time - so it falls back to the raw WKB `String`.
+    # Before the fix the query-backed path also dropped the effective `mysql_datatypes_support_level`
+    # entirely (it read the global query context), so the per-call/per-engine opt-out was ignored.
+    table_function_query = f"mysql('mysql80:3306', 'clickhouse', query('SELECT ls FROM {table_name}'), 'root', '{mysql_pass}')"
+    # The concrete subtype is unknowable from query result metadata, so it is inferred as `String` (raw
+    # WKB), never a geometric type such as `Point`/`LineString` (nullability follows the query metadata).
+    ls_query_type = node1.query(
+        f"SELECT toTypeName(ls) FROM {table_function_query} LIMIT 1"
+    ).strip()
+    assert "String" in ls_query_type and "Point" not in ls_query_type
+    # The value reads back as raw WKB `String` without an exception (before the fix this threw).
+    assert len(node1.query(f"SELECT ls FROM {table_function_query}").strip()) > 0
+
     drop_mysql_table(conn, table_name)
     conn.close()
 
