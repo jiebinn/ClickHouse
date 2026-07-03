@@ -116,18 +116,20 @@ size_t DictionaryBlockBase::upperBound(std::string_view token) const
 }
 
 DictionarySparseIndex::DictionarySparseIndex(ColumnPtr tokens_, ColumnPtr offsets_in_file_)
-    : DictionaryBlockBase(std::move(tokens_)), offsets_in_file(std::move(offsets_in_file_))
+    : DictionaryBlockBase(std::move(tokens_))
 {
+    const auto & offsets_data = assert_cast<const ColumnUInt64 &>(*offsets_in_file_).getData();
+    offsets_in_file = BitPackedUInt64Array(std::span(offsets_data.begin(), offsets_data.end()));
 }
 
 UInt64 DictionarySparseIndex::getOffsetInFile(size_t idx) const
 {
-    return assert_cast<const ColumnUInt64 &>(*offsets_in_file).getData()[idx];
+    return offsets_in_file.get(idx);
 }
 
 size_t DictionarySparseIndex::memoryUsageBytes() const
 {
-    return sizeof(*this) + tokens->allocatedBytes() + offsets_in_file->allocatedBytes();
+    return sizeof(*this) + tokens->allocatedBytes() + offsets_in_file.allocatedBytes();
 }
 
 DictionaryBlock::DictionaryBlock(ColumnPtr tokens_, std::vector<TokenPostingsInfo> token_infos_, UInt64 tokens_format_)
@@ -1113,13 +1115,22 @@ void TextIndexSerialization::serializeHeader(const DictionarySparseIndex & spars
     if (version >= static_cast<MergeTreeIndexVersion>(TextIndexHeader::Version::WithPositions))
         writeVarUInt(static_cast<UInt64>(has_positions), ostr);
 
-    chassert(sparse_index.tokens->size() == sparse_index.offsets_in_file->size());
+    chassert(sparse_index.tokens->size() == sparse_index.offsets_in_file.size());
     auto serialization_string = SerializationString::create();
     auto serialization_number = SerializationNumber<UInt64>::create();
 
     writeVarUInt(sparse_index.tokens->size(), ostr);
     serialization_string->serializeBinaryBulk(*sparse_index.tokens, ostr, 0, sparse_index.tokens->size());
-    serialization_number->serializeBinaryBulk(*sparse_index.offsets_in_file, ostr, 0, sparse_index.offsets_in_file->size());
+
+    /// Offsets are stored bit-packed in memory, but serialized as plain UInt64 values.
+    auto offsets_column = ColumnUInt64::create();
+    auto & offsets_data = offsets_column->getData();
+    offsets_data.resize(sparse_index.offsets_in_file.size());
+
+    for (size_t i = 0; i < offsets_data.size(); ++i)
+        offsets_data[i] = sparse_index.offsets_in_file.get(i);
+
+    serialization_number->serializeBinaryBulk(*offsets_column, ostr, 0, offsets_column->size());
 }
 
 TextIndexHeader TextIndexSerialization::deserializeHeaderPrefix(ReadBuffer & istr)
@@ -1164,6 +1175,7 @@ TextIndexHeader TextIndexSerialization::deserializeHeader(ReadBuffer & istr)
     readVarUInt(num_sparse_index_tokens, istr);
 
     auto tokens = deserializeTokensRaw(istr, num_sparse_index_tokens);
+    tokens->assumeMutableRef().shrinkToFit();
     auto offsets = ColumnUInt64::create();
 
     auto serialization_number = SerializationNumber<UInt64>::create();

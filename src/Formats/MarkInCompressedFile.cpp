@@ -23,27 +23,6 @@ String MarkInCompressedFile::toStringWithRows(size_t rows_num) const
         + DB::toString(rows_num) + ")";
 }
 
-// Write a range of bits in a bit-packed array.
-// The array must be overallocated by one element.
-// The bit range must be pre-filled with zeros.
-static void writeBits(UInt64 * dest, size_t bit_offset, UInt64 value)
-{
-    size_t mod = bit_offset % 64;
-    dest[bit_offset / 64] |= value << mod;
-    if (mod)
-        dest[bit_offset / 64 + 1] |= value >> (64 - mod);
-}
-
-// The array must be overallocated by one element.
-static UInt64 readBits(const UInt64 * src, size_t bit_offset, size_t num_bits)
-{
-    size_t mod = bit_offset % 64;
-    UInt64 value = src[bit_offset / 64] >> mod;
-    if (mod)
-        value |= src[bit_offset / 64 + 1] << (64 - mod);
-    return value & maskLowBits<UInt64>(static_cast<unsigned char>(num_bits));
-}
-
 MarksInCompressedFile::MarksInCompressedFile(const PlainArray & marks)
     : num_marks(marks.size()), blocks((marks.size() + MARKS_PER_BLOCK - 1) / MARKS_PER_BLOCK, BlockInfo{})
 {
