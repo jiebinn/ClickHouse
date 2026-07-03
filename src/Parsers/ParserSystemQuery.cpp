@@ -217,16 +217,15 @@ enum class SystemQueryTargetType : uint8_t
             if (!ParserStringLiteral{}.parse(pos, path_ast, expected))
                 return false;
             String zk_path = path_ast->as<ASTLiteral &>().value.safeGet<String>();
-            if (!zk_path.empty() && zk_path[zk_path.size() - 1] == '/')
-                zk_path.pop_back();
-            /// An empty ZKPATH used to be silently dropped, so the query was kept as if no `FROM` clause
-            /// was given (`is_drop_whole_replica`). That formatted back to a different query, breaking the
-            /// AST format/parse round-trip. Reject it here instead.
-            if (zk_path.empty())
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path is empty");
+            /// Normalize the keeper path the same way the interpreter does, then reject empty/root-only paths.
+            if (!zk_path.empty())
+            {
+                res->zk_name = zkutil::extractZooKeeperName(zk_path);
+                res->replica_zk_path = zkutil::extractZooKeeperPath(zk_path, /*check_starts_with_slash*/ false);
+            }
+            if (res->replica_zk_path.find_first_not_of('/') == String::npos)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path in DROP REPLICA is empty or refers to the root");
             res->full_replica_zk_path = std::move(zk_path);
-            res->zk_name = zkutil::extractZooKeeperName(res->full_replica_zk_path);
-            res->replica_zk_path = zkutil::extractZooKeeperPath(res->full_replica_zk_path, /*check_starts_with_slash*/false);
         }
         else
             return false;
