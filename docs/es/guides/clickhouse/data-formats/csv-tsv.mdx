@@ -26,7 +26,7 @@ ENGINE = MergeTree
 ORDER BY tuple(month, path)
 ```
 
-Para importar datos del [archivo CSV](/es/assets/data_small.csv) a la tabla `sometable`, podemos pasar el archivo directamente a `clickhouse-client` mediante una tubería:
+Para importar datos del [archivo CSV](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) a la tabla `sometable`, podemos pasar el archivo directamente a `clickhouse-client` mediante una tubería:
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT CSV" < data_small.csv
@@ -51,7 +51,7 @@ Aquí usamos la cláusula `FORMAT CSV` para que ClickHouse reconozca el formato 
   ### Archivos CSV con encabezados
 </div>
 
-Supongamos que nuestro [archivo CSV incluye encabezados](/es/assets/data_small_headers.csv):
+Supongamos que nuestro [archivo CSV incluye encabezados](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv):
 
 ```bash
 head data-small-headers.csv
@@ -109,7 +109,7 @@ SELECT count(*) FROM file('data-small.csv', CSV)
 └─────────┘
 ```
 
-El [archivo](/es/assets/data_small.csv) tiene 1k filas, pero ClickHouse solo cargó 990, ya que le indicamos que omitiera las primeras 10.
+El [archivo](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) tiene 1k filas, pero ClickHouse solo cargó 990, ya que le indicamos que omitiera las primeras 10.
 
 <Tip>
   Al usar la función `file()`, en ClickHouse Cloud tendrás que ejecutar los comandos en `clickhouse client` en la máquina donde se encuentra el archivo. Otra opción es usar [`clickhouse-local`](/es/concepts/features/tools-and-utilities/clickhouse-local) para explorar archivos de forma local.
@@ -168,7 +168,7 @@ SELECT * FROM file('nulls.csv')
   ## Archivos TSV (separados por tabuladores)
 </div>
 
-El formato de datos separados por tabuladores se utiliza ampliamente como formato de intercambio de datos. Para cargar datos desde un [archivo TSV](/es/assets/data_small.tsv) en ClickHouse, se utiliza el formato [TabSeparated](/es/reference/formats/TabSeparated/TabSeparated):
+El formato de datos separados por tabuladores se utiliza ampliamente como formato de intercambio de datos. Para cargar datos desde un [archivo TSV](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) en ClickHouse, se utiliza el formato [TabSeparated](/es/reference/formats/TabSeparated/TabSeparated):
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT TabSeparated" < data_small.tsv
@@ -326,7 +326,7 @@ FORMAT CSVWithNamesAndTypes
 "2016_Greater_Western_Sydney_Giants_season","2017-05-01",86
 ```
 
-Este formato incluirá dos filas de encabezado: una con los nombres de las columnas y la otra con los tipos de columna. Esto permitirá que ClickHouse (y otras aplicaciones) identifiquen los tipos de columna al cargar datos desde [estos archivos](/es/assets/data_csv_types.csv):
+Este formato incluirá dos filas de encabezado: una con los nombres de las columnas y la otra con los tipos de columna. Esto permitirá que ClickHouse (y otras aplicaciones) identifiquen los tipos de columna al cargar datos desde [estos archivos](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv):
 
 ```sql
 DESCRIBE file('data_csv_types.csv', CSVWithNamesAndTypes)
@@ -364,7 +364,7 @@ SET format_custom_row_between_delimiter = ',';
 SET format_custom_escaping_rule = 'Quoted';
 ```
 
-Ahora podemos cargar datos desde nuestro [archivo con formato personalizado](/es/assets/data_small_custom.txt):
+Ahora podemos cargar datos desde nuestro [archivo con formato personalizado](/eshttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt):
 
 ```sql
 SELECT *

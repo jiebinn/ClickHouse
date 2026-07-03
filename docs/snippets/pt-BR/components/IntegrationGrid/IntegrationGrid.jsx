@@ -297,7 +297,7 @@ export const IntegrationGrid = () => {
       const fetchIntegrations = async () => {
         try {
           const base = typeof window !== "undefined" && window.location.pathname.startsWith("/docs") ? "/docs" : ""
-          const fallbackResponse = await fetch(base + "/assets/integrations-fallback.json", {
+          const fallbackResponse = await fetch(base + "https://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/integrations-fallback.json", {
             cache: "force-cache"
           })
 

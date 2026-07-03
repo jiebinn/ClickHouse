@@ -26,7 +26,7 @@ ENGINE = MergeTree
 ORDER BY tuple(month, path)
 ```
 
-لاستيراد البيانات من [ملف CSV](/ar/assets/data_small.csv) إلى الجدول `sometable`، يمكننا توجيه ملفنا مباشرةً إلى clickhouse-client:
+لاستيراد البيانات من [ملف CSV](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) إلى الجدول `sometable`، يمكننا توجيه ملفنا مباشرةً إلى clickhouse-client:
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT CSV" < data_small.csv
@@ -51,7 +51,7 @@ FORMAT CSV
   ### ملفات CSV ذات صف العناوين
 </div>
 
-لنفترض أن [ملف CSV يتضمن صف العناوين](/ar/assets/data_small_headers.csv):
+لنفترض أن [ملف CSV يتضمن صف العناوين](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_headers.csv):
 
 ```bash
 head data-small-headers.csv
@@ -109,7 +109,7 @@ SELECT count(*) FROM file('data-small.csv', CSV)
 └─────────┘
 ```
 
-يحتوي [الملف](/ar/assets/data_small.csv) على 1k صف، لكن ClickHouse حمّل 990 صفًا فقط لأننا طلبنا تخطي أول 10 صفوف.
+يحتوي [الملف](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.csv) على 1k صف، لكن ClickHouse حمّل 990 صفًا فقط لأننا طلبنا تخطي أول 10 صفوف.
 
 <Tip>
   عند استخدام الدالة `file()` في ClickHouse Cloud، ستحتاج إلى تشغيل الأوامر في `clickhouse client` على الجهاز الذي يوجد عليه الملف. وخيار آخر هو استخدام [`clickhouse-local`](/ar/concepts/features/tools-and-utilities/clickhouse-local) لاستكشاف الملفات محليًا.
@@ -168,7 +168,7 @@ SELECT * FROM file('nulls.csv')
   ## ملفات TSV (مفصولة بعلامات الجدولة)
 </div>
 
-يُستخدم تنسيق البيانات المفصول بعلامات الجدولة على نطاق واسع كتنسيق لتبادل البيانات. لتحميل البيانات من [ملف TSV](/ar/assets/data_small.tsv) إلى ClickHouse، يُستخدم التنسيق [TabSeparated](/ar/reference/formats/TabSeparated/TabSeparated):
+يُستخدم تنسيق البيانات المفصول بعلامات الجدولة على نطاق واسع كتنسيق لتبادل البيانات. لتحميل البيانات من [ملف TSV](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small.tsv) إلى ClickHouse، يُستخدم التنسيق [TabSeparated](/ar/reference/formats/TabSeparated/TabSeparated):
 
 ```bash
 clickhouse-client -q "INSERT INTO sometable FORMAT TabSeparated" < data_small.tsv
@@ -326,7 +326,7 @@ FORMAT CSVWithNamesAndTypes
 "2016_Greater_Western_Sydney_Giants_season","2017-05-01",86
 ```
 
-سيتضمن هذا التنسيق صفَّي ترويسة: أحدهما يتضمن أسماء الأعمدة، والآخر أنواع الأعمدة. يتيح ذلك لـ ClickHouse (وللتطبيقات الأخرى) التعرّف على أنواع الأعمدة عند تحميل البيانات من [ملفات مثل هذه](/ar/assets/data_csv_types.csv):
+سيتضمن هذا التنسيق صفَّي ترويسة: أحدهما يتضمن أسماء الأعمدة، والآخر أنواع الأعمدة. يتيح ذلك لـ ClickHouse (وللتطبيقات الأخرى) التعرّف على أنواع الأعمدة عند تحميل البيانات من [ملفات مثل هذه](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_csv_types.csv):
 
 ```sql
 DESCRIBE file('data_csv_types.csv', CSVWithNamesAndTypes)
@@ -364,7 +364,7 @@ SET format_custom_row_between_delimiter = ',';
 SET format_custom_escaping_rule = 'Quoted';
 ```
 
-الآن يمكننا تحميل البيانات من [ملف](/ar/assets/data_small_custom.txt) بتنسيقنا المخصّص:
+الآن يمكننا تحميل البيانات من [ملف](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/data_small_custom.txt) بتنسيقنا المخصّص:
 
 ```sql
 SELECT *

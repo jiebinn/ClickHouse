@@ -28,7 +28,7 @@ FORMAT SQLInsert
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-Теперь мы можем импортировать файл [dump.sql](/ru/assets/dump.sql) в другую OLTP-базу данных:
+Теперь мы можем импортировать файл [dump.sql](/ruhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) в другую OLTP-базу данных:
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-По умолчанию ClickHouse пропускает неизвестные столбцы (это управляется параметром [input&#95;format&#95;skip&#95;unknown&#95;fields](/ru/reference/settings/formats#input_format_skip_unknown_fields)) и обрабатывает данные для первой таблицы, найденной в дампе (если в один файл выгружено несколько таблиц). DDL-операторы будут пропущены. Чтобы загрузить данные из дампа MySQL в таблицу (файл [mysql.sql](/ru/assets/mysql.sql)):
+По умолчанию ClickHouse пропускает неизвестные столбцы (это управляется параметром [input&#95;format&#95;skip&#95;unknown&#95;fields](/ru/reference/settings/formats#input_format_skip_unknown_fields)) и обрабатывает данные для первой таблицы, найденной в дампе (если в один файл выгружено несколько таблиц). DDL-операторы будут пропущены. Чтобы загрузить данные из дампа MySQL в таблицу (файл [mysql.sql](/ruhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
 
 ```sql
 INSERT INTO some_data

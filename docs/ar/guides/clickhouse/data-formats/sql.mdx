@@ -28,7 +28,7 @@ FORMAT SQLInsert
 SET output_format_sql_insert_include_column_names = 0
 ```
 
-الآن يمكننا إدخال ملف [dump.sql](/ar/assets/dump.sql) إلى قاعدة بيانات OLTP أخرى:
+الآن يمكننا إدخال ملف [dump.sql](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/dump.sql) إلى قاعدة بيانات OLTP أخرى:
 
 ```bash
 mysql some_db < dump.sql
@@ -78,7 +78,7 @@ LIMIT 5
 └────────────────────────────────┴────────────┴──────┘
 ```
 
-افتراضيًا، يتخطّى ClickHouse الأعمدة غير المعروفة (ويتحكّم في ذلك الخيار [input&#95;format&#95;skip&#95;unknown&#95;fields](/ar/reference/settings/formats#input_format_skip_unknown_fields))، ويعالج البيانات لأول جدول يُعثر عليه في ملف تفريغ (إذا جرى تفريغ عدة جداول في ملف واحد). وسيتم تخطّي عبارات DDL. لتحميل البيانات من ملف تفريغ MySQL إلى جدول (ملف [mysql.sql](/ar/assets/mysql.sql)):
+افتراضيًا، يتخطّى ClickHouse الأعمدة غير المعروفة (ويتحكّم في ذلك الخيار [input&#95;format&#95;skip&#95;unknown&#95;fields](/ar/reference/settings/formats#input_format_skip_unknown_fields))، ويعالج البيانات لأول جدول يُعثر عليه في ملف تفريغ (إذا جرى تفريغ عدة جداول في ملف واحد). وسيتم تخطّي عبارات DDL. لتحميل البيانات من ملف تفريغ MySQL إلى جدول (ملف [mysql.sql](/arhttps://clickhouse-docs-assets.s3.us-east-1.amazonaws.com/mysql.sql)):
 
 ```sql
 INSERT INTO some_data
