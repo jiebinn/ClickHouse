@@ -8,7 +8,6 @@
 #include <Common/Exception.h>
 #include <base/demangle.h>
 #include <base/hex.h>
-#include <base/unaligned.h>
 #include <Compression/ICompressionCodec.h>
 #include <Compression/CompressionFactory.h>
 #include <IO/ReadBuffer.h>
@@ -349,33 +348,5 @@ off_t CompressedReadBufferBase::getPosition() const
 }
 
 CompressedReadBufferBase::~CompressedReadBufferBase() = default; /// Proper destruction of unique_ptr of forward-declared type.
-
-size_t getDecompressedSizeFromCompressedFile(ReadBuffer & in)
-{
-    /// Block layout: checksum, 9-byte header (method, compressed size incl. header, decompressed size), payload.
-    constexpr size_t checksum_size = sizeof(Checksum);
-
-    size_t decompressed_size = 0;
-    char header[checksum_size + COMPRESSED_BLOCK_HEADER_SIZE];
-
-    while (!in.eof())
-    {
-        in.readStrict(header, sizeof(header));
-
-        const char * block_header = header + checksum_size;
-        UInt32 size_compressed_without_checksum = unalignedLoadLittleEndian<UInt32>(&block_header[1]);
-        UInt32 size_decompressed = unalignedLoadLittleEndian<UInt32>(&block_header[5]);
-
-        if (size_compressed_without_checksum < COMPRESSED_BLOCK_HEADER_SIZE)
-            throw Exception(ErrorCodes::CORRUPTED_DATA,
-                "Corrupted compressed block header: compressed size {} is less than header size {}",
-                size_compressed_without_checksum, static_cast<size_t>(COMPRESSED_BLOCK_HEADER_SIZE));
-
-        decompressed_size += size_decompressed;
-        in.ignore(size_compressed_without_checksum - COMPRESSED_BLOCK_HEADER_SIZE);
-    }
-
-    return decompressed_size;
-}
 
 }

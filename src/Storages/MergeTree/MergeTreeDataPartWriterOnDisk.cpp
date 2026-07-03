@@ -436,6 +436,15 @@ void MergeTreeDataPartWriterOnDisk::fillSkipIndicesChecksums(MergeTreeData::Data
                 /// buffer; finalize hands them to skip_indices_packed_writer. No per-file
                 /// checksum entry -- the archive's single checksum covers it.
                 stream->finalize();
+
+                /// Record uncompressed size in the archive index so the size accounting doesn't
+                /// have to read the payload back. Virtual name matches the one passed above.
+                if (MergeTreeIndexSubstream::isCompressed(type))
+                {
+                    PackedFilesWriter * packed_writer =
+                        skip_indices_packed_writer ? skip_indices_packed_writer.get() : skip_indices_packed_writer_borrowed;
+                    packed_writer->setUncompressedSize(logical_key + index_substreams[substream_idx].extension, stream->getDataUncompressedSize());
+                }
             }
             else
             {
@@ -454,7 +463,7 @@ void MergeTreeDataPartWriterOnDisk::fillSkipIndicesChecksums(MergeTreeData::Data
         skip_indices_packed_file = getDataPartStorage().writeFile(packed_filename, DBMS_DEFAULT_BUFFER_SIZE, settings.query_write_settings);
         HashingWriteBuffer packed_hashing(*skip_indices_packed_file);
 
-        auto [packed_index, _] = skip_indices_packed_writer->finalize(packed_hashing);
+        auto [packed_index, _] = skip_indices_packed_writer->finalize(packed_hashing, {}, PackedFilesIO::VERSION_WITH_UNCOMPRESSED_SIZE);
         packed_hashing.finalize();
 
         auto & checksum = checksums.files[packed_filename];
