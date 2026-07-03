@@ -1,3 +1,5 @@
+#include <memory>
+#include <optional>
 #include <Analyzer/QueryNode.h>
 #include <Analyzer/UnionNode.h>
 #include <Columns/ColumnConst.h>
@@ -651,7 +653,7 @@ static std::pair<std::vector<ConnectionPoolPtr>, size_t> prepareConnectionPoolsF
     return {pools_to_use, max_replicas_to_use};
 }
 
-static std::optional<size_t> findLocalReplicaIndexAndUpdatePools(std::vector<ConnectionPoolPtr> & pools, size_t max_replicas_to_use, const ClusterPtr & cluster)
+static size_t findLocalReplicaIndexAndUpdatePools(std::vector<ConnectionPoolPtr> & pools, size_t max_replicas_to_use, const ClusterPtr & cluster)
 {
     const auto & shard = cluster->getShardsInfo().at(0);
 
@@ -688,7 +690,7 @@ static std::optional<size_t> findLocalReplicaIndexAndUpdatePools(std::vector<Con
         local_replica_index = max_replicas_to_use - 1;
     }
     pools.resize(max_replicas_to_use);
-    return local_replica_index;
+    return *local_replica_index;
 }
 
 void executeQueryWithParallelReplicas(
@@ -731,7 +733,7 @@ void executeQueryWithParallelReplicas(
             processed_stage,
             coordinator,
             std::move(analyzed_read_from_merge_tree),
-            local_replica_index.value());
+            local_replica_index);
 
         if (!with_parallel_replicas || connection_pools.size() == 1)
         {
@@ -759,7 +761,7 @@ void executeQueryWithParallelReplicas(
         auto stub_local_plan = std::make_unique<QueryPlan>();
         stub_local_plan->addStep(std::move(read_from_local));
 
-        LOG_DEBUG(logger, "Local replica got replica number {}", local_replica_index.value());
+        LOG_DEBUG(logger, "Local replica got replica number {}", local_replica_index);
 
         auto read_from_remote = std::make_unique<ReadFromParallelRemoteReplicasStep>(
             query_ast,
@@ -824,37 +826,54 @@ void executeQueryWithParallelReplicas(
     }
 }
 
-void applyParallelReplicasSplit(QueryPlan & query_plan, ContextPtr context)
+QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr context)
 {
-    if (!query_plan.isInitialized())
-        return;
+    if (!plan_fragment->isInitialized())
+        return nullptr;
 
     if (!canUseParallelReplicasOnInitiator(context))
-        return;
+        return nullptr;
 
-    /// Applicability is decided on the plan: we need exactly one reading step we can distribute, and it
-    /// must be a MergeTree read that is not already reading from replicas.
-    const bool allow_view = context->getSettingsRef()[Setting::parallel_replicas_allow_view_over_mergetree];
-    auto reading_nodes = findReadingSteps(query_plan.getRootNode(), allow_view);
-    if (reading_nodes.size() != 1)
-        return;
+    auto logger = getLogger("executeParallelReplicasPlanFragment");
 
-    /// FIXME: consider all nodes
-    auto * read_node = reading_nodes.front();
-    auto * read_step = typeid_cast<ReadFromMergeTree *>(read_node->step.get());
-    if (!read_step)
-        return;
+    auto [cluster, shard_num] = prepareClusterForParallelReplicas(logger, context);
+    auto new_context = updateContextForParallelReplicas(logger, context, shard_num);
+    auto [connection_pools, max_replicas_to_use] = prepareConnectionPoolsForParallelReplicas(logger, new_context, cluster);
+    if (connection_pools.size() == 1)
+        return nullptr;
 
-    if (read_step->isQueryWithFinal())
-        return;
+    auto coordinator = std::make_shared<ParallelReplicasReadingCoordinator>(max_replicas_to_use);
 
-    QueryPlan logical_read_plan;
-    logical_read_plan.addStep(std::move(read_node->step));
-    QueryPlanStepPtr split_step
-        = std::make_unique<DB::ParallelReplicasSplitStep>(logical_read_plan.getRootNode()->step->getOutputHeader(), context);
-    logical_read_plan.addStep(std::move(split_step));
+    const auto & settings = new_context->getSettingsRef();
+    if (settings[Setting::allow_experimental_analyzer] && settings[Setting::parallel_replicas_local_plan]
+        && settings[Setting::parallel_replicas_prefer_local_replica])
+    {
+        auto local_replica_index = findLocalReplicaIndexAndUpdatePools(connection_pools, max_replicas_to_use, cluster);
 
-    query_plan.replaceNodeWithPlan(read_node, std::move(logical_read_plan));
+        auto plan_fragment_clone = std::make_unique<QueryPlan>(plan_fragment->clone());
+        auto local_plan
+            = createLocalPlanFragmentForParallelReplicas(context, std::move(plan_fragment_clone), coordinator, local_replica_index);
+
+        auto remote_plan = createRemotePlanFragmentForParallelReplicas(
+            context, std::move(plan_fragment), coordinator, cluster, connection_pools, local_replica_index);
+
+        SharedHeaders input_headers;
+        input_headers.reserve(2);
+        input_headers.emplace_back(local_plan->getCurrentHeader());
+        input_headers.emplace_back(remote_plan->getCurrentHeader());
+
+        std::vector<QueryPlanPtr> plans;
+        plans.emplace_back(std::move(local_plan));
+        plans.emplace_back(std::move(remote_plan));
+
+        auto union_step = std::make_unique<UnionStep>(std::move(input_headers));
+        auto query_plan = std::make_unique<QueryPlan>();
+        query_plan->unitePlans(std::move(union_step), std::move(plans));
+    }
+    else {
+    }
+
+    return nullptr;
 }
 
 void executeQueryWithParallelReplicas(

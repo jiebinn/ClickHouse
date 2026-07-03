@@ -29,6 +29,8 @@ public:
 
     const ContextPtr & getContext() const { return context; }
 
+    QueryPlanStepPtr clone() const override;
+
 private:
     void updateOutputHeader() override { output_header = input_headers.front(); }
 

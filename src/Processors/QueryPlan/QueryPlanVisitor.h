@@ -2,7 +2,7 @@
 
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/IQueryPlanStep.h>
-#include <Poco/Logger.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {

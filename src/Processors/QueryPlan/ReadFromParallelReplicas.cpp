@@ -89,61 +89,23 @@ namespace FailPoints
     extern const char parallel_replicas_wait_for_unused_replicas[];
 }
 
-static void addConvertingActions(Pipe & pipe, const Block & header, const ContextPtr & context, bool use_positions_to_match = false)
-{
-    if (blocksHaveEqualStructure(pipe.getHeader(), header))
-        return;
-
-    auto match_mode = use_positions_to_match ? ActionsDAG::MatchColumnsMode::Position : ActionsDAG::MatchColumnsMode::Name;
-
-    auto get_converting_dag = [mode = match_mode, context](const Block & block_, const Block & header_)
-    {
-        /// Convert header structure to expected.
-        /// Also we ignore constants from result and replace it with constants from header.
-        /// It is needed for functions like `now64()` or `randConstant()` because their values may be different.
-        return ActionsDAG::makeConvertingActions(
-            block_.getColumnsWithTypeAndName(),
-            header_.getColumnsWithTypeAndName(),
-            mode,
-            context,
-            true);
-    };
-
-    if (use_positions_to_match)
-        pipe.addSimpleTransform([](const SharedHeader & stream_header) { return std::make_shared<MaterializingTransform>(stream_header); });
-
-    auto convert_actions = std::make_shared<ExpressionActions>(get_converting_dag(pipe.getHeader(), header));
-    pipe.addSimpleTransform([&](const SharedHeader & cur_header, Pipe::StreamType) -> ProcessorPtr
-    {
-        return std::make_shared<ExpressionTransform>(cur_header, convert_actions);
-    });
-}
-
 ReadFromParallelReplicasStep::ReadFromParallelReplicasStep(
     ClusterPtr cluster_,
-    const StorageID & storage_id_,
     ParallelReplicasReadingCoordinatorPtr coordinator_,
-    SharedHeader header_,
-    ContextMutablePtr context_,
-    ThrottlerPtr throttler_,
-    Scalars scalars_,
-    Tables external_tables_,
-    LoggerPtr log_,
-    std::shared_ptr<const StorageLimitsList> storage_limits_,
+    ContextPtr context_,
     std::vector<ConnectionPoolPtr> pools_to_use_,
     std::optional<size_t> exclude_pool_index_,
     ConnectionPoolWithFailoverPtr connection_pool_with_failover_,
     std::shared_ptr<const QueryPlan> query_plan_)
-    : ISourceStep(std::move(header_))
+    : ISourceStep(query_plan_->getRootNode()->step->getOutputHeader())
     , cluster(cluster_)
-    , storage_id(storage_id_)
     , coordinator(std::move(coordinator_))
     , context(context_)
-    , throttler(throttler_)
-    , scalars(scalars_)
-    , external_tables{external_tables_}
-    , storage_limits(std::move(storage_limits_))
-    , log(log_)
+    // , throttler(throttler_)
+    // , scalars(scalars_)
+    // , external_tables{external_tables_}
+    // , storage_limits(std::move(storage_limits_))
+    , log(getLogger(this->getName()))
     , pools_to_use(std::move(pools_to_use_))
     , exclude_pool_index(exclude_pool_index_)
     , connection_pool_with_failover(connection_pool_with_failover_)
@@ -172,8 +134,8 @@ void ReadFromParallelReplicasStep::initializePipeline(QueryPipelineBuilder & pip
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
 
-    for (const auto & processor : pipe.getProcessors())
-        processor->setStorageLimits(storage_limits);
+    // for (const auto & processor : pipe.getProcessors())
+    //     processor->setStorageLimits(storage_limits);
 
     pipeline.init(std::move(pipe));
 }
@@ -262,19 +224,18 @@ Pipe ReadFromParallelReplicasStep::createPipeForSingeReplica(
         dumpQueryPlan(*query_plan),
         out_header,
         context,
-        throttler,
-        scalars,
-        external_tables,
+        ThrottlerPtr{},
+        Scalars{},
+        Tables{},
         QueryProcessingStage::QueryPlan,
         RemoteQueryExecutor::Extension{.parallel_reading_coordinator = coordinator, .replica_info = std::move(replica_info)},
         connection_pool_with_failover,
         query_plan);
 
     remote_query_executor->setLogger(log);
-    remote_query_executor->setMainTable(storage_id);
     remote_query_executor->setDistributedFanout(pools_to_use.size() - (exclude_pool_index.has_value() ? 1 : 0));
 
-    Pipe pipe = createRemoteSourcePipe(
+    return createRemoteSourcePipe(
         std::move(remote_query_executor),
         add_agg_info,
         add_totals,
@@ -282,8 +243,8 @@ Pipe ReadFromParallelReplicasStep::createPipeForSingeReplica(
         async_read,
         async_query_sending,
         parallel_marshalling_threads);
-    addConvertingActions(pipe, *out_header, context);
-    return pipe;
+    // addConvertingActions(pipe, *out_header, context);
+    // return pipe;
 }
 
 void ReadFromParallelReplicasStep::describeDistributedPlan(FormatSettings & settings, const ExplainPlanOptions & options)

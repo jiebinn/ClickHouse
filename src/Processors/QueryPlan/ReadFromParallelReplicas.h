@@ -23,15 +23,8 @@ class ReadFromParallelReplicasStep : public ISourceStep
 public:
     ReadFromParallelReplicasStep(
         ClusterPtr cluster_,
-        const StorageID & storage_id_,
         ParallelReplicasReadingCoordinatorPtr coordinator_,
-        SharedHeader header_,
-        ContextMutablePtr context_,
-        ThrottlerPtr throttler_,
-        Scalars scalars_,
-        Tables external_tables_,
-        LoggerPtr log_,
-        std::shared_ptr<const StorageLimitsList> storage_limits_,
+        ContextPtr context_,
         std::vector<ConnectionPoolPtr> pools_to_use,
         std::optional<size_t> exclude_pool_index_ = std::nullopt,
         ConnectionPoolWithFailoverPtr connection_pool_with_failover_ = nullptr,
@@ -44,7 +37,6 @@ public:
     void describeDistributedPlan(FormatSettings & settings, const ExplainPlanOptions & options) override;
     void describeDistributedPipeline(FormatSettings & settings, bool distributed) override;
 
-    StorageID getStorageID() const { return storage_id; }
     ParallelReplicasReadingCoordinatorPtr getCoordinator() const { return coordinator; }
 
 private:
@@ -57,13 +49,8 @@ private:
         size_t parallel_marshalling_threads);
 
     ClusterPtr cluster;
-    StorageID storage_id;
     ParallelReplicasReadingCoordinatorPtr coordinator;
-    ContextMutablePtr context;
-    ThrottlerPtr throttler;
-    Scalars scalars;
-    Tables external_tables;
-    std::shared_ptr<const StorageLimitsList> storage_limits;
+    ContextPtr context;
     LoggerPtr log;
     std::vector<ConnectionPoolPtr> pools_to_use;
     std::optional<size_t> exclude_pool_index;

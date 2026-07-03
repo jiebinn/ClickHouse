@@ -1,15 +1,17 @@
-#include <Processors/QueryPlan/ParallelReplicasSplitStep.h>
-#include <Processors/QueryPlan/ReadFromMergeTree.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/Optimizations/Optimizations.h>
+#include <memory>
 #include <Interpreters/ClusterProxy/executeQuery.h>
-#include <Processors/QueryPlan/ReadFromParallelReplicas.h>
-#include <Processors/QueryPlan/QueryPlanVisitor.h>
+#include <Processors/QueryPlan/AggregatingStep.h>
 #include <Processors/QueryPlan/BuildRuntimeFilterStep.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/AggregatingStep.h>
 #include <Processors/QueryPlan/MergingAggregatedStep.h>
+#include <Processors/QueryPlan/Optimizations/Optimizations.h>
+#include <Processors/QueryPlan/Optimizations/Utils.h>
+#include <Processors/QueryPlan/ParallelReplicasSplitStep.h>
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/QueryPlanVisitor.h>
+#include <Processors/QueryPlan/ReadFromMergeTree.h>
+#include <Processors/QueryPlan/ReadFromParallelReplicas.h>
 
 namespace DB
 {
@@ -29,11 +31,22 @@ public:
     {
     }
 
-    bool visitTopDownImpl(QueryPlan::Node *, QueryPlan::Node *) { return true; }
+    bool visitTopDownImpl(QueryPlan::Node *, QueryPlan::Node *)
+    {
+        // if (!parent_node)
+        //     return true;
+        //
+        // // there is no need to visit nodes below split step
+        // auto * split_step = typeid_cast<ParallelReplicasSplitStep *>(parent_node->step.get());
+        // if (split_step)
+        //     return false;
+        //
+        return true;
+    }
 
     void visitBottomUpImpl(QueryPlan::Node * current_node, QueryPlan::Node * parent_node)
     {
-        auto * original_split_step = typeid_cast<ParallelReplicasSplitStep*>(current_node->step.get());
+        auto * original_split_step = typeid_cast<ParallelReplicasSplitStep *>(current_node->step.get());
         if (!original_split_step)
             return;
 
@@ -69,7 +82,8 @@ public:
 
             /// Add gather
             auto & new_split_node = nodes.emplace_back();
-            new_split_node.step = std::make_unique<ParallelReplicasSplitStep>(partial_aggregation_node.step->getOutputHeader(), original_split_step->getContext());
+            new_split_node.step = std::make_unique<ParallelReplicasSplitStep>(
+                partial_aggregation_node.step->getOutputHeader(), original_split_step->getContext());
             new_split_node.children = {&partial_aggregation_node};
 
             /// Replace original aggregation step with MergingAggregated step
@@ -95,14 +109,77 @@ public:
     }
 };
 
-void applyParallelReplicas(QueryPlan::Node & node, QueryPlan::Nodes & nodes, const QueryPlanOptimizationSettings & );
+class ConvertToDistributedVisitor : public QueryPlanVisitor<ConvertToDistributedVisitor, debug_logging_enabled>
+{
+    QueryPlan & query_plan;
 
-void applyParallelReplicas(QueryPlan::Node & node, QueryPlan::Nodes & nodes, const QueryPlanOptimizationSettings & settings)
+public:
+    explicit ConvertToDistributedVisitor(QueryPlan & query_plan_)
+        : QueryPlanVisitor<ConvertToDistributedVisitor, debug_logging_enabled>(query_plan_.getRootNode())
+        , query_plan(query_plan_)
+    {
+    }
+
+    bool visitTopDownImpl(QueryPlan::Node *, QueryPlan::Node *)
+    {
+        // if (!parent_node)
+        //     return true;
+        //
+        // // there is no need to visit nodes below split step
+        // auto * split_step = typeid_cast<ParallelReplicasSplitStep *>(parent_node->step.get());
+        // if (split_step)
+        //     return false;
+
+        return true;
+    }
+
+    void visitBottomUpImpl(QueryPlan::Node * current_node, QueryPlan::Node *)
+    {
+        auto * split_step = typeid_cast<ParallelReplicasSplitStep *>(current_node->step.get());
+        if (!split_step)
+            return;
+
+        // build plan fragment
+        auto plan_fragment = buildPlanFragment(current_node);
+
+        auto parallel_replicas_plan = ClusterProxy::createParallelReplicasPlan(std::move(plan_fragment), split_step->getContext());
+        if (!parallel_replicas_plan)
+            return;
+
+        query_plan.replaceNodeWithPlan(current_node, std::move(*parallel_replicas_plan));
+    }
+
+private:
+    QueryPlanPtr buildPlanFragment(QueryPlan::Node * split_node)
+    {
+        auto plan_fragment = std::make_unique<QueryPlan>();
+
+        Stack stack;
+        traverseQueryPlan(
+            stack,
+            *split_node,
+            [&](auto &) {},
+            [&](auto & node)
+            {
+                auto clone_step = node.step->clone();
+                plan_fragment->addStep(std::move(clone_step));
+            });
+
+        return plan_fragment;
+    }
+};
+
+
+void applyParallelReplicas(QueryPlan & query_plan, QueryPlan::Nodes & nodes, const QueryPlanOptimizationSettings &);
+
+void applyParallelReplicas(QueryPlan & query_plan, QueryPlan::Nodes & nodes, const QueryPlanOptimizationSettings & settings)
 {
     if (!settings.enable_parallel_replicas)
         return;
 
-    ApplyParallelReplicasVisitor(&node, nodes).visit();
+    ApplyParallelReplicasVisitor(query_plan.getRootNode(), nodes).visit();
+
+    ConvertToDistributedVisitor(query_plan).visit();
 }
 
 }

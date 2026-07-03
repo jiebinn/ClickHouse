@@ -4,7 +4,9 @@
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPipeline/QueryPipeline.h>
+#include <Common/Logger_fwd.h>
 
+#include <memory>
 #include <optional>
 
 namespace DB
@@ -23,6 +25,7 @@ using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
 class Pipe;
 class QueryPlan;
+using QueryPlanPtr = std::unique_ptr<QueryPlan>;
 
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
@@ -127,8 +130,7 @@ void executeQueryWithParallelReplicas(
     std::shared_ptr<const StorageLimitsList> storage_limits,
     QueryPlanStepPtr read_from_merge_tree);
 
-/// inject parallel replicas split step into plan
-void applyParallelReplicasSplit(QueryPlan & query_plan, ContextPtr context);
+QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr query_plan, ContextPtr context);
 
 void executeQueryWithParallelReplicasCustomKey(
     QueryPlan & query_plan,
