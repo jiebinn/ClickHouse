@@ -140,9 +140,9 @@ ReaderExecutor::ReaderExecutor(
 ReaderExecutor::~ReaderExecutor()
 {
     /// Release any held connection (drains a small tail to complete it, frees its slot, and
-    /// accounts an incomplete drop if it was abandoned mid-response). The drain does remote I/O,
-    /// so a throw here -- e.g. on a cancelled query -- must not escape a destructor (it would
-    /// `std::terminate`); the slot still releases via `long_conn`'s own destruction.
+    /// accounts an incomplete drop if it was abandoned mid-response). `dropLong`'s drain is
+    /// best-effort and non-throwing, but keep a guard so nothing escapes a destructor -- a throw
+    /// would `std::terminate`; the slot still releases via `long_conn`'s own destruction.
     try
     {
         dropLong();
@@ -189,14 +189,26 @@ size_t ReaderExecutor::LongConnection::skipForward(size_t gap, size_t block_byte
     return skipped;
 }
 
-size_t ReaderExecutor::LongConnection::drainTail(size_t max_tail, size_t block_bytes)
+ReaderExecutor::LongConnection::DrainResult
+ReaderExecutor::LongConnection::drainTail(size_t max_tail, size_t block_bytes, LoggerPtr logger) noexcept
 {
     if (current_position >= read_until)
-        return 0;
+        return {};
     const size_t tail = read_until - current_position;
     if (tail > max_tail)
-        return 0;
-    return skipForward(tail, block_bytes);
+        return {};
+    /// The drained tail is discarded -- it only lets the underlying HTTP connection return to the
+    /// keep-alive pool -- so a read error here must not abort an otherwise valid query. Swallow it
+    /// and report the failure; the caller then releases the connection as incomplete.
+    try
+    {
+        return {.bytes = skipForward(tail, block_bytes), .failed = false};
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, "Failed to drain a held source connection; releasing it as incomplete");
+        return {.bytes = 0, .failed = true};
+    }
 }
 
 size_t ReaderExecutor::clampReach(size_t reach, size_t logical_pos) const
@@ -287,19 +299,23 @@ void ReaderExecutor::dropLong()
 {
     if (!long_conn)
         return;
-    /// Drain a small remaining tail so the connection completes and returns to the pool;
-    /// the drain reports whether it stopped short of its bound (EOF).
+    /// Drain a small remaining tail so the connection completes and returns to the pool. The drain
+    /// is best-effort (`drainTail` never throws): it reports whether it stopped short of its bound
+    /// (EOF) and whether a read error interrupted it.
     bool ended_at_eof = false;
+    bool drain_failed = false;
     if (!long_conn->atBound())
     {
-        const size_t drained = long_conn->drainTail(max_tail_for_drain, block_size);
-        if (drained)
-            stats.add(Stats::BytesFromSource, drained);
-        ended_at_eof = drained > 0 && !long_conn->atBound();
+        const auto drain = long_conn->drainTail(max_tail_for_drain, block_size, log);
+        if (drain.bytes)
+            stats.add(Stats::BytesFromSource, drain.bytes);
+        drain_failed = drain.failed;
+        ended_at_eof = !drain_failed && drain.bytes > 0 && !long_conn->atBound();
     }
     /// A connection abandoned mid-response (transferred, not complete) is not pool-reusable;
-    /// one that never transferred (its lazy GET never issued) is excluded.
-    if (long_conn->consumedAnyBytes() && !long_conn->isComplete(ended_at_eof))
+    /// one that never transferred (its lazy GET never issued) is excluded. A failed drain leaves the
+    /// connection in an unknown state, so it is always incomplete.
+    if (drain_failed || (long_conn->consumedAnyBytes() && !long_conn->isComplete(ended_at_eof)))
         stats.add(Stats::IncompleteConnections);
     long_conn.reset();
 }

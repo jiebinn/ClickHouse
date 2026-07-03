@@ -148,9 +148,17 @@ private:
         size_t readInto(char * dst, size_t want);
         /// Discard up to `gap` bytes on the stream (over-read) to advance over a hole.
         size_t skipForward(size_t gap, size_t block_bytes);
+
+        struct DrainResult
+        {
+            size_t bytes = 0;   /// bytes actually drained
+            bool failed = false;   /// a read error interrupted the drain
+        };
         /// If only a tail <= `max_tail` remains to the bound, read it out so the connection
-        /// completes (pool-reusable). Returns bytes drained.
-        size_t drainTail(size_t max_tail, size_t block_bytes);
+        /// completes (pool-reusable). The drained bytes are discarded (keep-alive only), so a read
+        /// error here must not fail the query: it is caught, logged, and reported via
+        /// `DrainResult::failed`. Best-effort -- never throws.
+        DrainResult drainTail(size_t max_tail, size_t block_bytes, LoggerPtr log) noexcept;
     };
 
     /// At known size, EOF is `position >= totalSize`. At unknown size, a short

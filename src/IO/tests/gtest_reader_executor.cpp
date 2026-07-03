@@ -37,6 +37,11 @@ namespace ProfileEvents
     extern const Event ReaderExecutorLongConnectionBytes;
 }
 
+namespace DB::ErrorCodes
+{
+    extern const int CANNOT_READ_ALL_DATA;
+}
+
 using namespace DB;
 
 namespace
@@ -118,6 +123,67 @@ public:
 
 private:
     std::shared_ptr<const std::string> data;
+};
+
+/// An external-buffer source (like `ExternalBufferReader`) that throws once it has delivered more
+/// than `budget` bytes, simulating a transient failure / closed stream mid-response. The budget is
+/// per buffer instance, so a freshly opened buffer starts over -- letting a test fail the drain on a
+/// held connection while a subsequently opened connection reads cleanly.
+class FaultBudgetReader : public ReadBufferFromFileBase
+{
+public:
+    FaultBudgetReader(std::shared_ptr<const std::string> data_, size_t budget_)
+        : ReadBufferFromFileBase(/*buf_size=*/0, /*existing_memory=*/nullptr, /*alignment=*/0, data_->size())
+        , data(std::move(data_)), budget(budget_)
+    {
+    }
+
+    bool nextImpl() override
+    {
+        const size_t cap = read_until ? std::min(*read_until, data->size()) : data->size();
+        if (file_pos >= cap || internal_buffer.empty())
+            return false;
+        const size_t n = std::min(internal_buffer.size(), cap - file_pos);
+        if (delivered + n > budget)
+            throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "FaultBudgetReader: injected read failure past budget");
+        memcpy(internal_buffer.begin(), data->data() + file_pos, n);
+        working_buffer = Buffer(internal_buffer.begin(), internal_buffer.begin() + n);
+        pos = working_buffer.begin();
+        file_pos += n;
+        delivered += n;
+        return n != 0;
+    }
+
+    off_t seek(off_t off, int) override { file_pos = static_cast<size_t>(off); resetWorkingBuffer(); return off; }
+    off_t getPosition() override { return static_cast<off_t>(file_pos) - static_cast<off_t>(available()); }
+    String getFileName() const override { return "fault_mock"; }
+    void setReadUntilPosition(size_t position) override { read_until = position; }
+    void setReadUntilEnd() override { read_until.reset(); }
+    bool supportsRightBoundedReads() const override { return true; }
+    bool supportsExternalBufferMode() const override { return true; }
+
+private:
+    std::shared_ptr<const std::string> data;
+    size_t budget;
+    size_t file_pos = 0;
+    size_t delivered = 0;
+    std::optional<size_t> read_until;
+};
+
+class FaultBudgetSourceReader : public IFileBasedSourceReader
+{
+public:
+    FaultBudgetSourceReader(std::shared_ptr<const std::string> data_, size_t budget_)
+        : data(std::move(data_)), budget(budget_) {}
+    std::unique_ptr<ReadBufferFromFileBase> open(const StoredObject &) override
+    {
+        return std::make_unique<FaultBudgetReader>(data, budget);
+    }
+    String name() const override { return "FaultBudgetSourceReader"; }
+
+private:
+    std::shared_ptr<const std::string> data;
+    size_t budget;
 };
 
 class ReaderExecutorTest : public ::testing::Test
@@ -557,6 +623,53 @@ TEST_F(ReaderExecutorTest, IncompleteConnectionOnAbandonedDrop)
     ASSERT_GE(tg.get(ProfileEvents::ReaderExecutorLongConnectionOpened), 1u);
     ex.seek(0);
     ex.readNextWindow();   /// drops the held connection (backward, undrained tail)
+    EXPECT_GE(tg.get(ProfileEvents::ReaderExecutorIncompleteConnections), 1u);
+}
+
+TEST_F(ReaderExecutorTest, DrainFailureDoesNotAbortQuery)
+{
+    /// The drain in `dropLong` is best-effort: it completes the held GET on discarded tail bytes so
+    /// the connection returns to the keep-alive pool. If the held response throws while draining,
+    /// the query must NOT fail -- the connection is released as incomplete and the required
+    /// (backward) read still succeeds on a fresh connection. Fails before the fix, when the drain
+    /// exception escaped `dropLong` on the foreground path.
+    TestThreadGroup tg;
+    constexpr size_t size = 2 * 1024 * 1024;
+    constexpr size_t block = 128 * 1024;
+    auto data = std::make_shared<std::string>(size, '\0');
+    for (size_t i = 0; i < size; ++i)
+        (*data)[i] = static_cast<char>(patternByte(i));
+    StoredObject obj;
+    obj.remote_path = "fault_mock";
+    obj.bytes_size = size;
+
+    auto limit = std::make_shared<LongConnectionLimit>(4);
+    /// budget covers the one window served through the long connection (`block`), but the drain --
+    /// which reads the remaining tail up to the bound -- crosses it and throws. A fresh connection
+    /// (opened for the backward read) starts with a full budget again.
+    ReaderExecutor ex(std::make_shared<FaultBudgetSourceReader>(data, /*budget=*/block + block / 2),
+        StoredObjects{obj}, ReaderExecutor::Options{
+            .min_bytes_for_seek = 2 * 1024 * 1024, .block_size = block,
+            .max_tail_for_drain = size, .long_connection_limit = limit});
+
+    /// Open a long connection with a large bound (an undrained tail remains), serving one window.
+    for (int i = 0; i < 8 && tg.get(ProfileEvents::ReaderExecutorLongConnectionOpened) == 0; ++i)
+        ex.readNextWindow();
+    ASSERT_GE(tg.get(ProfileEvents::ReaderExecutorLongConnectionOpened), 1u);
+
+    /// Backward seek: `dropLong` drains the tail and the held buffer throws past its budget. The
+    /// drain is swallowed; the required read must still return correct data without throwing.
+    ex.seek(0);
+    ChainedBuffers w;
+    ASSERT_NO_THROW(w = ex.readNextWindow());
+    ASSERT_FALSE(w.atEnd());
+    const auto span = w.peek();
+    ASSERT_EQ(span.logical_offset, 0u);
+    ASSERT_GE(span.size, block);
+    for (size_t i = 0; i < block; ++i)
+        ASSERT_EQ(static_cast<unsigned char>(span.data[i]), patternByte(i)) << "at " << i;
+
+    /// The failed drain leaves the connection incomplete.
     EXPECT_GE(tg.get(ProfileEvents::ReaderExecutorIncompleteConnections), 1u);
 }
 
