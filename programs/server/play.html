@@ -824,27 +824,26 @@
             font-size: 90%;
         }
 
-        /* Type icon to the left of the column name: either an inline SVG (Date/DateTime)
-           or a small monospace text badge (09, AZ, [], {}, (,)). */
+        /* Type icon to the left of the column name. Every icon is an SVG in the same 24x24
+           viewBox and the same box here, so they all render at identical dimensions (both the
+           line drawings for Date/DateTime and the text labels 09, Aa, [], {}, (,), T), which
+           also keeps the column names aligned. */
         .column-type-icon
         {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
             width: 1.4em;
             height: 1em;
-            vertical-align: -0.1em;
-            margin-right: 0.25em;
+            vertical-align: -0.15em;
+            margin-right: 0.3em;
             flex-shrink: 0;
             opacity: 0.5;
         }
 
-        .column-type-badge
+        /* The text-label icons are SVG <text>; size them here (font-size is in viewBox units). */
+        .column-type-badge text
         {
             font-family: 'Liberation Mono', 'DejaVu Sans Mono', monospace;
-            font-size: 0.7em;
             font-weight: bold;
-            letter-spacing: -0.06em;
+            font-size: 15px;
         }
 
         .columns-loading
@@ -894,12 +893,15 @@
             transition: opacity 0s 0.1s;
         }
 
-        /* Show the balloon when the row (or one of its links) is focused via
-           keyboard navigation, mirroring the hover behaviour above. Scoped to the
-           row's own button (not the whole `.table`, which would also match when a
-           nested column is focused) so the table balloon only appears for the table. */
-        .table > button:focus-within .table-addendum,
-        .table-column:focus-within .column-addendum
+        /* Show the balloon when the row (or one of its balloon links) is focused via the
+           keyboard, mirroring the hover behaviour above. Uses `:focus-visible` (not `:focus`
+           / `:focus-within`) so a mouse click - which focuses the button but not "visibly" -
+           does not leave the balloon stuck open after the pointer moves away; only keyboard
+           focus reveals it. `:has(:focus-visible)` covers a focused balloon link inside the
+           button; the bare `:focus-visible` covers the button itself. Scoped to the row's own
+           button so a focused nested column does not also reveal the table balloon. */
+        .table > button:is(:focus-visible, :has(:focus-visible)) .table-addendum,
+        .table-column > button:is(:focus-visible, :has(:focus-visible)) .column-addendum
         {
             opacity: 1;
             pointer-events: auto;
@@ -924,8 +926,8 @@
            balloons (e.g. when the stationary cursor also happens to be over the
            focused row). Placed after the suppress rule so it wins the specificity
            tie. */
-        body.suppress-balloons .table > button:focus-within .table-addendum,
-        body.suppress-balloons .table-column:focus-within .column-addendum
+        body.suppress-balloons .table > button:is(:focus-visible, :has(:focus-visible)) .table-addendum,
+        body.suppress-balloons .table-column > button:is(:focus-visible, :has(:focus-visible)) .column-addendum
         {
             opacity: 1;
             pointer-events: auto;
@@ -3977,19 +3979,48 @@ function setQueryOrRun(e, value) {
     e.stopPropagation();
 }
 
-/// A small monospace text badge used as a data-type icon, e.g. `09`, `AZ`, `[]`, `{}`, `(,)`.
-function makeColumnBadge(text) {
-    const span = document.createElement('span');
-    span.className = 'column-type-icon column-type-badge';
-    span.textContent = text;
-    return span;
+/// Every data-type icon is an SVG in the same 24x24 viewBox, so they all render at exactly the
+/// same dimensions - whether the glyph is a line drawing (Date/DateTime) or a short text label
+/// (`09`, `Aa`, `[]`, `{}`, `(,)`, `T`).
+function makeColumnSVG() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.classList.add('column-type-icon');
+    return svg;
 }
 
-/// An inline SVG data-type icon, sharing the sizing/opacity of the text badges above.
+/// A line-drawing data-type icon (no fill, stroked with the current text color).
 function makeColumnIcon(...paths) {
-    const svg = makeSVG('0 0 24 24', ...paths);
-    svg.classList.remove('table-icon');
-    svg.classList.add('column-type-icon');
+    const svg = makeColumnSVG();
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    for (const d of paths)
+    {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+    }
+    return svg;
+}
+
+/// A short text label rendered as an SVG glyph, centered in the same box as the line icons.
+/// `textLength` pins every label to the same width so 1-, 2- and 3-character labels line up.
+function makeColumnBadge(text) {
+    const svg = makeColumnSVG();
+    svg.classList.add('column-type-badge');
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', '12');
+    t.setAttribute('y', '12.5');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.setAttribute('fill', 'currentColor');
+    t.setAttribute('textLength', text.length > 1 ? '17' : '9');
+    t.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+    t.textContent = text;
+    svg.appendChild(t);
     return svg;
 }
 
@@ -4005,20 +4036,20 @@ function getColumnTypeIcon(type) {
     if (/^(?:Map\s*\(|JSON\b|Object\b)/.test(t)) return makeColumnBadge('{}');
     if (/^(?:Tuple|Nested)\s*\(/.test(t)) return makeColumnBadge('(,)');
 
-    /// Date - calendar.
+    /// Date - calendar. Drawn within a central region so its visual size matches the text glyphs.
     if (/^Date(?:32)?$/.test(t))
         return makeColumnIcon(
-            'M4 5 h16 v16 h-16 z',       // body
-            'M4 9 h16',                   // header separator
-            'M8 3 v4', 'M16 3 v4');       // binding rings
+            'M5 7 h14 v12 h-14 z',       // body
+            'M5 10.5 h14',                // header separator
+            'M9 5 v3', 'M15 5 v3');       // binding rings
     /// DateTime - clock.
     if (/^DateTime/.test(t))
         return makeColumnIcon(
-            'M12 2 a10 10 0 1 0 0 20 a10 10 0 1 0 0 -20', // dial
-            'M12 7 v5 l3.5 2');                            // hands
+            'M12 6 a6 6 0 1 0 0 12 a6 6 0 1 0 0 -12', // dial
+            'M12 9 v3.5 l2.5 1.5');                    // hands
 
     if (/^(?:U?Int|Float|BFloat|Decimal|Bool)/.test(t)) return makeColumnBadge('09');
-    if (/^(?:String|FixedString|Enum|UUID|IPv[46])/.test(t)) return makeColumnBadge('AZ');
+    if (/^(?:String|FixedString|Enum|UUID|IPv[46])/.test(t)) return makeColumnBadge('Aa');
 
     /// Fallback for everything else (e.g. `AggregateFunction`, geo types, `Nothing`).
     return makeColumnBadge('T');
@@ -4080,20 +4111,24 @@ function renderColumns(columns_elem, data, database, table_name_str) {
 
         button.append(name_elem, type_elem);
 
-        /// Hover balloon: compressed and uncompressed size, and the compression ratio.
-        let addendum = document.createElement('span');
-        addendum.className = 'column-addendum';
-        let lines = [
-            `Compressed: ${formatReadableBytes(compressed)}`,
-            `Uncompressed: ${formatReadableBytes(uncompressed)}`,
-        ];
-        if (compressed) lines.push(`Ratio: ${Number(uncompressed / compressed).toFixed(2)}×`);
-        addendum.textContent = lines.join('\n');
-        button.appendChild(addendum);
+        /// Hover balloon: compressed and uncompressed size, and the compression ratio. Only
+        /// shown when at least one size is known and non-zero (e.g. `Memory` tables or columns
+        /// that have never been written report zero sizes, so there is nothing worth showing).
+        if (compressed || uncompressed) {
+            let addendum = document.createElement('span');
+            addendum.className = 'column-addendum';
+            let lines = [
+                `Compressed: ${formatReadableBytes(compressed)}`,
+                `Uncompressed: ${formatReadableBytes(uncompressed)}`,
+            ];
+            if (compressed) lines.push(`Ratio: ${Number(uncompressed / compressed).toFixed(2)}×`);
+            addendum.textContent = lines.join('\n');
+            button.appendChild(addendum);
 
-        name_elem.addEventListener('mouseenter', () => positionColumnBalloon(column));
-        /// Show the balloon when the row is focused via keyboard navigation, too.
-        button.addEventListener('focus', () => positionColumnBalloon(column));
+            name_elem.addEventListener('mouseenter', () => positionColumnBalloon(column));
+            /// Show the balloon when the row is focused via keyboard navigation, too.
+            button.addEventListener('focus', () => positionColumnBalloon(column));
+        }
 
         column.appendChild(button);
         column.addEventListener('click', e => setQueryOrRun(e, `SELECT "${col.name}" FROM "${database}"."${table_name_str}" LIMIT 100`));
