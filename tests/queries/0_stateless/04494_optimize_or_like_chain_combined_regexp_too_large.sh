@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Tags: long
 # A long OR chain of raw `match()` predicates on the same expression. When `multiMatchAny` is not
 # used (here the chain contains raw `match()` regexps, so it is kept off the Vectorscan path), the
 # rewrite would merge the whole chain into a single combined `match(s, '(p0)|(p1)|...')` regexp.
@@ -15,9 +16,11 @@
 # `z{1000}` tokens (~100000 RE2 instructions per branch, still far below the 8 MiB per-pattern budget),
 # and the 20 branches merge into a ~2000000-instruction alternation, ~2x over the budget. A handful of
 # large branches reproduces the same over-budget combined program that thousands of `z{1000}` branches
-# would, but keeps the OR-chain AST small so a single run stays fast: the flaky check runs each new
-# test many times and fails a single run over 180s, and a chain of thousands of branches took minutes
-# per run under sanitizers.
+# would, while keeping the OR-chain AST small enough to compile in seconds instead of minutes under
+# sanitizers. Compiling ~2000000 RE2 instructions per run is still inherently slow, and the flaky check
+# runs each new test many times, so the accumulated time trips its 180s soft cap under `tsan`. The test
+# is genuinely long, so it carries the `long` tag, which exempts it from that flaky-check cap (a single
+# run stays well under the 600s hard timeout).
 
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
