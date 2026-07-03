@@ -20,8 +20,9 @@ namespace DB
 
 static constexpr UInt64 DEFAULT_AI_MAX_TOKENS = 1024;
 
-/// Value kind of an AI-function parameter. Map values are always strings on the wire; the kind
-/// tells the resolver how to parse each one (and how to read the same key from a named collection).
+/// Logical type of an AI-function parameter. The parameter map is `Map(String, String)`, so every
+/// value arrives as a `String`; the kind tells the resolver how to parse each one into its real type
+/// (and how to read the same key from a named collection).
 enum class AIParamKind
 {
     String,

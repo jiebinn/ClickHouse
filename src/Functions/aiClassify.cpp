@@ -198,7 +198,7 @@ are taken from the `credentials` key of the optional parameter map, or from the
         .arguments = {
             {"text", "Text to classify.", {"String"}},
             {"categories", "Constant list of candidate category labels.", {"Array(String)"}},
-            {"params", "Optional constant `Map(String, String)` of parameters: `credentials`, `temperature`, `max_tokens`, `model`.", {"Map(String, String)"}},
+            {"params", "Optional constant `Map(String, String)` of parameters. Keys: `credentials` (named collection with provider credentials; defaults to the `ai_function_text_default_credentials` setting), `model` (overrides the collection's model), `max_tokens` (maximum output tokens per call; default `1024`), `temperature` (sampling temperature controlling randomness; default `0.0`).", {"Map(String, String)"}},
         },
         .returned_value = {"One of the provided category labels, or the default value for the column type (empty string) if the request failed and `ai_function_throw_on_error` is disabled.", {"String"}},
         .examples = {

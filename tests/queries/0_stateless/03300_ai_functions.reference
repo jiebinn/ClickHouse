@@ -41,6 +41,7 @@ result	String
 -- Non-constant parameter map rejected
 -- Wrong type for parameter argument (not a map)
 -- Wrong map value type (Map(String, Float) not accepted)
+-- Map in the prompt position rejected
 -- Setting defaults
 ai_function_embedding_default_credentials	
 ai_function_embedding_max_batch_size	100

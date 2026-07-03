@@ -93,7 +93,7 @@ are taken from the `credentials` key of the optional parameter map, or from the
         .arguments = {
             {"text", "Text to translate.", {"String"}},
             {"target_language", "Target language name or BCP-47 code (e.g. `'French'`, `'es-MX'`).", {"String"}},
-            {"params", "Optional constant `Map(String, String)` of parameters: `credentials`, `instructions`, `temperature`, `max_tokens`, `model`.", {"Map(String, String)"}},
+            {"params", "Optional constant `Map(String, String)` of parameters. Keys: `credentials` (named collection with provider credentials; defaults to the `ai_function_text_default_credentials` setting), `model` (overrides the collection's model), `max_tokens` (maximum output tokens per call; default `1024`), `temperature` (sampling temperature controlling randomness; default `0.3`), `instructions` (additional style or dialect instructions for the translator).", {"Map(String, String)"}},
         },
         .returned_value = {"The translated text, or the default value for the column type (empty string) if the request failed and `ai_function_throw_on_error` is disabled.", {"String"}},
         .examples = {

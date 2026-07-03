@@ -86,7 +86,7 @@ not set, the default is: `)" + String(default_system_prompt) + R"(`
         .syntax = "aiGenerate(prompt[, params])",
         .arguments
         = {{"prompt", "The user prompt or question to send to the model.", {"String"}},
-           {"params", "Optional constant `Map(String, String)` of parameters: `credentials`, `system_prompt`, `temperature`, `max_tokens`, `model`.", {"Map(String, String)"}}},
+           {"params", "Optional constant `Map(String, String)` of parameters. Keys: `credentials` (named collection with provider credentials; defaults to the `ai_function_text_default_credentials` setting), `model` (overrides the collection's model), `max_tokens` (maximum output tokens per call; default `1024`), `temperature` (sampling temperature controlling randomness; default `0.7`), `system_prompt` (constant system-level instruction guiding the model's behavior; default a generic assistant prompt).", {"Map(String, String)"}}},
         .returned_value = {"The generated text response, or the default value for the column type (empty string) if the request failed and `ai_function_throw_on_error` is disabled.", {"String"}},
         .examples
         = {{"Simple question", "SELECT aiGenerate('What is 2 + 2? Reply with just the number.')", "4"},

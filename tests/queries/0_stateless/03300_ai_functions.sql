@@ -258,6 +258,9 @@ SELECT aiGenerate(x, 'notamap') FROM tab; -- { serverError ILLEGAL_TYPE_OF_ARGUM
 SELECT '-- Wrong map value type (Map(String, Float) not accepted)';
 SELECT aiGenerate(x, map('temperature', 0.5)) FROM tab; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 
+SELECT '-- Map in the prompt position rejected';
+SELECT aiGenerate(map('credentials', 'ai_credentials')); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+
 -- =============================================================================
 -- 13. Setting types and defaults
 -- =============================================================================

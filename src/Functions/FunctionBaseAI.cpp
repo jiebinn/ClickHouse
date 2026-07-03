@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <exception>
 #include <thread>
+#include <utility>
 #include <Common/logger_useful.h>
 #include <Common/NamedCollections/NamedCollectionsFactory.h>
 #include <Common/RemoteHostFilter.h>
@@ -56,7 +57,6 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int SUPPORT_IS_DISABLED;
-    extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -86,49 +86,55 @@ void checkUIntFitsInt64(UInt64 value, std::string_view name)
             name, std::numeric_limits<Int64>::max());
 }
 
-/// Parse a map value (always a string on the wire) into a `Field` of the parameter's kind.
+/// Parse a map value (string) into a `Field` of the parameter's kind.
 Field parseAIParamValue(AIParamKind kind, const String & raw, std::string_view name)
 {
-    if (kind == AIParamKind::String)
-        return Field(raw);
-
-    if (kind == AIParamKind::Float)
+    switch (kind)
     {
-        try
+        case AIParamKind::String:
+            return Field(raw);
+        case AIParamKind::Float:
+            try
+            {
+                return Field(parseFromString<Float64>(raw));
+            }
+            catch (...)
+            {
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "AI function parameter '{}' must be a number, got '{}'", name, raw);
+            }
+        case AIParamKind::UInt:
         {
-            return Field(parseFromString<Float64>(raw));
-        }
-        catch (...)
-        {
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "AI function parameter '{}' must be a number, got '{}'", name, raw);
+            /// Special UInt64 handling to avoid potential overflow
+            UInt64 value;
+            ReadBufferFromString buf(raw);
+            if (!tryReadIntText<ReadIntTextCheckOverflow::CHECK_OVERFLOW>(value, buf) || !buf.eof())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "AI function parameter '{}' must be a non-negative integer, got '{}'", name, raw);
+            checkUIntFitsInt64(value, name);
+            return Field(value);
         }
     }
-
-    /// AIParamKind::UInt. Overflow-checked so a value above UInt64 max is rejected rather than
-    /// silently wrapping (e.g. "18446744073709551616" -> 0); the Int64 cap is applied on top.
-    UInt64 value;
-    ReadBufferFromString buf(raw);
-    if (!tryReadIntText<ReadIntTextCheckOverflow::CHECK_OVERFLOW>(value, buf) || !buf.eof())
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "AI function parameter '{}' must be a non-negative integer, got '{}'", name, raw);
-    checkUIntFitsInt64(value, name);
-    return Field(value);
+    std::unreachable();
 }
 
 /// Read a parameter's fallback value from the named collection (used when `inherit_from_collection`).
 Field readAIParamFromCollection(AIParamKind kind, const NamedCollectionPtr & collection, std::string_view name)
 {
     const String key(name);
-    if (kind == AIParamKind::String)
-        return Field(collection->get<String>(key));
-
-    if (kind == AIParamKind::Float)
-        return Field(collection->get<Float64>(key));
-
-    /// AIParamKind::UInt
-    UInt64 value = collection->get<UInt64>(key);
-    checkUIntFitsInt64(value, name);
-    return Field(value);
+    switch (kind)
+    {
+        case AIParamKind::String:
+            return Field(collection->get<String>(key));
+        case AIParamKind::Float:
+            return Field(collection->get<Float64>(key));
+        case AIParamKind::UInt:
+        {
+            UInt64 value = collection->get<UInt64>(key);
+            checkUIntFitsInt64(value, name);
+            return Field(value);
+        }
+    }
+    std::unreachable();
 }
 
 }
@@ -171,8 +177,7 @@ namespace
 const Field & getResolvedAIParam(const std::map<String, Field, std::less<>> & values, std::string_view key)
 {
     auto it = values.find(key);
-    if (it == values.end())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "AI function parameter '{}' was not resolved", key);
+    chassert(it != values.end());
     return it->second;
 }
 
