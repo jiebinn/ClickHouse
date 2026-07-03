@@ -283,12 +283,13 @@ struct PatternInfo
     }
 
     /// Returns true if no regexp contains an embedded NUL byte. Used to gate both regexp rewrite
-    /// targets — `multiMatchAny` and the combined-`match` fallback — because neither reproduces the
-    /// original predicate faithfully when a pattern contains an embedded NUL: `multiMatchAny` compiles
-    /// through a NUL-terminated Vectorscan API and truncates at the first NUL (so a `LIKE`-derived
-    /// regexp such as `^a\x00.` matches a broader set than the original `like`/`ilike`, which uses
-    /// length-aware RE2), and the combined `(p1)|(p2)|...` alternation defeats RE2's required-substring
-    /// truncation (so it matches a different set than the per-branch chain). When any pattern has an
+    /// targets — `multiMatchAny` and the combined-`match` fallback — off chains that contain an
+    /// embedded NUL. `multiMatchAny` compiles through a NUL-terminated Vectorscan API and truncates at
+    /// the first NUL (so a `LIKE`-derived regexp such as `^a\x00.` matches a broader set than the
+    /// original `like`/`ilike`, which uses length-aware RE2) — this path must be gated for correctness.
+    /// The combined `(p1)|(p2)|...` alternation is matched by the same length-aware RE2 as the originals
+    /// (RE2 matches `\0` literally — see commit `2655ec4ea51`), so it reproduces embedded NUL faithfully;
+    /// the gate is kept there too so one check governs both regexp targets. When any pattern has an
     /// embedded NUL we keep the originals on both paths. The byte-oriented `multiSearchAny*` substring
     /// path is length-aware and preserving, so it needs no such guard.
     [[maybe_unused]] bool allRegexpsHaveNoEmbeddedNul() const
@@ -555,10 +556,11 @@ void ConvertFunctionOrLikeData::visit(ASTFunction & function, ASTPtr & /*ast*/) 
                         /// pre-compile the merged regexp (`combinedRegexpCompilesWithRE2`) and only emit
                         /// the combined `match` when it compiles; otherwise we fall through to the `else`
                         /// below and keep the originals.
-                        /// `allRegexpsHaveNoEmbeddedNul` excludes patterns with an embedded NUL: RE2
-                        /// truncates a lone pattern at the first NUL but not the `(p1)|(p2)|...`
-                        /// alternation, so the combined `match` would match a different (narrower) set
-                        /// than the original chain. Such groups fall through to the `else` below and
+                        /// `allRegexpsHaveNoEmbeddedNul` also gates this path: the combined
+                        /// `(p1)|(p2)|...` alternation is matched by the same length-aware RE2 as the
+                        /// originals (RE2 matches `\0` literally — see commit `2655ec4ea51`), so it
+                        /// reproduces embedded NUL faithfully; the gate is kept here too so one check
+                        /// governs both regexp targets. Such groups fall through to the `else` below and
                         /// keep the originals, so results are preserved regardless of `allow_hyperscan`.
                         match_fn = makeASTFunction("match", key_data.identifier, make_intrusive<ASTLiteral>(Field{info.getCombinedRegexp()}));
                     }

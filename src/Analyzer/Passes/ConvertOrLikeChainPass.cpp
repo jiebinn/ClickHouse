@@ -301,15 +301,17 @@ struct PatternInfo
     }
 
     /// Returns true if no regexp contains an embedded NUL byte. Used to gate both regexp rewrite
-    /// targets — `multiMatchAny` and the combined-`match` fallback — because neither reproduces the
-    /// original predicate faithfully when a pattern contains an embedded NUL:
+    /// targets — `multiMatchAny` and the combined-`match` fallback — off chains that contain an
+    /// embedded NUL:
     ///  - `multiMatchAny` compiles each pattern through a NUL-terminated Vectorscan API and truncates
     ///    it at the first NUL, whereas a `LIKE`/`ILIKE`-derived regexp (e.g. `^a\x00.` from
     ///    `LIKE 'a\0_%'`) is matched by the original `like`/`ilike` with RE2 over the full length, so
-    ///    the truncated `multiMatchAny` pattern matches a *broader* set than the original.
-    ///  - the combined `(p1)|(p2)|...` alternation built by `getCombinedRegexp` does not get truncated
-    ///    by RE2's required-substring optimization (which truncates a *lone* trivial pattern at the
-    ///    first NUL), so it matches a *different* set than the original per-branch chain.
+    ///    the truncated `multiMatchAny` pattern matches a *broader* set than the original. This path
+    ///    must be gated for correctness.
+    ///  - the combined `(p1)|(p2)|...` alternation built by `getCombinedRegexp` is matched by the same
+    ///    length-aware RE2 engine as the original per-branch `like`/`match` (RE2 matches `\0` literally
+    ///    — see commit `2655ec4ea51`), so it reproduces embedded NUL faithfully; the gate is kept on
+    ///    this path so a single `allRegexpsHaveNoEmbeddedNul` check governs both regexp targets.
     /// When any pattern has an embedded NUL we therefore keep the originals on both paths. The
     /// byte-oriented `multiSearchAny*` substring path is length-aware and preserving, so it needs no
     /// such guard.
@@ -608,12 +610,13 @@ public:
                     /// and throws `CANNOT_COMPILE_REGEXP`. We therefore additionally pre-compile the merged
                     /// regexp and emit the combined `match` only when it compiles; otherwise we keep the
                     /// original branches (see `combinedRegexpCompilesWithRE2`).
-                    /// `allRegexpsHaveNoEmbeddedNul` excludes patterns with an embedded NUL: RE2's
-                    /// required-substring optimization truncates a lone pattern at the first NUL, but the
-                    /// `(p1)|(p2)|...` alternation does not, so the combined `match` would match a
-                    /// *different* (narrower) set than the original per-branch `match`/`LIKE` chain. When
-                    /// any pattern has an embedded NUL we leave `match_function` null and keep the
-                    /// originals, so the result is preserved regardless of `allow_hyperscan` or the build.
+                    /// `allRegexpsHaveNoEmbeddedNul` also gates this path. The combined `(p1)|(p2)|...`
+                    /// alternation is matched by the same length-aware RE2 as the original per-branch
+                    /// `match`/`LIKE` (RE2 matches `\0` literally — see commit `2655ec4ea51`), so it would
+                    /// reproduce embedded NUL faithfully; the gate is kept here too so one
+                    /// `allRegexpsHaveNoEmbeddedNul` check governs both regexp targets. When any pattern
+                    /// has an embedded NUL we leave `match_function` null and keep the originals, so the
+                    /// result is preserved regardless of `allow_hyperscan` or the build.
                     String combined_regexp = info.getCombinedRegexp();
                     if (combinedRegexpCompilesWithRE2(combined_regexp))
                     {
