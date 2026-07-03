@@ -13,13 +13,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
-#include <Common/ProfileEvents.h>
 #include <Common/assert_cast.h>
-
-namespace ProfileEvents
-{
-extern const Event SparseOffsetsShareConsumed;
-}
 
 namespace DB
 {
@@ -222,29 +216,10 @@ size_t readOrGetCachedSparseOffsets(
     if (cached_element)
     {
         const auto & cached_offsets_element = assert_cast<const SubstreamsCacheSparseOffsetsElement &>(*cached_element);
+        num_read_offsets = cached_offsets_element.offsets->size() - cached_offsets_element.old_size;
         read_rows = cached_offsets_element.read_rows;
         skipped_values_rows = cached_offsets_element.skipped_values_rows;
-        if (cached_offsets_element.offsets)
-        {
-            num_read_offsets = cached_offsets_element.offsets->size() - cached_offsets_element.old_size;
-            ISerialization::insertDataFromCachedColumn(settings, offsets_column, cached_offsets_element.offsets, num_read_offsets, cache);
-        }
-        else
-        {
-            /// Deferred slice seeded by `SparseOffsetsShare`: append `src[i] + shift` directly
-            /// into `offsets_column`, saving the intermediate `ColumnUInt64` alloc and
-            /// `insertRangeFrom` copy the materialised path would do.
-            auto & offsets_data = assert_cast<ColumnUInt64 &>(offsets_column->assumeMutableRef()).getData();
-            const size_t old_data_size = offsets_data.size();
-            num_read_offsets = cached_offsets_element.slice_count;
-            offsets_data.resize(old_data_size + num_read_offsets);
-            UInt64 * __restrict__ dst = offsets_data.data() + old_data_size;
-            const UInt64 * __restrict__ src = cached_offsets_element.slice_source_begin;
-            const UInt64 shift = cached_offsets_element.slice_shift;
-            for (size_t i = 0; i < num_read_offsets; ++i)
-                dst[i] = src[i] + shift;
-            ProfileEvents::increment(ProfileEvents::SparseOffsetsShareConsumed);
-        }
+        ISerialization::insertDataFromCachedColumn(settings, offsets_column, cached_offsets_element.offsets, num_read_offsets, cache);
     }
     else if (auto * stream = settings.getter(settings.path))
     {
@@ -333,12 +308,6 @@ void SerializationSparse::enumerateStreams(
                                  .withSerializationInfo(data.serialization_info);
         settings.path.back().data = null_map_data;
         callback(settings.path);
-    }
-
-    if (settings.skip_sparse_values_substream)
-    {
-        settings.path.pop_back();
-        return;
     }
 
     settings.path.back() = Substream::SparseElements;
@@ -459,27 +428,15 @@ void SerializationSparse::deserializeBinaryBulkWithMultipleStreams(
     auto & values_column = column_sparse.getValuesPtr();
 
     settings.path.push_back(Substream::SparseElements);
-    if (settings.skip_sparse_values_substream)
-    {
-        /// Caller (e.g. the sparsity analyzer) does not inspect the values; pad the
-        /// column with defaults so the `offsets.size() + 1 == values.size()` invariant
-        /// holds and the nested state is left untouched.
-        auto values_mut = values_column->assumeMutable();
-        values_mut->insertManyDefaults(num_read_offsets);
-        values_column = std::move(values_mut);
-    }
-    else
-    {
-        /// We cannot use column from substream cache during deserialization of sparse values column, because
-        /// sparse values column must always contain default value at the first row that is added during ColumnSparse
-        /// creation. Using column from substream cache will lead to loss of this value and unexpected column size.
-        /// So, we should set insert_only_rows_in_current_range_from_substreams_cache flag to true
-        /// to insert only rows in current range from substream cache instead of using the whole cached column if any.
-        auto values_settings = settings;
-        values_settings.insert_only_rows_in_current_range_from_substreams_cache = true;
-        nested->deserializeBinaryBulkWithMultipleStreams(
-            values_column, skipped_values_rows, num_read_offsets, values_settings, state_sparse->nested, cache);
-    }
+    /// We cannot use column from substream cache during deserialization of sparse values column, because
+    /// sparse values column must always contain default value at the first row that is added during ColumnSparse
+    /// creation. Using column from substream cache will lead to loss of this value and unexpected column size.
+    /// So, we should set insert_only_rows_in_current_range_from_substreams_cache flag to true
+    /// to insert only rows in current range from substream cache instead of using the whole cached column if any.
+    auto values_settings = settings;
+    values_settings.insert_only_rows_in_current_range_from_substreams_cache = true;
+    nested->deserializeBinaryBulkWithMultipleStreams(
+        values_column, skipped_values_rows, num_read_offsets, values_settings, state_sparse->nested, cache);
     settings.path.pop_back();
 
     if (offsets_column->size() + 1 != values_column->size())

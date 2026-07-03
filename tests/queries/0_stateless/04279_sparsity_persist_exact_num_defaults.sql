@@ -1,7 +1,7 @@
 -- Tags: no-old-analyzer
 -- no-old-analyzer: Not supported
 
--- Sparsity based count and pruning act only when `serialization.json` carries an
+-- Sparsity based count acts only when `serialization.json` carries an
 -- `exact_num_defaults: true` flag for the column. The flag must survive a metadata
 -- reload, and the merged stats of `OPTIMIZE FINAL` must stay exact when every input
 -- part is exact.
@@ -66,11 +66,6 @@ WHERE table = 't_persist' AND database = currentDatabase() AND active;
 SELECT 'merged x!=0',   extract(explain, '[A-Za-z].*') FROM (EXPLAIN SELECT count() FROM t_persist WHERE x != 0      SETTINGS optimize_trivial_count_with_sparsity_filter = 1) WHERE explain LIKE '%Optimized trivial count with sparsity filter%';
 SELECT 'merged isNull', extract(explain, '[A-Za-z].*') FROM (EXPLAIN SELECT count() FROM t_persist WHERE n IS NULL    SETTINGS optimize_trivial_count_with_sparsity_filter = 1) WHERE explain LIKE '%Optimized trivial count with sparsity filter%';
 SELECT 'merged isNot',  extract(explain, '[A-Za-z].*') FROM (EXPLAIN SELECT count() FROM t_persist WHERE n IS NOT NULL SETTINGS optimize_trivial_count_with_sparsity_filter = 1) WHERE explain LIKE '%Optimized trivial count with sparsity filter%';
-
--- 4. Granule level pruning (`Sparsity` step) on the merged part.
-SELECT 'planning x!=0',   trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT id FROM t_persist WHERE x != 0      SETTINGS use_sparsity_info_for_pruning = 'planning', optimize_trivial_count_with_sparsity_filter = 0) WHERE trimLeft(explain) LIKE 'Sparsity%';
-SELECT 'planning isNull', trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT id FROM t_persist WHERE n IS NULL    SETTINGS use_sparsity_info_for_pruning = 'planning', optimize_trivial_count_with_sparsity_filter = 0) WHERE trimLeft(explain) LIKE 'Sparsity%';
-SELECT 'planning isNot',  trimLeft(explain) FROM (EXPLAIN indexes = 1 SELECT id FROM t_persist WHERE n IS NOT NULL SETTINGS use_sparsity_info_for_pruning = 'planning', optimize_trivial_count_with_sparsity_filter = 0) WHERE trimLeft(explain) LIKE 'Sparsity%';
 
 DROP TABLE t_persist;
 

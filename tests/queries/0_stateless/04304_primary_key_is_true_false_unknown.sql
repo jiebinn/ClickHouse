@@ -29,7 +29,6 @@ OPTIMIZE TABLE bool_pk FINAL;
 SET enable_parallel_replicas = 0,
     optimize_trivial_count_query = 0,
     optimize_use_implicit_projections = 0,
-    use_sparsity_info_for_pruning = 'off',
     optimize_trivial_count_with_sparsity_filter = 0;
 
 SELECT 'count'          AS predicate, count() FROM bool_pk;

@@ -134,8 +134,7 @@ class FilterWithCachedCount
     const IColumn::Filter * data = nullptr;
     mutable size_t cached_count_bytes = -1;
 
-    ColumnPtr sparse_column_holder;
-    ColumnPtr sparse_valid_offsets_holder;
+    ColumnPtr sparse_indices_holder;
     const ColumnUInt64 * sparse_indices = nullptr;
 
 public:

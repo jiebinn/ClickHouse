@@ -118,8 +118,7 @@ MergeTreePrefetchedReadPool::MergeTreePrefetchedReadPool(
     const PoolSettings & settings_,
     const MergeTreeReadTask::BlockSizeParams & params_,
     const ContextPtr & context_,
-    RuntimeDataflowStatisticsCacheUpdaterPtr updater_,
-    SparseOffsetsSharePtr sparse_offsets_share_)
+    RuntimeDataflowStatisticsCacheUpdaterPtr updater_)
     : MergeTreeReadPoolBase(
           std::move(parts_),
           std::move(mutations_snapshot_),
@@ -135,7 +134,6 @@ MergeTreePrefetchedReadPool::MergeTreePrefetchedReadPool(
           params_,
           context_)
     , updater(std::move(updater_))
-    , sparse_offsets_share(std::move(sparse_offsets_share_))
     , prefetch_threadpool(getContext()->getPrefetchThreadpool())
     , log(getLogger(
           "MergeTreePrefetchedReadPool("
@@ -172,13 +170,6 @@ void MergeTreePrefetchedReadPool::createPrefetchedReadersForTask(ThreadTask & ta
 
     auto extras = getExtras();
     auto readers = MergeTreeReadTask::createReaders(task.read_info, extras, task.ranges, task.patches_ranges);
-
-    /// Attach the share before prefetch so `prefetchForColumn` can skip the `SparseOffsets`
-    /// stream for `(part, column)` pairs the planning-mode analyzer already cached.
-    /// `MergeTreeReadTask::initializeIndexReader` will set the share again later for the
-    /// `data_read`-mode path, which is harmless (the value is the same).
-    readers.setSparseOffsetsShare(sparse_offsets_share);
-
     task.readers_future = std::make_unique<PrefetchedReaders>(prefetch_threadpool, std::move(readers), task.priority, *this);
 }
 

@@ -86,8 +86,10 @@ FilterWithCachedCount::FilterWithCachedCount(const ColumnPtr & column_)
         {
             SparseFilterDescription sparse_desc(*column_);
             sparse_indices = sparse_desc.filter_indices;
-            sparse_column_holder = column_;
-            sparse_valid_offsets_holder = std::move(sparse_desc.valid_offsets);
+            /// `filter_indices` aliases either the sparse column's offsets (non-nullable path)
+            /// or the freshly-allocated `valid_offsets` column (nullable path). Keep whichever
+            /// owns the storage alive.
+            sparse_indices_holder = sparse_desc.valid_offsets ? std::move(sparse_desc.valid_offsets) : column_;
         }
     }
 

@@ -56,11 +56,9 @@ SETTINGS optimize_on_insert = 0; -- { serverError UNKNOWN_STATUS_OF_INSERT,UNSAT
 -- Without sequential consistency the rewrite counts both parts: 4000 + 4000.
 SELECT 'seq0_rewrite', count() FROM t_sparse_seq_consistency_r1 WHERE n = 0
     SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off',
              select_sequential_consistency = 0;
 SELECT 'seq0_scan',    count() FROM t_sparse_seq_consistency_r1 WHERE n = 0
     SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off',
              select_sequential_consistency = 0;
 
 -- With sequential consistency both paths must see only the first part: 4000
@@ -69,11 +67,9 @@ SELECT 'seq0_scan',    count() FROM t_sparse_seq_consistency_r1 WHERE n = 0
 -- the ZK-filtered active parts list.
 SELECT 'seq1_rewrite', count() FROM t_sparse_seq_consistency_r1 WHERE n = 0
     SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off',
              select_sequential_consistency = 1;
 SELECT 'seq1_scan',    count() FROM t_sparse_seq_consistency_r1 WHERE n = 0
     SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off',
              select_sequential_consistency = 1;
 
 SYSTEM START FETCHES t_sparse_seq_consistency_r2;

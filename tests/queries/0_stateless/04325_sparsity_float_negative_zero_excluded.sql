@@ -19,26 +19,14 @@ INSERT INTO t_sparse_neg_zero SELECT if(number < 4000, -0.0, 1.0)::Float64 FROM 
 
 -- Trivial count rewrite must not fire for `x = 0` on Float, so the count matches the scan.
 SELECT 'rewrite', count() FROM t_sparse_neg_zero WHERE x = 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 SELECT 'scan',    count() FROM t_sparse_neg_zero WHERE x = 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
 
 -- Same for `!= 0`: rewrite must not drop the negative zeros.
 SELECT 'rewrite_ne', count() FROM t_sparse_neg_zero WHERE x != 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 SELECT 'scan_ne',    count() FROM t_sparse_neg_zero WHERE x != 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off';
-
--- Granule pruning must not drop the -0.0 part either.
-SELECT 'prune_eq',   count() FROM t_sparse_neg_zero WHERE x = 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'planning';
-SELECT 'prune_ne',   count() FROM t_sparse_neg_zero WHERE x != 0
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'planning';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
 
 DROP TABLE t_sparse_neg_zero;

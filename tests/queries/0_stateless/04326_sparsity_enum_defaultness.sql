@@ -24,21 +24,13 @@ INSERT INTO t_sparse_enum SELECT if(number < 4000, 'a', 'b')::Enum8('a' = 1, 'b'
 -- `tryGetLeastSupertype` returns Enum8 and the buggy classifier would mark
 -- `e = CAST('a' ...)` as MatchesDefault even though `num_defaults` is 0.
 SELECT 'rewrite_eq', count() FROM t_sparse_enum WHERE e = CAST('a' AS Enum8('a' = 1, 'b' = 2))
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 SELECT 'scan_eq',    count() FROM t_sparse_enum WHERE e = CAST('a' AS Enum8('a' = 1, 'b' = 2))
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
 
 SELECT 'rewrite_ne', count() FROM t_sparse_enum WHERE e != CAST('a' AS Enum8('a' = 1, 'b' = 2))
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 1,
-             use_sparsity_info_for_pruning = 'off';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 SELECT 'scan_ne',    count() FROM t_sparse_enum WHERE e != CAST('a' AS Enum8('a' = 1, 'b' = 2))
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'off';
-
-SELECT 'prune_eq',   count() FROM t_sparse_enum WHERE e = CAST('a' AS Enum8('a' = 1, 'b' = 2))
-    SETTINGS optimize_trivial_count_with_sparsity_filter = 0,
-             use_sparsity_info_for_pruning = 'planning';
+    SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
 
 DROP TABLE t_sparse_enum;

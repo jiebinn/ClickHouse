@@ -155,11 +155,6 @@ public:
         MergeTreeReaderPtr prepared_index;
 
         void updateAllMarkRanges(const MarkRanges & ranges);
-
-        /// Attach the analyzer's offsets share to every reader that may consult it.
-        /// Idempotent: setting the same share twice (e.g. once before prefetch and
-        /// once during index-reader init) is a no-op.
-        void setSparseOffsetsShare(const SparseOffsetsSharePtr & share);
     };
 
     struct BlockSizeParams

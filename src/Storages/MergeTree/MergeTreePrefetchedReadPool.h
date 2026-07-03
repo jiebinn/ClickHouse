@@ -1,6 +1,5 @@
 #pragma once
 #include <Storages/MergeTree/MergeTreeReadPoolBase.h>
-#include <Storages/MergeTree/SparseOffsetsShare.h>
 #include <Common/threadPoolCallbackRunner.h>
 #include <Common/ThreadPool_fwd.h>
 #include <IO/AsyncReadCounters.h>
@@ -35,8 +34,7 @@ public:
         const PoolSettings & settings_,
         const MergeTreeReadTask::BlockSizeParams & params_,
         const ContextPtr & context_,
-        RuntimeDataflowStatisticsCacheUpdaterPtr updater_,
-        SparseOffsetsSharePtr sparse_offsets_share_ = nullptr);
+        RuntimeDataflowStatisticsCacheUpdaterPtr updater_);
 
     String getName() const override { return "PrefetchedReadPool"; }
     bool preservesOrderOfRanges() const override { return false; }
@@ -125,10 +123,6 @@ private:
     static std::string dumpTasks(const TasksPerThread & tasks);
 
     RuntimeDataflowStatisticsCacheUpdaterPtr updater;
-
-    /// Visible to the prefetch path through the readers so the `SparseOffsets` stream is not
-    /// prefetched when the planning-mode analyzer has already cached it in `SparseOffsetsShare`.
-    SparseOffsetsSharePtr sparse_offsets_share;
 
     mutable std::mutex mutex;
     ThreadPool & prefetch_threadpool;

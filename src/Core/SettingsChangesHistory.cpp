@@ -42,7 +42,6 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
         addSettingsChanges(settings_changes_history, "26.7",
         {
             {"optimize_trivial_count_with_sparsity_filter", false, false, "New (experimental) setting to serve `SELECT count() FROM t WHERE <pred>` from per-column `num_defaults` / `num_rows` recorded in `serialization.json` when `<pred>` partitions rows into defaults vs non-defaults."},
-            {"use_sparsity_info_for_pruning", "off", "off", "New (experimental) setting controlling sparsity-based pruning of parts (always at plan time) and granules (at plan or scan time)."},
             {"s3_validate_etag_on_read", false, true, "New setting to detect concurrent in-place overwrites of S3/GCS objects during a read by validating the GET response ETag against the listed one. previous_value=false so `compatibility` with versions before 26.7 restores the pre-existing behavior (no validation)."},
             {"input_format_csv_missing_nullable_as_empty_string", false, false, "New setting to read a missing value of `Nullable(String)` from CSV as an empty string instead of NULL."},
             {"use_legacy_to_time", true, false, "Use the new `toTime` function (converting values to the `Time` data type) by default instead of the legacy `toTime` (which is still available as `toTimeWithFixedDate`)."},
