@@ -1291,6 +1291,28 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
             "spark.databricks.delta.stats.skipping": true_false_lambda,
         }
 
+    def generate_table_properties(
+        self,
+        table: SparkTable,
+    ) -> dict[str, str]:
+        properties = super().generate_table_properties(table)
+        if (
+            properties.get("delta.enableDeletionVectors") == "true"
+            and properties.get("delta.compatibility.symlinkFormatManifest.enabled")
+            == "true"
+        ):
+            # Delta rejects persistent deletion vectors combined with incremental
+            # symlink manifest generation, so keep only one of them enabled
+            properties[
+                random.choice(
+                    [
+                        "delta.enableDeletionVectors",
+                        "delta.compatibility.symlinkFormatManifest.enabled",
+                    ]
+                )
+            ] = "false"
+        return properties
+
     def generate_alter_table_statements(
         self,
         spark: SparkSession,

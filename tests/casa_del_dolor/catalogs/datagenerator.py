@@ -192,6 +192,10 @@ def _to_json_safe(obj):
         return None
     if isinstance(obj, bool):
         return obj
+    if isinstance(obj, float) and not math.isfinite(obj):
+        # `json.dumps` emits bare NaN/Infinity tokens, which are not valid JSON
+        # and Spark's `parse_json` rejects them, so keep them as strings
+        return str(obj)
     if isinstance(obj, (int, float, str)):
         return obj
     if isinstance(obj, Decimal):

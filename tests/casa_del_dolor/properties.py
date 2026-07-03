@@ -195,6 +195,8 @@ possible_properties = {
     "enable_system_unfreeze": true_false_lambda,
     "enable_webterminal": true_false_lambda,
     "format_parsing_thread_pool_queue_size": threshold_generator(0.2, 0.2, 0, 1000),
+    "global_profiler_cpu_time_period_ns": threshold_generator(0.2, 0.2, 0, 1000000000),
+    "global_profiler_real_time_period_ns": threshold_generator(0.2, 0.2, 0, 1000000000),
     "handshake_timeout_milliseconds": threshold_generator(0.2, 0.2, 1000, 30000),
     "http_connections_hard_limit": threshold_generator(0.2, 0.2, 0, 400000),
     "http_connections_rcvbuf": threshold_generator(0.2, 0.2, 0, 16 * 1024 * 1024),
@@ -227,9 +229,20 @@ possible_properties = {
         ["old_separate_hashes", "compatible_double_hashes", "new_unified_hashes"]
     ),
     "io_thread_pool_queue_size": threshold_generator(0.2, 0.2, 0, 1000),
+    "jemalloc_collect_global_profile_samples_in_trace_log": true_false_lambda,
+    "jemalloc_enable_background_threads": true_false_lambda,
+    "jemalloc_enable_global_profiler": true_false_lambda,
+    "jemalloc_flush_profile_interval_bytes": threshold_generator(
+        0.2, 0.2, 0, 100 * 1024 * 1024
+    ),
+    "jemalloc_flush_profile_on_memory_exceeded": true_false_lambda,
     "jemalloc_flush_profile_on_memory_exceeded_interval": threshold_generator(
         0.2, 0.2, 0, 10000
     ),
+    "jemalloc_max_background_threads_num": threads_lambda,
+    # log2 of the sampling interval in bytes (default 19 = 512KiB); keep a floor
+    # so the profiler doesn't sample nearly every allocation
+    "jemalloc_profiler_sampling_rate": threshold_generator(0.2, 0.2, 10, 32),
     "keeper_multiread_batch_size": threshold_generator(0.2, 0.2, 1, 1000),
     "load_marks_threadpool_pool_size": threads_lambda,
     "load_marks_threadpool_queue_size": threshold_generator(0.2, 0.2, 0, 1000),
@@ -305,6 +318,13 @@ possible_properties = {
     "memory_worker_correct_memory_tracker": true_false_lambda,
     "memory_worker_decay_adjustment_period_ms": threshold_generator(0.2, 0.2, 0, 30000),
     "memory_worker_dynamic_hard_limit": true_false_lambda,
+    "memory_worker_period_ms": threshold_generator(0.2, 0.2, 0, 10000),
+    "memory_worker_purge_dirty_pages_threshold_ratio": threshold_generator(
+        0.2, 0.2, 0.0, 1.0
+    ),
+    "memory_worker_purge_total_memory_threshold_ratio": threshold_generator(
+        0.2, 0.2, 0.0, 1.0
+    ),
     "memory_worker_rss_speculative_reserve_ratio": threshold_generator(
         0.2, 0.2, 0.0, 1.0
     ),
@@ -427,6 +447,14 @@ possible_properties = {
     "threadpool_writer_pool_size": threshold_generator(0.2, 0.2, 1, 200),
     "threadpool_writer_queue_size": threshold_generator(0.2, 0.2, 0, 1000),
     "throw_on_unknown_workload": true_false_lambda,
+    "total_memory_profiler_sample_max_allocation_size": threshold_generator(
+        0.2, 0.2, 0, 1024 * 1024
+    ),
+    "total_memory_profiler_sample_min_allocation_size": threshold_generator(
+        0.2, 0.2, 0, 1024 * 1024
+    ),
+    "total_memory_profiler_step": threshold_generator(0.2, 0.2, 0, 4 * 1024 * 1024),
+    "total_memory_tracker_sample_probability": threshold_generator(0.2, 0.2, 0.0, 1.0),
     "transaction_log": {
         "fault_probability_after_commit": threshold_generator(0.2, 0.2, 0.0, 1.0),
         "fault_probability_before_commit": threshold_generator(0.2, 0.2, 0.0, 1.0),
@@ -599,6 +627,8 @@ cache_storage_properties = {
     "overcommit_eviction_evict_step": threshold_generator(
         0.2, 0.2, 1, 10 * 1024 * 1024
     ),
+    # Capped at the file segment size internally, 0 disables reserve-ahead
+    "reserve_granularity": threshold_generator(0.2, 0.2, 0, 32 * 1024 * 1024),
     # "max_size_ratio_to_total_space": threshold_generator(0.2, 0.2, 0.0, 1.0), cannot be specified with `max_size` at the same time
     "skip_cache_on_disk_failure": true_false_lambda,
     "slru_size_ratio": threshold_generator(0.2, 0.2, 0.01, 0.99),
@@ -636,6 +666,7 @@ all_disks_properties = {
 backup_properties = {
     "allow_concurrent_backups": true_false_lambda,
     "allow_concurrent_restores": true_false_lambda,
+    "compare_collected_metadata": true_false_lambda,
     "remove_backup_files_after_failure": true_false_lambda,
     "test_inject_sleep": true_false_lambda,
     "test_randomize_order": true_false_lambda,
