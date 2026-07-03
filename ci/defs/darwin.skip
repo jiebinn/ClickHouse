@@ -192,4 +192,5 @@
 04242_file_log_delete_recreate
 04257_file_log_rename_and_recreate
 04281_sparsity_stream_skips_trivial_count
+04319_skip_unavailable_shards_mode_table_missing
 04402_float_parsing_corner_cases
