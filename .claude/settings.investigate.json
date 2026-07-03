@@ -47,6 +47,7 @@
       "Bash(head:*)",
       "Bash(tail:*)",
       "Bash(wc:*)",
+      "Bash(.claude/tools/gh-ro.sh:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh pr list:*)",

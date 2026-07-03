@@ -27,6 +27,11 @@ A read-only first pass over a CI failure: turn a single URL into a per-test verd
   act on them. To read source at the report's commit, use `git show <sha>:<path>` rather than
   checking it out; only fetch/switch after asking the user (see step 4).
 - Use `tmp/investigate/` for all working files, never `/tmp` (per CLAUDE.md).
+- **Run every `gh` read through `.claude/tools/gh-ro.sh` (same args as `gh`).** It drops a poisoned
+  `GH_CONFIG_DIR` — some agent/CI runners set it to a config dir with no working auth, which makes
+  raw `gh` fail — and refuses any non-read-only subcommand, so it can never create/close/edit/merge/
+  comment. The examples below use it for this reason. (`fetch_ci_report.js` clears `GH_CONFIG_DIR`
+  internally, so drive it as `node .claude/tools/fetch_ci_report.js …` directly.)
 - Wrap test names, identifiers, and log excerpts in backticks per the project style rule.
 - Say "exception", not "crash", for logical errors.
 
@@ -38,13 +43,14 @@ A read-only first pass over a CI failure: turn a single URL into a per-test verd
 issue links. If `$0` is `.../issues/NNNNN`, read the issue body and extract the report URL first:
 
 ```bash
-gh issue view <NNNNN> --repo ClickHouse/ClickHouse --json title,body
+.claude/tools/gh-ro.sh issue view <NNNNN> --repo ClickHouse/ClickHouse --json title,body
 ```
 
 Read the issue from the command output — do **not** redirect to a file. A
-`gh issue view … > tmp/investigate/issue.json` redirect is a file write that rides the wildcard
-`Bash(gh issue view:*)` allow (not the hook), so a symlinked `tmp`/`tmp/investigate` could land it
-outside the scratch dir without a prompt. (Step 1 creates `tmp/investigate`.)
+`.claude/tools/gh-ro.sh issue view … > tmp/investigate/issue.json` redirect is a file write that
+rides the wildcard `Bash(.claude/tools/gh-ro.sh:*)` allow (not the hook), so a symlinked
+`tmp`/`tmp/investigate` could land it outside the scratch dir without a prompt. (Step 1 creates
+`tmp/investigate`.)
 
 Bot-generated `flaky test` issues use this body format:
 
@@ -133,7 +139,7 @@ Search issues (open **and** closed) by test name — a hit often names the track
 and its comments may already carry the root cause, a fix PR, or a "known flaky" note.
 
 ```bash
-gh issue list --repo ClickHouse/ClickHouse --state all --limit 10 \
+.claude/tools/gh-ro.sh issue list --repo ClickHouse/ClickHouse --state all --limit 10 \
   --search "<distinctive test-name fragment> in:title,body" \
   --json number,title,state,stateReason,url,labels,closedAt
 ```
@@ -144,7 +150,7 @@ name rarely matches. If a candidate looks relevant, read it **with its comments*
 already provide the diagnosis:
 
 ```bash
-gh issue view <NNNNN> --repo ClickHouse/ClickHouse \
+.claude/tools/gh-ro.sh issue view <NNNNN> --repo ClickHouse/ClickHouse \
   --json number,title,state,stateReason,body,comments,labels,closedAt
 ```
 
@@ -176,7 +182,7 @@ non-CIDB labels on a `🏷️ labels:` line. Two are decisive:
 - An **`issue`** label gives you the matched issue number **for free** — the printed link is the
   issue CI matched **at run time** (e.g. `Server died` → `issue (…/issues/107487)`, `Hung check …`
   → `…/107941`). It saves the *search*, but it is **not** by itself `tracked #N`: the label reflects
-  the catalog when the report was produced, not the issue's state **now**. Always `gh issue view`
+  the catalog when the report was produced, not the issue's state **now**. Always `.claude/tools/gh-ro.sh issue view`
   the linked issue and classify from its **current** `state`/`closedAt` — an issue closed after the
   run and aged past the ~8 h window is `stale #N` (reopen candidate), not `tracked`. The label
   shortcuts the lookup; it does not replace the tracked-vs-stale decision below.
@@ -197,7 +203,7 @@ includes not just open ones but every `testing` issue closed in the last ~8 h
 by `Job pattern` / `Failure reason` against the failing job and its output:
 
 ```bash
-gh issue list --repo ClickHouse/ClickHouse --state all --label testing --label infrastructure \
+.claude/tools/gh-ro.sh issue list --repo ClickHouse/ClickHouse --state all --label testing --label infrastructure \
   --limit 100 --json number,title,url,body,state,closedAt
 ```
 
@@ -226,7 +232,7 @@ makes no sense. It is a "searched, nothing matched, and not worth filing" verdic
 Determine, per test:
 
 - **Tracked** — a `testing` issue matches (by the rule above, or reached via the report's `issue`
-  label) and is **currently** open or closed within ~8 h (`gh issue view` → `state`/`closedAt`). No
+  label) and is **currently** open or closed within ~8 h (`.claude/tools/gh-ro.sh issue view` → `state`/`closedAt`). No
   new issue needed; CI will keep auto-matching it. Applies to generic-bucket names too when such an
   issue exists (e.g. `Server died` → #107487). If the linked/ matched issue is closed longer ago,
   it is `stale #N`, not `tracked`.
@@ -281,7 +287,7 @@ Three complementary sources, cheapest first:
   **not** support a `timelineItems` field — it errors `Unknown JSON field`):
 
   ```bash
-  gh issue view <issue-number> --repo ClickHouse/ClickHouse --json number,state,stateReason,closedByPullRequestsReferences,comments
+  .claude/tools/gh-ro.sh issue view <issue-number> --repo ClickHouse/ClickHouse --json number,state,stateReason,closedByPullRequestsReferences,comments
   ```
 
   This surfaces PRs that closed the issue and any fix mentioned in comments. A PR that only
@@ -296,14 +302,14 @@ Three complementary sources, cheapest first:
   `test_dns_cache`):
 
   ```bash
-  gh pr view <pr> --repo ClickHouse/ClickHouse --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
+  .claude/tools/gh-ro.sh pr view <pr> --repo ClickHouse/ClickHouse --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
   ```
 
 - **By test name:** search PRs (open **and** merged) whose title/body names the test or its
   fragment:
 
   ```bash
-  gh pr list --repo ClickHouse/ClickHouse --state all --limit 20 \
+  .claude/tools/gh-ro.sh pr list --repo ClickHouse/ClickHouse --state all --limit 20 \
     --search "<distinctive test-name fragment>" \
     --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
   ```
@@ -457,7 +463,7 @@ mean distinct bugs.
   run the cross-PR corroboration query first**, then:
   - Fails across multiple *unrelated* PRs with the same error → **FLAKY** (low rate; it just
     rarely lands on a direct-master run), not a regression.
-  - The PR *adds* this test (`gh pr diff` shows the test file as new) → new test, judge on its
+  - The PR *adds* this test (`.claude/tools/gh-ro.sh pr diff` shows the test file as new) → new test, judge on its
     own output, not history.
   - Absent on master **and** across other PRs, and the test already exists on master →
     **likely a REAL regression introduced by this PR**.
@@ -496,7 +502,7 @@ every failed test is `FLAKY`, **skip this step entirely**.
 **Read the error and the source before downloading anything.** The step-1 failure output usually
 already contains the decisive evidence — an assertion message, an exception, a result diff, or a
 stack trace. Read it, then open the referenced code (the stack-trace `file:line`, and
-`gh pr diff <PR>` for the suspect change). For a large category of failures —
+`.claude/tools/gh-ro.sh pr diff <PR>` for the suspect change). For a large category of failures —
 logical-error / assertion aborts with a symbolized stack, exceptions with a clear message, simple
 stateless-test result diffs — that is enough to root-cause, and **no artifacts need to be
 downloaded at all** (this investigation root-caused a `KeeperStateMachine.cpp` assertion straight
@@ -574,7 +580,7 @@ selected failure (or per shared-cause group) in parallel. Give each subagent:
 
 - the failure output from step 1,
 - the path(s) to any artifacts downloaded in step 4 (omit if none were needed),
-- the PR diff for cross-referencing — run `gh pr diff <PR>` and pass its output (or have the
+- the PR diff for cross-referencing — run `.claude/tools/gh-ro.sh pr diff <PR>` and pass its output (or have the
   subagent run it); do **not** redirect to a file (same symlink-write reason as step 0),
 - the report `SHA`, instructing it to read source at that commit (`git show <sha>:<path>`) for
   accurate `file:line`, per step 4.
