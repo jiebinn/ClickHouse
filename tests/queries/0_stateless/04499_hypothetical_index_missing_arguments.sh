@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Tags: no-replicated-database
+# no-replicated-database: hypothetical indexes are session-scoped and not replicated
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=../shell_config.sh
+. "$CURDIR"/../shell_config.sh
+
+$CLICKHOUSE_CLIENT -q "
+    DROP TABLE IF EXISTS t_hypo_noargs;
+    CREATE TABLE t_hypo_noargs (a UInt64, b String) ENGINE = MergeTree ORDER BY a;
+"
+
+# Arg-taking index types with the argument omitted used to reach the index creator
+# (which reads index.arguments->children[0] unguarded) before validation and crash the server.
+# They must now be rejected cleanly by the validator.
+
+echo "--- set with no argument ---"
+$CLICKHOUSE_CLIENT -q "CREATE HYPOTHETICAL INDEX hi ON t_hypo_noargs (b) TYPE set GRANULARITY 1;" 2>&1 | grep -m1 -oE 'INCORRECT_QUERY|BAD_ARGUMENTS'
+
+echo "--- ngrambf_v1 with no arguments ---"
+$CLICKHOUSE_CLIENT -q "CREATE HYPOTHETICAL INDEX hi ON t_hypo_noargs (b) TYPE ngrambf_v1 GRANULARITY 1;" 2>&1 | grep -m1 -oE 'INCORRECT_QUERY|BAD_ARGUMENTS'
+
+echo "--- tokenbf_v1 with no arguments ---"
+$CLICKHOUSE_CLIENT -q "CREATE HYPOTHETICAL INDEX hi ON t_hypo_noargs (b) TYPE tokenbf_v1 GRANULARITY 1;" 2>&1 | grep -m1 -oE 'INCORRECT_QUERY|BAD_ARGUMENTS'
+
+echo "--- server is still alive ---"
+$CLICKHOUSE_CLIENT -q "SELECT 1"
+
+echo "--- well-formed set is still accepted ---"
+$CLICKHOUSE_CLIENT -q "
+    CREATE HYPOTHETICAL INDEX hi ON t_hypo_noargs (b) TYPE set(100) GRANULARITY 1;
+    SELECT count() FROM system.hypothetical_indexes WHERE table = 't_hypo_noargs' AND name = 'hi';
+"
+
+$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t_hypo_noargs;"

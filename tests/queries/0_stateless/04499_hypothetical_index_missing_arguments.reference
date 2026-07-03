@@ -1,0 +1,10 @@
+--- set with no argument ---
+INCORRECT_QUERY
+--- ngrambf_v1 with no arguments ---
+BAD_ARGUMENTS
+--- tokenbf_v1 with no arguments ---
+BAD_ARGUMENTS
+--- server is still alive ---
+1
+--- well-formed set is still accepted ---
+1
