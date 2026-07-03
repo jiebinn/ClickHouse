@@ -32,7 +32,6 @@
 #include <IO/S3/AWSLogger.h>
 #include <IO/S3/Credentials.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ProcessList.h>
 
 #include <Common/assert_cast.h>
 #include <Common/logger_useful.h>
@@ -84,7 +83,6 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int TOO_MANY_REDIRECTS;
-    extern const int QUERY_WAS_CANCELLED;
 }
 
 namespace S3
@@ -185,32 +183,6 @@ void Client::RetryStrategy::RequestBookkeeping(
 
 namespace
 {
-
-/// On cancellation (e.g. KILL QUERY) the S3 retry/redirect loops stop early and keep the last failed
-/// outcome. Surface the cancellation so callers report it instead of a misleading network/S3 error.
-void throwIfQueryWasCanceled()
-{
-    if (!CurrentThread::isInitialized())
-        return;
-
-    auto & thread_status = CurrentThread::get();
-
-    /// Prefer the process-list element so the real cause is preserved: a timeout is reported as
-    /// TIMEOUT_EXCEEDED and an exception stored by cancelQuery (e.g. a coordination failure on another
-    /// host) is rethrown, instead of a generic QUERY_WAS_CANCELLED.
-    if (auto query_context = thread_status.tryGetQueryContext())
-    {
-        if (auto query_status = query_context->getProcessListElementSafe())
-        {
-            query_status->throwIfKilled();
-            return;
-        }
-    }
-
-    /// No process-list element to consult; fall back to a generic cancellation if the query was killed.
-    if (thread_status.isQueryCanceled())
-        throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
-}
 
 void verifyClientConfiguration(const Aws::Client::ClientConfiguration & client_config)
 {
@@ -448,7 +420,7 @@ Model::HeadObjectOutcome Client::HeadObject(HeadObjectRequest & request) const
     /// S3/network outcome.
     auto outcome = headObjectInternal(request);
     if (!outcome.IsSuccess())
-        throwIfQueryWasCanceled();
+        CurrentThread::checkIfNotCancelled();
     return outcome;
 }
 
@@ -737,7 +709,7 @@ Client::doRequest(RequestType & request, RequestFn request_fn) const
         if (result.IsSuccess())
             return result;
 
-        throwIfQueryWasCanceled();
+        CurrentThread::checkIfNotCancelled();
 
         const auto & error = result.GetError();
 
