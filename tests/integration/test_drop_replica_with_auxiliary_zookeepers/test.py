@@ -250,6 +250,40 @@ def test_drop_replica_from_zkpath_not_blocked_by_default_keeper_table(started_cl
     drop_table([node1, node2], "test_shared_aux")
 
 
+def test_drop_database_replica_blocked_by_local_db_with_trailing_slashes(
+    started_cluster,
+):
+    # The self-protection guard for an ATTACHED local Replicated database must collapse
+    # trailing slashes the same way the parser does. DatabaseReplicated strips only a
+    # single trailing slash in its constructor, so `Replicated('/path//', ...)` keeps
+    # getZooKeeperPath() == '/path/', while the parser normalizes the query ZKPATH down to
+    # '/path'. Before the guard collapsed the leftover slash the paths mismatched, the guard
+    # was skipped, and `SYSTEM DROP DATABASE REPLICA ... FROM ZKPATH '/path//'` destructively
+    # dropped the still-attached local replica instead of being rejected.
+    db_path = "/clickhouse/databases/test/local_db_slashes"
+    node1.query("DROP DATABASE IF EXISTS local_db_slashes SYNC")
+
+    node1.query(
+        "CREATE DATABASE local_db_slashes "
+        "ENGINE = Replicated('{path}//', 'shard1', 'r1')".format(path=db_path)
+    )
+
+    # The database is attached and lives at this exact path on the default keeper, so the
+    # drop must be rejected with "There is a local database"; the '//' spelling must not
+    # slip past the guard and drop the local replica.
+    err = node1.query_and_get_error(
+        "SYSTEM DROP DATABASE REPLICA 'r1' FROM SHARD 'shard1' "
+        "FROM ZKPATH '{path}//'".format(path=db_path)
+    )
+    assert "There is a local database" in err
+
+    # The local database's replica znode must still be intact.
+    zk = cluster.get_kazoo_client("zoo1")
+    assert zk.exists(db_path + "/replicas/shard1|r1") is not None
+
+    node1.query("DROP DATABASE IF EXISTS local_db_slashes SYNC")
+
+
 def test_drop_database_replica_from_zkpath_not_blocked_by_detached_default_keeper_db(
     started_cluster,
 ):

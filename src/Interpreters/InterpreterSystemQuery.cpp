@@ -1926,8 +1926,15 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
     {
         /// When a ZKPATH is given, a database on a different keeper (or path) is a different znode and must
         /// not block a drop targeting query_zk_name_.
+        /// DatabaseReplicated collapses only a single trailing slash in its constructor, while the parser
+        /// collapses all of them in query_replica_zk_path_. Normalize the database path the same way before
+        /// comparing, otherwise a `Replicated('/path//', ...)` database keeps a leftover trailing slash, this
+        /// guard mismatches, and the local replica gets destructively dropped.
+        String replicated_zk_path = replicated->getZooKeeperPath();
+        while (replicated_zk_path.size() > 1 && replicated_zk_path.back() == '/')
+            replicated_zk_path.pop_back();
         if (!query_replica_zk_path_.empty()
-            && (fs::path(replicated->getZooKeeperPath()) != query_replica_zk_path_
+            && (fs::path(replicated_zk_path) != query_replica_zk_path_
                 || replicated->getZooKeeperName() != query_zk_name_))
             return;
         if (replicated->getFullReplicaName() != full_replica_name_)
