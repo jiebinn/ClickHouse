@@ -4957,10 +4957,18 @@ let query_area = document.getElementById('query');
 /// middle button additionally pastes the PRIMARY selection into the freshly-focused editor,
 /// appending clipboard junk after the query we just set. The new-tab activation (`activateTab`
 /// with `guard_paste`) arms this flag right around that `query_area.focus()`, so we swallow
-/// exactly that one paste; a real Ctrl+V is never affected (the flag is only armed for the brief
-/// moment around a middle-click new-tab open, and is cleared by the paste itself or, if none
-/// fires, a short post-focus fallback).
+/// exactly that one paste.
+///
+/// The guard must never eat a real keyboard paste. The X11 PRIMARY paste is mouse-driven and
+/// carries no keystroke, whereas a real Ctrl+V / Cmd+V is always preceded by its own paste-shortcut
+/// `keydown`; disarming on that `keydown` (which fires before the resulting `paste`) keeps the
+/// discrimination independent of timing. So even if the user middle-clicks and immediately presses
+/// Ctrl+V on a platform where no PRIMARY paste ever arrives, their paste is preserved; the short
+/// post-focus fallback in `activateTab` only bounds how long a never-consumed guard can linger.
 let suppress_middleclick_paste = false;
+query_area.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) suppress_middleclick_paste = false;
+});
 query_area.addEventListener('paste', e => {
     if (suppress_middleclick_paste) {
         e.preventDefault();
@@ -5067,9 +5075,10 @@ async function activateTab(id, guard_paste = false) {
     /// A middle-click new-tab open arms the X11 PRIMARY paste guard right around this focus, so
     /// the paste Linux delivers to the freshly-focused editor is swallowed - and only that one.
     /// Anchoring the guard here, rather than at the original `auxclick`, means a slow activation
-    /// can never let it expire before focus. It is cleared by the paste itself, or by a short
-    /// fallback below in case no paste fires (non-Linux, empty selection) so a later real Ctrl+V
-    /// is never swallowed.
+    /// can never let it expire before focus. It is cleared by the swallowed paste, by a real
+    /// paste-shortcut keydown (which must never be eaten - see `suppress_middleclick_paste`), or by
+    /// the short fallback below in case no paste fires at all (non-Linux, empty selection), so the
+    /// flag can never linger.
     if (guard_paste) suppress_middleclick_paste = true;
     query_area.focus();
     if (guard_paste) setTimeout(() => { suppress_middleclick_paste = false; }, 250);
