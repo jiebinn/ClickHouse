@@ -125,8 +125,8 @@ void CurrentThread::checkIfNotCancelled()
     /// host) is rethrown, instead of a generic QUERY_WAS_CANCELLED.
     current_thread->throwIfQueryCanceled();
 
-    /// If the process-list entry has already expired (query teardown), the exact cause is no longer
-    /// available; the durable flag on the thread group still reports the cancellation generically.
+    /// Both checks consult the same process-list element, so this fires only if the element became
+    /// visible (and killed) between the two calls; in that case report a generic cancellation.
     if (current_thread->isQueryCanceled())
         throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
 }
