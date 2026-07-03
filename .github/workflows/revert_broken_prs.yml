@@ -191,6 +191,14 @@ jobs:
 
             # Check merge commit for failures (commit statuses). Same as above: a failed query
             # must not be mistaken for "no failures".
+            #
+            # The event-based non-gating filter used for check-runs cannot be applied here:
+            # schedule-only jobs like `PRVersionInfo` and `Hourly` are published as plain commit
+            # statuses (not check-runs), and their `target_url` is an S3 report link with no
+            # `/actions/runs/<id>` to resolve the triggering event from. Such a status never
+            # gated this PR, so exclude those contexts explicitly by name, alongside the other
+            # master-only / non-gating contexts (`MasterCI`, `SQLTest`, ...). The `Nightly*`
+            # schedule-only statuses are already dropped by the `startswith("Nightly")` filter.
             if ! merge_failed_statuses=$(gh api "repos/$GH_REPO/commits/$sha/status" --jq '
               .statuses[] |
               select(.state == "failure" or .state == "error") |
@@ -198,7 +206,7 @@ jobs:
               select((.context | startswith("libFuzzer")) | not) |
               select((.context | startswith("Nightly")) | not) |
               select((.context | startswith("ClickBench")) | not) |
-              select(.context != "Config Workflow" and .context != "Finish Workflow" and .context != "Mergeable Check" and .context != "PR" and .context != "MasterCI" and .context != "SQLTest" and .context != "VectorSearchStress" and .context != "ClickHouse Keeper Jepsen") |
+              select(.context != "Config Workflow" and .context != "Finish Workflow" and .context != "Mergeable Check" and .context != "PR" and .context != "MasterCI" and .context != "PRVersionInfo" and .context != "Hourly" and .context != "SQLTest" and .context != "VectorSearchStress" and .context != "ClickHouse Keeper Jepsen") |
               .context
             '); then
               echo "  WARNING: could not query commit statuses for merge commit $sha, skipping candidate."
@@ -260,14 +268,18 @@ jobs:
               continue
             fi
 
-            # Check PR head for failed or pending commit statuses. Same as above.
+            # Check PR head for failed or pending commit statuses. Same as above, including the
+            # schedule-only `PRVersionInfo` / `Hourly` exclusion: were they left in, a
+            # schedule-only status failing (or staying pending) on both the merge commit and the
+            # merged head would survive the `common_failures` intersection and open a
+            # false-positive revert.
             if ! pr_failed_statuses=$(gh api "repos/$GH_REPO/commits/$pr_head_sha/status" --jq '
               .statuses[] |
               select((.context | startswith("Performance Comparison")) | not) |
               select((.context | startswith("libFuzzer")) | not) |
               select((.context | startswith("Nightly")) | not) |
               select((.context | startswith("ClickBench")) | not) |
-              select(.context != "CH Inc sync" and .context != "Mergeable Check" and .context != "PR" and .context != "MasterCI" and .context != "SQLTest" and .context != "VectorSearchStress" and .context != "ClickHouse Keeper Jepsen") |
+              select(.context != "CH Inc sync" and .context != "Mergeable Check" and .context != "PR" and .context != "MasterCI" and .context != "PRVersionInfo" and .context != "Hourly" and .context != "SQLTest" and .context != "VectorSearchStress" and .context != "ClickHouse Keeper Jepsen") |
               select(.state == "failure" or .state == "error" or .state == "pending") |
               (if .state == "failure" then .context + " (failed)"
                elif .state == "error" then .context + " (error)"
