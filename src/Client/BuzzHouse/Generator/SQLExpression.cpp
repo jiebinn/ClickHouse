@@ -657,14 +657,7 @@ void StatementGenerator::generatePredicate(RandomGenerator & rg, Expr * expr)
             std::uniform_int_distribution<uint32_t> op_range(
                 1, static_cast<uint32_t>(rg.nextLargeNumber() < 5 ? BinaryOperator_MAX : BinaryOperator::BINOP_LEEQGR));
 
-            if (rg.nextSmallNumber() < 3)
-            {
-                eany->set_op(rg.nextBool() ? BinaryOperator::BINOP_IS_DISTINCT_FROM : BinaryOperator::BINOP_IS_NOT_DISTINCT_FROM);
-            }
-            else
-            {
-                eany->set_op(static_cast<BinaryOperator>(op_range(rg.generator)));
-            }
+            eany->set_op(static_cast<BinaryOperator>(op_range(rg.generator)));
             eany->set_anyall(static_cast<ExprAny::AnyAllSome>(rg.randomInt<uint32_t>(1, static_cast<uint32_t>(ExprAny::AnyAllSome_MAX))));
             this->depth++;
             this->generateExpression(rg, eany->mutable_expr());
