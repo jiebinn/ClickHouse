@@ -220,6 +220,7 @@ ConcurrentHashJoin::ConcurrentHashJoin(
                         /*use_two_level_maps*/ true);
                     inner_hash_join->data->setMaxJoinedBlockRows(table_join->maxJoinedBlockRows());
                     inner_hash_join->data->setMaxJoinedBlockBytes(table_join->maxJoinedBlockBytes());
+                    inner_hash_join->total_bytes.store(inner_hash_join->data->getTotalByteCount(), std::memory_order_relaxed);
                     hash_joins[i] = std::move(inner_hash_join);
                 });
         }
@@ -319,6 +320,10 @@ bool ConcurrentHashJoin::addBlockToJoin(const Block & right_block_, bool check_l
 
                 auto [block, selector] = std::move(dispatched_block).detachData();
                 bool limit_exceeded = !hash_join->data->addBlockToJoin(block, std::move(selector), check_limits);
+
+                /// Update the snapshot of total rows and bytes for the current join instance
+                hash_join->total_rows.store(hash_join->data->getTotalRowCount(), std::memory_order_relaxed);
+                hash_join->total_bytes.store(hash_join->data->getTotalByteCount(), std::memory_order_relaxed);
 
                 dispatched_block = {};
                 blocks_left--;
@@ -454,10 +459,7 @@ size_t ConcurrentHashJoin::getTotalRowCount() const
 {
     size_t res = 0;
     for (const auto & hash_join : hash_joins)
-    {
-        std::lock_guard lock(hash_join->mutex);
-        res += hash_join->data->getTotalRowCount();
-    }
+        res += hash_join->total_rows.load(std::memory_order_relaxed);
     return res;
 }
 
@@ -465,10 +467,7 @@ size_t ConcurrentHashJoin::getTotalByteCount() const
 {
     size_t res = 0;
     for (const auto & hash_join : hash_joins)
-    {
-        std::lock_guard lock(hash_join->mutex);
-        res += hash_join->data->getTotalByteCount();
-    }
+        res += hash_join->total_bytes.load(std::memory_order_relaxed);
     return res;
 }
 
@@ -728,39 +727,6 @@ ScatteredBlocks ConcurrentHashJoin::dispatchBlock(const Strings & key_columns_na
                                   : scatterBlocksByCopying(num_shards, selector, from_block);
 }
 
-IQueryTreeNode::HashState preCalculateCacheKey(const QueryTreeNodePtr & right_table_expression, const SelectQueryInfo & select_query_info)
-{
-    IQueryTreeNode::HashState hash;
-
-    const auto * select = select_query_info.query->as<DB::ASTSelectQuery>();
-    if (!select)
-        return hash;
-
-    if (const auto prewhere = select->prewhere())
-        hash.update(prewhere->getTreeHash(/*ignore_aliases=*/true));
-    if (const auto where = select->where())
-        hash.update(where->getTreeHash(/*ignore_aliases=*/true));
-
-    chassert(right_table_expression);
-    hash.update(right_table_expression->getTreeHash());
-    return hash;
-}
-
-UInt64 calculateCacheKey(std::shared_ptr<TableJoin> & table_join, IQueryTreeNode::HashState hash)
-{
-    // This condition is always true for ConcurrentHashJoin (see `TableJoin::allowParallelHashJoin()`),
-    // but this method is called from generic code.
-    if (!table_join || !table_join->oneDisjunct())
-        return 0;
-
-    const auto keys
-        = NameOrderedSet{table_join->getClauses().at(0).key_names_right.begin(), table_join->getClauses().at(0).key_names_right.end()};
-    for (const auto & name : keys)
-        hash.update(name);
-
-    return hash.get64();
-}
-
 BlocksList ConcurrentHashJoin::releaseSlotBlocks(size_t slot_idx)
 {
     chassert(slot_idx < hash_joins.size());
@@ -768,6 +734,8 @@ BlocksList ConcurrentHashJoin::releaseSlotBlocks(size_t slot_idx)
     std::lock_guard lock(hash_join->mutex);
     if (!hash_join->data || !hash_join->data->getJoinedData())
         return {};
+    hash_join->total_rows.store(0, std::memory_order_relaxed);
+    hash_join->total_bytes.store(0, std::memory_order_relaxed);
     return hash_join->data->releaseJoinedBlocks(/*restructure=*/ false);
 }
 
