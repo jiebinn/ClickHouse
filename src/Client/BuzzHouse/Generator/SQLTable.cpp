@@ -1805,55 +1805,107 @@ void StatementGenerator::addTableIndex(RandomGenerator & rg, SQLTable & t, const
     }
 
     chassert(!t.cols.empty());
-    idef->set_type(itpe);
-    if (rg.nextBool())
+
+    /// Some index types only accept a narrow set of column types: text/ngrambf_v1/tokenbf_v1/sparse_grams
+    /// require String-compatible columns (`bloomFilterIndexTextValidator`), vector_similarity requires
+    /// Array columns. An index expression over any other type is a deterministic `BAD_ARGUMENTS` at CREATE
+    /// time, wasting the fuzzer iteration. For these types we reference a compatible column directly: an
+    /// arbitrary expression (or wrapping the column in a hash/date/modulo function via `colRefOrExpression`)
+    /// would change the result type and be rejected just the same. If the table has no compatible column at
+    /// all, reroll to an index type that accepts any column type instead of emitting a guaranteed error.
+    const bool is_text = itpe == IDX_text;
+    bool need_string = is_text || itpe == IDX_ngrambf_v1 || itpe == IDX_tokenbf_v1 || itpe == IDX_sparse_grams;
+    bool need_array = itpe == IDX_vector_similarity;
+
+    if (need_string || need_array)
     {
-        /// For index types that require specific column types, filter to compatible columns first.
-        /// Text/ngrambf/tokenbf indices require String-compatible columns; using numeric columns causes CREATE TABLE to fail.
-        /// Vector similarity indices require Array columns.
-        const bool need_string = itpe == IDX_text || itpe == IDX_ngrambf_v1 || itpe == IDX_tokenbf_v1 || itpe == IDX_sparse_grams;
-        const bool need_array = itpe == IDX_vector_similarity;
+        flatTableColumnPath(
+            flat_tuple | flat_nested | flat_json | skip_nested_node,
+            t.cols,
+            [&](const SQLColumn & c)
+            {
+                const SQLType * tp = c.tp.get();
 
-        if ((need_string || need_array) && rg.nextBool())
-        {
-            flatTableColumnPath(
-                flat_tuple | flat_nested | flat_json | skip_nested_node,
-                t.cols,
-                [&](const SQLColumn & c)
+                if (need_array)
                 {
-                    SQLType * tp = c.tp.get();
+                    /// vector_similarity only accepts Array(Float32|Float64|BFloat16); an array of any
+                    /// other element type is an `ILLEGAL_COLUMN` at CREATE time. FloatType covers all
+                    /// three (size 16/32/64), so require the element to be a plain (non-Nullable) float.
+                    const ArrayType * at = dynamic_cast<const ArrayType *>(tp);
 
-                    if (tp->getTypeClass() == SQLTypeClass::LOWCARDINALITY)
+                    return at != nullptr && at->subtype->getTypeClass() == SQLTypeClass::FLOAT;
+                }
+                if (is_text)
+                {
+                    /// `textIndexValidator` recursively unwraps Array/Nullable/LowCardinality (any nesting,
+                    /// via `getNestedDataType`) and then requires String/FixedString at the bottom.
+                    while (true)
                     {
-                        LowCardinality * lc = dynamic_cast<LowCardinality *>(tp);
+                        const SQLTypeClass tc = tp->getTypeClass();
 
-                        tp = lc->subtype.get();
+                        if (tc == SQLTypeClass::ARRAY)
+                        {
+                            tp = dynamic_cast<const ArrayType *>(tp)->subtype.get();
+                        }
+                        else if (tc == SQLTypeClass::NULLABLE)
+                        {
+                            tp = dynamic_cast<const Nullable *>(tp)->subtype.get();
+                        }
+                        else if (tc == SQLTypeClass::LOWCARDINALITY)
+                        {
+                            tp = dynamic_cast<const LowCardinality *>(tp)->subtype.get();
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
-                    if (tp->getTypeClass() == SQLTypeClass::NULLABLE)
-                    {
-                        /// JSON type can be inside nullable
-                        Nullable * nl = dynamic_cast<Nullable *>(tp);
-
-                        tp = nl->subtype.get();
-                    }
-                    const SQLTypeClass tc = tp->getTypeClass();
-
-                    return need_array ? (tc == SQLTypeClass::ARRAY) : (tc == SQLTypeClass::STRING);
-                });
-        }
+                    return tp->getTypeClass() == SQLTypeClass::STRING;
+                }
+                /// ngrambf_v1/tokenbf_v1/sparse_grams share `bloomFilterIndexTextValidator`, which unwraps a
+                /// single LowCardinality OR Array level but NOT Nullable, so a Nullable (or
+                /// LowCardinality(Nullable)) string column is a deterministic BAD_ARGUMENTS.
+                if (tp->getTypeClass() == SQLTypeClass::LOWCARDINALITY)
+                {
+                    tp = dynamic_cast<const LowCardinality *>(tp)->subtype.get();
+                }
+                else if (tp->getTypeClass() == SQLTypeClass::ARRAY)
+                {
+                    tp = dynamic_cast<const ArrayType *>(tp)->subtype.get();
+                }
+                return tp->getTypeClass() == SQLTypeClass::STRING;
+            });
         if (this->entries.empty())
         {
-            /// No type-compatible columns found, fall back to any column
-            flatTableColumnPath(flat_tuple | flat_nested | flat_json | skip_nested_node, t.cols, [](const SQLColumn &) { return true; });
-        }
-        colRefOrExpression(rg, createTableRelation(rg, rg.nextSmallNumber() < 8, "", t), t, rg.pickRandomly(this->entries), expr);
-        this->entries.clear();
-    }
-    else
-    {
-        std::optional<SQLRelation> trel = std::make_optional<SQLRelation>(createTableRelation(rg, true, "", t));
+            /// No type-compatible column: reroll to an index type that accepts any column type
+            static const std::vector<IndexType> unconstrained_index_types
+                = {IndexType::IDX_set, IndexType::IDX_minmax, IndexType::IDX_bloom_filter};
 
-        generateTableExpression(rg, trel, rg.nextMediumNumber() < 6, rg.nextMediumNumber() < 16, expr);
+            itpe = rg.pickRandomly(unconstrained_index_types);
+            need_string = need_array = false;
+        }
+        else
+        {
+            /// Reference a compatible column directly so the index expression keeps its (String/Array) type
+            columnPathRef(rg.pickRandomly(this->entries), expr);
+            this->entries.clear();
+        }
+    }
+    idef->set_type(itpe);
+    if (!need_string && !need_array)
+    {
+        if (rg.nextBool())
+        {
+            flatTableColumnPath(flat_tuple | flat_nested | flat_json | skip_nested_node, t.cols, [](const SQLColumn &) { return true; });
+            colRefOrExpression(rg, createTableRelation(rg, rg.nextSmallNumber() < 8, "", t), t, rg.pickRandomly(this->entries), expr);
+            this->entries.clear();
+        }
+        else
+        {
+            std::optional<SQLRelation> trel = std::make_optional<SQLRelation>(createTableRelation(rg, true, "", t));
+
+            generateTableExpression(rg, trel, rg.nextMediumNumber() < 6, rg.nextMediumNumber() < 16, expr);
+        }
     }
     switch (itpe)
     {
