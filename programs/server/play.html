@@ -5044,13 +5044,19 @@ function uniqueTitle(desired, excludeId) {
     }
 }
 
-/// Title for a duplicated tab: the source title with a " N" suffix, N starting at 1 and
+/// Title for a duplicated tab: a base title with a " N" suffix, N starting at 1 and
 /// incrementing until the result is free (titles must stay unique — see `uniqueTitle`).
-/// An existing trailing numeric suffix on the source is stripped first, so duplicating
-/// "Query A 2" yields "Query A 3" rather than "Query A 2 1".
+///
+/// A trailing " N" on the source is collapsed only when it is a real duplicate-family suffix,
+/// i.e. the title with it removed is itself an existing tab (the family root). So with a tab
+/// "Query A" present, duplicating "Query A 2" yields "Query A 3" rather than "Query A 2 1".
+/// Otherwise the digits are part of a user-authored name — "Incident 2025", "Release 24 7" —
+/// so the whole title is kept as the base and we append the copy counter to it, never rewriting
+/// a meaningful numeric ending down to "Incident 1" / "Release 24 1".
 function duplicateTitle(title) {
-    const base = title.replace(/ \d+$/, '');
     const taken = new Set(tabs.map(t => t.title));
+    const stripped = title.replace(/ \d+$/, '');
+    const base = (stripped !== title && taken.has(stripped)) ? stripped : title;
     for (let i = 1; ; ++i) {
         const candidate = base + ' ' + i;
         if (!taken.has(candidate)) return candidate;
