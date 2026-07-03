@@ -824,6 +824,7 @@ TestKeeper::TestKeeper(const zkutil::ZooKeeperArgs & args_)
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::CHECK_STAT);
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::TRY_REMOVE);
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::LIST_WITH_STAT_AND_DATA);
+    keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::CREATE_WITH_STATS);
 
     processing_thread = ThreadFromGlobalPool([this] { processingThread(); });
 }
