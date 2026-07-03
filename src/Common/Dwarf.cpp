@@ -543,6 +543,8 @@ std::string_view Dwarf::decompressSection(std::string_view compressed) const
     }
     catch (...)
     {
+        /// Ok to swallow: the symbolizer must not throw (it runs while handling other exceptions
+        /// and fatal signals). Failing to allocate here just means no line info for this section.
         return {};
     }
 
