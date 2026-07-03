@@ -11,4 +11,6 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 $CLICKHOUSE_LOCAL --format_csv_null_representation='' --query "SELECT 'a', NULL, 'b' FORMAT CSV"
 
 # A zero-token switch must still reject an adjacent empty value (it must not be silently enabled).
-$CLICKHOUSE_LOCAL --no-system-tables= --query "SELECT 1" |& grep -o "the argument for option '--no-system-tables' should follow immediately after the equal sign"
+# Assert it is rejected without running the query, rather than matching boost's exact error
+# message (which can change across boost::program_options versions).
+$CLICKHOUSE_LOCAL --no-system-tables= --query "SELECT 1" > /dev/null 2>&1 && echo "unexpectedly accepted" || echo "rejected"
