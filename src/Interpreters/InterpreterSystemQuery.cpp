@@ -1609,7 +1609,10 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
                 {
-                    if (storage_replicated->getReplicaPath() == remote_replica_path)
+                    /// Match the keeper too: a table on a different keeper with the same path string is a
+                    /// different znode, so it must not block a drop targeting query.zk_name.
+                    if (storage_replicated->getReplicaPath() == remote_replica_path
+                        && storage_replicated->getZooKeeperName() == query.zk_name)
                         throw Exception(ErrorCodes::TABLE_WAS_NOT_DROPPED,
                                         "There is a local table {}, which has the same table path in ZooKeeper. "
                                         "Please check the path in query. "
@@ -1904,10 +1907,14 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
     const String full_replica_name
         = query.shard.empty() ? query.replica : DatabaseReplicated::getFullReplicaName(query.shard, query.replica);
     const fs::path & query_replica_zk_path = fs::path(query.replica_zk_path);
-    auto check_not_local_replica
-        = [](const DatabaseReplicated * replicated, const String & full_replica_name_, const fs::path & query_replica_zk_path_)
+    auto check_not_local_replica = [](const DatabaseReplicated * replicated, const String & full_replica_name_,
+                                       const fs::path & query_replica_zk_path_, const String & query_zk_name_)
     {
-        if (!query_replica_zk_path_.empty() && fs::path(replicated->getZooKeeperPath()) != query_replica_zk_path_)
+        /// When a ZKPATH is given, a database on a different keeper (or path) is a different znode and must
+        /// not block a drop targeting query_zk_name_.
+        if (!query_replica_zk_path_.empty()
+            && (fs::path(replicated->getZooKeeperPath()) != query_replica_zk_path_
+                || replicated->getZooKeeperName() != query_zk_name_))
             return;
         if (replicated->getFullReplicaName() != full_replica_name_)
             return;
@@ -1923,7 +1930,7 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
         DatabasePtr database = DatabaseCatalog::instance().getDatabase(query.getDatabase());
         if (auto * replicated = dynamic_cast<DatabaseReplicated *>(database.get()))
         {
-            check_not_local_replica(replicated, full_replica_name, query_replica_zk_path);
+            check_not_local_replica(replicated, full_replica_name, query_replica_zk_path, query.zk_name);
             if (query.with_tables)
                 dropStorageReplicasFromDatabase(query.replica, database);
             DatabaseReplicated::dropReplica(
@@ -1951,7 +1958,7 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
                 continue;
             }
 
-            check_not_local_replica(replicated, full_replica_name, query_replica_zk_path);
+            check_not_local_replica(replicated, full_replica_name, query_replica_zk_path, query.zk_name);
             if (query.with_tables)
                 dropStorageReplicasFromDatabase(query.replica, database);
             DatabaseReplicated::dropReplica(
@@ -1970,7 +1977,7 @@ void InterpreterSystemQuery::dropDatabaseReplica(ASTSystemQuery & query)
         /// This check is actually redundant, but it may prevent from some user mistakes
         for (auto & elem : DatabaseCatalog::instance().getDatabases(GetDatabasesOptions{.with_remote_databases = false}))
             if (auto * replicated = dynamic_cast<DatabaseReplicated *>(elem.second.get()))
-                check_not_local_replica(replicated, full_replica_name, query_replica_zk_path);
+                check_not_local_replica(replicated, full_replica_name, query_replica_zk_path, query.zk_name);
 
         if (query.with_tables)
         {

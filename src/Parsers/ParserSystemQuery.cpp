@@ -223,6 +223,11 @@ enum class SystemQueryTargetType : uint8_t
                 res->zk_name = zkutil::extractZooKeeperName(zk_path);
                 res->replica_zk_path = zkutil::extractZooKeeperPath(zk_path, /*check_starts_with_slash*/ false);
             }
+            /// extractZooKeeperPath strips only a single trailing slash, so collapse any remaining ones:
+            /// the interpreter concatenates replica_zk_path + "/replicas", and a leftover trailing slash
+            /// would probe "...//replicas" and miss the real node.
+            while (res->replica_zk_path.size() > 1 && res->replica_zk_path.back() == '/')
+                res->replica_zk_path.pop_back();
             if (res->replica_zk_path.find_first_not_of('/') == String::npos)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "ZooKeeper path in DROP REPLICA is empty or refers to the root");
             res->full_replica_zk_path = std::move(zk_path);
