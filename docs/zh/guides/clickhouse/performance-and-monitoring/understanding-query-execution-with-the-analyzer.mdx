@@ -29,7 +29,7 @@ INSERT INTO session_events SELECT * FROM generateRandom('clientId UUID,
 
 现在 ClickHouse 中已经有了一些数据，我们可以运行一些查询并了解它们的执行过程。查询执行会被拆分为多个步骤。查询执行的每个步骤都可以通过相应的 `EXPLAIN` 查询进行分析和故障排查。下图概括了这些步骤：
 
-<Image img="/images/guides/developer/analyzer1.png" alt="Explain 查询步骤" size="md" />
+<Image img="/images/guides/developer/analyzer1.webp" alt="Explain 查询步骤" size="md" />
 
 下面我们来看这些环节在查询执行过程中是如何工作的。我们将选取几个查询，然后使用 `EXPLAIN` 语句来分析它们。
 
@@ -64,7 +64,7 @@ EXPLAIN AST SELECT min(timestamp), max(timestamp) FROM session_events;
 
 输出结果是一棵抽象语法树，可视化效果如下所示：
 
-<Image img="/images/guides/developer/analyzer2.png" alt="AST 输出" size="md" />
+<Image img="/images/guides/developer/analyzer2.webp" alt="AST 输出" size="md" />
 
 每个节点都有对应的子节点，整棵树表示查询的整体结构。这是一种有助于处理查询的逻辑结构。从终端用户的角度来看 (除非你对查询执行感兴趣) ，它的实用性并不高；这个工具主要供开发者使用。
 
@@ -349,7 +349,7 @@ digraph
 
 您可以将此输出复制并粘贴到[此处](https://dreampuf.github.io/GraphvizOnline)，从而生成以下图形：
 
-<Image img="/images/guides/developer/analyzer3.png" alt="图形输出" size="md" />
+<Image img="/images/guides/developer/analyzer3.webp" alt="图形输出" size="md" />
 
 白色矩形对应管道节点，灰色矩形对应查询计划步骤，`x` 后跟的数字表示当前使用的输入/输出数量。如果不希望以紧凑形式显示，可以添加 `compact=0`：
 
@@ -389,7 +389,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer4.png" alt="紧凑图输出" size="md" />
+<Image img="/images/guides/developer/analyzer4.webp" alt="紧凑图输出" size="md" />
 
 为什么 ClickHouse 没有使用多个线程从表中读取数据？我们来尝试向表中添加更多数据：
 
@@ -448,7 +448,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer5.png" alt="并行图输出" size="md" />
+<Image img="/images/guides/developer/analyzer5.webp" alt="并行图输出" size="md" />
 
 因此，执行器认为无需将这些操作并行化，因为数据量还不够大。增加更多行后，执行器便决定改用多个线程，如图所示。
 

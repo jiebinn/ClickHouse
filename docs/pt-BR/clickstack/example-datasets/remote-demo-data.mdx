@@ -64,7 +64,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Navegue até `Team Settings` e clique em `Edit` em `Local Connection`:
 
-    <Image img="/images/use-cases/observability/edit_connection.png" alt="Editar conexão" size="lg" />
+    <Image img="/images/use-cases/observability/edit_connection.webp" alt="Editar conexão" size="lg" />
 
     Renomeie a conexão para `Demo` e preencha o formulário a seguir com os seguintes detalhes de conexão do servidor de demonstração:
 
@@ -73,7 +73,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
     * `Username`: `otel_demo`
     * `Password`: Deixe em branco
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/edit_demo_connection.png" alt="Editar conexão Demo" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/edit_demo_connection.webp" alt="Editar conexão Demo" size="lg" />
   </Step>
 
   <Step>
@@ -87,7 +87,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Role até `Sources` e modifique cada uma das fontes — `Logs`, `Traces`, `Metrics` e `Sessions` — para usar o banco de dados `otel_v2`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/edit_demo_source.png" alt="Editar fonte Demo" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/edit_demo_source.webp" alt="Editar fonte Demo" size="lg" />
 
     <Note>
       Talvez seja necessário recarregar a página para garantir que a lista completa de bancos de dados apareça em cada fonte.
@@ -99,7 +99,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Ajuste o período para mostrar todos os dados do `1 day` anterior usando o seletor de tempo no canto superior direito.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_2.png" alt="Etapa 2" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_2.webp" alt="Etapa 2" size="lg" />
 
     Você pode notar uma pequena diferença no número de erros no gráfico de barras da visão geral, com um pequeno aumento em vermelho em várias barras consecutivas.
 
@@ -115,7 +115,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     O erro deve ficar mais evidente:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_3.png" alt="Passo 3" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_3.webp" alt="Passo 3" size="lg" />
   </Step>
 
   <Step>
@@ -125,7 +125,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Os clusters de erro revelam problemas relacionados a falhas em pagamentos, incluindo um padrão chamado `Failed to place order`. Outros clusters também indicam problemas na cobrança de cartões e caches cheios.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_4.png" alt="Passo 4" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_4.webp" alt="Passo 4" size="lg" />
 
     Observe que esses clusters de erro provavelmente se originam de serviços diferentes.
   </Step>
@@ -137,13 +137,13 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Isso exibirá uma lista de todas as ocorrências desse erro associadas ao serviço `frontend`:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_5.png" alt="Passo 5" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_5.webp" alt="Passo 5" size="lg" />
 
     Selecione qualquer um dos erros exibidos. Os metadados dos logs serão mostrados em detalhes. Ao percorrer `Overview` e `Column Values`, fica evidente um problema na cobrança dos cartões devido ao cache:
 
     `failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.`
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_6.png" alt="Passo 6" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_6.webp" alt="Passo 6" size="lg" />
   </Step>
 
   <Step>
@@ -155,7 +155,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Selecione a aba `Infrastructure` para ver as métricas associadas aos pods subjacentes do serviço `frontend` e amplie o intervalo de tempo para `1d`:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_7.png" alt="Etapa 7" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_7.webp" alt="Etapa 7" size="lg" />
 
     O problema não parece estar relacionado à infraestrutura — nenhuma métrica mudou de forma significativa ao longo do período, nem antes nem depois do erro. Feche a aba Infrastructure.
   </Step>
@@ -167,11 +167,11 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Selecione `Trace` para visualizar o trace associado. Ao rolar a tela na visualização seguinte, podemos ver como o HyperDX consegue visualizar o trace distribuído entre os microsserviços, conectando os spans em cada serviço. Um pagamento claramente envolve vários microsserviços, incluindo os que processam o checkout e as conversões de moeda.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_8.png" alt="Passo 8" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_8.webp" alt="Passo 8" size="lg" />
 
     Ao rolar até o fim da visualização, podemos ver que o serviço `payment` está causando o erro, que por sua vez se propaga de volta pela cadeia de chamadas.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_9.png" alt="Passo 9" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_9.webp" alt="Passo 9" size="lg" />
   </Step>
 
   <Step>
@@ -181,15 +181,15 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Mude para a visualização principal de Busca selecionando `Search`. Altere a fonte de dados para `Traces` e selecione a visualização `Results table`. **Certifique-se de que o intervalo de tempo ainda esteja definido para o último dia.**
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_10.png" alt="Etapa 10" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_10.webp" alt="Etapa 10" size="lg" />
 
     Essa visualização mostra todos os traces do último dia. Sabemos que o problema se origina no nosso serviço de pagamento, então aplique o filtro `payment` a `ServiceName`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_11.png" alt="Etapa 11" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_11.webp" alt="Etapa 11" size="lg" />
 
     Se aplicarmos o agrupamento de eventos aos traces selecionando `Event Patterns`, veremos imediatamente o problema de cache no serviço `payment`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_12.png" alt="Etapa 12" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_12.webp" alt="Etapa 12" size="lg" />
   </Step>
 
   <Step>
@@ -197,11 +197,11 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Mude para a visualização de resultados clicando em `Results table`. Filtre os erros usando o filtro `StatusCode` e o valor `Error`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_13.png" alt="Etapa 13" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_13.webp" alt="Etapa 13" size="lg" />
 
     Selecione o erro `Error: Visa cache full: cannot add new item.`, mude para a aba `Infrastructure` e amplie o intervalo de tempo para `1d`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_14.png" alt="Etapa 14" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_14.webp" alt="Etapa 14" size="lg" />
 
     Ao correlacionar traces com métricas, podemos ver que o uso de memória e CPU do serviço `payment` aumentou antes de cair para `0` (podemos atribuir isso à reinicialização de um pod do Kubernetes), o que sugere que o problema de cache causou problemas de recursos. É de se esperar que isso tenha impactado os tempos de processamento dos pagamentos.
   </Step>
@@ -215,17 +215,17 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Volte para a visualização da tabela de resultados e selecione o período de tempo que contém os erros para restringir os dados. Certifique-se de selecionar várias horas antes dos erros e, se possível, também depois deles (o problema pode ainda estar ocorrendo):
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_15.png" alt="Etapa 15" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_15.webp" alt="Etapa 15" size="lg" />
 
     Remova o filtro de erros e selecione `Event Deltas` no menu `Analysis Mode`, à esquerda.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_16.png" alt="Etapa 16" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_16.webp" alt="Etapa 16" size="lg" />
 
     O painel superior mostra a distribuição dos tempos, com cores indicando a densidade de eventos (número de spans). O subconjunto de eventos fora da concentração principal normalmente é o que mais vale a pena investigar.
 
     Se selecionarmos os eventos com duração maior que `1ms` e aplicarmos o filtro `Filter by selection`, poderemos analisar as diferenças entre os eventos &quot;normais&quot; e o grupo de spans de alta densidade com duração de ~0ms:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_17.png" alt="Etapa 17" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_17.webp" alt="Etapa 17" size="lg" />
 
     Com a análise feita no subconjunto de dados, podemos ver que os spans de &quot;background&quot; fora da seleção são, em sua maioria, transações Visa, associadas a respostas de 0ms devido a erros de cache.
   </Step>
@@ -256,11 +256,11 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Ao clicar em `▶️`, você verá como o desempenho dos pagamentos se degradou ao longo do tempo.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_18.png" alt="Etapa 18" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_18.webp" alt="Etapa 18" size="lg" />
 
     Se definirmos `Group By` como `SpanAttributes['app.payment.card_type']` (basta digitar `card` para usar o preenchimento automático), poderemos ver como o desempenho do serviço se degradou para transações Visa em relação à Mastercard:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_19.png" alt="Etapa 19" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_19.webp" alt="Etapa 19" size="lg" />
 
     Observe que, quando o erro ocorre, as respostas voltam em `0s`.
   </Step>
@@ -280,7 +280,7 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Podemos ver como o tamanho do cache aumentou ao longo de um período de 4–5 horas (provavelmente após uma implantação de software) antes de atingir o tamanho máximo de `100,000`. Em `Sample Matched Events`, vemos que nossos erros estão correlacionados com o cache atingindo esse limite e, depois disso, ele passa a ser registrado com tamanho `0`, com as respostas também retornando em `0s`.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_20.png" alt="Passo 20" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_20.webp" alt="Passo 20" size="lg" />
 
     Em resumo, ao explorar logs, traces e, por fim, métricas, concluímos:
 
@@ -302,11 +302,11 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Navegue até a aba `Client Sessions` no menu à esquerda e, antes disso, verifique se a fonte de dados está definida como `Sessions` e se o período está definido como `Last 1 day`:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_21.png" alt="Etapa 21" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_21.webp" alt="Etapa 21" size="lg" />
 
     Pesquise por `SpanAttributes.userEmail: Ronny.Windler` para encontrar a sessão do nosso cliente. Ao selecionar a sessão, você verá à esquerda os eventos do navegador e os spans associados à sessão do cliente, enquanto a experiência dele no navegador será reproduzida à direita:
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_22.png" alt="Etapa 22" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_22.webp" alt="Etapa 22" size="lg" />
   </Step>
 
   <Step>
@@ -316,11 +316,11 @@ Esta demo usa um [fork mantido pelo ClickStack](https://github.com/ClickHouse/op
 
     Se rolarmos até o fim dos spans, podemos ver um erro `500` associado a `/api/checkout`. Selecionar o botão ▶️ desse span específico leva a reprodução para esse ponto da sessão, permitindo confirmar a experiência do cliente: o pagamento simplesmente parece não funcionar, sem nenhum erro exibido.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_23.png" alt="Passo 23" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_23.webp" alt="Passo 23" size="lg" />
 
     Ao selecionar o span, podemos confirmar que isso foi causado por um erro interno. Ao clicar na aba `Trace` e percorrer os spans conectados, conseguimos confirmar que o cliente de fato foi vítima do nosso problema de cache.
 
-    <Image img="/images/use-cases/observability/hyperdx-demo/step_24.png" alt="Passo 24" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-demo/step_24.webp" alt="Passo 24" size="lg" />
   </Step>
 </Steps>
 

@@ -20,7 +20,7 @@ import { Image } from "/snippets/pt-BR/components/Image.jsx";
 
 O ClickPipes pode ser implantado e gerenciado manualmente usando a UI do ClickPipes, bem como de forma programática com [OpenAPI](/pt-BR/integrations/clickpipes/programmatic-access/openapi) e [Terraform](/pt-BR/integrations/clickpipes/programmatic-access/terraform).
 
-<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.png" alt="Stack do ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.webp" alt="Stack do ClickPipes" size="lg" border />
 
 <div id="supported-data-sources">
   ## Fontes de dados compatíveis
@@ -30,7 +30,7 @@ O ClickPipes pode ser implantado e gerenciado manualmente usando a UI do ClickPi
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Apache Kafka](/pt-BR/integrations/clickpipes/kafka/index)        | <img src="/images/integrations/logos/kafka.svg" alt="logo do Apache Kafka" width="32" />                  | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do Apache Kafka no ClickHouse Cloud.                                                                                                                     |
 | Confluent Cloud                                             | <img src="/images/integrations/logos/confluent.svg" alt="logo do Confluent Cloud" width="32" />           | Streaming      | Estável        | Aproveite o poder combinado do Confluent e do ClickHouse Cloud por meio da nossa integração direta.                                                                                                                   |
-| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.png" alt="logo do Redpanda" width="32" />              | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do Redpanda no ClickHouse Cloud.                                                                                                                         |
+| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.webp" alt="logo do Redpanda" width="32" />              | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do Redpanda no ClickHouse Cloud.                                                                                                                         |
 | AWS MSK                                                     | <img src="/images/integrations/logos/msk.svg" alt="logo do AWS MSK" width="32" />                         | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do AWS MSK no ClickHouse Cloud.                                                                                                                          |
 | Azure Event Hubs                                            | <img src="/images/integrations/logos/azure_event_hubs.svg" alt="logo do Azure Event Hubs" width="32" />   | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do Azure Event Hubs no ClickHouse Cloud. Consulte o [FAQ do Azure Event Hubs](/pt-BR/integrations/clickpipes/kafka/faq#azure-eventhubs) para mais orientações. |
 | WarpStream                                                  | <img src="/images/integrations/logos/warpstream.svg" alt="logo do WarpStream" width="32" />               | Streaming      | Estável        | Configure o ClickPipes e comece a ingerir dados de streaming do WarpStream no ClickHouse Cloud.                                                                                                                       |
@@ -126,7 +126,7 @@ Etapas:
 1. crie uma função personalizada `CREATE ROLE my_clickpipes_role SETTINGS ...`. Consulte a sintaxe de [CREATE ROLE](/pt-BR/reference/statements/create/role) para mais detalhes.
 2. adicione a função personalizada ao usuário do ClickPipes na etapa `Details and Settings`, durante a criação do ClickPipes.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.png" alt="Atribuir uma função personalizada" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.webp" alt="Atribuir uma função personalizada" size="lg" border />
 
 <div id="clickpipes-advanced-settings">
   ## Ajustando as configurações avançadas do ClickPipes
@@ -151,7 +151,7 @@ O ClickPipes oferece padrões sensatos que atendem aos requisitos da maioria dos
 | `Parallel view processing`           | false        | Define se o envio para views anexadas deve ser habilitado [de forma simultânea em vez de sequencial](/pt-BR/reference/settings/session-settings#parallel_view_processing). |
 | `Use cluster function`               | true         | Define se os arquivos devem ser processados em paralelo em vários nós.                                                                                               |
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.png" alt="Configurações avançadas do ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.webp" alt="Configurações avançadas do ClickPipes" size="lg" border />
 
 <div id="clickpipes-advanced-settings-streaming">
   ### ClickPipes de streaming

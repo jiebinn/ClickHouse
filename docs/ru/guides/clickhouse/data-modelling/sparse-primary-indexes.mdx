@@ -319,7 +319,7 @@ ClickHouse — это <a href="/ru/get-started/about/distinctive-features#true-c
   * затем по `URL`,
   * и наконец по `EventTime`:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-01.png" size="lg" alt="Разреженные первичные индексы 01" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-01.webp" size="lg" alt="Разреженные первичные индексы 01" />
 
 `UserID.bin`, `URL.bin` и `EventTime.bin` — это файлы данных на диске, в которых хранятся значения столбцов `UserID`, `URL` и `EventTime`.
 
@@ -344,7 +344,7 @@ ClickHouse — это <a href="/ru/get-started/about/distinctive-features#true-c
 Следующая диаграмма показывает, как (значения столбцов) 8,87 миллиона строк нашей таблицы
 организованы в 1083 гранулы, поскольку DDL-оператор таблицы содержит настройку `index_granularity` (со значением по умолчанию 8192).
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-02.png" size="lg" alt="Разреженные первичные индексы 02" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-02.webp" size="lg" alt="Разреженные первичные индексы 02" />
 
 Первые 8192 строки (их значения столбцов) — в физическом порядке на диске — логически относятся к грануле 0, затем следующие 8192 строки (их значения столбцов) относятся к грануле 1 и так далее.
 
@@ -377,11 +377,11 @@ ClickHouse — это <a href="/ru/get-started/about/distinctive-features#true-c
 * первая запись индекса (&#39;метка 0&#39; на диаграмме ниже) хранит значения столбцов ключа первой строки гранулы 0 с диаграммы выше,
 * вторая запись индекса (&#39;метка 1&#39; на диаграмме ниже) хранит значения столбцов ключа первой строки гранулы 1 с диаграммы выше, и так далее.
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-03a.png" size="lg" alt="Разреженные первичные индексы 03a" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-03a.webp" size="lg" alt="Разреженные первичные индексы 03a" />
 
 Всего индекс содержит 1083 записи для нашей таблицы с 8,87 миллиона строк и 1083 гранулами:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-03b.png" size="lg" alt="Разреженные первичные индексы 03b" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-03b.webp" size="lg" alt="Разреженные первичные индексы 03b" />
 
 <Note>
   * Для таблиц с [адаптивной гранулярностью индекса](/ru/resources/changelogs/oss/2019#experimental-features-1) в первичном индексе также хранится ещё одна, дополнительная &quot;финальная&quot; метка, в которой записываются значения столбцов первичного ключа последней строки таблицы. Но поскольку мы отключили адаптивную гранулярность индекса (чтобы упростить объяснение в этом руководстве, а также сделать диаграммы и результаты воспроизводимыми), индекс нашей таблицы в примере не содержит этой финальной метки.
@@ -582,7 +582,7 @@ LIMIT 10;
 
 Следующая диаграмма иллюстрирует часть файла первичного индекса нашей таблицы.
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-04.png" size="lg" alt="Разреженные первичные индексы 04" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-04.webp" size="lg" alt="Разреженные первичные индексы 04" />
 
 Как обсуждалось выше, с помощью двоичного поиска по 1083 меткам `UserID` в индексе была найдена метка 176. Следовательно, соответствующая ей гранула 176 потенциально может содержать строки со значением 749.927.693 в столбце `UserID`.
 
@@ -600,7 +600,7 @@ LIMIT 10;
 
 Следующая диаграмма показывает три файла меток `UserID.mrk`, `URL.mrk` и `EventTime.mrk`, в которых хранятся физические расположения гранул для столбцов таблицы `UserID`, `URL` и `EventTime`.
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-05.png" size="lg" alt="Разреженные первичные индексы 05" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-05.webp" size="lg" alt="Разреженные первичные индексы 05" />
 
 Мы уже обсуждали, что первичный индекс — это плоский несжатый файл-массив (`primary.idx`), содержащий метки индекса, нумерация которых начинается с 0.
 
@@ -648,7 +648,7 @@ LIMIT 10;
 
 Следующая схема и текст ниже показывают, как в нашем примере запроса ClickHouse находит гранулу 176 в файле данных UserID.bin.
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-06.png" size="lg" alt="Sparse Primary Indices 06" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-06.webp" size="lg" alt="Sparse Primary Indices 06" />
 
 Ранее в этом руководстве мы уже обсуждали, что ClickHouse выбрал метку 176 в первичном индексе и, следовательно, гранулу 176 как потенциально содержащую строки, соответствующие нашему запросу.
 
@@ -769,7 +769,7 @@ Processed 8.81 million rows,
 
 Предположим, что UserID имеет низкую мощность. В этом случае велика вероятность, что одно и то же значение UserID будет распределено по нескольким строкам таблицы, гранулам и, следовательно, меткам индекса. Для меток индекса с одинаковым UserID значения URL отсортированы по возрастанию (поскольку строки таблицы упорядочены сначала по UserID, а затем по URL). Это позволяет эффективно фильтровать данные, как описано ниже:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-07.png" size="lg" alt="Sparse Primary Indices 06" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-07.webp" size="lg" alt="Sparse Primary Indices 06" />
 
 Для процесса выбора гранул в наших абстрактных примерных данных на диаграмме выше возможны три разных сценария:
 
@@ -783,7 +783,7 @@ Processed 8.81 million rows,
 
 Когда UserID имеет высокую мощность, маловероятно, что одно и то же значение UserID будет распределено по нескольким строкам таблицы и гранулам. Это означает, что значения URL для меток индекса не возрастают монотонно:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-08.png" size="lg" alt="Sparse Primary Indices 06" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-08.webp" size="lg" alt="Sparse Primary Indices 06" />
 
 Как видно на диаграмме выше, все показанные метки, у которых значения URL меньше W3, выбираются для передачи строк связанных с ними гранул в движок ClickHouse.
 
@@ -819,7 +819,7 @@ ALTER TABLE hits_UserID_URL MATERIALIZE INDEX url_skipping_index;
 
 Теперь ClickHouse создал дополнительный индекс, который хранит — для каждой группы из 4 последовательных [гранул](#data-is-organized-into-granules-for-parallel-data-processing) (обратите внимание на предложение `GRANULARITY 4` в операторе `ALTER TABLE` выше) — минимальное и максимальное значения URL:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-13a.png" size="lg" alt="Разреженные первичные индексы 13a" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-13a.webp" size="lg" alt="Разреженные первичные индексы 13a" />
 
 Первая запись индекса (&#39;mark 0&#39; на диаграмме выше) хранит минимальное и максимальное значения URL для [строк, относящихся к первым 4 гранулам нашей таблицы](#data-is-organized-into-granules-for-parallel-data-processing).
 
@@ -859,15 +859,15 @@ ALTER TABLE hits_UserID_URL MATERIALIZE INDEX url_skipping_index;
 
 При создании **второй таблицы** с другим первичным ключом запросы нужно явно отправлять в ту версию таблицы, которая лучше всего подходит для конкретного запроса, а новые данные нужно явно вставлять в обе таблицы, чтобы поддерживать их синхронизацию:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-09a.png" size="lg" alt="Sparse Primary Indices 09a" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-09a.webp" size="lg" alt="Sparse Primary Indices 09a" />
 
 В случае с **materialized view** дополнительная таблица создается неявно, а данные в обеих таблицах автоматически поддерживаются в синхронизированном состоянии:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-09b.png" size="lg" alt="Sparse Primary Indices 09b" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-09b.webp" size="lg" alt="Sparse Primary Indices 09b" />
 
 А **проекция** — самый прозрачный вариант, потому что, помимо автоматической синхронизации неявно созданной (и скрытой) дополнительной таблицы при изменениях данных, ClickHouse также автоматически выберет наиболее эффективную версию таблицы для запросов:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-09c.png" size="lg" alt="Sparse Primary Indices 09c" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-09c.webp" size="lg" alt="Sparse Primary Indices 09c" />
 
 Далее мы подробнее рассмотрим эти три варианта создания и использования нескольких первичных индексов на реальных примерах.
 
@@ -917,11 +917,11 @@ OPTIMIZE TABLE hits_URL_UserID FINAL;
 
 Поскольку мы изменили порядок столбцов в первичном ключе, вставленные строки теперь хранятся на диске в другом лексикографическом порядке (по сравнению с нашей [исходной таблицей](#a-table-with-a-primary-key)), и поэтому 1083 гранулы этой таблицы теперь тоже содержат иные значения, чем раньше:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-10.png" size="lg" alt="Разреженные первичные индексы 10" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-10.webp" size="lg" alt="Разреженные первичные индексы 10" />
 
 Вот получившийся первичный ключ:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-11.png" size="lg" alt="Разреженные первичные индексы 11" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-11.webp" size="lg" alt="Разреженные первичные индексы 11" />
 
 Теперь его можно использовать, чтобы значительно ускорить выполнение нашего примера запроса с фильтрацией по столбцу URL и определить 10 пользователей, которые чаще всего переходили по URL &quot;http://public&#95;search&quot;:
 
@@ -1062,11 +1062,11 @@ Ok.
   * если в исходную таблицу hits&#95;UserID&#95;URL вставляются новые строки, эти строки автоматически вставляются и в неявно созданную таблицу
   * Фактически неявно созданная таблица имеет тот же порядок строк и тот же первичный индекс, что и [вторичная таблица, которую мы создали явно](/ru/guides/clickhouse/data-modelling/sparse-primary-indexes#option-1-secondary-tables):
 
-  <Image img="/images/guides/best-practices/sparse-primary-indexes-12b-1.png" size="lg" alt="Sparse Primary Indices 12b1" />
+  <Image img="/images/guides/best-practices/sparse-primary-indexes-12b-1.webp" size="lg" alt="Sparse Primary Indices 12b1" />
 
   ClickHouse хранит [файлы данных столбцов](#data-is-stored-on-disk-ordered-by-primary-key-columns) (*.bin), [файлы меток](#mark-files-are-used-for-locating-granules) (*.mrk2) и [первичный индекс](#the-primary-index-has-one-entry-per-granule) (primary.idx) неявно созданной таблицы в специальной папке внутри каталога данных сервера ClickHouse:
 
-  <Image img="/images/guides/best-practices/sparse-primary-indexes-12b-2.png" size="md" alt="Sparse Primary Indices 12b2" />
+  <Image img="/images/guides/best-practices/sparse-primary-indexes-12b-2.webp" size="md" alt="Sparse Primary Indices 12b2" />
 </Note>
 
 Неявно созданная таблица (и её первичный индекс), лежащая в основе materialized view, теперь может использоваться для значительного ускорения выполнения нашего запроса из примера с фильтрацией по столбцу URL:
@@ -1146,11 +1146,11 @@ ALTER TABLE hits_UserID_URL
   * обратите внимание, что проекции не делают более эффективными запросы с ORDER BY, даже если ORDER BY совпадает с ORDER BY проекции (см. https://github.com/ClickHouse/ClickHouse/issues/47333)
   * фактически неявно созданная скрытая таблица имеет тот же порядок строк и тот же первичный индекс, что и [вторичная таблица, которую мы явно создали](/ru/guides/clickhouse/data-modelling/sparse-primary-indexes#option-1-secondary-tables):
 
-  <Image img="/images/guides/best-practices/sparse-primary-indexes-12c-1.png" size="lg" alt="Sparse Primary Indices 12c1" />
+  <Image img="/images/guides/best-practices/sparse-primary-indexes-12c-1.webp" size="lg" alt="Sparse Primary Indices 12c1" />
 
   ClickHouse хранит [файлы данных столбцов](#data-is-stored-on-disk-ordered-by-primary-key-columns) (*.bin), [файлы меток](#mark-files-are-used-for-locating-granules) (*.mrk2) и [первичный индекс](#the-primary-index-has-one-entry-per-granule) (primary.idx) скрытой таблицы в специальной папке (выделена оранжевым на снимке экрана ниже) рядом с файлами данных, файлами меток и файлами первичного индекса исходной таблицы:
 
-  <Image img="/images/guides/best-practices/sparse-primary-indexes-12c-2.png" size="sm" alt="Sparse Primary Indices 12c2" />
+  <Image img="/images/guides/best-practices/sparse-primary-indexes-12c-2.webp" size="sm" alt="Sparse Primary Indices 12c2" />
 </Note>
 
 Скрытая таблица (и ее первичный индекс), созданная проекцией, теперь может (неявно) использоваться для значительного ускорения выполнения нашего примера запроса с фильтрацией по столбцу URL. Обратите внимание: синтаксически запрос обращен к исходной таблице проекции.
@@ -1428,7 +1428,7 @@ ORDER BY Ratio ASC
 
 На диаграмме ниже схематично показан порядок строк на диске для первичного ключа, в котором столбцы ключа упорядочены по мощности по возрастанию:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-14a.png" size="lg" alt="Разреженные первичные индексы 14a" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-14a.webp" size="lg" alt="Разреженные первичные индексы 14a" />
 
 Мы уже обсуждали, что [данные строк таблицы хранятся на диске в порядке столбцов первичного ключа](#data-is-stored-on-disk-ordered-by-primary-key-columns).
 
@@ -1440,7 +1440,7 @@ ORDER BY Ratio ASC
 
 В отличие от диаграммы выше, на диаграмме ниже схематично показан порядок строк на диске для первичного ключа, в котором столбцы ключа упорядочены по мощности по убыванию:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-14b.png" size="lg" alt="Разреженные первичные индексы 14b" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-14b.webp" size="lg" alt="Разреженные первичные индексы 14b" />
 
 Теперь строки таблицы сначала упорядочиваются по значению `ch`, а строки с одинаковым значением `ch` — по значению `cl`.
 Но поскольку первый ключевой столбец `ch` имеет высокую мощность, строки с одинаковым значением `ch` встречаются редко. А значит, значения `cl` тоже вряд ли будут упорядочены (локально — в пределах строк с одинаковым значением `ch`).
@@ -1483,7 +1483,7 @@ ORDER BY Ratio ASC
 * порядок вставки строк при изменении содержимого (например, из-за нажатий клавиш при вводе текста в текстовое поле) и
 * порядок данных на диске из вставленных строк при использовании `PRIMARY KEY (hash)`:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-15a.png" size="lg" alt="Sparse Primary Indices 15a" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-15a.webp" size="lg" alt="Sparse Primary Indices 15a" />
 
 Поскольку столбец `hash` используется в качестве столбца первичного ключа,
 
@@ -1500,7 +1500,7 @@ ORDER BY Ratio ASC
 * порядок вставки строк при изменении содержимого (например, из-за нажатий клавиш при вводе текста в текстовое поле) и
 * порядок данных на диске из вставленных строк при использовании составного `PRIMARY KEY (fingerprint, hash)`:
 
-<Image img="/images/guides/best-practices/sparse-primary-indexes-15b.png" size="lg" alt="Sparse Primary Indices 15b" />
+<Image img="/images/guides/best-practices/sparse-primary-indexes-15b.webp" size="lg" alt="Sparse Primary Indices 15b" />
 
 Теперь строки на диске сначала упорядочиваются по `fingerprint`, а для строк с одинаковым значением fingerprint итоговый порядок определяется значением `hash`.
 

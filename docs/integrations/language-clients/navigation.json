@@ -28,7 +28,7 @@
     },
     {
       "group": "Rust",
-      "icon": "/images/integrations/logos/rust.png",
+      "icon": "/images/integrations/logos/rust.webp",
       "root": "integrations/language-clients/rust",
       "pages": []
     },

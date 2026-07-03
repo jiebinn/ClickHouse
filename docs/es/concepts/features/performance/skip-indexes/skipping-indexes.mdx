@@ -104,7 +104,7 @@ En lugar de procesar 100 millones de filas de 800 megabytes, ClickHouse solo ley
 De forma más visual, así es como se leyeron y seleccionaron las 4096 filas con un `my_value` de 125, y cómo las filas siguientes
 se omitieron sin leer del disco:
 
-<Image img="/images/guides/best-practices/simple_skip.png" size="md" alt="Omisión simple" />
+<Image img="/images/guides/best-practices/simple_skip.webp" size="md" alt="Omisión simple" />
 
 Puede acceder a información detallada sobre el uso del índice de omisión habilitando la traza al ejecutar consultas.  Desde
 clickhouse-client, establezca `send_logs_level`:
@@ -223,7 +223,7 @@ Los índices de omisión no son intuitivos, especialmente para quienes están ac
 
 Considere la siguiente distribución de datos:
 
-<Image img="/images/guides/best-practices/bad_skip.png" size="md" alt="Omisión deficiente" />
+<Image img="/images/guides/best-practices/bad_skip.webp" size="md" alt="Omisión deficiente" />
 
 Suponga que la clave primaria/ORDER BY es `timestamp` y que hay un índice sobre `visitor_id`. Considere la siguiente consulta:
 

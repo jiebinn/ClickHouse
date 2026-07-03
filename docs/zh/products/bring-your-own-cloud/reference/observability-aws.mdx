@@ -211,19 +211,19 @@ scrape_configs:
 1. **在 Grafana 中将 Prometheus 添加为数据源**
    前往 Grafana 侧边栏中的“Data sources”，点击“Add data source”，然后选择“Prometheus”。输入你的 Prometheus 实例 URL 以及连接所需的凭据。
 
-<Image img="/images/cloud/reference/byoc-mixin-1.png" size="lg" alt="BYOC Mixin 1" background="black" />
+<Image img="/images/cloud/reference/byoc-mixin-1.webp" size="lg" alt="BYOC Mixin 1" background="black" />
 
-<Image img="/images/cloud/reference/byoc-mixin-2.png" size="lg" alt="BYOC Mixin 2" background="black" />
+<Image img="/images/cloud/reference/byoc-mixin-2.webp" size="lg" alt="BYOC Mixin 2" background="black" />
 
-<Image img="/images/cloud/reference/byoc-mixin-3.png" size="lg" alt="BYOC Mixin 3" background="black" />
+<Image img="/images/cloud/reference/byoc-mixin-3.webp" size="lg" alt="BYOC Mixin 3" background="black" />
 
 2. **导入 ClickHouse 仪表板**
    在 Grafana 中，进入仪表板区域并选择“Import”。你既可以上传仪表板 JSON 文件，也可以直接粘贴其内容。从 ClickHouse mixin 仓库获取该 JSON 文件：
    [ClickHouse Mix-in Dashboard JSON](https://github.com/ClickHouse/clickhouse-mixin/blob/main/dashboard_byoc.json)
 
-<Image img="/images/cloud/reference/byoc-mixin-4.png" size="lg" alt="BYOC Mixin 4" background="black" />
+<Image img="/images/cloud/reference/byoc-mixin-4.webp" size="lg" alt="BYOC Mixin 4" background="black" />
 
 3. **查看你的指标**
    导入仪表板并将其配置为使用你的 Prometheus 数据源后，你应该能看到来自 ClickHouse Cloud 服务的实时指标。
 
-<Image img="/images/cloud/reference/byoc-mixin-5.png" size="lg" alt="BYOC Mixin 5" background="black" />
+<Image img="/images/cloud/reference/byoc-mixin-5.webp" size="lg" alt="BYOC Mixin 5" background="black" />

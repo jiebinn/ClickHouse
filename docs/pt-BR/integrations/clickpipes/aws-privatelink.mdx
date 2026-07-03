@@ -222,19 +222,19 @@ Consulte o guia de [primeiros passos](https://docs.aws.amazon.com/vpc/latest/pri
 
 1. Acesse o SQL Console do seu serviço do ClickHouse Cloud.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.png" alt="Serviço do ClickPipes" size="md" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.webp" alt="Serviço do ClickPipes" size="md" border />
 
 2. Selecione o botão `Data Sources` no menu à esquerda e clique em &quot;Set up a ClickPipe&quot;
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="Selecionar importações" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="Selecionar importações" size="lg" border />
 
 3. Selecione Kafka ou Postgres como fonte de dados.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.png" alt="Selecionar fonte de dados" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.webp" alt="Selecionar fonte de dados" size="lg" border />
 
 4. Selecione a opção `Reverse private endpoint`.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.png" alt="Selecionar endpoint privado reverso" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.webp" alt="Selecionar endpoint privado reverso" size="lg" border />
 
 5. Selecione um dos endpoints privados reversos existentes ou crie um novo.
 
@@ -245,11 +245,11 @@ Consulte o guia de [primeiros passos](https://docs.aws.amazon.com/vpc/latest/pri
   Para acesso na mesma região, a abordagem recomendada é criar um recurso da VPC.
 </Info>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.png" alt="Selecionar endpoint privado reverso" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.webp" alt="Selecionar endpoint privado reverso" size="lg" border />
 
 6. Forneça os parâmetros obrigatórios para o tipo de endpoint selecionado.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.png" alt="Selecionar endpoint privado reverso" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.webp" alt="Selecionar endpoint privado reverso" size="lg" border />
 
 * Para recurso da VPC, forneça o ARN de compartilhamento da configuração e o ID da configuração.
   * Para MSK multi-VPC, forneça o ARN do cluster e o método de autenticação usado com o endpoint criado.
@@ -261,7 +261,7 @@ Consulte o guia de [primeiros passos](https://docs.aws.amazon.com/vpc/latest/pri
    A página será atualizada automaticamente assim que o endpoint estiver pronto.
    O VPC endpoint service pode exigir que você aceite a solicitação de conexão no console da AWS.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.png" alt="Selecionar endpoint privado reverso" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.webp" alt="Selecionar endpoint privado reverso" size="lg" border />
 
 8. Quando o endpoint estiver pronto, você poderá usar um nome DNS para se conectar à fonte de dados.
 
@@ -282,11 +282,11 @@ Você pode gerenciar endpoints privados reversos existentes nas configurações 
 
 1. Na barra lateral, localize o botão `Settings` e clique nele.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.png" alt="Configurações do ClickHouse Cloud" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.webp" alt="Configurações do ClickHouse Cloud" size="lg" border />
 
 2. Clique em `Reverse private endpoints` na seção `ClickPipe reverse private endpoints`.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.png" alt="Configurações do ClickHouse Cloud" size="md" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.webp" alt="Configurações do ClickHouse Cloud" size="md" border />
 
    Informações detalhadas sobre o endpoint privado reverso são exibidas no painel lateral.
 

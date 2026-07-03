@@ -50,7 +50,7 @@ ClickHouse は自動的に主キーをサンプリングし、
 同じ正しい結果を生成でき、かつ読み取る必要があるデータ量が最も少ないテーブルを
 以下の図に示すように選択します。
 
-<Image img="/images/data-modeling/projections_1.png" size="md" alt="ClickHouse における プロジェクション" />
+<Image img="/images/data-modeling/projections_1.webp" size="md" alt="ClickHouse における プロジェクション" />
 
 <div id="smarter_storage_with_part_offset">
   ### `_part_offset` によるより効率的なストレージ
@@ -304,7 +304,7 @@ SETTINGS mutations_sync = 1
 以下の図は、メインテーブル `uk_price_paid_with_projections`
 と、その 2 つの射影を可視化したものです。
 
-<Image img="/images/data-modeling/projections_2.png" size="md" alt="メインテーブル uk_price_paid_with_projections とその 2 つの射影の可視化" />
+<Image img="/images/data-modeling/projections_2.webp" size="md" alt="メインテーブル uk_price_paid_with_projections とその 2 つの射影の可視化" />
 
 ここで、ロンドンの county のうち価格が最も高い 3 件を
 一覧表示するクエリを再度実行すると、クエリのパフォーマンスが改善していることがわかります。

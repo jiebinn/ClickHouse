@@ -17,11 +17,11 @@ ClickHouse Cloud ofrece una API basada en OpenAPI que le permite gestionar media
 
 1. Puede usar la pestaña **claves de API** del menú de la izquierda para crear y gestionar sus claves de API.
 
-<Image img="/images/cloud/manage/openapi1.png" size="sm" alt="Pestaña claves de API" border />
+<Image img="/images/cloud/manage/openapi1.webp" size="sm" alt="Pestaña claves de API" border />
 
 2. La página **claves de API** mostrará inicialmente una opción para crear su primera clave de API, como se muestra a continuación. Una vez creada la primera clave, podrá crear otras nuevas con el botón `New API Key`, que aparece en la esquina superior derecha.
 
-<Image img="/images/cloud/manage/openapi2.png" size="md" alt="Página claves de API" border />
+<Image img="/images/cloud/manage/openapi2.webp" size="md" alt="Página claves de API" border />
 
 3. Para crear una clave de API, especifique el nombre de la clave, sus permisos y el tiempo de expiración, y luego haga clic en `Generate API Key`.
 
@@ -41,7 +41,7 @@ ClickHouse Cloud ofrece una API basada en OpenAPI que le permite gestionar media
 
 4. La siguiente pantalla mostrará su ID de clave y el secreto de la clave. Copie estos valores y guárdelos en un lugar seguro, como una bóveda. Estos valores dejarán de mostrarse cuando salga de esta pantalla.
 
-<Image img="/images/cloud/manage/openapi4.png" size="md" alt="Detalles de la clave de API" border />
+<Image img="/images/cloud/manage/openapi4.webp" size="md" alt="Detalles de la clave de API" border />
 
 5. La API de ClickHouse Cloud utiliza [autenticación básica de HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) para verificar la validez de sus claves de API. A continuación se muestra un ejemplo de cómo usar sus claves de API para enviar solicitudes a la API de ClickHouse Cloud con `curl`:
 
@@ -60,7 +60,7 @@ $ curl --user $KEY_ID:$KEY_SECRET https://api.clickhouse.cloud/v1/organizations
   Eliminar una clave de API es una acción permanente. Cualquier servicio que use la clave perderá inmediatamente el acceso a ClickHouse Cloud.
 </Note>
 
-<Image img="/images/cloud/manage/openapi5.png" size="md" alt="Página de administración de claves de API" border />
+<Image img="/images/cloud/manage/openapi5.webp" size="md" alt="Página de administración de claves de API" border />
 
 <div id="endpoints">
   ## Endpoints

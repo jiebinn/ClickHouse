@@ -443,7 +443,7 @@ Query id: c7e11e7b-d970-4e35-936c-ecfc24e3b879
 
 一旦识别出潜在的优化项，建议逐项实施，这样更容易跟踪它们对性能的影响。下图展示了总体方法。
 
-<Image img="/images/guides/best-practices/query_optimization_diagram_1.png" size="lg" alt="优化工作流" />
+<Image img="/images/guides/best-practices/query_optimization_diagram_1.webp" size="lg" alt="优化工作流" />
 
 *最后，要注意异常值；查询偶尔运行缓慢是很常见的，可能是因为某个用户执行了一条高开销的临时查询，也可能是系统由于其他原因正处于高压状态。你可以按 `normalized_query_hash` 字段分组，以识别那些被定期执行的高开销查询。这些通常才是你真正需要重点调查的对象。*
 

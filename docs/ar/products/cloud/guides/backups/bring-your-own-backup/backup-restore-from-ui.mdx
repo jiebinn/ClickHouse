@@ -45,7 +45,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     * a. احصل على ARN من صفحة إعدادات خدمة ClickHouse Cloud، ضمن Network security information، وسيبدو مشابهًا لما يلي:
 
-    <Image img="/images/cloud/manage/backups/arn.png" alt="AWS S3 ARN" size="lg" />
+    <Image img="/images/cloud/manage/backups/arn.webp" alt="AWS S3 ARN" size="lg" />
 
     * b. لهذا الدور، أنشئ trust policy كما يلي:
 
@@ -124,7 +124,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     في صفحة &quot;Settings&quot;، انقر على &quot;Set up external backup&quot;:
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
   </Step>
 
   <Step>
@@ -132,7 +132,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     في الشاشة التالية، أدخل AWS IAM Role ARN الذي أنشأته للتو وBucket URL لحاوية S3 بالتنسيق التالي:
 
-    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.png" alt="تهيئة AWS IAM Role ARN وتفاصيل حاوية S3" size="lg" />
+    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.webp" alt="تهيئة AWS IAM Role ARN وتفاصيل حاوية S3" size="lg" />
   </Step>
 
   <Step>
@@ -157,7 +157,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     ستعرض صفحة &quot;Backups&quot; هذه النسخ الاحتياطية الموجودة في حاويتك في جدول منفصل،
     كما هو موضح أدناه:
 
-    <Image img="/images/cloud/manage/backups/view_backups.png" alt="عرض النسخ الاحتياطية المخزنة في حاويتك" size="lg" />
+    <Image img="/images/cloud/manage/backups/view_backups.webp" alt="عرض النسخ الاحتياطية المخزنة في حاويتك" size="lg" />
   </Step>
 </Steps>
 
@@ -188,7 +188,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     انقر على رابط “access or restore a backup” الموجود أعلى قائمة النسخ الاحتياطية في
     واجهة المستخدم للحصول على أمر SQL لاستعادة النسخة الاحتياطية. سيبدو الأمر كما يلي:
 
-    <Image img="/images/cloud/manage/backups/backup_command.png" alt="احصل على أمر SQL المستخدم لاستعادة النسخة الاحتياطية" size="md" />
+    <Image img="/images/cloud/manage/backups/backup_command.webp" alt="احصل على أمر SQL المستخدم لاستعادة النسخة الاحتياطية" size="md" />
 
     <Warning>
       **نقل النسخ الاحتياطية إلى موقع آخر**
@@ -272,7 +272,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     في صفحة `Settings`، انقر على `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
   </Step>
 
   <Step>
@@ -280,7 +280,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     في النافذة المنبثقة، أدخل مسار الـ bucket في GCP، وHMAC Key وSecret اللذين أُنشئا في القسم السابق.
 
-    <Image img="/images/cloud/manage/backups/gcp_configure.png" alt="تهيئة GCP HMAC Key and Secret" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_configure.webp" alt="تهيئة GCP HMAC Key and Secret" size="md" />
   </Step>
 
   <Step>
@@ -304,7 +304,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     يجب أن تعرض صفحة Backups هذه النسخ الاحتياطية الموجودة في الـ bucket الخاص بك في جدول منفصل كما هو موضح أدناه:
 
-    <Image img="/images/cloud/manage/backups/gcp_stored_backups.png" alt="عرض النسخ الاحتياطية المخزنة في الـ bucket الخاص بك" size="lg" />
+    <Image img="/images/cloud/manage/backups/gcp_stored_backups.webp" alt="عرض النسخ الاحتياطية المخزنة في الـ bucket الخاص بك" size="lg" />
   </Step>
 </Steps>
 
@@ -330,7 +330,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     الخاص بتلك النسخة تحديدًا. وستحتاج إلى إضافة مفتاح الوصول السري الخاص بك
     إلى الأمر:
 
-    <Image img="/images/cloud/manage/backups/gcp_restore_command.png" alt="الحصول على أمر SQL المستخدم لاستعادة النسخة الاحتياطية" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_restore_command.webp" alt="الحصول على أمر SQL المستخدم لاستعادة النسخة الاحتياطية" size="md" />
 
     <Warning>
       **نقل النسخ الاحتياطية إلى موقع آخر**
@@ -399,7 +399,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     في صفحة `Settings`، انقر على `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="تغيير النسخ الاحتياطي الخارجي" size="lg" />
   </Step>
 
   <Step>
@@ -408,7 +408,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     في الشاشة التالية، أدخل `Connection String` و`Container Name` الخاصَّين
     بحساب تخزين Azure الذي أنشأته في القسم السابق:
 
-    <Image img="/images/cloud/manage/backups/azure_connection_details.png" alt="أدخل سلسلة الاتصال واسم الحاوية لحساب تخزين Azure الخاص بك" size="md" />
+    <Image img="/images/cloud/manage/backups/azure_connection_details.webp" alt="أدخل سلسلة الاتصال واسم الحاوية لحساب تخزين Azure الخاص بك" size="md" />
   </Step>
 
   <Step>
@@ -432,7 +432,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     يجب أن تعرض صفحة Backups هذه النسخ الاحتياطية الموجودة في الـ bucket الخاص بك في جدول منفصل،
     كما هو موضح أدناه:
 
-    <Image img="/images/cloud/manage/backups/view_backups_azure.png" alt="عرض النسخ الاحتياطية المخزنة في الـ bucket الخاص بك" size="md" />
+    <Image img="/images/cloud/manage/backups/view_backups_azure.webp" alt="عرض النسخ الاحتياطية المخزنة في الـ bucket الخاص بك" size="md" />
   </Step>
 </Steps>
 
@@ -459,7 +459,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     أمر الاستعادة الخاص بتلك النسخة الاحتياطية. ستحتاج إلى إضافة سلسلة اتصال حساب التخزين
     في Azure إلى الأمر.
 
-    <Image img="/images/cloud/manage/backups/restore_backups_azure.png" alt="استعادة النسخ الاحتياطية في Azure" size="md" />
+    <Image img="/images/cloud/manage/backups/restore_backups_azure.webp" alt="استعادة النسخ الاحتياطية في Azure" size="md" />
 
     <Warning>
       **نقل النسخ الاحتياطية إلى موقع آخر**

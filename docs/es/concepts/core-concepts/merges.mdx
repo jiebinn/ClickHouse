@@ -26,7 +26,7 @@ Para controlar el número de partes por tabla e implementar el punto ② anterio
 
 El siguiente diagrama ilustra este proceso de fusión en segundo plano:
 
-<Image img="/images/managing-data/core-concepts/merges_01.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_01.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -87,7 +87,7 @@ La grabación del dashboard anterior muestra todo el proceso, desde las insercio
 
 Un servidor ClickHouse utiliza varios [hilos de fusión](/es/reference/settings/server-settings/settings#background_pool_size) en segundo plano para ejecutar fusiones concurrentes de partes:
 
-<Image img="/images/managing-data/core-concepts/merges_02.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_02.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -115,7 +115,7 @@ ClickHouse no necesariamente carga en memoria todas las partes que se van a fusi
 
 El siguiente diagrama ilustra cómo un único [hilo de fusión en segundo plano](/es/concepts/core-concepts/merges#concurrent-merges) en ClickHouse fusiona partes (de forma predeterminada, sin [fusión vertical](/es/concepts/core-concepts/merges#memory-optimized-merges)):
 
-<Image img="/images/managing-data/core-concepts/merges_03.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_03.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -141,7 +141,7 @@ A continuación, describiremos brevemente la mecánica de fusión de motores esp
 
 El diagrama siguiente ilustra cómo se fusionan las partes en una tabla [MergeTree](/es/reference/engines/table-engines/mergetree-family/mergetree) estándar:
 
-<Image img="/images/managing-data/core-concepts/merges_04.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_04.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -155,7 +155,7 @@ Las columnas de la tabla ① descomprimidas y preordenadas se ② fusionan mante
 
 Las fusiones de partes en una tabla [ReplacingMergeTree](/es/reference/engines/table-engines/mergetree-family/replacingmergetree) funcionan de forma similar a las [fusiones estándar](/es/concepts/core-concepts/merges#standard-merges), pero solo se conserva la versión más reciente de cada fila y se descartan las versiones anteriores:
 
-<Image img="/images/managing-data/core-concepts/merges_05.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_05.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -173,7 +173,7 @@ Sin embargo, `ReplacingMergeTree` elimina las filas duplicadas con la misma clav
 
 Los datos numéricos se resumen automáticamente durante las fusiones de partes de una tabla [SummingMergeTree](/es/reference/engines/table-engines/mergetree-family/summingmergetree):
 
-<Image img="/images/managing-data/core-concepts/merges_06.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_06.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 
@@ -187,7 +187,7 @@ En el paso ② de fusión, ClickHouse reemplaza todas las filas con la misma cla
 
 El ejemplo de la tabla `SummingMergeTree` anterior es una variante especializada de la tabla [AggregatingMergeTree](/es/reference/engines/table-engines/mergetree-family/aggregatingmergetree), que permite la [transformación automática e incremental de datos](https://www.youtube.com/watch?v=QDAJTKZT8y4) al aplicar cualquiera de las [más de 90](/es/reference/functions/aggregate-functions/reference-index) funciones de agregación durante las fusiones de partes:
 
-<Image img="/images/managing-data/core-concepts/merges_07.png" size="lg" alt="FUSIONES DE PARTES" />
+<Image img="/images/managing-data/core-concepts/merges_07.webp" size="lg" alt="FUSIONES DE PARTES" />
 
 <br />
 

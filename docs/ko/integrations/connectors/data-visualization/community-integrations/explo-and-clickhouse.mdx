@@ -25,7 +25,7 @@ import CommunityMaintainedBadge from "/snippets/ko/components/CommunityMaintaine
 
 이 가이드에서는 ClickHouse의 데이터를 Explo에 연결하고 결과를 시각화하는 방법을 설명합니다. 차트는 다음과 같이 표시됩니다.
 
-<Image img="/images/integrations/data-visualization/explo_15.png" size="md" alt="Explo 대시보드" />
+<Image img="/images/integrations/data-visualization/explo_15.webp" size="md" alt="Explo 대시보드" />
 
 <p />
 
@@ -49,27 +49,27 @@ import CommunityMaintainedBadge from "/snippets/ko/components/CommunityMaintaine
 
 2. 왼쪽 사이드바에서 Explo **Data** 탭을 클릭합니다.
 
-<Image img="/images/integrations/data-visualization/explo_01.png" size="sm" alt="데이터 탭" border />
+<Image img="/images/integrations/data-visualization/explo_01.webp" size="sm" alt="데이터 탭" border />
 
 3. 오른쪽 상단의 **데이터 소스 연결**을 클릭합니다.
 
-<Image img="/images/integrations/data-visualization/explo_02.png" size="sm" alt="데이터 소스 연결" border />
+<Image img="/images/integrations/data-visualization/explo_02.webp" size="sm" alt="데이터 소스 연결" border />
 
 4. **시작하기** 페이지에서 정보를 입력합니다.
 
-<Image img="/images/integrations/data-visualization/explo_03.png" size="md" alt="시작하기" border />
+<Image img="/images/integrations/data-visualization/explo_03.webp" size="md" alt="시작하기" border />
 
 5. **ClickHouse**를 선택합니다.
 
-<Image img="/images/integrations/data-visualization/explo_04.png" size="md" alt="Clickhouse" border />
+<Image img="/images/integrations/data-visualization/explo_04.webp" size="md" alt="Clickhouse" border />
 
 6. **ClickHouse 자격 증명**을 입력합니다.
 
-<Image img="/images/integrations/data-visualization/explo_05.png" size="md" alt="자격 증명" border />
+<Image img="/images/integrations/data-visualization/explo_05.webp" size="md" alt="자격 증명" border />
 
 7. **보안**을 구성합니다.
 
-<Image img="/images/integrations/data-visualization/explo_06.png" size="md" alt="보안" border />
+<Image img="/images/integrations/data-visualization/explo_06.webp" size="md" alt="보안" border />
 
 8. ClickHouse에서 **Explo IP를 허용 목록에 추가합니다**.
    `54.211.43.19, 52.55.98.121, 3.214.169.94, and 54.156.141.148`
@@ -80,15 +80,15 @@ import CommunityMaintainedBadge from "/snippets/ko/components/CommunityMaintaine
 
 1. 왼쪽 탐색 바에서 **대시보드** 탭으로 이동하세요.
 
-<Image img="/images/integrations/data-visualization/explo_07.png" size="sm" alt="대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_07.webp" size="sm" alt="대시보드" border />
 
 2. 오른쪽 상단의 **대시보드 만들기**를 클릭한 다음 대시보드 이름을 입력하세요. 이제 대시보드가 생성되었습니다!
 
-<Image img="/images/integrations/data-visualization/explo_08.png" size="sm" alt="대시보드 만들기" border />
+<Image img="/images/integrations/data-visualization/explo_08.webp" size="sm" alt="대시보드 만들기" border />
 
 3. 이제 다음과 비슷한 화면이 표시됩니다.
 
-<Image img="/images/integrations/data-visualization/explo_09.png" size="md" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_09.webp" size="md" alt="Explo 대시보드" border />
 
 <div id="4-run-a-sql-query">
   ## 4. SQL 쿼리 실행
@@ -98,11 +98,11 @@ import CommunityMaintainedBadge from "/snippets/ko/components/CommunityMaintaine
    `SELECT * FROM YOUR_TABLE_NAME
    LIMIT 100`
 
-<Image img="/images/integrations/data-visualization/explo_10.png" size="md" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_10.webp" size="md" alt="Explo 대시보드" border />
 
 2. 이제 Run을 클릭한 다음 미리보기 탭으로 이동하여 데이터를 확인하십시오.
 
-<Image img="/images/integrations/data-visualization/explo_11.png" size="md" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_11.webp" size="md" alt="Explo 대시보드" border />
 
 <div id="5-build-a-chart">
   ## 5. 차트 만들기
@@ -110,23 +110,23 @@ import CommunityMaintainedBadge from "/snippets/ko/components/CommunityMaintaine
 
 1. 왼쪽에서 막대 차트 아이콘을 화면으로 끌어다 놓으세요.
 
-<Image img="/images/integrations/data-visualization/explo_16.png" size="sm" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_16.webp" size="sm" alt="Explo 대시보드" border />
 
 2. 데이터셋을 선택하세요. 그러면 다음과 같은 화면이 표시됩니다.
 
-<Image img="/images/integrations/data-visualization/explo_12.png" size="sm" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_12.webp" size="sm" alt="Explo 대시보드" border />
 
 3. 다음과 같이 X축에는 **county**를, Y축 섹션에는 **Price**를 설정하세요.
 
-<Image img="/images/integrations/data-visualization/explo_13.png" size="sm" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_13.webp" size="sm" alt="Explo 대시보드" border />
 
 4. 이제 집계를 **AVG**로 변경하세요.
 
-<Image img="/images/integrations/data-visualization/explo_14.png" size="sm" alt="Explo 대시보드" border />
+<Image img="/images/integrations/data-visualization/explo_14.webp" size="sm" alt="Explo 대시보드" border />
 
 5. 이제 카운티별 주택 평균 가격이 표시됩니다.
 
-<Image img="/images/integrations/data-visualization/explo_15.png" size="md" alt="Explo 대시보드" />
+<Image img="/images/integrations/data-visualization/explo_15.webp" size="md" alt="Explo 대시보드" />
 
 <div id="learn-more">
   ## 더 알아보기

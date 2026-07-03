@@ -54,7 +54,7 @@ ClickHouse автоматически анализирует первичные 
 дать тот же корректный результат, но при этом требует прочитать минимальный объём данных,
 как показано на рисунке ниже:
 
-<Image img="/images/data-modeling/projections_1.png" size="md" alt="Проекции в ClickHouse" />
+<Image img="/images/data-modeling/projections_1.webp" size="md" alt="Проекции в ClickHouse" />
 
 <div id="smarter_storage_with_part_offset">
   ### Более эффективное хранение с `_part_offset`
@@ -327,7 +327,7 @@ SETTINGS mutations_sync = 1
 На рисунке ниже показана визуализация основной таблицы `uk_price_paid_with_projections`
 и двух её проекций:
 
-<Image img="/images/data-modeling/projections_2.png" size="md" alt="Визуализация основной таблицы uk_price_paid_with_projections и двух её проекций" />
+<Image img="/images/data-modeling/projections_2.webp" size="md" alt="Визуализация основной таблицы uk_price_paid_with_projections и двух её проекций" />
 
 Если теперь снова выполнить запрос, который выводит районы Лондона с тремя
 самыми высокими ценами продажи, мы увидим улучшение производительности запроса:

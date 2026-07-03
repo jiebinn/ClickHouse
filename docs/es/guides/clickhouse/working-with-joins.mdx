@@ -22,7 +22,7 @@ las tablas en local.
 
 Usarás las siguientes cuatro tablas del conjunto de datos de ejemplo:
 
-<Image img="/images/starter_guides/joins/imdb_schema.png" alt="Esquema de IMDB" />
+<Image img="/images/starter_guides/joins/imdb_schema.webp" alt="Esquema de IMDB" />
 
 Los datos de estas cuatro tablas representan películas que pueden tener uno o varios géneros.
 Los papeles de una película son interpretados por actores.
@@ -56,7 +56,7 @@ En las siguientes secciones, escribirás consultas de ejemplo para cada uno de l
 El `INNER JOIN` devuelve, para cada par de filas que coincide en las claves de unión, los valores de las columnas de la fila de la tabla izquierda combinados con los valores de las columnas de la fila de la tabla derecha.
 Si una fila tiene más de una coincidencia, se devuelven todas las coincidencias (es decir, se produce el [producto cartesiano](https://en.wikipedia.org/wiki/Cartesian_product) para las filas con claves de unión coincidentes).
 
-<Image img="/images/starter_guides/joins/inner_join.png" alt="Inner Join" />
+<Image img="/images/starter_guides/joins/inner_join.webp" alt="Inner Join" />
 
 Esta consulta encuentra los géneros de cada película uniendo la tabla `movies` con la tabla `genres`:
 
@@ -104,7 +104,7 @@ Una consulta `RIGHT OUTER JOIN` es similar y también devuelve valores de las fi
 
 Una consulta `FULL OUTER JOIN` combina `LEFT` y `RIGHT OUTER JOIN` y devuelve valores de las filas sin coincidencia de las tablas izquierda y derecha, junto con valores predeterminados para las columnas de las tablas derecha e izquierda, respectivamente.
 
-<Image img="/images/starter_guides/joins/outer_join.png" alt="Outer Join" />
+<Image img="/images/starter_guides/joins/outer_join.webp" alt="Outer Join" />
 
 <Note>
   ClickHouse puede [configurarse](/es/reference/settings/session-settings#join_use_nulls) para devolver [NULL](/es/reference/syntax#null)s en lugar de valores predeterminados (aunque, por [motivos de rendimiento](/es/reference/data-types/nullable#storage-features), es menos recomendable).
@@ -149,7 +149,7 @@ LIMIT 10;
 `CROSS JOIN` genera el producto cartesiano completo de las dos tablas sin tener en cuenta las claves de unión.
 Cada fila de la tabla izquierda se combina con cada fila de la tabla derecha.
 
-<Image img="/images/starter_guides/joins/cross_join.png" alt="Cross Join" />
+<Image img="/images/starter_guides/joins/cross_join.webp" alt="Cross Join" />
 
 Por lo tanto, la siguiente consulta combina cada fila de la tabla `movies` con cada fila de la tabla `genres`:
 
@@ -249,7 +249,7 @@ Solo se devuelve la primera coincidencia encontrada (el producto cartesiano est�
 
 Una consulta `RIGHT SEMI JOIN` es similar y devuelve valores para todas las filas de la tabla derecha con al menos una coincidencia en la tabla izquierda, pero solo se devuelve la primera coincidencia encontrada.
 
-<Image img="/images/starter_guides/joins/semi_join.png" alt="Semi Join" />
+<Image img="/images/starter_guides/joins/semi_join.webp" alt="Semi Join" />
 
 Esta consulta encuentra todos los actores y actrices que participaron en una película en 2023.
 Ten en cuenta que, con un join normal (`INNER`), el mismo actor o actriz aparecería más de una vez si hubiera tenido más de un papel en 2023:
@@ -288,7 +288,7 @@ Un `LEFT ANTI JOIN` devuelve los valores de las columnas de todas las filas sin 
 
 De forma similar, `RIGHT ANTI JOIN` devuelve los valores de las columnas de todas las filas sin coincidencia de la tabla derecha.
 
-<Image img="/images/starter_guides/joins/anti_join.png" alt="Anti Join" />
+<Image img="/images/starter_guides/joins/anti_join.webp" alt="Anti Join" />
 
 Una formulación alternativa de la consulta de ejemplo anterior con outer join consiste en usar un anti join para encontrar películas que no tienen ningún género en el conjunto de datos:
 
@@ -328,7 +328,7 @@ De forma similar, `RIGHT ANY JOIN` es la combinación de `RIGHT OUTER JOIN` + `R
 
 Y `INNER ANY JOIN` es un `INNER JOIN` con el producto cartesiano deshabilitado.
 
-<Image img="/images/starter_guides/joins/any_join.png" alt="Any Join" />
+<Image img="/images/starter_guides/joins/any_join.webp" alt="Any Join" />
 
 El siguiente ejemplo muestra `LEFT ANY JOIN` mediante un ejemplo abstracto que utiliza dos tablas temporales (`left_table` y `right_table`) creadas con la [values](https://github.com/ClickHouse/ClickHouse/blob/23.2/src/TableFunctions/TableFunctionValues.h) [función de tabla](/es/reference/functions/table-functions/index):
 
@@ -403,14 +403,14 @@ Si una fila de la tabla izquierda no tiene una coincidencia exacta en la tabla d
 
 Esto resulta especialmente útil para análisis de series temporales y puede reducir drásticamente la complejidad de la consulta.
 
-<Image img="/images/starter_guides/joins/asof_join.png" alt="Asof Join" />
+<Image img="/images/starter_guides/joins/asof_join.webp" alt="Asof Join" />
 
 El siguiente ejemplo realiza un análisis de series temporales sobre datos del mercado bursátil.
 Una tabla `quotes` contiene cotizaciones de símbolos bursátiles en momentos específicos del día.
 En los datos de ejemplo, el precio se actualiza cada 10 segundos.
 Una tabla `trades` enumera operaciones sobre símbolos: se compró un volumen concreto de un símbolo en un momento determinado:
 
-<Image img="/images/starter_guides/joins/asof_example.png" alt="Asof Example" />
+<Image img="/images/starter_guides/joins/asof_example.webp" alt="Asof Example" />
 
 Para calcular el coste real de cada operación, necesitamos hacer coincidir las operaciones con el instante de cotización más cercano.
 

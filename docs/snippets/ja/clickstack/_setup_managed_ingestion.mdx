@@ -2,11 +2,11 @@
 title: Managed Ingestion の設定
 ---
 
-<img src="/images/clickstack/getting-started/start_ingestion.png" alt="" />
+<img src="/images/clickstack/getting-started/start_ingestion.webp" alt="" />
 
 「Start Ingestion」を選択すると、インジェストソースを選択するよう求められます。Managed ClickStack では、主要なインジェストソースとして OpenTelemetry と [Vector](https://vector.dev/) をサポートしています。一方で、ユーザーは [ClickHouse Cloud でサポートされているインテグレーション](/ja/integrations/home) のいずれかを使用して、独自のスキーマでデータを ClickHouse に直接送信することもできます。
 
-<img src="/images/clickstack/getting-started/select_source.png" alt="" />
+<img src="/images/clickstack/getting-started/select_source.webp" alt="" />
 
 <Info>
   **OpenTelemetry を推奨**
@@ -27,7 +27,7 @@ title: Managed Ingestion の設定
 
     すぐに開始するには、表示されている Docker コマンドをコピーして実行してください。
 
-    <img src="/images/clickstack/getting-started/otel_collector_start.png" alt="" />
+    <img src="/images/clickstack/getting-started/otel_collector_start.webp" alt="" />
 
     このコマンドには、接続 credentials があらかじめ入力されています。
 
@@ -53,7 +53,7 @@ title: Managed Ingestion の設定
 
     <ExampleOTelConfig />
 
-    <img src="/images/clickstack/getting-started/otel_collector_start.png" alt="" />
+    <img src="/images/clickstack/getting-started/otel_collector_start.webp" alt="" />
 
     OpenTelemetry collector の設定について詳しくは、[&quot;OpenTelemetry でインジェストする。&quot;](/ja/clickstack/ingesting-data/opentelemetry) を参照してください。
 
@@ -128,7 +128,7 @@ title: Managed Ingestion の設定
 
     テーブルを作成したら、表示されている設定スニペットをコピーしてください。既存のパイプラインを利用するように input を調整し、必要に応じてターゲットテーブルとデータベースも変更してください。認証情報は事前に入力されているはずです。
 
-    <img src="/images/clickstack/getting-started/vector_config.png" alt="" />
+    <img src="/images/clickstack/getting-started/vector_config.webp" alt="" />
 
     Vector を使ったデータ取り込みのその他の例については、[&quot;Vector で取り込む&quot;](/ja/clickstack/ingesting-data/vector)または高度なオプションについては [Vector ClickHouse sink documentation](https://vector.dev/docs/reference/configuration/sinks/clickhouse/) を参照してください。
 

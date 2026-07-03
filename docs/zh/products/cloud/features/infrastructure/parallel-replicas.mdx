@@ -32,7 +32,7 @@ ClickHouse 处理查询的速度极快，但这些查询是如何
 每个分片都会执行相应的查询。被查询的分布式表所在服务器
 会对数据进行聚合，并向客户端返回响应：
 
-<Image img="/images/deployment-guides/parallel-replicas-1.png" size="md" alt="分片架构" />
+<Image img="/images/deployment-guides/parallel-replicas-1.webp" size="md" alt="分片架构" />
 
 上图展示了客户端查询分布式表时会发生什么：
 
@@ -72,7 +72,7 @@ ClickHouse Cloud 的架构与上文介绍的架构有很大不同。
 
 下图展示了 ClickHouse Cloud 的架构：
 
-<Image img="/images/deployment-guides/parallel-replicas-2.png" size="md" alt="非分片架构" />
+<Image img="/images/deployment-guides/parallel-replicas-2.webp" size="md" alt="非分片架构" />
 
 这种架构让我们几乎可以瞬间添加和移除副本，
 从而确保集群具备极高的可扩展性。右侧所示的 ClickHouse
@@ -93,7 +93,7 @@ Keeper 集群为元数据提供了单一事实来源。
 
 现在，让我们借助下图看看它在实际中是如何工作的：
 
-<Image img="/images/deployment-guides/parallel-replicas-3.png" size="md" alt="并行副本" />
+<Image img="/images/deployment-guides/parallel-replicas-3.webp" size="md" alt="并行副本" />
 
 使用并行副本时：
 
@@ -148,7 +148,7 @@ Keeper 集群为元数据提供了单一事实来源。
 
 为了解决上述列表中的 (1) 和 (2)，我们引入了“通知”这一概念。下面通过下图来说明其工作方式：
 
-<Image img="/images/deployment-guides/parallel-replicas-4.png" size="md" alt="通知" />
+<Image img="/images/deployment-guides/parallel-replicas-4.webp" size="md" alt="通知" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -191,7 +191,7 @@ Keeper 集群为元数据提供了单一事实来源。
 
 下图展示了动态协调的工作方式：
 
-<Image img="/images/deployment-guides/parallel-replicas-5.png" size="md" alt="动态协调 - 第 1 部分" />
+<Image img="/images/deployment-guides/parallel-replicas-5.webp" size="md" alt="动态协调 - 第 1 部分" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -204,7 +204,7 @@ Keeper 集群为元数据提供了单一事实来源。
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-6.png" size="md" alt="动态协调 - 第 2 部分" />
+<Image img="/images/deployment-guides/parallel-replicas-6.webp" size="md" alt="动态协调 - 第 2 部分" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -217,7 +217,7 @@ Keeper 集群为元数据提供了单一事实来源。
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-7.png" size="md" alt="动态协调 - 第 3 部分" />
+<Image img="/images/deployment-guides/parallel-replicas-7.webp" size="md" alt="动态协调 - 第 3 部分" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -495,7 +495,7 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=0
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-8.png" size="lg" alt="未使用 parallel_replica 的 EXPLAIN" />
+<Image img="/images/deployment-guides/parallel-replicas-8.webp" size="lg" alt="未使用 parallel_replica 的 EXPLAIN" />
 
 现在再看启用并行副本的情况：
 
@@ -510,4 +510,4 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=2
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-9.png" size="lg" alt="使用 parallel_replica 的 EXPLAIN" />
+<Image img="/images/deployment-guides/parallel-replicas-9.webp" size="lg" alt="使用 parallel_replica 的 EXPLAIN" />

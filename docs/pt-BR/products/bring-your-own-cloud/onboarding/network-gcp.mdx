@@ -46,15 +46,15 @@ Para criar ou excluir VPC peering no ClickHouse BYOC, siga estas etapas:
     3. Clique em &quot;Create connection&quot;.
     4. Preencha os campos necessários de acordo com seus requisitos. Abaixo está uma captura de tela da criação de um peering dentro do mesmo projeto do GCP.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.png" size="md" alt="BYOC Criar conexão de peering" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.webp" size="md" alt="BYOC Criar conexão de peering" border />
 
     O VPC peering do GCP exige 2 conexões entre as 2 redes para funcionar (ou seja, uma conexão da rede BYOC para a rede VPC existente e uma conexão da rede VPC existente para a rede BYOC). Portanto, você também precisa criar mais 1 conexão no sentido inverso. Abaixo está uma captura de tela da criação da segunda conexão de peering:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.png" size="md" alt="BYOC Aceitar conexão de peering" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.webp" size="md" alt="BYOC Aceitar conexão de peering" border />
 
     Depois que ambas as conexões forem criadas, o status das 2 conexões deverá mudar para &quot;Active&quot; após atualizar a página do Google Cloud Console:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.png" size="lg" alt="BYOC Aceitar conexão de peering" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.webp" size="lg" alt="BYOC Aceitar conexão de peering" border />
 
     O serviço ClickHouse agora deve estar acessível a partir da VPC emparelhada.
   </Step>
@@ -89,15 +89,15 @@ O GCP PSC (Private Service Connect) oferece conectividade segura e privada aos s
 
     O suporte do ClickHouse fornecerá o nome do serviço PSC. Você também pode obtê-lo no console do ClickHouse Cloud, em &quot;Organization&quot; -&gt; &quot;Infrastructure&quot;. Clique no nome da infraestrutura para ver os detalhes.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.png" size="lg" alt="Endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.webp" size="lg" alt="Endpoint PSC do BYOC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.png" size="lg" alt="Endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.webp" size="lg" alt="Endpoint PSC do BYOC" border />
 
     Você também pode encontrar o nome do serviço PSC no console do GCP Private Service Connect, em &quot;Published services&quot; (filtre pelo nome do serviço ou procure pelos serviços do ClickHouse)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.png" size="lg" alt="Endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.webp" size="lg" alt="Endpoint PSC do BYOC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.png" size="lg" alt="Endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.webp" size="lg" alt="Endpoint PSC do BYOC" border />
   </Step>
 
   <Step>
@@ -115,13 +115,13 @@ O GCP PSC (Private Service Connect) oferece conectividade segura e privada aos s
     * Clique em &quot;Add Endpoint&quot; e aguarde um momento até que o endpoint seja criado.
     * O status do endpoint deve mudar para &quot;Accepted&quot;; entre em contato com o suporte do ClickHouse se ele não for aceito automaticamente.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.png" size="lg" alt="Criação de endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.webp" size="lg" alt="Criação de endpoint PSC do BYOC" border />
 
     2. **Obter o ID da conexão PSC**:
 
     * Clique no endpoint para abrir os detalhes e obtenha o &quot;PSC Connection ID&quot; para usar na etapa [Adicionar o PSC Connection ID do endpoint à allowlist do serviço](#step-5-add-endpoint-id-allowlist)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.png" size="lg" alt="Detalhes do endpoint PSC do BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.webp" size="lg" alt="Detalhes do endpoint PSC do BYOC" border />
   </Step>
 
   <Step>

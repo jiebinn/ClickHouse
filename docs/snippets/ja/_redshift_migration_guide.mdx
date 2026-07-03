@@ -8,7 +8,7 @@ title: Redshift 移行ガイド
 
 [Amazon Redshift](https://aws.amazon.com/redshift/) は、Amazon Web Services が提供する代表的なクラウドデータウェアハウスソリューションです。このガイドでは、Redshift インスタンスから ClickHouse へデータを移行するためのさまざまなアプローチを紹介します。ここでは、次の 3 つの選択肢を取り上げます。
 
-<img src="/images/integrations/data-ingestion/redshift/redshift-to-clickhouse.png" alt="Redshift から ClickHouse への移行オプション" />
+<img src="/images/integrations/data-ingestion/redshift/redshift-to-clickhouse.webp" alt="Redshift から ClickHouse への移行オプション" />
 
 ClickHouse インスタンスの観点では、次のいずれかの方法を選択できます。
 
@@ -28,7 +28,7 @@ ClickHouse インスタンスの観点では、次のいずれかの方法を選
 
 プッシュのシナリオでは、サードパーティ製のツールやサービス (カスタムコードや [ETL/ELT](https://en.wikipedia.org/wiki/Extract,_transform,_load#ETL_vs._ELT) など) を利用して、データをClickHouseインスタンスに送信します。たとえば、[Airbyte](https://www.airbyte.com/) のようなソフトウェアを使って、Redshiftインスタンスをソース、ClickHouseを宛先としてデータを移動できます ([Airbyteのインテグレーションガイドを参照](/ja/integrations/connectors/data-ingestion/etl-tools/airbyte-and-clickhouse)) 。
 
-<img src="/images/integrations/data-ingestion/redshift/push.png" alt="RedshiftからClickHouseへのプッシュ" />
+<img src="/images/integrations/data-ingestion/redshift/push.webp" alt="RedshiftからClickHouseへのプッシュ" />
 
 <div id="pros-pros">
   ### 長所 [#pros]
@@ -51,7 +51,7 @@ ClickHouse インスタンスの観点では、次のいずれかの方法を選
 
 プルのシナリオでは、ClickHouse JDBC Bridge を使用して ClickHouse インスタンスから Redshift クラスターに直接接続し、`INSERT INTO ... SELECT` クエリを実行します。
 
-<img src="/images/integrations/data-ingestion/redshift/pull.png" alt="Redshift から ClickHouse へのプル" />
+<img src="/images/integrations/data-ingestion/redshift/pull.webp" alt="Redshift から ClickHouse へのプル" />
 
 <div id="pros-pros-1">
   ### 利点 [#pros-1]
@@ -196,7 +196,7 @@ ClickHouse インスタンスの観点では、次のいずれかの方法を選
 
 このシナリオでは、まずデータを中間的なピボット形式で S3 にエクスポートし、次に S3 から ClickHouse にデータを読み込みます。
 
-<img src="/images/integrations/data-ingestion/redshift/pivot.png" alt="S3 を使用した Redshift からのピボット" />
+<img src="/images/integrations/data-ingestion/redshift/pivot.webp" alt="S3 を使用した Redshift からのピボット" />
 
 <div id="pros-pros-2">
   ### 長所 [#pros-2]
@@ -223,11 +223,11 @@ ClickHouse インスタンスの観点では、次のいずれかの方法を選
 
     Redshift の [UNLOAD](https://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD.html) 機能を使用して、既存のプライベート S3 バケットにデータをエクスポートします。
 
-    <img src="/images/integrations/data-ingestion/redshift/s3-1.png" alt="Redshift から S3 への UNLOAD" />
+    <img src="/images/integrations/data-ingestion/redshift/s3-1.webp" alt="Redshift から S3 への UNLOAD" />
 
     これにより、S3 に生データを含む part ファイルが生成されます。
 
-    <img src="/images/integrations/data-ingestion/redshift/s3-2.png" alt="S3 内のデータ" />
+    <img src="/images/integrations/data-ingestion/redshift/s3-2.webp" alt="S3 内のデータ" />
   </Step>
 
   <Step>

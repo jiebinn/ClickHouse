@@ -33,7 +33,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 ستنفّذ كل شظية الاستعلامات المطلوبة. وسيقوم الخادم الذي تم الاستعلام من خلاله عن
 الجدول الموزّع بتجميع البيانات وإرجاع الرد إلى العميل:
 
-<Image img="/images/deployment-guides/parallel-replicas-1.png" size="md" alt="البنية المُجزّأة" />
+<Image img="/images/deployment-guides/parallel-replicas-1.webp" size="md" alt="البنية المُجزّأة" />
 
 يوضح الشكل أعلاه ما يحدث عندما يرسل عميل استعلامًا إلى جدول موزّع:
 
@@ -76,7 +76,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 يوضح الشكل أدناه بنية ClickHouse Cloud:
 
-<Image img="/images/deployment-guides/parallel-replicas-2.png" size="md" alt="بنية غير مُشظّاة" />
+<Image img="/images/deployment-guides/parallel-replicas-2.webp" size="md" alt="بنية غير مُشظّاة" />
 
 تتيح لنا هذه البنية إضافة النسخ المتماثلة وإزالتها بشكل شبه
 فوري، مما يضمن قابلية توسع عالية جدًا للعنقود. ويضمن عنقود ClickHouse
@@ -105,7 +105,7 @@ Keeper (الموضح على اليمين) وجود مرجع وحيد موثوق
 
 والآن، لنرَ كيف يعمل ذلك عمليًا بمساعدة الشكل أدناه:
 
-<Image img="/images/deployment-guides/parallel-replicas-3.png" size="md" alt="النسخ المتماثلة المتوازية" />
+<Image img="/images/deployment-guides/parallel-replicas-3.webp" size="md" alt="النسخ المتماثلة المتوازية" />
 
 مع النسخ المتماثلة المتوازية:
 
@@ -170,7 +170,7 @@ Keeper (الموضح على اليمين) وجود مرجع وحيد موثوق
 لمعالجة (1) و(2) من القائمة أعلاه، قدّمنا مفهوم
 الإعلان. لنتصوّر كيف يعمل ذلك باستخدام الشكل أدناه:
 
-<Image img="/images/deployment-guides/parallel-replicas-4.png" size="md" alt="الإعلانات" />
+<Image img="/images/deployment-guides/parallel-replicas-4.webp" size="md" alt="الإعلانات" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -216,7 +216,7 @@ Keeper (الموضح على اليمين) وجود مرجع وحيد موثوق
 
 يوضّح الشكل أدناه كيفية عمل التنسيق الديناميكي:
 
-<Image img="/images/deployment-guides/parallel-replicas-5.png" size="md" alt="التنسيق الديناميكي - الجزء 1" />
+<Image img="/images/deployment-guides/parallel-replicas-5.webp" size="md" alt="التنسيق الديناميكي - الجزء 1" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -229,7 +229,7 @@ Keeper (الموضح على اليمين) وجود مرجع وحيد موثوق
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-6.png" size="md" alt="التنسيق الديناميكي - الجزء 2" />
+<Image img="/images/deployment-guides/parallel-replicas-6.webp" size="md" alt="التنسيق الديناميكي - الجزء 2" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -242,7 +242,7 @@ Keeper (الموضح على اليمين) وجود مرجع وحيد موثوق
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-7.png" size="md" alt="التنسيق الديناميكي - الجزء 3" />
+<Image img="/images/deployment-guides/parallel-replicas-7.webp" size="md" alt="التنسيق الديناميكي - الجزء 3" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -521,7 +521,7 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=0
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-8.png" size="lg" alt="EXPLAIN بدون parallel_replica" />
+<Image img="/images/deployment-guides/parallel-replicas-8.webp" size="lg" alt="EXPLAIN بدون parallel_replica" />
 
 والآن مع النسخ المتماثلة المتوازية:
 
@@ -536,4 +536,4 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=2
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-9.png" size="lg" alt="EXPLAIN باستخدام parallel_replica" />
+<Image img="/images/deployment-guides/parallel-replicas-9.webp" size="lg" alt="EXPLAIN باستخدام parallel_replica" />

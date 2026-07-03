@@ -39,7 +39,7 @@ Para los ejemplos siguientes, usamos el conjunto de datos remoto disponible en [
 
     Selecciona `Chart Explorer` en el menú de la izquierda.
 
-    <Image img="/images/use-cases/observability/clickstack-visualization-1.png" alt="Chart Explorer" size="lg" />
+    <Image img="/images/use-cases/observability/clickstack-visualization-1.webp" alt="Chart Explorer" size="lg" />
   </Step>
 
   <Step>
@@ -55,21 +55,21 @@ Para los ejemplos siguientes, usamos el conjunto de datos remoto disponible en [
     * Group By: `ServiceName`
     * Alias: `Average Time`
 
-    <Image img="/images/use-cases/observability/clickstack-visualization-2.png" alt="Visualización simple" size="lg" />
+    <Image img="/images/use-cases/observability/clickstack-visualization-2.webp" alt="Visualización simple" size="lg" />
 
     Ten en cuenta que puedes filtrar eventos usando una cláusula SQL `WHERE` o sintaxis Lucene, y establecer el intervalo de tiempo en el que deben visualizarse. También se admiten varias series.
 
     Por ejemplo, filtra por el servicio `frontend` añadiendo el filtro `ServiceName:\"frontend\"`. Agrega una segunda serie para el recuento de eventos a lo largo del tiempo con el alias `Count` haciendo clic en `Add Series`.
 
-    <Image img="/images/use-cases/observability/clickstack-visualization-3.png" alt="Visualización simple 2" size="lg" />
+    <Image img="/images/use-cases/observability/clickstack-visualization-3.webp" alt="Visualización simple 2" size="lg" />
 
     Para crear una serie similar a una existente, puedes duplicarla en lugar de empezar desde cero. Haz clic en el icono de copia (`Duplicate series`) en una fila de serie para insertar una copia directamente debajo. La copia conserva la configuración de la serie de origen, como la métrica, la columna y el filtro. Después, solo tienes que cambiar los campos que sean distintos (por ejemplo, la agregación) y asignarle a la copia su propio alias. La duplicación está disponible siempre que se admitan varias series. Está oculta en los tipos de visualización que solo permiten una serie, como `Number`, `Pie` y `Heatmap`.
 
-    <Image img="/images/use-cases/observability/clickstack-duplicate-series.png" alt="El icono de copia Duplicate series y su descripción emergente en una fila de serie de un gráfico" size="lg" />
+    <Image img="/images/use-cases/observability/clickstack-duplicate-series.webp" alt="El icono de copia Duplicate series y su descripción emergente en una fila de serie de un gráfico" size="lg" />
 
     Para crear una serie similar a una existente, puedes duplicarla en lugar de empezar desde cero. Haz clic en el icono de copia (`Duplicate series`) en una fila de serie para insertar una copia directamente debajo. La copia conserva la configuración de la serie de origen, como la métrica, la columna y el filtro. Después, solo tienes que cambiar los campos que sean distintos (por ejemplo, la agregación) y asignarle a la copia su propio alias. La duplicación está disponible siempre que se admitan varias series. Está oculta en los tipos de visualización que solo permiten una serie, como `Number`, `Pie` y `Heatmap`.
 
-    <Image img="/images/use-cases/observability/clickstack-duplicate-series.png" alt="El icono de copia Duplicate series y su descripción emergente en una fila de serie de un gráfico" size="lg" />
+    <Image img="/images/use-cases/observability/clickstack-duplicate-series.webp" alt="El icono de copia Duplicate series y su descripción emergente en una fila de serie de un gráfico" size="lg" />
 
     <Note>
       Las visualizaciones pueden crearse a partir de cualquier fuente de datos: métricas, traza o logs. ClickStack trata todos estos datos como eventos wide. Cualquier **columna numérica** puede representarse en un gráfico a lo largo del tiempo, y las columnas de tipo **cadena**, **fecha** o **numérico** pueden usarse para agrupaciones.
@@ -95,7 +95,7 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Seleccione `Dashboards` en el menú de la izquierda. Luego, haga clic en `New Dashboard` para crear un dashboard temporal o guardado.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-1.png" alt="Crear dashboard" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-1.webp" alt="Crear dashboard" size="lg" />
   </Step>
 
   <Step>
@@ -114,11 +114,11 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Haz clic en el botón **play** antes de hacer clic en `Save`.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-2.png" alt="Crear una visualización en el dashboard" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-2.webp" alt="Crear una visualización en el dashboard" size="lg" />
 
     Cambia el tamaño de la visualización para que ocupe todo el ancho del dashboard.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-3.png" alt="Dashboard con visualizaciones" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-3.webp" alt="Dashboard con visualizaciones" size="lg" />
   </Step>
 
   <Step>
@@ -136,11 +136,11 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Haga clic en el botón **play** antes de hacer clic en `Save`.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-4.png" alt="Visualización del dashboard 2" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-4.webp" alt="Visualización del dashboard 2" size="lg" />
 
     Cambie el tamaño de la visualización para que ocupe todo el ancho del dashboard.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-5.png" alt="Dashboard con visualizaciones 2" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-5.webp" alt="Dashboard con visualizaciones 2" size="lg" />
   </Step>
 
   <Step>
@@ -168,11 +168,11 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Haz clic en `Run` para obtener una vista previa del gráfico y luego en `Save`.
 
-    <Image img="/images/clickstack/dashboards/heatmap-tile-editor.png" alt="Editor de tile de heatmap con valores predeterminados de duración de span ya completados, filtro ServiceName payment y botón Display Settings" size="lg" />
+    <Image img="/images/clickstack/dashboards/heatmap-tile-editor.webp" alt="Editor de tile de heatmap con valores predeterminados de duración de span ya completados, filtro ServiceName payment y botón Display Settings" size="lg" />
 
     El tile guardado se muestra como un heatmap en el dashboard. Pasa el cursor sobre cualquier celda para ver los límites del bucket y el recuento de eventos.
 
-    <Image img="/images/clickstack/dashboards/heatmap-tile-rendered.png" alt="Tile de dashboard de heatmap que muestra la distribución de duración de spans del servicio payment durante 24 horas" size="lg" />
+    <Image img="/images/clickstack/dashboards/heatmap-tile-rendered.webp" alt="Tile de dashboard de heatmap que muestra la distribución de duración de spans del servicio payment durante 24 horas" size="lg" />
 
     <Tip>
       **Dos consultas de ClickHouse por heatmap**
@@ -184,7 +184,7 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Haz clic en cualquier celda de un tile de heatmap ya renderizado para abrir la acción **View in Event Deltas**.
 
-    <Image img="/images/clickstack/dashboards/heatmap-tile-drilldown.png" alt="Clic en una celda de heatmap que revela la acción View in Event Deltas" size="lg" />
+    <Image img="/images/clickstack/dashboards/heatmap-tile-drilldown.webp" alt="Clic en una celda de heatmap que revela la acción View in Event Deltas" size="lg" />
 
     Al seleccionarla, se abre la vista de [Event Deltas](/es/clickstack/features/event-deltas) con la fuente de datos del tile, la cláusula `Where` y el intervalo de tiempo transferidos. Desde allí puedes examinar la misma distribución de forma interactiva, segmentar por attribute para ver qué hace que los spans lentos sean distintos de los rápidos e inspeccionar los spans individuales detrás de cualquier celda, sin tener que reconstruir manualmente la consulta.
   </Step>
@@ -194,13 +194,13 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
     Se pueden aplicar filtros de Lucene o SQL, junto con el intervalo de tiempo, a nivel del dashboard, y se propagarán automáticamente a todas las visualizaciones.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-filter.png" alt="Dashboard con filtrado" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-filter.webp" alt="Dashboard con filtrado" size="lg" />
 
     Para demostrarlo, aplique el filtro de Lucene `ServiceName:"frontend"` al dashboard y ajuste el intervalo de tiempo para que abarque las últimas 3 horas. Observe cómo las visualizaciones ahora reflejan únicamente datos del servicio `frontend`.
 
     El dashboard se guardará automáticamente. Para definir el nombre del dashboard, seleccione el título y modifíquelo antes de hacer clic en `Save Name`.
 
-    <Image img="/images/use-cases/observability/hyperdx-dashboard-save.png" alt="Guardado del dashboard" size="lg" />
+    <Image img="/images/use-cases/observability/hyperdx-dashboard-save.webp" alt="Guardado del dashboard" size="lg" />
   </Step>
 </Steps>
 
@@ -210,7 +210,7 @@ A continuación, creamos un dashboard con dos visualizaciones usando las fuentes
 
 Para eliminar, editar o duplicar una visualización, pase el cursor sobre ella y utilice los botones de acción correspondientes.
 
-<Image img="/images/use-cases/observability/hyperdx-dashboard-edit.png" alt="Edición de dashboards" size="lg" />
+<Image img="/images/use-cases/observability/hyperdx-dashboard-edit.webp" alt="Edición de dashboards" size="lg" />
 
 <div id="dashboard-listing-search">
   ## Dashboards: listado y búsqueda
@@ -220,7 +220,7 @@ Los dashboards están disponibles en la página de dashboards. Están organizado
 
 Los dashboards se pueden marcar como favoritos para acceder fácilmente a ellos desde la barra lateral y desde la parte superior de la página de listado. Los favoritos son individuales para cada usuario.
 
-<Image img="/images/use-cases/observability/hyperdx-dashboard-search.png" alt="Búsqueda de dashboards" size="lg" />
+<Image img="/images/use-cases/observability/hyperdx-dashboard-search.webp" alt="Búsqueda de dashboards" size="lg" />
 
 <div id="tagging">
   ## Dashboards - etiquetado
@@ -234,7 +234,7 @@ Los dashboards se pueden marcar como favoritos para acceder fácilmente a ellos 
 
 Además de los [filtros de texto libre](#filter-dashboards) disponibles en todos los dashboards, los dashboards guardados admiten filtros personalizados en listas desplegables que se rellenan con datos consultados desde ClickHouse. Estos proporcionan controles de filtro reutilizables de apuntar y hacer clic, para que quienes consultan el dashboard puedan filtrar sin tener que escribir expresiones manualmente.
 
-<Image img="/images/clickstack/dashboards/filter-dropdown.png" alt="Filtro desplegable de servicios que muestra los nombres de servicio disponibles" size="lg" />
+<Image img="/images/clickstack/dashboards/filter-dropdown.webp" alt="Filtro desplegable de servicios que muestra los nombres de servicio disponibles" size="lg" />
 
 Los siguientes pasos muestran cómo añadir un filtro personalizado al dashboard creado en la sección [&quot;Creación de paneles&quot;](#creating-dashboards).
 
@@ -244,7 +244,7 @@ Los siguientes pasos muestran cómo añadir un filtro personalizado al dashboard
 
     Abra un dashboard guardado y seleccione **Edit Filters** en la barra de herramientas.
 
-    <Image img="/images/clickstack/dashboards/edit-filters.png" alt="Botón Edit Filters en la barra de herramientas del dashboard" size="lg" />
+    <Image img="/images/clickstack/dashboards/edit-filters.webp" alt="Botón Edit Filters en la barra de herramientas del dashboard" size="lg" />
   </Step>
 
   <Step>
@@ -254,11 +254,11 @@ Los siguientes pasos muestran cómo añadir un filtro personalizado al dashboard
 
     Por ejemplo, para añadir un filtro de servicio a datos de traza, use `ServiceName` como expresión de filtro con la fuente de datos `Traces`. El &quot;Dropdown values filter&quot; es opcional y permite restringir qué valores aparecen en la lista desplegable.
 
-    <Image img="/images/clickstack/dashboards/add-filter.png" alt="Cuadro de diálogo Add filter con campos Name, Data source y Filter expression" size="md" />
+    <Image img="/images/clickstack/dashboards/add-filter.webp" alt="Cuadro de diálogo Add filter con campos Name, Data source y Filter expression" size="md" />
 
     El modal Filters muestra todos los filtros configurados para el dashboard. Desde aquí puede editar o eliminar filtros existentes, o añadir más.
 
-    <Image img="/images/clickstack/dashboards/saved-filters.png" alt="Modal Filters que muestra un filtro Services configurado" size="md" />
+    <Image img="/images/clickstack/dashboards/saved-filters.webp" alt="Modal Filters que muestra un filtro Services configurado" size="md" />
   </Step>
 
   <Step>
@@ -266,7 +266,7 @@ Los siguientes pasos muestran cómo añadir un filtro personalizado al dashboard
 
     Cierre el modal Filters. El nuevo filtro desplegable aparece debajo de la barra de búsqueda. Haga clic en él para ver los valores disponibles y, a continuación, seleccione uno para filtrar todas las visualizaciones del dashboard.
 
-    <Image img="/images/clickstack/dashboards/filtered-dashboard.png" alt="Dashboard filtrado al servicio frontend" size="lg" />
+    <Image img="/images/clickstack/dashboards/filtered-dashboard.webp" alt="Dashboard filtrado al servicio frontend" size="lg" />
   </Step>
 
   <Step>
@@ -274,7 +274,7 @@ Los siguientes pasos muestran cómo añadir un filtro personalizado al dashboard
 
     Para conservar una selección de filtro como valor predeterminado del dashboard, elija **Save Query &amp; Filters as Default** en el menú del dashboard. El dashboard siempre se abrirá con los filtros seleccionados aplicados. Para restablecerlo, seleccione **Remove Default Query &amp; Filters** en el mismo menú.
 
-    <Image img="/images/clickstack/dashboards/save-filter-values.png" alt="Menú del dashboard que muestra la opción Save Query and Filters as Default" size="lg" />
+    <Image img="/images/clickstack/dashboards/save-filter-values.webp" alt="Menú del dashboard que muestra la opción Save Query and Filters as Default" size="lg" />
   </Step>
 </Steps>
 
@@ -291,7 +291,7 @@ Los tiles del dashboard permiten desglosar hasta la página Search. Haz clic en 
 * **Ver todos los eventos** — navega a la página Search y muestra todos los eventos de la ventana de tiempo seleccionada.
 * **Filtrar por grupo** — navega a la página Search filtrada por una serie específica.
 
-<Image img="/images/clickstack/dashboards/drilldown.png" alt="Menú contextual de desglose que muestra las opciones Ver todos los eventos y Filtrar por grupo" size="lg" />
+<Image img="/images/clickstack/dashboards/drilldown.webp" alt="Menú contextual de desglose que muestra las opciones Ver todos los eventos y Filtrar por grupo" size="lg" />
 
 Esto resulta útil para investigar picos o anomalías concretos detectados en un dashboard: puedes pasar rápidamente de una vista agregada a los eventos individuales subyacentes.
 
@@ -307,7 +307,7 @@ HyperDX se despliega con dashboards listos para usar.
 
 Este dashboard ofrece visualizaciones para monitorizar ClickHouse. Para acceder a él, selecciónelo en el menú de la izquierda.
 
-<Image img="/images/use-cases/observability/hyperdx-dashboard-clickhouse.png" alt="Dashboard de ClickHouse" size="lg" />
+<Image img="/images/use-cases/observability/hyperdx-dashboard-clickhouse.webp" alt="Dashboard de ClickHouse" size="lg" />
 
 Este dashboard usa pestañas para separar la monitorización de **Selects**, **Inserts** e **Infraestructura de ClickHouse**.
 
@@ -335,7 +335,7 @@ Los nombres de los servicios se detectan automáticamente a partir de los datos 
 
 Las visualizaciones se pueden filtrar mediante la sintaxis de Lucene o SQL, y el intervalo de tiempo puede ajustarse para un análisis más preciso.
 
-<Image img="/images/use-cases/observability/hyperdx-dashboard-services.png" alt="Servicios de ClickHouse" size="lg" />
+<Image img="/images/use-cases/observability/hyperdx-dashboard-services.webp" alt="Servicios de ClickHouse" size="lg" />
 
 <div id="kubernetes-dashboard">
   ### Dashboard de Kubernetes
@@ -345,4 +345,4 @@ Este dashboard permite explorar los eventos de Kubernetes recopilados mediante O
 
 Los datos de Kubernetes se organizan en tres pestañas para facilitar la navegación: Pods, Nodos y Espacios de nombres.
 
-<Image img="/images/use-cases/observability/hyperdx-dashboard-kubernetes.png" alt="ClickHouse Kubernetes" size="lg" />
+<Image img="/images/use-cases/observability/hyperdx-dashboard-kubernetes.webp" alt="ClickHouse Kubernetes" size="lg" />

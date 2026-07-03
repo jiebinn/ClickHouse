@@ -36,7 +36,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
   ### Тест 1: Интенсивный IO — чтение+запись (набор данных 500 ГБ)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="Результаты бенчмарка интенсивного чтения+записи" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="Результаты бенчмарка интенсивного чтения+записи" size="md" border />
 
 **Повышение производительности по сравнению с RDS (16k IOPS):**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### Тест 2: Интенсивный IO — только для чтения (набор данных 500 ГБ)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="Результаты бенчмарка интенсивного IO в режиме только для чтения" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="Результаты бенчмарка интенсивного IO в режиме только для чтения" size="md" border />
 
 **Повышение производительности по сравнению с RDS (16k IOPS):**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### Тест 3: Интенсивная нагрузка на CPU (данные помещаются в память)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="Результаты бенчмарка для интенсивной нагрузки на CPU" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="Результаты бенчмарка для интенсивной нагрузки на CPU" size="md" border />
 
 **Повышение производительности:**
 

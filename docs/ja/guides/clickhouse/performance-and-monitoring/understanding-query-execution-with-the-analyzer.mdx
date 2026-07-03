@@ -29,7 +29,7 @@ INSERT INTO session_events SELECT * FROM generateRandom('clientId UUID,
 
 ClickHouse にデータが入ったので、いくつかのクエリを実行し、その実行の仕組みを見ていきましょう。クエリの実行はいくつもの段階に分解されます。クエリ実行の各段階は、対応する `EXPLAIN` クエリを使って分析し、トラブルシュートできます。これらの段階は以下の図にまとめられています。
 
-<Image img="/images/guides/developer/analyzer1.png" alt="EXPLAINクエリのステップ" size="md" />
+<Image img="/images/guides/developer/analyzer1.webp" alt="EXPLAINクエリのステップ" size="md" />
 
 クエリ実行時に各要素がどのように機能するのかを見ていきましょう。いくつかのクエリを取り上げ、`EXPLAIN` ステートメントを使って確認します。
 
@@ -64,7 +64,7 @@ EXPLAIN AST SELECT min(timestamp), max(timestamp) FROM session_events;
 
 出力は抽象構文木 (AST) で、以下のように可視化できます。
 
-<Image img="/images/guides/developer/analyzer2.png" alt="ASTの出力" size="md" />
+<Image img="/images/guides/developer/analyzer2.webp" alt="ASTの出力" size="md" />
 
 各ノードには対応する子ノードがあり、木全体でクエリ全体の構造を表しています。これはクエリを処理するための論理構造です。エンドユーザーの観点では (クエリ実行に関心がある場合を除き) 、それほど有用ではありません。このツールは主に開発者が使用します。
 
@@ -349,7 +349,7 @@ digraph
 
 この出力をコピーして[こちら](https://dreampuf.github.io/GraphvizOnline)に貼り付けると、以下のグラフが生成されます。
 
-<Image img="/images/guides/developer/analyzer3.png" alt="グラフ出力" size="md" />
+<Image img="/images/guides/developer/analyzer3.webp" alt="グラフ出力" size="md" />
 
 白い長方形はパイプラインノードを、灰色の長方形はクエリプランのステップを表し、`x` に続く数字は使用されている入力/出力の数を示します。コンパクト形式での表示が不要な場合は、`compact=0` を追加してください：
 
@@ -389,7 +389,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer4.png" alt="コンパクトなグラフの出力" size="md" />
+<Image img="/images/guides/developer/analyzer4.webp" alt="コンパクトなグラフの出力" size="md" />
 
 ClickHouse はなぜ複数のスレッドでテーブルを読み込まないのでしょうか。テーブルにさらにデータを追加してみましょう：
 
@@ -448,7 +448,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer5.png" alt="並列グラフの出力" size="md" />
+<Image img="/images/guides/developer/analyzer5.webp" alt="並列グラフの出力" size="md" />
 
 つまり、データ量が十分でなかったため、エグゼキュータは処理を並列化しないと判断しました。さらに行を追加すると、グラフに示されているように、エグゼキュータは複数のスレッドを使用するようになりました。
 

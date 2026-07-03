@@ -44,7 +44,7 @@ Un tableau d’ensemble avec une ligne par service répond à la question « qu
 
     Triez par `Requests` dans l’ordre décroissant afin que les services les plus sollicités apparaissent en haut. Ce tableau est le catalogue : une ligne par service, évalué selon RED.
 
-    <Image img="/images/clickstack/dashboards/row-click-catalog.png" alt="Table d’inventaire des services avec colonnes RED (Requests, Errors, P95 Duration) pour chaque service, triée par volume de requêtes, au-dessus d’une tendance des requêtes dans le temps" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-catalog.webp" alt="Table d’inventaire des services avec colonnes RED (Requests, Errors, P95 Duration) pour chaque service, triée par volume de requêtes, au-dessus d’une tendance des requêtes dans le temps" size="lg" />
 
     <Tip>
       **Placez la colonne de group-by en premier**
@@ -71,7 +71,7 @@ Un tableau d’ensemble avec une ligne par service répond à la question « qu
 
     Au survol d’une ligne, un lien d’action apparaît sur le bord droit du tableau, avec une indication décrivant l’action (`Open dashboard "Service Detail"`). Un clic sur la ligne ouvre le tableau de bord `Service Detail` avec son filtre `ServiceName` défini sur la valeur cliquée, de sorte que chaque tuile (les indicateurs clés RED, les percentiles de latence, la ventilation par endpoint) se recentre sur ce seul service en un seul clic.
 
-    <Image img="/images/clickstack/dashboards/row-click-drilldown.png" alt="Tableau de bord Service Detail après un clic sur une ligne, avec le filtre ServiceName défini sur le service cliqué et les indicateurs clés RED, les percentiles de latence et la ventilation par endpoint tous limités à celui-ci" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-drilldown.webp" alt="Tableau de bord Service Detail après un clic sur une ligne, avec le filtre ServiceName défini sur le service cliqué et les indicateurs clés RED, les percentiles de latence et la ventilation par endpoint tous limités à celui-ci" size="lg" />
   </Step>
 </Steps>
 
@@ -100,7 +100,7 @@ Parfois, vous ne voulez pas d’une vue agrégée supplémentaire : vous voule
 
     Un clic sur une ligne de service ouvre désormais la page Search sur cette source de traces, filtrée sur `ServiceName = <service>`, ce qui vous amène aux spans de ce seul service sur le même intervalle de temps.
 
-    <Image img="/images/clickstack/dashboards/row-click-search-drilldown.png" alt="Page Search ouverte sur la source de traces après un clic sur une ligne, filtrée sur le service sélectionné" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-search-drilldown.webp" alt="Page Search ouverte sur la source de traces après un clic sur une ligne, filtrée sur le service sélectionné" size="lg" />
   </Step>
 </Steps>
 
@@ -112,7 +112,7 @@ Le même principe fonctionne pour n’importe quel catalogue d’éléments. Reg
 
 Les actions de clic sur une ligne se configurent directement sur la tuile de tableau ; il n’existe pas de page distincte pour cela. Ajoutez ou modifiez une tuile, puis définissez son type de visualisation sur **Table**. Un bouton **Row Click Action** apparaît alors dans la barre d’outils de l’éditeur, à côté de **Display Settings**. Ce bouton n’est affiché que pour les tuiles de tableau, et son libellé reflète l’action actuelle : `Row Click Action: Default`, `Row Click Action: Search` ou `Row Click Action: Dashboard`. Cliquez dessus pour ouvrir le panneau latéral.
 
-<Image img="/images/clickstack/dashboards/row-click-drawer.png" alt="Panneau Row Click Action en mode Dashboard, avec le tableau de bord Service Detail sélectionné comme cible et un filtre ServiceName généré à partir de la ligne cliquée" size="lg" />
+<Image img="/images/clickstack/dashboards/row-click-drawer.webp" alt="Panneau Row Click Action en mode Dashboard, avec le tableau de bord Service Detail sélectionné comme cible et un filtre ServiceName généré à partir de la ligne cliquée" size="lg" />
 
 Le panneau latéral propose trois actions :
 

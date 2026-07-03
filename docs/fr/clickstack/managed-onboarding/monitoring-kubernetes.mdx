@@ -316,15 +316,15 @@ Pour une charge de travail exécutée dans Kubernetes, le collecteur passerelle 
 
     Ouvrez votre service dans la [console ClickHouse Cloud](https://console.clickhouse.cloud) et sélectionnez **ClickStack** dans le menu de gauche.
 
-    <Image img="/images/use-cases/observability/clickstack-cloud-v2.png" size="lg" alt="Lancer ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-cloud-v2.webp" size="lg" alt="Lancer ClickStack" border />
 
     Dans la vue **Search**, sélectionnez `Logs` comme source et définissez l’intervalle de temps sur **Last 15 minutes**. Les logs des conteneurs de tout le cluster devraient apparaître en quelques secondes, enrichis d’attributs comme `k8s.namespace.name`, `k8s.pod.name` et `k8s.node.name`.
 
-    <Image img="/images/use-cases/observability/clickstack-search-with-k8-logs.png" size="lg" alt="Vue Search de ClickStack avec les logs Kubernetes" />
+    <Image img="/images/use-cases/observability/clickstack-search-with-k8-logs.webp" size="lg" alt="Vue Search de ClickStack avec les logs Kubernetes" />
 
     Pour voir les métriques et événements d’infrastructure dans leur contexte, ouvrez le tableau de bord **Kubernetes** intégré en accédant à **Dashboards** -&gt; **Kubernetes**. Les onglets `Pods`, `Nodes` et `Namespaces` devraient tous contenir des données.
 
-    <Image img="/images/use-cases/observability/clickstack-dashboard-kubernetes.png" size="lg" alt="Tableau de bord Kubernetes de ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-dashboard-kubernetes.webp" size="lg" alt="Tableau de bord Kubernetes de ClickStack" border />
 
     Si rien ne s’affiche :
 

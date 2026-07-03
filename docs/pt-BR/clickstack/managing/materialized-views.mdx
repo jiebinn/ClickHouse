@@ -36,7 +36,7 @@ A principal motivação para usar visões materializadas é que os dados gravado
 
 As visões materializadas no ClickHouse são atualizadas continuamente à medida que os dados fluem para a tabela de origem, comportando-se mais como índices sempre atualizados. Isso difere de muitos outros bancos de dados, nos quais visões materializadas são snapshots estáticos que precisam ser atualizados periodicamente, de forma semelhante às [visões materializadas atualizáveis](/pt-BR/concepts/features/materialized-views/refreshable-materialized-view) do ClickHouse.
 
-<Image img="/images/materialized-view/materialized-view-diagram.png" size="md" alt="Diagrama de visão materializada" />
+<Image img="/images/materialized-view/materialized-view-diagram.webp" size="md" alt="Diagrama de visão materializada" />
 
 Views materializadas incrementais computam apenas as alterações na visão à medida que novos dados chegam, transferindo a computação para o momento da inserção. Como o ClickHouse é altamente otimizado para ingestão, o custo incremental de manter a visão para cada bloco inserido é pequeno em relação à economia obtida durante a execução das consultas. O custo de computar a agregação é amortizado ao longo das inserções, em vez de ser pago repetidamente a cada leitura. Portanto, consultar os resultados pré-agregados é muito menos custoso do que recomputá-los, resultando em menor custo operacional e desempenho quase em tempo real para visualizações que consomem esses dados, mesmo em escala de petabytes.
 
@@ -124,7 +124,7 @@ Nesta etapa, **concentre-se nas consultas** que serão executadas pelas visualiz
 
 Depois de identificar uma visualização, ou um conjunto de visualizações, que você deseja acelerar, a próxima etapa é identificar as consultas subjacentes. Na prática, isso significa inspecionar a configuração da visualização e revisar o SQL gerado, prestando bastante atenção às métricas de agregação usadas e às funções aplicadas.
 
-<Image img="/images/clickstack/materialized_views/generated_sql.png" size="lg" alt="SQL gerado" />
+<Image img="/images/clickstack/materialized_views/generated_sql.webp" size="lg" alt="SQL gerado" />
 
 <Note>
   Nos casos em que um painel de depuração não estiver disponível no HyperDX para um componente, os usuários podem inspecionar o console do navegador, onde todas as consultas são registradas.
@@ -231,7 +231,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
 
     Navegue até a **fonte** relevante no HyperDX e abra a caixa de diálogo **Editar configuração**. Role até a seção de visões materializadas.
 
-    <Image img="/images/clickstack/materialized_views/edit_source.png" size="lg" alt="Editar fontes" />
+    <Image img="/images/clickstack/materialized_views/edit_source.webp" size="lg" alt="Editar fontes" />
   </Step>
 
   <Step>
@@ -239,7 +239,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
 
     Selecione **Adicionar visão materializada** e, em seguida, escolha o banco de dados e a tabela de destino que dão suporte à visão materializada.
 
-    <Image img="/images/clickstack/materialized_views/add_view.png" size="lg" alt="Editar fontes" />
+    <Image img="/images/clickstack/materialized_views/add_view.webp" size="lg" alt="Editar fontes" />
   </Step>
 
   <Step>
@@ -254,7 +254,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
 
     Para dimensões, especifique todas as colunas, além do timestamp, pelas quais a visão agrupa.
 
-    <Image img="/images/clickstack/materialized_views/select_metrics.png" size="lg" alt="Selecionar métricas" />
+    <Image img="/images/clickstack/materialized_views/select_metrics.webp" size="lg" alt="Selecionar métricas" />
   </Step>
 
   <Step>
@@ -262,7 +262,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
 
     Selecione a **granularidade de tempo** da visão materializada, por exemplo, um minuto.
 
-    <Image img="/images/clickstack/materialized_views/select_time_granularity.png" size="lg" alt="Selecionar granularidade de tempo" />
+    <Image img="/images/clickstack/materialized_views/select_time_granularity.webp" size="lg" alt="Selecionar granularidade de tempo" />
   </Step>
 
   <Step>
@@ -275,7 +275,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
       Um guia completo sobre backfilling de visões materializadas pode ser encontrado em [&quot;Carga retroativa de dados.&quot;](/pt-BR/guides/clickhouse/data-modelling/backfilling#scenario-2-adding-materialized-views-to-existing-tables)
     </Note>
 
-    <Image img="/images/clickstack/materialized_views/select_min_time.png" size="lg" alt="Selecionar tempo mínimo" />
+    <Image img="/images/clickstack/materialized_views/select_min_time.webp" size="lg" alt="Selecionar tempo mínimo" />
 
     Se o horário exato de início não estiver claro, você pode determiná-lo consultando o timestamp mínimo da tabela de destino, por exemplo:
 
@@ -289,7 +289,7 @@ As visões materializadas devem ser registradas na **fonte** do HyperDX que corr
 
     Salve a configuração da fonte.
 
-    <Image img="/images/clickstack/materialized_views/save_source.png" size="lg" alt="Salvar fonte" />
+    <Image img="/images/clickstack/materialized_views/save_source.webp" size="lg" alt="Salvar fonte" />
   </Step>
 </Steps>
 
@@ -312,7 +312,7 @@ O ClickStack fornece indicadores visuais claros para confirmar se uma visão mat
 * **Raio verde** indica que a consulta está sendo acelerada por uma visão materializada.
 * **Raio laranja** indica que a consulta é executada na tabela de origem.
 
-<Image img="/images/clickstack/materialized_views/accelerated_visual.png" size="lg" alt="Visualização acelerada" />
+<Image img="/images/clickstack/materialized_views/accelerated_visual.webp" size="lg" alt="Visualização acelerada" />
 
 2. **Inspecione os detalhes da otimização**  Clique no ícone de raio para abrir um painel de detalhes mostrando:
 

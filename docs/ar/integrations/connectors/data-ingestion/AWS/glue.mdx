@@ -41,7 +41,7 @@ import ClickHouseSupportedBadge from "/snippets/ar/components/ClickHouseSupporte
     4. <h3 id="use-in-glue-job">الاستخدام في مهمة Glue</h3>
        في مهمة Glue، حدِّد علامة التبويب `Job details`، ثم وسِّع نافذة `Advanced properties`. ضمن قسم `Connections`، حدِّد الـ connection الذي أنشأته للتو. يضيف الـ connector تلقائيًا ملفات JAR المطلوبة إلى runtime الخاص بالمهمة.
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.png" size="md" alt="إعدادات اتصالات Glue Notebook" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.webp" size="md" alt="إعدادات اتصالات Glue Notebook" force="true" />
 
     <Note>
       ملفات JAR المستخدمة في Glue connector مبنية لإصدارات `Spark 3.3` و`Scala 2` و`Python 3`. تأكد من اختيار هذه الإصدارات عند تكوين مهمة Glue.
@@ -55,7 +55,7 @@ import ClickHouseSupportedBadge from "/snippets/ar/components/ClickHouseSupporte
     2. تأكد من أن مهمة Glue لديها حق الوصول إلى هذا الـ bucket.
     3. ضمن علامة التبويب `Job details`، مرِّر إلى الأسفل ووسِّع القائمة المنسدلة `Advanced properties`، ثم أدخل مسار ملفات JAR في `Dependent JARs path`:
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.png" size="md" alt="خيارات مسار JAR في Glue Notebook" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.webp" size="md" alt="خيارات مسار JAR في Glue Notebook" force="true" />
   </Tab>
 </Tabs>
 

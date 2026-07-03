@@ -37,11 +37,11 @@ Managed Postgres está disponible actualmente en AWS en varias regiones y es gra
 
 Para crear un nuevo servicio de Managed Postgres, haga clic en el botón **New service** en la lista de servicios de la Cloud Console. Luego podrá seleccionar Postgres como tipo de base de datos.
 
-<Image img="/images/managed-postgres/create-service.png" alt="Crear un servicio de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/create-service.webp" alt="Crear un servicio de Managed Postgres" size="md" border />
 
 Introduzca un nombre para su instancia de base de datos y haga clic en **Create service**. Se le llevará a la página Overview.
 
-<Image img="/images/managed-postgres/overview.png" alt="Overview de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/overview.webp" alt="Overview de Managed Postgres" size="md" border />
 
 Su instancia de Managed Postgres se aprovisionará y estará lista para usarse en un plazo de 3 a 5 minutos.
 
@@ -51,7 +51,7 @@ Su instancia de Managed Postgres se aprovisionará y estará lista para usarse e
 
 En la barra lateral izquierda, verás un [botón **Connect**](/es/products/managed-postgres/connection). Haz clic en él para ver los detalles de conexión y las cadenas de conexión en varios formatos.
 
-<Image img="/images/managed-postgres/connect-modal.png" alt="Modal de conexión de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/connect-modal.webp" alt="Modal de conexión de Managed Postgres" size="md" border />
 
 Copia la cadena de conexión de `psql` y conéctate a tu base de datos. También puedes usar cualquier cliente compatible con Postgres, como DBeaver, o cualquier biblioteca de aplicaciones.
 
@@ -251,7 +251,7 @@ Esta sección te muestra cómo replicar tus datos de Postgres en ClickHouse y co
 
 Ahora que ya tenemos tablas y datos en Postgres, vamos a replicar las tablas en ClickHouse para análisis. Para empezar, haz clic en **ClickHouse integration** en la barra lateral. Luego, puedes hacer clic en **Replicate data in ClickHouse**.
 
-<Image img="/images/managed-postgres/integration-landing.png" alt="Integración de Managed Postgres vacía" size="md" border />
+<Image img="/images/managed-postgres/integration-landing.webp" alt="Integración de Managed Postgres vacía" size="md" border />
 
 En el formulario siguiente, puedes introducir un nombre para tu integración y seleccionar una instancia existente de ClickHouse en la que replicar los datos. Si todavía no tienes una instancia de ClickHouse, puedes crear una directamente desde este formulario.
 
@@ -261,7 +261,7 @@ En el formulario siguiente, puedes introducir un nombre para tu integración y s
   Asegúrate de que el servicio de ClickHouse que selecciones esté en estado **Running** antes de continuar.
 </Info>
 
-<Image img="/images/managed-postgres/postgres-analytics-form.png" alt="Formulario de integración de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/postgres-analytics-form.webp" alt="Formulario de integración de Managed Postgres" size="md" border />
 
 Haz clic en **Next** para ir al selector de tablas. Aquí, solo tienes que hacer lo siguiente:
 
@@ -269,7 +269,7 @@ Haz clic en **Next** para ir al selector de tablas. Aquí, solo tienes que hacer
 * Expandir el esquema **public** y seleccionar las tablas users y events que creamos antes.
 * Hacer clic en **Replicate data to ClickHouse**.
 
-<Image img="/images/managed-postgres/table-picker.png" alt="Selector de tablas de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/table-picker.webp" alt="Selector de tablas de Managed Postgres" size="md" border />
 
 Se iniciará el proceso de replicación y se te llevará a la página de resumen de la integración. Como se trata de la primera integración, la configuración de la infraestructura inicial puede tardar entre 2 y 3 minutos. Mientras tanto, veamos la nueva extensión **pg&#95;clickhouse**.
 
@@ -294,7 +294,7 @@ CREATE SERVER ch FOREIGN DATA WRAPPER clickhouse_fdw
 
 Reemplace `<clickhouse_cloud_host>` por el `hostname` de ClickHouse y `<database_name>` por la base de datos que seleccionó durante la configuración de la replicación. Puede encontrar el hostname en su servicio de ClickHouse haciendo clic en **Connect** en la barra lateral.
 
-<Image img="/images/managed-postgres/get-clickhouse-host.png" alt="Obtener el host de ClickHouse" size="md" border />
+<Image img="/images/managed-postgres/get-clickhouse-host.webp" alt="Obtener el host de ClickHouse" size="md" border />
 
 Ahora asignamos el usuario de Postgres a las credenciales del servicio de ClickHouse:
 
@@ -324,11 +324,11 @@ Ahora ya puedes ver todas las tablas de ClickHouse en tu cliente de Postgres:
 
 Volvamos a la página de integración. Debería ver que la replicación inicial ha finalizado. Haga clic en el nombre de la integración para ver los detalles.
 
-<Image img="/images/managed-postgres/analytics-list.png" alt="Lista de analíticas de Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/analytics-list.webp" alt="Lista de analíticas de Managed Postgres" size="md" border />
 
 Haga clic en el nombre del servicio para abrir la consola de ClickHouse y ver sus tablas replicadas.
 
-<Image img="/images/managed-postgres/replicated-tables.png" alt="Tablas replicadas de Managed Postgres en ClickHouse" size="md" border />
+<Image img="/images/managed-postgres/replicated-tables.webp" alt="Tablas replicadas de Managed Postgres en ClickHouse" size="md" border />
 
 <div id="performance-comparison">
   ### Comparar el rendimiento de Postgres frente a ClickHouse

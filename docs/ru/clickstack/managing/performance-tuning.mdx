@@ -115,7 +115,7 @@ ClickStack хранит метаданные, такие как метки Kuber
 
 Пользователь может фильтровать трассировки, используя синтаксис Lucene, например: `ResourceAttributes.k8s.pod.name:"checkout-675775c4cc-f2p9c"`:
 
-<Image img="/images/clickstack/performance_guide/trace_filtering.png" size="lg" alt="Фильтрация трассировок" />
+<Image img="/images/clickstack/performance_guide/trace_filtering.webp" size="lg" alt="Фильтрация трассировок" />
 
 В результате получается SQL-предикат, похожий на следующий:
 
@@ -139,7 +139,7 @@ MATERIALIZED ResourceAttributes['k8s.pod.name']
 
 Теперь пользователи могут эффективно выполнять запросы по именам подов, используя синтаксис Lucene, например `PodName:"checkout-675775c4cc-f2p9c"`
 
-<Image img="/images/clickstack/performance_guide/trace_filtering_v2.png" size="lg" alt="Фильтрация трассировки v2" />
+<Image img="/images/clickstack/performance_guide/trace_filtering_v2.webp" size="lg" alt="Фильтрация трассировки v2" />
 
 Для вновь вставленных данных это позволяет полностью избежать доступа к Map и значительно сократить I/O.
 
@@ -759,7 +759,7 @@ pruning на уровне токенов для столбцов типа Array 
 
     Настройте интерфейс ClickStack так, чтобы для источника данных журналов использовалась таблица `otel_logs_merge`.
 
-    <Image img="/images/clickstack/performance_guide/select_merge_table.png" size="lg" alt="Выберите Merge-таблицу" />
+    <Image img="/images/clickstack/performance_guide/select_merge_table.webp" size="lg" alt="Выберите Merge-таблицу" />
 
     На этом этапе запись по-прежнему идёт в `otel_logs` с исходным первичным ключом, а чтение использует merge-таблицу. Для пользователей нет видимых изменений, и на ингестию это не влияет.
   </Step>

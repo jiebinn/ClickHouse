@@ -38,7 +38,7 @@ Siga as instruções na seção [Configuração do dbt e do adaptador ClickHouse
 
 O dbt se destaca na modelagem de dados altamente relacionais. Para fins de exemplo, fornecemos um pequeno conjunto de dados do IMDB com o seguinte esquema relacional. Esse conjunto de dados vem do[ repositório de conjuntos de dados relacionais](https://relational.fit.cvut.cz/dataset/IMDb). Ele é simples em comparação com os esquemas normalmente usados com dbt, mas representa uma amostra gerenciável:
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_01.png" size="lg" alt="Esquema de tabelas do IMDB" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_01.webp" size="lg" alt="Esquema de tabelas do IMDB" />
 
 Usamos um subconjunto dessas tabelas, como mostrado.
 
@@ -209,13 +209,13 @@ Nos guias posteriores, converteremos esta consulta em um modelo - materializando
 
 3. Neste ponto, você precisará de um editor de texto de sua preferência. Nos exemplos abaixo, usamos o popular VS Code. Ao abrir o diretório IMDB, você deverá ver uma coleção de arquivos yml e sql:
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_02.png" size="lg" alt="Novo projeto dbt" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_02.webp" size="lg" alt="Novo projeto dbt" />
 
 4. Atualize o arquivo `dbt_project.yml` para especificar nosso primeiro modelo, `actor_summary`, e defina o profile como `clickhouse_imdb`.
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_03.png" size="lg" alt="profile do dbt" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_03.webp" size="lg" alt="profile do dbt" />
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_04.png" size="lg" alt="profile do dbt" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_04.webp" size="lg" alt="profile do dbt" />
 
 5. Em seguida, precisamos fornecer ao dbt os detalhes de conexão da nossa instância do ClickHouse. Adicione o seguinte ao arquivo `~/.dbt/profiles.yml`.
 
@@ -681,7 +681,7 @@ Ajuste a consulta acima ao período de execução. Deixamos a inspeção do resu
 
 Isso é ilustrado abaixo:
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_05.png" size="lg" alt="atualizações incrementais no dbt" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_05.webp" size="lg" alt="atualizações incrementais no dbt" />
 
 Essa estratégia pode apresentar desafios em modelos muito grandes. Para mais detalhes, consulte [Limitações](/pt-BR/integrations/connectors/data-ingestion/etl-tools/dbt/index#limitations).
 
@@ -812,7 +812,7 @@ Em resumo, esta abordagem:
 
 Esse processo é mostrado abaixo:
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_06.png" size="lg" alt="incremental com exclusão leve" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_06.webp" size="lg" alt="incremental com exclusão leve" />
 
 <div id="insert_overwrite-mode-experimental">
   ### modo `insert_overwrite` (experimental)
@@ -832,7 +832,7 @@ Essa abordagem tem as seguintes vantagens:
 * É mais segura do que outras estratégias porque não modifica a tabela original até que a operação INSERT seja concluída com sucesso: em caso de falha intermediária, a tabela original não é modificada.
 * Implementa a prática recomendada de engenharia de dados de &quot;imutabilidade das partições&quot;, o que simplifica o processamento de dados incremental e paralelo, rollbacks etc.
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_07.png" size="lg" alt="incremental insert overwrite" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_07.webp" size="lg" alt="incremental insert overwrite" />
 
 <div id="creating-a-snapshot">
   ## Criando um snapshot

@@ -267,11 +267,11 @@ import { TrackedLink } from "/snippets/ru/components/GalaxyTrackedLink/GalaxyTra
 
     Откройте свой сервис в [консоли ClickHouse Cloud](https://console.clickhouse.cloud) и выберите **ClickStack** в левом меню.
 
-    <Image img="/images/use-cases/observability/clickstack-cloud-v2.png" size="lg" alt="Запуск ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-cloud-v2.webp" size="lg" alt="Запуск ClickStack" border />
 
     В представлении **Search** переключите источник на `Logs` и установите временной диапазон **Last 15 minutes**. События CloudWatch должны появиться в течение нескольких интервалов опроса.
 
-    <Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.png" size="lg" alt="Представление Search в ClickStack с журналами CloudWatch" />
+    <Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.webp" size="lg" alt="Представление Search в ClickStack с журналами CloudWatch" />
 
     Каждое событие содержит исходную группу и поток как атрибуты ресурса:
 
@@ -282,11 +282,11 @@ import { TrackedLink } from "/snippets/ru/components/GalaxyTrackedLink/GalaxyTra
 
     Измените запрос поиска на `Timestamp, SeverityText as level, ResourceAttributes['aws.region'], ResourceAttributes['cloudwatch.log.group.name'], ResourceAttributes['cloudwatch.log.stream'], Body`, чтобы добавить эти атрибуты:
 
-    <Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.png" size="lg" alt="Представление Search в ClickStack с журналами CloudWatch и атрибутами" />
+    <Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.webp" size="lg" alt="Представление Search в ClickStack с журналами CloudWatch и атрибутами" />
 
     Выберите запись в журнале, чтобы просмотреть её метаданные:
 
-    <Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.png" size="lg" alt="Атрибуты CloudWatch в представлении сведений о журнале" />
+    <Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.webp" size="lg" alt="Атрибуты CloudWatch в представлении сведений о журнале" />
 
     Если ничего не отображается:
 
@@ -303,11 +303,11 @@ import { TrackedLink } from "/snippets/ru/components/GalaxyTrackedLink/GalaxyTra
 
     <TrackedLink href={'/ru/examples/cloudwatch-logs-dashboard.json'} download="cloudwatch-logs-dashboard.json" eventName="docs.cloudwatch_logs_monitoring.dashboard_download">Скачать `cloudwatch-logs-dashboard.json`</TrackedLink>, затем в интерфейсе ClickStack перейдите в **Панели мониторинга** и нажмите **Импортировать**.
 
-    <Image img="/images/clickstack/clickstack-import-dashboard.png" size="lg" alt="Кнопка импорта панели мониторинга" />
+    <Image img="/images/clickstack/clickstack-import-dashboard.webp" size="lg" alt="Кнопка импорта панели мониторинга" />
 
     Загрузите JSON‑файл и нажмите **Завершить импорт**.
 
-    <Image img="/images/clickstack/cloudwatch/finish-clickstack-import.png" size="lg" alt="Диалог завершения импорта" />
+    <Image img="/images/clickstack/cloudwatch/finish-clickstack-import.webp" size="lg" alt="Диалог завершения импорта" />
   </Step>
 
   <Step>

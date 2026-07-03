@@ -21,7 +21,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 | **Amazon S3**                                 | <img src="/images/integrations/logos/amazon_s3_logo.svg" alt="شعار Amazon S3" width="32" />   | يتطلب الإدخال المستمر [الترتيب المعجمي](#continuous-ingestion-lexicographical-order) افتراضيًا، ولكن يمكن تهيئته أيضًا [لإدخال الملفات بأي ترتيب](#continuous-ingestion-any-order). |
 | **Cloudflare R2** <br /> *متوافق مع S3*       | <img src="/images/integrations/logos/cloudflare.svg" alt="شعار Cloudflare R2" width="32" />   | يتطلب الإدخال المستمر [الترتيب المعجمي](#continuous-ingestion-lexicographical-order). ولا يدعم الوضع غير المرتب.                                                                     |
 | **DigitalOcean Spaces** <br /> *متوافق مع S3* | <img src="/images/integrations/logos/digitalocean.svg" alt="شعار Digital Ocean" width="32" /> | يتطلب الإدخال المستمر [الترتيب المعجمي](#continuous-ingestion-lexicographical-order). ولا يدعم الوضع غير المرتب.                                                                     |
-| **OVH Object Storage** <br /> *متوافق مع S3*  | <img src="/images/integrations/logos/ovh.png" alt="شعار Cloud Storage" width="32" />          | يتطلب الإدخال المستمر [الترتيب المعجمي](#continuous-ingestion-lexicographical-order). ولا يدعم الوضع غير المرتب.                                                                     |
+| **OVH Object Storage** <br /> *متوافق مع S3*  | <img src="/images/integrations/logos/ovh.webp" alt="شعار Cloud Storage" width="32" />          | يتطلب الإدخال المستمر [الترتيب المعجمي](#continuous-ingestion-lexicographical-order). ولا يدعم الوضع غير المرتب.                                                                     |
 
 <Tip>
   نظرًا لاختلاف تنسيقات URL وتنفيذات واجهة برمجة تطبيقات بين موفري خدمات تخزين الكائنات، ليست كل الخدمات المتوافقة مع S3 مدعومة بشكل مباشر. إذا كنت تواجه مشكلات مع خدمة غير مُدرجة أعلاه، فيُرجى [التواصل مع فريقنا](https://clickhouse.com/company/contact?loc=clickpipes).
@@ -189,7 +189,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 لاستخدام [مفاتيح الوصول](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) في المصادقة، اختر `Credentials` ضمن **Authentication method** عند إعداد اتصال ClickPipe. بعد ذلك، أدخِل معرّف مفتاح الوصول (مثل `AKIAIOSFODNN7EXAMPLE`) ومفتاح الوصول السري (مثل `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`) في الحقلين `Access key` و`Secret key`، على الترتيب.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_credentials.png" alt="بيانات اعتماد IAM لـ S3 ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_credentials.webp" alt="بيانات اعتماد IAM لـ S3 ClickPipes" size="lg" border />
 
 <div id="iam-role">
   #### IAM role
@@ -197,7 +197,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 لاستخدام [الوصول المستند إلى الأدوار](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) في المصادقة، اختر `IAM role` ضمن **Authentication method** عند إعداد اتصال ClickPipe.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_iam.png" alt="مصادقة IAM لـ S3 ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_iam.webp" alt="مصادقة IAM لـ S3 ClickPipes" size="lg" border />
 
 اتّبع [هذا الدليل](/ar/products/cloud/guides/data-sources/accessing-s3-data-securely) [لإنشاء دور](/ar/products/cloud/guides/data-sources/accessing-s3-data-securely#option-2-manually-create-iam-role) بسياسة الثقة المطلوبة للوصول إلى S3. ثم أدخِل ARN لدور IAM ضمن `IAM role ARN`.
 
@@ -240,7 +240,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 | `Parallel view processing`           | false             | ما إذا كان سيتم تمكين الدفع إلى طرق العرض المرفقة [بالتوازي بدلًا من التسلسل](/ar/reference/settings/session-settings#parallel_view_processing). |
 | `Use cluster function`               | true              | ما إذا كانت الملفات ستُعالَج بالتوازي عبر عدة عُقد.                                                                                           |
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.png" alt="الإعدادات المتقدمة لـ ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.webp" alt="الإعدادات المتقدمة لـ ClickPipes" size="lg" border />
 
 <div id="scaling">
   ### التحجيم

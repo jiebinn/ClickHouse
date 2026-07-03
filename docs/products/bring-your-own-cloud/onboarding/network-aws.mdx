@@ -32,13 +32,13 @@ To create or delete VPC peering for ClickHouse BYOC, follow the steps:
 5. Set the VPC Accepter to the target VPC ID. (Select another account if applicable)
 6. Click Create Peering Connection.
 
-<Image img="/images/cloud/reference/byoc-vpcpeering-1.png" size="lg" alt="BYOC Create Peering Connection" border />
+<Image img="/images/cloud/reference/byoc-vpcpeering-1.webp" size="lg" alt="BYOC Create Peering Connection" border />
 </Step>
 <Step>
 ### Accept the peering connection request {#step-2-accept-the-peering-connection-request}
 Go to the peering account, in the (VPC -> Peering connections -> Actions -> Accept request) page customer can approve this VPC peering request.
 
-<Image img="/images/cloud/reference/byoc-vpcpeering-2.png" size="lg" alt="BYOC Accept Peering Connection" border />
+<Image img="/images/cloud/reference/byoc-vpcpeering-2.webp" size="lg" alt="BYOC Accept Peering Connection" border />
 </Step>
 <Step>
 ### Add destination to ClickHouse VPC route tables {#step-3-add-destination-to-clickhouse-vpc-route-tables}
@@ -50,7 +50,7 @@ In ClickHouse BYOC account,
 5. Enter the CIDR range of the target VPC for the Destination.
 6. Select “Peering Connection” and the ID of the peering connection for the Target.
 
-<Image img="/images/cloud/reference/byoc-vpcpeering-3.png" size="lg" alt="BYOC Add route table" border />
+<Image img="/images/cloud/reference/byoc-vpcpeering-3.webp" size="lg" alt="BYOC Add route table" border />
 </Step>
 <Step>
 ### Add destination to the target VPC route tables {#step-4-add-destination-to-the-target-vpc-route-tables}
@@ -62,7 +62,7 @@ In the peering AWS account,
 5. Enter the CIDR range of the ClickHouse VPC for the Destination.
 6. Select “Peering Connection” and the ID of the peering connection for the Target.
 
-<Image img="/images/cloud/reference/byoc-vpcpeering-4.png" size="lg" alt="BYOC Add route table" border />
+<Image img="/images/cloud/reference/byoc-vpcpeering-4.webp" size="lg" alt="BYOC Add route table" border />
 </Step>
 <Step>
 ### Edit security group to allow peered VPC access {#step-5-edit-security-group-to-allow-peered-vpc-access}
@@ -101,7 +101,7 @@ After ClickHouse Support has enabled PrivateLink on their side, you need to crea
    - ClickHouse Support will provide you with the Endpoint Service name
    - You can also find it in the AWS VPC console under "Endpoint Services" (filter by service name or look for ClickHouse services)
 
-<Image img="/images/cloud/reference/byoc-privatelink-1.png" size="lg" alt="BYOC PrivateLink Service Endpoint" border />
+<Image img="/images/cloud/reference/byoc-privatelink-1.webp" size="lg" alt="BYOC PrivateLink Service Endpoint" border />
 
 2. **Create the VPC Endpoint**:
    - Navigate to the AWS VPC Console → Endpoints → Create Endpoint
@@ -124,7 +124,7 @@ These settings are required for the PrivateLink DNS to function correctly.
    - In the VPC Console, go to "Endpoint Connections"
    - Find the connection request from ClickHouse and click "Accept" to approve it
 
-<Image img="/images/cloud/reference/byoc-privatelink-2.png" size="lg" alt="BYOC PrivateLink Approve" border />
+<Image img="/images/cloud/reference/byoc-privatelink-2.webp" size="lg" alt="BYOC PrivateLink Approve" border />
 </Step>
 <Step>
 ### Add Endpoint ID to Service Allowlist {#step-3-add-endpoint-id-allowlist}

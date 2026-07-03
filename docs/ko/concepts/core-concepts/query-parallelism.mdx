@@ -127,7 +127,7 @@ FROM
 
 ClickHouse의 [내장 web UI](/ko/concepts/features/interfaces/http) (`/play` endpoint에서 사용 가능)는 위의 물리적 계획을 그래픽으로 시각화해 표시할 수 있습니다. 이 예시에서는 시각화를 간결하게 유지하기 위해 `max_threads`를 `4`로 설정하여 병렬 처리 레인 4개만 표시합니다:
 
-<Image img="/images/guides/best-practices/query-parallelism_05.png" alt="쿼리 파이프라인" />
+<Image img="/images/guides/best-practices/query-parallelism_05.webp" alt="쿼리 파이프라인" />
 
 참고: 이 시각화는 왼쪽에서 오른쪽으로 읽으십시오. 각 행은 데이터 블록을 순차적으로 스트리밍하면서 필터링, 집계, 최종 처리 단계와 같은 변환을 적용하는 병렬 처리 레인을 나타냅니다. 이 예시에서는 `max_threads = 4` 설정에 해당하는 4개의 병렬 레인을 확인할 수 있습니다.
 

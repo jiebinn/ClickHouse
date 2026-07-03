@@ -29,7 +29,7 @@ INSERT INTO session_events SELECT * FROM generateRandom('clientId UUID,
 
 الآن بعد أن أصبحت لدينا بعض البيانات في ClickHouse، نريد تشغيل بعض الاستعلامات وفهم كيفية تنفيذها. يُقسَّم تنفيذ الاستعلام إلى العديد من الخطوات. ويمكن تحليل كل خطوة من خطوات تنفيذ الاستعلام واستكشاف أخطائها وإصلاحها باستخدام استعلام `EXPLAIN` المقابل. تُلخَّص هذه الخطوات في المخطط أدناه:
 
-<Image img="/images/guides/developer/analyzer1.png" alt="خطوات استعلام Explain" size="md" />
+<Image img="/images/guides/developer/analyzer1.webp" alt="خطوات استعلام Explain" size="md" />
 
 لنلقِ نظرة على كل مكوّن أثناء تنفيذ الاستعلام. سنأخذ بضعة استعلامات ثم نفحصها باستخدام عبارة `EXPLAIN`.
 
@@ -64,7 +64,7 @@ EXPLAIN AST SELECT min(timestamp), max(timestamp) FROM session_events;
 
 الناتج هو شجرة البنية المجرّدة يمكن عرضها بصريًا كما هو موضح أدناه:
 
-<Image img="/images/guides/developer/analyzer2.png" alt="مخرجات AST" size="md" />
+<Image img="/images/guides/developer/analyzer2.webp" alt="مخرجات AST" size="md" />
 
 لكل عقدة عُقد فرعية مرتبطة بها، وتمثل الشجرة بأكملها البنية العامة لاستعلامك. وهذه بنية منطقية تساعد في معالجة الاستعلام. ومن منظور المستخدم النهائي (ما لم يكن مهتمًا بتنفيذ الاستعلام)، فهي ليست مفيدة كثيرًا؛ إذ تُستخدم هذه الأداة أساسًا من قِبل المطورين.
 
@@ -349,7 +349,7 @@ digraph
 
 يمكنك بعد ذلك نسخ هذا الناتج ولصقه [هنا](https://dreampuf.github.io/GraphvizOnline)، وسيؤدي ذلك إلى إنشاء الرسم البياني التالي:
 
-<Image img="/images/guides/developer/analyzer3.png" alt="مخرَج الرسم البياني" size="md" />
+<Image img="/images/guides/developer/analyzer3.webp" alt="مخرَج الرسم البياني" size="md" />
 
 يشير المستطيل الأبيض إلى عقدة في مسار المعالجة، ويشير المستطيل الرمادي إلى خطوات خطة الاستعلام، أما الرمز `x` متبوعًا برقم فيشير إلى عدد المدخلات/المخرجات المستخدمة. وإذا كنت لا تريد عرضها بصيغة مضغوطة، فيمكنك دائمًا إضافة `compact=0`:
 
@@ -389,7 +389,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer4.png" alt="مخرجات الرسم البياني المضغوط" size="md" />
+<Image img="/images/guides/developer/analyzer4.webp" alt="مخرجات الرسم البياني المضغوط" size="md" />
 
 لماذا لا يقرأ ClickHouse من الجدول باستخدام مؤشرات ترابط متعددة؟ لنجرب إضافة المزيد من البيانات إلى جدولنا:
 
@@ -448,7 +448,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer5.png" alt="مخرجات الرسم البياني المتوازي" size="md" />
+<Image img="/images/guides/developer/analyzer5.webp" alt="مخرجات الرسم البياني المتوازي" size="md" />
 
 لذلك قرر المنفّذ عدم تنفيذ العمليات بالتوازي لأن حجم البيانات لم يكن كبيرًا بما يكفي. وبعد إضافة المزيد من الصفوف، قرر المنفّذ استخدام عدة خيوط كما هو موضح في الرسم البياني.
 

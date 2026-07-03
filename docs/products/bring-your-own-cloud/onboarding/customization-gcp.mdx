@@ -21,7 +21,7 @@ If you prefer to use an existing VPC to deploy ClickHouse BYOC instead of having
 2. Within the private subnet, allocate at least 1 secondary IPv4 range that will be used for GKE cluster pods. The secondary range should be at least `/23` to provide sufficient IP addresses for GKE cluster pods.
 3. Enable **Private Google Access** on the subnet. This allows GKE nodes to reach Google APIs and services without requiring external IP addresses.
 
-<Image img="/images/cloud/reference/byoc-gcp-subnet.png" size="lg" alt="BYOC GCP Subnet details showing primary and secondary IPv4 ranges with Private Google Access enabled" />
+<Image img="/images/cloud/reference/byoc-gcp-subnet.webp" size="lg" alt="BYOC GCP Subnet details showing primary and secondary IPv4 ranges with Private Google Access enabled" />
 </Step>
 <Step>
 ### Ensure network connectivity {#ensure-network-connectivity}
@@ -42,6 +42,6 @@ In the ClickHouse Cloud console, configure the following when setting up new inf
 3. Enter the **Subnet name** you allocated for ClickHouse.
 4. Click **Set up Infrastructure** to begin provisioning.
 
-<Image img="/images/cloud/reference/byoc-gcp-existing-vpc-ui.png" size="lg" alt="ClickHouse Cloud BYOC setup UI with Use existing VPC selected for GCP" />
+<Image img="/images/cloud/reference/byoc-gcp-existing-vpc-ui.webp" size="lg" alt="ClickHouse Cloud BYOC setup UI with Use existing VPC selected for GCP" />
 </Step>
 </Steps>

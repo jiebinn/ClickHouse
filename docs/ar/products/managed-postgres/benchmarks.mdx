@@ -36,7 +36,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
   ### الاختبار 1: كثيف الإدخال/الإخراج - قراءة+كتابة (مجموعة بيانات بحجم 500 جيجابايت)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="نتائج اختبار كثيف الإدخال/الإخراج للقراءة+الكتابة" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="نتائج اختبار كثيف الإدخال/الإخراج للقراءة+الكتابة" size="md" border />
 
 **تحسّن الأداء مقارنةً بـ RDS ‏(16k IOPS):**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### الاختبار 2: كثيف عمليات الإدخال/الإخراج - للقراءة فقط (مجموعة بيانات بحجم 500 جيجابايت)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="نتائج اختبار الأداء للقراءة فقط وكثيف الإدخال/الإخراج" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="نتائج اختبار الأداء للقراءة فقط وكثيف الإدخال/الإخراج" size="md" border />
 
 **تحسّن الأداء مقارنةً بـ RDS ‏(16k IOPS):**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### الاختبار 3: مكثّف الاستخدام للـ CPU (البيانات تتّسع في الذاكرة)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="نتائج اختبار الأداء المكثّف للـ CPU" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="نتائج اختبار الأداء المكثّف للـ CPU" size="md" border />
 
 **تحسّن الأداء:**
 

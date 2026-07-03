@@ -47,15 +47,15 @@ ClickHouse Cloud ahora ofrece ClickPipes para migrar su base de datos externa de
 
 Abre la [consola de ClickHouse Cloud](https://clickhouse.cloud) y selecciona tu servicio de Managed Postgres.
 
-<Image img="/images/managed-postgres/pgpg/servicecard.png" alt="Tarjeta del servicio de Managed Postgres en la lista de servicios de ClickHouse Cloud" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/servicecard.webp" alt="Tarjeta del servicio de Managed Postgres en la lista de servicios de ClickHouse Cloud" size="lg" border />
 
 En la barra lateral izquierda, haz clic en **fuente de datos**.
 
-<Image img="/images/managed-postgres/pgpg/overview.png" alt="Entrada fuente de datos en la barra lateral del servicio de Managed Postgres" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/overview.webp" alt="Entrada fuente de datos en la barra lateral del servicio de Managed Postgres" size="lg" border />
 
 Haz clic en **Start import**.
 
-<Image img="/images/managed-postgres/pgpg/startimport.png" alt="Página de fuente de datos con el botón Start import" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/startimport.webp" alt="Página de fuente de datos con el botón Start import" size="lg" border />
 
 Completa los detalles de conexión de tu base de datos PostgreSQL de origen: host, puerto, nombre de usuario, contraseña y nombre de la base de datos. Habilita **TLS** si la base de datos de origen lo requiere.
 
@@ -67,7 +67,7 @@ Elige un método de ingestión:
 * **Solo carga inicial** — copia puntual, sin replicación continua.
 * **Solo CDC** — omite la copia inicial y replica únicamente los cambios nuevos a partir de este momento.
 
-<Image img="/images/managed-postgres/pgpg/migrationform.png" alt="Paso 1: formulario de conexión a la base de datos de origen con opciones de método de ingestión" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/migrationform.webp" alt="Paso 1: formulario de conexión a la base de datos de origen con opciones de método de ingestión" size="lg" border />
 
 Haz clic en **Next**.
 
@@ -77,7 +77,7 @@ Haz clic en **Next**.
 
 El asistente muestra un comando `pg_dump` rellenado previamente con los detalles de conexión de origen. Ejecútalo en una terminal:
 
-<Image img="/images/managed-postgres/pgpg/nextexport.png" alt="Paso 2: comando pg_dump para exportar el esquema" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/nextexport.webp" alt="Paso 2: comando pg_dump para exportar el esquema" size="lg" border />
 
 ```shell
 pg_dump \
@@ -90,7 +90,7 @@ pg_dump \
 
 Esto crea `pg.sql` en el directorio actual.
 
-<Image img="/images/managed-postgres/pgpg/psqlexport.png" alt="Salida de la terminal tras ejecutar pg_dump" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/psqlexport.webp" alt="Salida de la terminal tras ejecutar pg_dump" size="lg" border />
 
 Haz clic en **Next**.
 
@@ -102,7 +102,7 @@ Selecciona la base de datos de destino en el menú desplegable o haz clic en **C
 
 El asistente muestra un comando `psql` para aplicar el volcado del esquema a tu servicio de Managed Postgres. Ejecútalo en una terminal:
 
-<Image img="/images/managed-postgres/pgpg/nextimport.png" alt="Paso 3: comando psql para importar el esquema" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/nextimport.webp" alt="Paso 3: comando psql para importar el esquema" size="lg" border />
 
 ```shell
 psql \
@@ -113,7 +113,7 @@ psql \
   -f pg.sql
 ```
 
-<Image img="/images/managed-postgres/pgpg/psqlimport.png" alt="Salida de la terminal tras ejecutar la importación del esquema con psql" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/psqlimport.webp" alt="Salida de la terminal tras ejecutar la importación del esquema con psql" size="lg" border />
 
 Haz clic en **Siguiente**.
 
@@ -133,7 +133,7 @@ Expanda **Advanced replication settings** para ajustar el rendimiento:
 | Número de filas por partición en la instantánea | 100000         | Tamaño de la partición para instantáneas de tablas grandes    |
 | Número de tablas en paralelo en la instantánea  | 1              | Tablas de las que se toma una instantánea de forma simultánea |
 
-<Image img="/images/managed-postgres/pgpg/advancedsettings.png" alt="Paso 4: formulario de ajustes de ingestión con publicación y opciones avanzadas de replicación" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/advancedsettings.webp" alt="Paso 4: formulario de ajustes de ingestión con publicación y opciones avanzadas de replicación" size="lg" border />
 
 Haga clic en **Siguiente**.
 
@@ -143,7 +143,7 @@ Haga clic en **Siguiente**.
 
 Selecciona las tablas que quieres replicar. Las tablas están agrupadas por esquema. Selecciona tablas individuales o expande un esquema para elegirlas todas.
 
-<Image img="/images/managed-postgres/pgpg/tablepicker.png" alt="Paso 5: selector de tablas agrupadas por esquema con el botón Crear migración" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/tablepicker.webp" alt="Paso 5: selector de tablas agrupadas por esquema con el botón Crear migración" size="lg" border />
 
 Haz clic en **Crear migración**.
 
@@ -153,11 +153,11 @@ Haz clic en **Crear migración**.
 
 Después de crear la migración, la verás en **Fuentes de datos** con el estado **En ejecución**.
 
-<Image img="/images/managed-postgres/pgpg/migrationlist.png" alt="Lista de fuentes de datos que muestra una migración en ejecución" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/migrationlist.webp" alt="Lista de fuentes de datos que muestra una migración en ejecución" size="lg" border />
 
 Haz clic en la migración para abrir la vista de detalles. La pestaña **Tablas** muestra el progreso de la carga inicial de cada tabla, incluidas las filas procesadas, las particiones y el tiempo medio por partición. La pestaña **Métricas** muestra la latencia de replicación y el rendimiento una vez que se inicia CDC.
 
-<Image img="/images/managed-postgres/pgpg/initialload.png" alt="Vista de detalles de la migración que muestra estadísticas de la carga inicial por tabla" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/initialload.webp" alt="Vista de detalles de la migración que muestra estadísticas de la carga inicial por tabla" size="lg" border />
 
 <div id="post-migration">
   ## Tareas posteriores a la migración

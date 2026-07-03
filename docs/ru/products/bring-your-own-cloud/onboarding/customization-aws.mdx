@@ -24,9 +24,9 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     3. Убедитесь, что каждая подсеть имеет минимальный CIDR-диапазон `/23` (например, 10.0.0.0/23), чтобы обеспечить достаточное количество IP-адресов для развертывания ClickHouse.
     4. Добавьте в каждую подсеть теги `kubernetes.io/role/internal-elb=1` и `clickhouse-byoc="true"`, чтобы обеспечить корректную настройку балансировщика нагрузки.
 
-    <Image img="/images/cloud/reference/byoc-subnet-1.png" size="lg" alt="Подсеть BYOC VPC" />
+    <Image img="/images/cloud/reference/byoc-subnet-1.webp" size="lg" alt="Подсеть BYOC VPC" />
 
-    <Image img="/images/cloud/reference/byoc-subnet-2.png" size="lg" alt="Теги подсети BYOC VPC" />
+    <Image img="/images/cloud/reference/byoc-subnet-2.webp" size="lg" alt="Теги подсети BYOC VPC" />
   </Step>
 
   <Step>
@@ -34,7 +34,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     Если в вашей VPC еще не настроена конечная точка шлюза S3, ее нужно создать, чтобы обеспечить безопасное приватное взаимодействие между вашей VPC и Amazon S3. Эта конечная точка позволяет сервисам ClickHouse обращаться к S3 без выхода в публичный интернет. Пример конфигурации приведен на снимке экрана ниже.
 
-    <Image img="/images/cloud/reference/byoc-s3-endpoint.png" size="lg" alt="Конечная точка S3 BYOC" />
+    <Image img="/images/cloud/reference/byoc-s3-endpoint.webp" size="lg" alt="Конечная точка S3 BYOC" />
   </Step>
 
   <Step>
@@ -82,7 +82,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     4. При необходимости введите **Public subnet IDs**, если в вашей конфигурации требуются общедоступные балансировщики нагрузки.
     5. Нажмите **Set up Infrastructure**, чтобы начать подготовку инфраструктуры.
 
-    <Image img="/images/cloud/reference/byoc-aws-existing-vpc-ui.png" size="lg" alt="Интерфейс настройки BYOC в ClickHouse Cloud с выбранным пунктом Use existing VPC" />
+    <Image img="/images/cloud/reference/byoc-aws-existing-vpc-ui.webp" size="lg" alt="Интерфейс настройки BYOC в ClickHouse Cloud с выбранным пунктом Use existing VPC" />
 
     <Note>
       Настройка нового региона может занять до 40 минут.

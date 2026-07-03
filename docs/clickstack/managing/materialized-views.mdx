@@ -32,7 +32,7 @@ The primary motivation for using materialized views is that the data written to 
 
 Materialized views in ClickHouse are updated continuously as data flows into the source table, behaving more like always-up-to-date indexes. This differs from many other databases, where materialized views are static snapshots that must be periodically refreshed, similar to ClickHouse [Refreshable Materialized Views](/concepts/features/materialized-views/refreshable-materialized-view).
 
-<Image img="/images/materialized-view/materialized-view-diagram.png" size="md" alt="Materialized view diagram"/>
+<Image img="/images/materialized-view/materialized-view-diagram.webp" size="md" alt="Materialized view diagram"/>
 
 Incremental materialized views compute only the changes to the view as new data arrives, pushing computation to insert time. Because ClickHouse is highly optimized for ingestion, the incremental cost of maintaining the view for each inserted block is small relative to the savings achieved during query execution. The cost of computing the aggregation is amortized across inserts rather than paid repeatedly on every read. Querying the pre-aggregated results is therefore far less expensive than recomputing them, resulting in lower operational cost and near real-time performance for downstream visualizations, even at petabyte scale.
 
@@ -110,7 +110,7 @@ At this stage, **focus on the queries** that will be issued by the visualization
 
 Once you have identified a visualization, or set of visualizations, that you want to accelerate, the next step is to identify the underlying queries. In practice, this means inspecting the visualization configuration and reviewing the generated SQL, paying close attention to the aggregation metrics used, and the functions applied.
 
-<Image img="/images/clickstack/materialized_views/generated_sql.png" size="lg" alt="Generated SQL"/>
+<Image img="/images/clickstack/materialized_views/generated_sql.webp" size="lg" alt="Generated SQL"/>
 
 <Note>
 In cases where a debug panel isn't available inside HyperDX for a component, users can inspect the browser console, where all queries are logged.
@@ -211,14 +211,14 @@ Materialized views should be registered against the **source** in HyperDX that c
 
 Navigate to the relevant **source** in HyperDX and open the **Edit configuration** dialog. Scroll to the section for materialized views.
 
-<Image img="/images/clickstack/materialized_views/edit_source.png" size="lg" alt="Edit sources"/>
+<Image img="/images/clickstack/materialized_views/edit_source.webp" size="lg" alt="Edit sources"/>
 </Step>
 <Step>
 #### Add the materialized view {#add-the-materialized-view}
 
 Select **Add materialized view**, then choose the database and target table that back the materialized view.
 
-<Image img="/images/clickstack/materialized_views/add_view.png" size="lg" alt="Edit sources"/>
+<Image img="/images/clickstack/materialized_views/add_view.webp" size="lg" alt="Edit sources"/>
 </Step>
 <Step>
 #### Select metrics {#select-metrics}
@@ -231,14 +231,14 @@ For metrics, you must map:
 
 For dimensions, specify all the columns, other than the timestamp, that the view groups by.
 
-<Image img="/images/clickstack/materialized_views/select_metrics.png" size="lg" alt="Select Metrics"/>
+<Image img="/images/clickstack/materialized_views/select_metrics.webp" size="lg" alt="Select Metrics"/>
 </Step>
 <Step>
 #### Select the time granularity {#select-time-granularity}
 
 Select the **time granularity** of the materialized view, for example, one minute.
 
-<Image img="/images/clickstack/materialized_views/select_time_granularity.png" size="lg" alt="Select Time Granularity"/>
+<Image img="/images/clickstack/materialized_views/select_time_granularity.webp" size="lg" alt="Select Time Granularity"/>
 </Step>
 <Step>
 #### Select the minimum date {#specify-the-minimum-date}
@@ -250,7 +250,7 @@ Materialized views are **not automatically backfilled** when they're created, so
 A full guide on backfilling materialized views can be found under ["Backfilling Data."](/guides/clickhouse/data-modelling/backfilling#scenario-2-adding-materialized-views-to-existing-tables)
 </Note>
 
-<Image img="/images/clickstack/materialized_views/select_min_time.png" size="lg" alt="Select Min Time"/>
+<Image img="/images/clickstack/materialized_views/select_min_time.webp" size="lg" alt="Select Min Time"/>
 
 If the exact start time is unclear, you can determine it by querying the minimum timestamp from the target table, for example:
 
@@ -263,7 +263,7 @@ SELECT min(Timestamp) FROM otel_traces_1m
 
 Save the source configuration.
 
-<Image img="/images/clickstack/materialized_views/save_source.png" size="lg" alt="Save Source"/>
+<Image img="/images/clickstack/materialized_views/save_source.webp" size="lg" alt="Save Source"/>
 </Step>
 </Steps>
 
@@ -283,7 +283,7 @@ ClickStack provides clear visual indicators to confirm whether a materialized vi
 - **Green lightning bolt** indicates the query is accelerated by a materialized view.
 - **Orange lightning bolt** indicates the query is executed against the source table.
 
-<Image img="/images/clickstack/materialized_views/accelerated_visual.png" size="lg" alt="Accelerated Visualization"/>
+<Image img="/images/clickstack/materialized_views/accelerated_visual.webp" size="lg" alt="Accelerated Visualization"/>
 
 2. **Inspect optimization details**  Click the lightning bolt icon to open a details panel showing:
 - **Active materialized view**: the view selected for the query, including its estimated row count.

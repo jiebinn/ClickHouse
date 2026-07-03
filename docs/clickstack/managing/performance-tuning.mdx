@@ -105,7 +105,7 @@ Consider the default ClickStack schema for traces, where Kubernetes metadata is 
 
 A user may filter traces using Lucene syntax e.g. `ResourceAttributes.k8s.pod.name:"checkout-675775c4cc-f2p9c"`:
 
-<Image img="/images/clickstack/performance_guide/trace_filtering.png" size="lg" alt="Trace filtering"/>
+<Image img="/images/clickstack/performance_guide/trace_filtering.webp" size="lg" alt="Trace filtering"/>
 
 This results in a SQL predicate similar to:
 
@@ -129,7 +129,7 @@ From this point forward, **new** data will store the Pod name as a dedicated col
 
 Users can now query for pod names efficiently, using Lucene syntax e.g. `PodName:"checkout-675775c4cc-f2p9c"`
 
-<Image img="/images/clickstack/performance_guide/trace_filtering_v2.png" size="lg" alt="Trace filtering v2"/>
+<Image img="/images/clickstack/performance_guide/trace_filtering_v2.webp" size="lg" alt="Trace filtering v2"/>
 
 For newly inserted data, this avoids map access entirely and significantly reduces I/O.
 
@@ -710,7 +710,7 @@ You can now query this table to confirm it returns data from `otel_logs`.
 
 Configure the ClickStack UI to use `otel_logs_merge` as the table for the logs data source.
 
-<Image img="/images/clickstack/performance_guide/select_merge_table.png" size="lg" alt="Select Merge Table"/>
+<Image img="/images/clickstack/performance_guide/select_merge_table.webp" size="lg" alt="Select Merge Table"/>
 
 At this point, writes continue to `otel_logs` with the original primary key, while reads use the merge table. There is no visible change for users or impact on ingestion.
 </Step>

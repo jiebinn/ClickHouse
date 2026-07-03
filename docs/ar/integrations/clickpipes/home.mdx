@@ -20,7 +20,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 يمكن نشر ClickPipes وإدارتها يدويًا باستخدام ClickPipes UI، وكذلك برمجيًا باستخدام [OpenAPI](/ar/integrations/clickpipes/programmatic-access/openapi) و[Terraform](/ar/integrations/clickpipes/programmatic-access/terraform).
 
-<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.png" alt="مكدس ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.webp" alt="مكدس ClickPipes" size="lg" border />
 
 <div id="supported-data-sources">
   ## مصادر البيانات المدعومة
@@ -30,7 +30,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Apache Kafka](/ar/integrations/clickpipes/kafka/index)        | <img src="/images/integrations/logos/kafka.svg" alt="شعار Apache Kafka" width="32" />                  | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من Apache Kafka إلى ClickHouse Cloud.                                                                                                                           |
 | Confluent Cloud                                             | <img src="/images/integrations/logos/confluent.svg" alt="شعار Confluent Cloud" width="32" />           | بث مباشر       | مستقر       | استفد من القوة المشتركة لـ Confluent وClickHouse Cloud عبر تكاملنا المباشر.                                                                                                                                             |
-| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.png" alt="شعار Redpanda" width="32" />              | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من Redpanda إلى ClickHouse Cloud.                                                                                                                               |
+| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.webp" alt="شعار Redpanda" width="32" />              | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من Redpanda إلى ClickHouse Cloud.                                                                                                                               |
 | AWS MSK                                                     | <img src="/images/integrations/logos/msk.svg" alt="شعار AWS MSK" width="32" />                         | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من AWS MSK إلى ClickHouse Cloud.                                                                                                                                |
 | Azure Event Hubs                                            | <img src="/images/integrations/logos/azure_event_hubs.svg" alt="شعار Azure Event Hubs" width="32" />   | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من Azure Event Hubs إلى ClickHouse Cloud. راجع [الأسئلة الشائعة حول Azure Event Hubs](/ar/integrations/clickpipes/kafka/faq#azure-eventhubs) للحصول على الإرشادات. |
 | WarpStream                                                  | <img src="/images/integrations/logos/warpstream.svg" alt="شعار WarpStream" width="32" />               | بث مباشر       | مستقر       | قم بتهيئة ClickPipes وابدأ في استيعاب البيانات المتدفقة من WarpStream إلى ClickHouse Cloud.                                                                                                                             |
@@ -126,7 +126,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 1. أنشئ دورًا مخصصًا `CREATE ROLE my_clickpipes_role SETTINGS ...`. راجع بناء جملة [CREATE ROLE](/ar/reference/statements/create/role) لمزيد من التفاصيل.
 2. أضف الدور المخصص إلى مستخدم ClickPipes في خطوة `Details and Settings` أثناء إنشاء ClickPipes.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.png" alt="تعيين دور مخصص" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.webp" alt="تعيين دور مخصص" size="lg" border />
 
 <div id="clickpipes-advanced-settings">
   ## ضبط الإعدادات المتقدمة في ClickPipes
@@ -151,7 +151,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 | `Parallel view processing`           | false             | ما إذا كان سيتم تمكين الدفع إلى العروض المرفقة [بالتوازي بدلًا من التسلسل](/ar/reference/settings/session-settings#parallel_view_processing). |
 | `Use cluster function`               | true              | ما إذا كانت الملفات ستُعالَج بالتوازي عبر عدة عُقد.                                                                                        |
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.png" alt="الإعدادات المتقدمة لـ ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.webp" alt="الإعدادات المتقدمة لـ ClickPipes" size="lg" border />
 
 <div id="clickpipes-advanced-settings-streaming">
   ### ClickPipes للبث

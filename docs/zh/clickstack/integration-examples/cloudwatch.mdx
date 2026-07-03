@@ -60,7 +60,7 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
     3. 前往 **Team Settings → API Keys**
     4. 复制你的 **摄取 API key**
 
-    <Image img="/images/clickstack/api-key.png" alt="ClickStack API Key" />
+    <Image img="/images/clickstack/api-key.webp" alt="ClickStack API Key" />
 
     将其保存为环境变量：
 
@@ -304,7 +304,7 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
     3. 等待 1–2 分钟，日志会显示出来 (具体取决于你的轮询间隔)
     4. 搜索来自你的 CloudWatch 日志组的日志
 
-    <Image img="/images/clickstack/cloudwatch/log-search-view.png" alt="日志搜索视图" />
+    <Image img="/images/clickstack/cloudwatch/log-search-view.webp" alt="日志搜索视图" />
 
     在日志中查找以下关键属性：
 
@@ -313,7 +313,7 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
     * `ResourceAttributes['cloudwatch.log.stream']`：日志 stream 名称
     * `Body`：实际的日志消息内容
 
-    <Image img="/images/clickstack/cloudwatch/error-log-column-values.png" alt="错误日志列值" />
+    <Image img="/images/clickstack/cloudwatch/error-log-column-values.webp" alt="错误日志列值" />
   </Step>
 </Steps>
 
@@ -376,7 +376,7 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
 
     你应该会看到来自多个 CloudWatch 日志组的日志。
 
-    <Image img="/images/clickstack/cloudwatch/demo-search-view.png" alt="演示搜索视图" />
+    <Image img="/images/clickstack/cloudwatch/demo-search-view.webp" alt="演示搜索视图" />
 
     <Info>
       **时区显示**
@@ -403,11 +403,11 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
     1. 打开 HyperDX，进入 Dashboards 部分
     2. 点击右上角省略号菜单中的 **Import Dashboard**
 
-    <Image img="/images/clickstack/import-dashboard.png" alt="导入仪表盘按钮" />
+    <Image img="/images/clickstack/import-dashboard.webp" alt="导入仪表盘按钮" />
 
     3. 上传 `cloudwatch-logs-dashboard.json` 文件，然后点击 **Finish Import**
 
-    <Image img="/images/clickstack/cloudwatch/finish-import.png" alt="完成导入对话框" />
+    <Image img="/images/clickstack/cloudwatch/finish-import.webp" alt="完成导入对话框" />
   </Step>
 
   <Step>
@@ -415,7 +415,7 @@ AWS CloudWatch 是一项用于监控 AWS 资源和应用程序的服务。虽然
 
     仪表盘创建后，所有可视化内容都将预先配置好：
 
-    <Image img="/images/clickstack/cloudwatch/logs-dashboard.png" alt="CloudWatch 日志仪表盘" />
+    <Image img="/images/clickstack/cloudwatch/logs-dashboard.webp" alt="CloudWatch 日志仪表盘" />
 
     <Note>
       对于演示数据集，请将时间范围设置为 **2025-12-07 00:00:00 - 2025-12-08 00:00:00 (UTC)** (请根据你的本地时区调整) 。导入后的仪表盘默认不会指定时间范围。

@@ -222,19 +222,19 @@ Consultez le guide de [prise en main](https://docs.aws.amazon.com/vpc/latest/pri
 
 1. Accédez à la SQL Console de votre service ClickHouse Cloud.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.png" alt="Service ClickPipes" size="md" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.webp" alt="Service ClickPipes" size="md" border />
 
 2. Sélectionnez le bouton `Data Sources` dans le menu de gauche, puis cliquez sur &quot;Set up a ClickPipe&quot;
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="Sélectionner les importations" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="Sélectionner les importations" size="lg" border />
 
 3. Sélectionnez Kafka ou Postgres comme source de données.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.png" alt="Sélectionner la source de données" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.webp" alt="Sélectionner la source de données" size="lg" border />
 
 4. Sélectionnez l’option `Reverse private endpoint`.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.png" alt="Sélectionner le reverse private endpoint" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.webp" alt="Sélectionner le reverse private endpoint" size="lg" border />
 
 5. Sélectionnez l’un des reverse private endpoints existants ou créez-en un nouveau.
 
@@ -245,11 +245,11 @@ Consultez le guide de [prise en main](https://docs.aws.amazon.com/vpc/latest/pri
   Pour un accès dans la même région, la création d’une VPC Resource est l’approche recommandée.
 </Info>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.png" alt="Sélectionner le reverse private endpoint" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.webp" alt="Sélectionner le reverse private endpoint" size="lg" border />
 
 6. Fournissez les paramètres requis pour le type d’endpoint sélectionné.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.png" alt="Sélectionner le reverse private endpoint" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.webp" alt="Sélectionner le reverse private endpoint" size="lg" border />
 
 * Pour une VPC Resource, fournissez l’ARN de partage de configuration et l’ID de configuration.
   * Pour MSK multi-VPC, fournissez l’ARN du cluster et la méthode d’authentification utilisée avec un endpoint créé.
@@ -261,7 +261,7 @@ Consultez le guide de [prise en main](https://docs.aws.amazon.com/vpc/latest/pri
    La page s’actualisera automatiquement une fois l’endpoint prêt.
    Un VPC endpoint service peut nécessiter l’acceptation de la demande de connexion dans votre console AWS.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.png" alt="Sélectionner le reverse private endpoint" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.webp" alt="Sélectionner le reverse private endpoint" size="lg" border />
 
 8. Une fois l’endpoint prêt, vous pouvez utiliser un nom DNS pour vous connecter à la source de données.
 
@@ -282,11 +282,11 @@ Vous pouvez gérer les endpoints privés inversés existants dans les paramètre
 
 1. Dans la barre latérale, repérez le bouton `Settings` et cliquez dessus.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.png" alt="Paramètres de ClickHouse Cloud" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.webp" alt="Paramètres de ClickHouse Cloud" size="lg" border />
 
 2. Cliquez sur `Reverse private endpoints` dans la section `ClickPipe reverse private endpoints`.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.png" alt="Paramètres de ClickHouse Cloud" size="md" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.webp" alt="Paramètres de ClickHouse Cloud" size="md" border />
 
    Les informations détaillées de l’endpoint privé inversé s’affichent dans le volet latéral.
 

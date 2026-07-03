@@ -36,7 +36,7 @@ Todas las pruebas de rendimiento se realizaron con una VM cliente con la misma c
   ### Prueba 1: Intensiva en IO - Lectura+Escritura (conjunto de datos de 500 GB)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="Resultados del benchmark de lectura+escritura intensiva en IO" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="Resultados del benchmark de lectura+escritura intensiva en IO" size="md" border />
 
 **Mejora del rendimiento frente a RDS (16k IOPS):**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### Prueba 2: intensivo en IO - Solo lectura (conjunto de datos de 500 GB)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="Resultados del benchmark de solo lectura intensivo en IO" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="Resultados del benchmark de solo lectura intensivo en IO" size="md" border />
 
 **Mejora del rendimiento frente a RDS (16k IOPS):**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### Test 3: Uso intensivo de CPU (los datos caben en memoria)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="Resultados del benchmark de uso intensivo de CPU" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="Resultados del benchmark de uso intensivo de CPU" size="md" border />
 
 **Mejora del rendimiento:**
 

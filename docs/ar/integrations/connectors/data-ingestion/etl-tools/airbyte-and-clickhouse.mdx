@@ -39,7 +39,7 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     3. بمجرد ظهور شعار Airbyte في الطرفية، يمكنك الوصول إلى <a href="http://localhost:8000" target="_blank">localhost:8000</a>
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_01.png" size="lg" border alt="شعار Airbyte" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_01.webp" size="lg" border alt="شعار Airbyte" />
 
     <Note>
       بدلاً من ذلك، يمكنك إنشاء حساب واستخدام <a href="https://docs.airbyte.com/deploying-airbyte/on-cloud" target="_blank">Airbyte Cloud</a>
@@ -59,11 +59,11 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     2. في Airbyte، انتقل إلى صفحة &quot;Destinations&quot; وأضف وجهة جديدة:
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_02.png" size="lg" border alt="إضافة وجهة في Airbyte" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_02.webp" size="lg" border alt="إضافة وجهة في Airbyte" />
 
     3. اختر ClickHouse من القائمة المنسدلة &quot;Destination type&quot;، ثم املأ نموذج &quot;Set up the destination&quot; بإدخال اسم مضيف ClickHouse والمنافذ واسم قاعدة البيانات واسم المستخدم وكلمة المرور، وحدد ما إذا كان الاتصال من نوع SSL (وهو ما يعادل الخيار `--secure` في `clickhouse-client`):
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_03.png" size="lg" border alt="إنشاء وجهة ClickHouse في Airbyte" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_03.webp" size="lg" border alt="إنشاء وجهة ClickHouse في Airbyte" />
 
     4. تهانينا! لقد أضفت ClickHouse الآن كوجهة في Airbyte.
 
@@ -85,7 +85,7 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     1. من داخل Airbyte، انتقل إلى صفحة &quot;Sources&quot; وأضف مصدرًا جديدًا من نوع ملف.
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_04.png" size="lg" border alt="إضافة مصدر في Airbyte" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_04.webp" size="lg" border alt="إضافة مصدر في Airbyte" />
 
     2. املأ نموذج &quot;Set up the source&quot; عبر تسمية المصدر وتوفير URL لملف NYC Taxi لشهر يناير 2022 (انظر أدناه). احرص على اختيار `parquet` كتنسيق الملف، و`HTTPS Public Web` كموفر التخزين، و`nyc_taxi_2022` كاسم مجموعة البيانات.
 
@@ -93,7 +93,7 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
        https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2022-01.parquet
        ```
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_05.png" size="lg" border alt="إنشاء مصدر ClickHouse في Airbyte" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_05.webp" size="lg" border alt="إنشاء مصدر ClickHouse في Airbyte" />
 
     3. تهانينا! لقد أضفت الآن ملفًا مصدرًا في Airbyte.
   </Step>
@@ -103,21 +103,21 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     1. ضمن Airbyte، انتقِل إلى صفحة &quot;Connections&quot; وأضِف اتصالًا جديدًا
 
-    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_06.png" size="lg" border alt="أضِف اتصالًا في Airbyte" />
+    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_06.webp" size="lg" border alt="أضِف اتصالًا في Airbyte" />
 
     2. حدِّد &quot;Use existing source&quot; ثم اختر New York City Taxi Data، ثم حدِّد &quot;Use existing destination&quot; واختر مثيل ClickHouse الخاص بك.
 
     3. املأ نموذج &quot;Set up the connection&quot; باختيار تكرار النسخ المتماثل (سنستخدم `manual` في هذا الدليل العملي)، ثم حدِّد `nyc_taxi_2022` باعتباره الدفق الذي تريد مزامنته. وتأكد من اختيار `Normalized Tabular Data` كخيار للتطبيع.
 
-    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_07.png" size="lg" border alt="إنشاء اتصال في Airbyte" />
+    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_07.webp" size="lg" border alt="إنشاء اتصال في Airbyte" />
 
     4. الآن بعد إنشاء الاتصال، انقر على &quot;Sync now&quot; لبدء تحميل البيانات (بما أننا اخترنا `Manual` كوتيرة للنسخ المتماثل)
 
-    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_08.png" size="lg" border alt="زامن الآن في Airbyte" />
+    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_08.webp" size="lg" border alt="زامن الآن في Airbyte" />
 
     5. سيبدأ تحميل بياناتك، ويمكنك توسيع العرض لرؤية سجلات Airbyte ومؤشر التقدّم. وعند اكتمال العملية، سترى الرسالة `Completed successfully` في السجلات:
 
-    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_09.png" size="lg" border alt="اكتمل بنجاح" />
+    <Image img="/images/integrations/data-ingestion/etl-tools/airbyte_09.webp" size="lg" border alt="اكتمل بنجاح" />
 
     6. اتصل بمثيل ClickHouse الخاص بك باستخدام عميل SQL المفضل لديك، ثم تحقق من الجدول الناتج:
 

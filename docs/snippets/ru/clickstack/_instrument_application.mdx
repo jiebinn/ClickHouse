@@ -23,7 +23,7 @@ title: Инструментирование приложения
 
     Откройте [http://localhost:5001](http://localhost:5001). Вы увидите выбор года, сводную статистику, диаграмму активности, таблицы с пользователями и доменами, а также строку поиска. Попробуйте интерфейс: переключайте годы, открывайте истории.
 
-    <Image img="/images/clickstack/getting-started/hackernews_main.png" alt="Приложение HackerNews Analyzer, запущенное локально" />
+    <Image img="/images/clickstack/getting-started/hackernews_main.webp" alt="Приложение HackerNews Analyzer, запущенное локально" />
 
     На этом этапе приложение запущено, но пока без инструментирования. ClickStack не показывает данные: он ждёт поступления телеметрии. Это состояние &quot;до&quot;.
   </Step>
@@ -118,15 +118,15 @@ title: Инструментирование приложения
 
     1. Перейдите в **Search** и отфильтруйте данные за последние 5 минут. Появятся журналы для `hn-analyzer-api`.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.png" alt="Журналы ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.webp" alt="Журналы ClickStack" />
 
     2. Откройте запрос и поднимитесь вверх по трейсу. Вы увидите спан обработчика Express, дочерний HTTP-спан, указывающий на кластер ClickHouse с реальной длительностью сетевого взаимодействия, а также коррелированные записи `console.log` в том же трейсе.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.png" alt="Трейсы ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.webp" alt="Трейсы ClickStack" />
 
     3. Откройте **Воспроизведение сеанса**, чтобы просмотреть видео сеанса браузера с возможностью перемотки, синхронизированное с временной шкалой трейса.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.png" alt="Сеансы ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.webp" alt="Сеансы ClickStack" />
 
     Журналы, метрики, трейсы и воспроизведения сеансов попадают в один и тот же интерфейс, используют один и тот же язык запросов и автоматически коррелируются.
   </Step>

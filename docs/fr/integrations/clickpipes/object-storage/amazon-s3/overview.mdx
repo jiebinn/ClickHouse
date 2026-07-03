@@ -21,7 +21,7 @@ Les S3 ClickPipes peuvent être déployés et gérés manuellement à l’aide d
 | **Amazon S3**                                  | <img src="/images/integrations/logos/amazon_s3_logo.svg" alt="logo Amazon S3" width="32" />   | L’ingestion continue nécessite par défaut un [ordre lexicographique](#continuous-ingestion-lexicographical-order), mais peut être configurée pour [ingérer des fichiers dans n’importe quel ordre](#continuous-ingestion-any-order). |
 | **Cloudflare R2** <br /> *compatible S3*       | <img src="/images/integrations/logos/cloudflare.svg" alt="logo Cloudflare R2" width="32" />   | L’ingestion continue nécessite un [ordre lexicographique](#continuous-ingestion-lexicographical-order). Le mode non ordonné n’est pas pris en charge.                                                                                |
 | **DigitalOcean Spaces** <br /> *compatible S3* | <img src="/images/integrations/logos/digitalocean.svg" alt="logo Digital Ocean" width="32" /> | L’ingestion continue nécessite un [ordre lexicographique](#continuous-ingestion-lexicographical-order). Le mode non ordonné n’est pas pris en charge.                                                                                |
-| **OVH Object Storage** <br /> *compatible S3*  | <img src="/images/integrations/logos/ovh.png" alt="logo Cloud Storage" width="32" />          | L’ingestion continue nécessite un [ordre lexicographique](#continuous-ingestion-lexicographical-order). Le mode non ordonné n’est pas pris en charge.                                                                                |
+| **OVH Object Storage** <br /> *compatible S3*  | <img src="/images/integrations/logos/ovh.webp" alt="logo Cloud Storage" width="32" />          | L’ingestion continue nécessite un [ordre lexicographique](#continuous-ingestion-lexicographical-order). Le mode non ordonné n’est pas pris en charge.                                                                                |
 
 <Tip>
   En raison des différences de formats d’URL et d’implémentations d’API selon les fournisseurs de services de stockage objet, tous les services compatibles S3 ne sont pas pris en charge immédiatement. Si vous rencontrez des problèmes avec un service qui ne figure pas dans la liste ci-dessus, veuillez [contacter notre équipe](https://clickhouse.com/company/contact?loc=clickpipes).
@@ -189,7 +189,7 @@ Lors de l’utilisation du [mode non ordonné](#continuous-ingestion-any-order),
 
 Pour utiliser des [clés d&#39;accès](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) pour vous authentifier, sélectionnez `Credentials` sous **Méthode d’authentification** lors de la configuration de votre connexion ClickPipe. Indiquez ensuite l&#39;ID de clé d&#39;accès (par exemple, `AKIAIOSFODNN7EXAMPLE`) et la clé d&#39;accès secrète (par exemple, `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`) dans les champs `Access key` et `Secret key`, respectivement.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_credentials.png" alt="Identifiants IAM pour les S3 ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_credentials.webp" alt="Identifiants IAM pour les S3 ClickPipes" size="lg" border />
 
 <div id="iam-role">
   #### Rôle IAM
@@ -197,7 +197,7 @@ Pour utiliser des [clés d&#39;accès](https://docs.aws.amazon.com/IAM/latest/Us
 
 Pour utiliser le [contrôle d’accès basé sur les rôles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) pour vous authentifier, choisissez `IAM role` sous **Méthode d’authentification** lors de la configuration de votre connexion ClickPipe.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_iam.png" alt="Authentification IAM pour les ClickPipes S3" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_iam.webp" alt="Authentification IAM pour les ClickPipes S3" size="lg" border />
 
 Suivez [ce guide](/fr/products/cloud/guides/data-sources/accessing-s3-data-securely) pour [créer un rôle](/fr/products/cloud/guides/data-sources/accessing-s3-data-securely#option-2-manually-create-iam-role) avec la stratégie d’approbation requise pour accéder à S3. Indiquez ensuite l’ARN du rôle IAM dans `IAM role ARN`.
 
@@ -240,7 +240,7 @@ ClickPipes fournit des valeurs par défaut adaptées à la plupart des cas d’u
 | `Parallel view processing`           | false             | Indique s’il faut activer l’envoi vers les vues attachées [de manière concurrente plutôt que séquentielle](/fr/reference/settings/session-settings#parallel_view_processing). |
 | `Use cluster function`               | true              | Indique s’il faut traiter les fichiers en parallèle sur plusieurs nœuds.                                                                                                   |
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.png" alt="Paramètres avancés de ClickPipes" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.webp" alt="Paramètres avancés de ClickPipes" size="lg" border />
 
 <div id="scaling">
   ### Mise à l’échelle

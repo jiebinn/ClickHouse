@@ -23,7 +23,7 @@ title: إضافة الرصد إلى التطبيق
 
     افتح [http://localhost:5001](http://localhost:5001). سترى محدِّد السنة، وإحصاءات موجزة، ومخططًا للنشاط، وجدولي أهم المستخدمين والنطاقات، ومربع بحث. جرّب التنقّل: بدّل بين السنوات، وتعمّق في القصص.
 
-    <Image img="/images/clickstack/getting-started/hackernews_main.png" alt="تطبيق HackerNews Analyzer قيد التشغيل محليًا" />
+    <Image img="/images/clickstack/getting-started/hackernews_main.webp" alt="تطبيق HackerNews Analyzer قيد التشغيل محليًا" />
 
     في هذه المرحلة، يكون التطبيق قيد التشغيل لكنه غير مُهيّأ لجمع بيانات الرصد. لا يعرض ClickStack أي بيانات، إذ إنه ينتظر بيانات القياس عن بُعد. هذه هي حالة &quot;قبل&quot;.
   </Step>
@@ -118,15 +118,15 @@ title: إضافة الرصد إلى التطبيق
 
     1. انتقل إلى **Search** وصفِّ النتائج لآخر 5 دقائق. ستبدأ سجلات `hn-analyzer-api` بالظهور تباعًا.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.png" alt="سجلات ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.webp" alt="سجلات ClickStack" />
 
     2. انقر على أحد الطلبات ثم تنقّل صعودًا عبر التتبّع. سترى مقطع التتبّع (span) الخاص بمعالج Express، ومقطع HTTP فرعيًا يشير إلى عنقود ClickHouse مع مدة الشبكة الفعلية، وسجلات `console.log` مرتبطة على التتبّع نفسه.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.png" alt="تتبعات ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.webp" alt="تتبعات ClickStack" />
 
     3. افتح **Session Replay** لتشغيل فيديو يمكنك التنقّل خلاله لجلسة في المتصفح، متزامنًا مع المخطط الزمني للتتبّع.
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.png" alt="جلسات ClickStack" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.webp" alt="جلسات ClickStack" />
 
     تظهر السجلات والمقاييس والتتبعات وإعادات تشغيل الجلسات كلها في الواجهة نفسها، وتستخدم لغة الاستعلام نفسها، وترتبط تلقائيًا ببعضها بعضًا.
   </Step>

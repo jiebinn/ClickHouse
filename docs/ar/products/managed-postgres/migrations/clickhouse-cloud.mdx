@@ -34,15 +34,15 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 افتح [ClickHouse Cloud console](https://clickhouse.cloud) وحدد خدمة Managed Postgres الخاصة بك.
 
-<Image img="/images/managed-postgres/pgpg/servicecard.png" alt="بطاقة خدمة Managed Postgres في قائمة خدمات ClickHouse Cloud" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/servicecard.webp" alt="بطاقة خدمة Managed Postgres في قائمة خدمات ClickHouse Cloud" size="lg" border />
 
 في الشريط الجانبي الأيسر، انقر على **مصادر البيانات**.
 
-<Image img="/images/managed-postgres/pgpg/overview.png" alt="إدخال مصادر البيانات في الشريط الجانبي لخدمة Managed Postgres" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/overview.webp" alt="إدخال مصادر البيانات في الشريط الجانبي لخدمة Managed Postgres" size="lg" border />
 
 انقر على **Start import**.
 
-<Image img="/images/managed-postgres/pgpg/startimport.png" alt="صفحة مصادر البيانات مع زر Start import" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/startimport.webp" alt="صفحة مصادر البيانات مع زر Start import" size="lg" border />
 
 أدخل تفاصيل الاتصال بقاعدة بيانات PostgreSQL المصدر: المضيف، والمنفذ، واسم المستخدم، وكلمة المرور، واسم قاعدة البيانات. فعّل **TLS** إذا كانت قاعدة البيانات المصدر تتطلب ذلك.
 
@@ -54,7 +54,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 * **Initial load only** — نسخ لمرة واحدة فقط، من دون تكرار مستمر.
 * **CDC only** — يتجاوز النسخ الأولي ويكرّر فقط التغييرات الجديدة من هذه النقطة فصاعدًا.
 
-<Image img="/images/managed-postgres/pgpg/migrationform.png" alt="الخطوة 1: نموذج الاتصال بقاعدة بيانات المصدر مع خيارات طريقة الإدخال" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/migrationform.webp" alt="الخطوة 1: نموذج الاتصال بقاعدة بيانات المصدر مع خيارات طريقة الإدخال" size="lg" border />
 
 انقر على **Next**.
 
@@ -64,7 +64,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 يعرض المعالج أمر `pg_dump` مُعبّأً مسبقًا بتفاصيل اتصال المصدر. شغّله في الطرفية:
 
-<Image img="/images/managed-postgres/pgpg/nextexport.png" alt="الخطوة 2: أمر pg_dump لتصدير المخطط" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/nextexport.webp" alt="الخطوة 2: أمر pg_dump لتصدير المخطط" size="lg" border />
 
 ```shell
 pg_dump \
@@ -77,7 +77,7 @@ pg_dump \
 
 سيُنشئ هذا الملف `pg.sql` في الدليل الحالي.
 
-<Image img="/images/managed-postgres/pgpg/psqlexport.png" alt="مخرجات الطرفية بعد تشغيل pg_dump" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/psqlexport.webp" alt="مخرجات الطرفية بعد تشغيل pg_dump" size="lg" border />
 
 انقر على **التالي**.
 
@@ -89,7 +89,7 @@ pg_dump \
 
 يعرض المعالج أمر `psql` لتطبيق ملف تفريغ المخطط على خدمة Managed Postgres الخاصة بك. شغِّله في الطرفية:
 
-<Image img="/images/managed-postgres/pgpg/nextimport.png" alt="الخطوة 3: أمر psql لاستيراد المخطط" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/nextimport.webp" alt="الخطوة 3: أمر psql لاستيراد المخطط" size="lg" border />
 
 ```shell
 psql \
@@ -100,7 +100,7 @@ psql \
   -f pg.sql
 ```
 
-<Image img="/images/managed-postgres/pgpg/psqlimport.png" alt="مخرجات الطرفية بعد تشغيل استيراد المخطط عبر psql" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/psqlimport.webp" alt="مخرجات الطرفية بعد تشغيل استيراد المخطط عبر psql" size="lg" border />
 
 انقر على **Next**.
 
@@ -120,7 +120,7 @@ psql \
 | عدد الصفوف في اللقطة لكل partition     | 100000    | حجم partition للقطات الجداول الكبيرة            |
 | عدد الجداول التي تؤخذ لقطاتها بالتوازي | 1         | الجداول التي تؤخذ لقطاتها بشكل متزامن           |
 
-<Image img="/images/managed-postgres/pgpg/advancedsettings.png" alt="الخطوة 4: نموذج إعدادات الإدخال مع publication وخيارات النسخ المتماثل المتقدمة" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/advancedsettings.webp" alt="الخطوة 4: نموذج إعدادات الإدخال مع publication وخيارات النسخ المتماثل المتقدمة" size="lg" border />
 
 انقر **التالي**.
 
@@ -130,7 +130,7 @@ psql \
 
 حدِّد الجداول التي تريد مزامنتها. الجداول مُجمَّعة حسب المخططات. حدِّد جداول فردية أو وسِّع مخططًا لاختيارها جميعًا.
 
-<Image img="/images/managed-postgres/pgpg/tablepicker.png" alt="الخطوة 5: منتقي الجداول مُجمَّع حسب المخطط مع زر Create migration" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/tablepicker.webp" alt="الخطوة 5: منتقي الجداول مُجمَّع حسب المخطط مع زر Create migration" size="lg" border />
 
 انقر على **Create migration**.
 
@@ -140,11 +140,11 @@ psql \
 
 بعد إنشاء الترحيل، ستراه مُدرجًا ضمن **مصادر البيانات** بحالة **قيد التشغيل**.
 
-<Image img="/images/managed-postgres/pgpg/migrationlist.png" alt="قائمة مصادر البيانات تعرض ترحيلاً قيد التشغيل" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/migrationlist.webp" alt="قائمة مصادر البيانات تعرض ترحيلاً قيد التشغيل" size="lg" border />
 
 انقر على الترحيل لفتح عرض التفاصيل. تعرض علامة التبويب **الجداول** تقدّم التحميل الأولي لكل جدول، بما في ذلك الصفوف المُعالَجة، والتقسيمات، ومتوسط الوقت لكل تقسيم. وتعرض علامة التبويب **المقاييس** تأخر النسخ المتماثل ومعدل النقل بمجرد بدء CDC.
 
-<Image img="/images/managed-postgres/pgpg/initialload.png" alt="عرض تفاصيل الترحيل يُظهر إحصاءات التحميل الأولي لكل جدول" size="lg" border />
+<Image img="/images/managed-postgres/pgpg/initialload.webp" alt="عرض تفاصيل الترحيل يُظهر إحصاءات التحميل الأولي لكل جدول" size="lg" border />
 
 <div id="post-migration">
   ## مهام ما بعد الترحيل

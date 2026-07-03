@@ -27,7 +27,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
 
 为了完成这些步骤，我们以一个示例 RDS Postgres 数据库作为源数据库。大致如下：
 
-<Image img="/images/managed-postgres/pg_dump_restore/source-setup.png" alt="源 PostgreSQL 数据库设置" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/source-setup.webp" alt="源 PostgreSQL 数据库设置" size="xl" border />
 
 我们要处理的内容包括：
 
@@ -62,7 +62,7 @@ pg_dump \
 
 以下是运行此命令后的效果：
 
-<Image img="/images/managed-postgres/pg_dump_restore/dump-command.png" alt="pg_dump 命令执行" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/dump-command.webp" alt="pg_dump 命令执行" size="xl" border />
 
 <div id="migration-pgdump-pg-restore-restore">
   ## 将转储恢复到 ClickHouse Managed Postgres
@@ -76,7 +76,7 @@ pg_dump \
 
 首先，请确保你已创建好一个 Managed Postgres 实例，最好与源位于同一区域。你可以参考[这里](/zh/products/managed-postgres/quickstart#create-postgres-database)的快速入门指南。下面是本指南中将要创建的实例：
 
-<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.png" alt="创建 ClickHouse Managed Postgres 实例" size="md" border />
+<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.webp" alt="创建 ClickHouse Managed Postgres 实例" size="md" border />
 
 <div id="migration-pgdump-pg-restore-restore-dump">
   ### 恢复转储
@@ -100,7 +100,7 @@ pg_restore \
 
 在我们的示例中，命令如下所示：
 
-<Image img="/images/managed-postgres/pg_dump_restore/restore-command.png" alt="pg_restore 命令执行" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/restore-command.webp" alt="pg_restore 命令执行" size="xl" border />
 
 <div id="migration-pgdump-pg-restore-verify">
   ## 验证迁移
@@ -109,7 +109,7 @@ pg_restore \
 恢复完成后，您可以连接到 Managed Postgres 实例，确认所有数据和对象都已成功迁移。您可以使用任意 PostgreSQL 客户端进行连接并执行查询。
 以下是迁移完成后我们的 Managed Postgres 配置：
 
-<Image img="/images/managed-postgres/pg_dump_restore/target-setup.png" alt="目标 Managed Postgres 数据库配置" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/target-setup.webp" alt="目标 Managed Postgres 数据库配置" size="xl" border />
 
 可以看到，所有表、索引、视图和序列都完好无损，数据量也一致。
 

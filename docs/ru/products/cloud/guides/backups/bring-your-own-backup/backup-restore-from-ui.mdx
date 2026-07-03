@@ -45,7 +45,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     * a. Получите ARN на странице настроек сервиса ClickHouse Cloud в разделе Network security information. Он выглядит примерно так:
 
-    <Image img="/images/cloud/manage/backups/arn.png" alt="AWS S3 ARN" size="lg" />
+    <Image img="/images/cloud/manage/backups/arn.webp" alt="AWS S3 ARN" size="lg" />
 
     * b. Для этой роли создайте политику доверия следующим образом:
 
@@ -124,7 +124,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     На странице Settings нажмите Set up external backup:
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Изменение внешней резервной копии" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Изменение внешней резервной копии" size="lg" />
   </Step>
 
   <Step>
@@ -132,7 +132,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     На следующем экране укажите ARN только что созданной роли AWS IAM и URL S3 бакета в следующем формате:
 
-    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.png" alt="Настройка ARN роли AWS IAM и параметров S3 бакета" size="lg" />
+    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.webp" alt="Настройка ARN роли AWS IAM и параметров S3 бакета" size="lg" />
   </Step>
 
   <Step>
@@ -157,7 +157,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     На странице Backups эти резервные копии из вашего бакета будут отображаться в отдельной таблице,
     как показано ниже:
 
-    <Image img="/images/cloud/manage/backups/view_backups.png" alt="Просмотр резервных копий, сохранённых в вашем бакете" size="lg" />
+    <Image img="/images/cloud/manage/backups/view_backups.webp" alt="Просмотр резервных копий, сохранённых в вашем бакете" size="lg" />
   </Step>
 </Steps>
 
@@ -189,7 +189,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     Нажмите ссылку “access or restore a backup” над списком резервных копий в
     интерфейсе, чтобы получить SQL-команду для восстановления резервной копии. Команда будет выглядеть так:
 
-    <Image img="/images/cloud/manage/backups/backup_command.png" alt="Получение SQL-команды для восстановления резервной копии" size="md" />
+    <Image img="/images/cloud/manage/backups/backup_command.webp" alt="Получение SQL-команды для восстановления резервной копии" size="md" />
 
     <Warning>
       **Перемещение резервных копий в другое место**
@@ -273,7 +273,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     На странице `Settings` нажмите `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Изменение внешней резервной копии" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Изменение внешней резервной копии" size="lg" />
   </Step>
 
   <Step>
@@ -281,7 +281,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     Во всплывающем окне укажите путь к бакету GCP, HMAC-ключ и Secret, созданные в предыдущем разделе.
 
-    <Image img="/images/cloud/manage/backups/gcp_configure.png" alt="Настройка HMAC-ключа и секрета GCP" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_configure.webp" alt="Настройка HMAC-ключа и секрета GCP" size="md" />
   </Step>
 
   <Step>
@@ -305,7 +305,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     На странице Backups эти резервные копии из вашего бакета должны отображаться в отдельной таблице, как показано ниже:
 
-    <Image img="/images/cloud/manage/backups/gcp_stored_backups.png" alt="Просмотр резервных копий, хранящихся в вашем бакете" size="lg" />
+    <Image img="/images/cloud/manage/backups/gcp_stored_backups.webp" alt="Просмотр резервных копий, хранящихся в вашем бакете" size="lg" />
   </Step>
 </Steps>
 
@@ -330,7 +330,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     вы можете выбрать нужную резервную копию в раскрывающемся списке, чтобы получить команду восстановления
     именно для неё. В команду также потребуется добавить свой секретный ключ доступа:
 
-    <Image img="/images/cloud/manage/backups/gcp_restore_command.png" alt="Получение SQL-команды для восстановления резервной копии" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_restore_command.webp" alt="Получение SQL-команды для восстановления резервной копии" size="md" />
 
     <Warning>
       **Перемещение резервных копий в другое расположение**
@@ -399,7 +399,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     На странице `Settings` нажмите `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Изменение внешней резервной копии" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Изменение внешней резервной копии" size="lg" />
   </Step>
 
   <Step>
@@ -408,7 +408,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     На следующем экране укажите `Connection String` и `Container Name` для вашей
     учетной записи хранилища Azure, созданной в предыдущем разделе:
 
-    <Image img="/images/cloud/manage/backups/azure_connection_details.png" alt="Укажите строку подключения и имя контейнера для вашей учетной записи хранилища Azure" size="md" />
+    <Image img="/images/cloud/manage/backups/azure_connection_details.webp" alt="Укажите строку подключения и имя контейнера для вашей учетной записи хранилища Azure" size="md" />
   </Step>
 
   <Step>
@@ -432,7 +432,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     На странице Backups эти резервные копии из вашего бакета должны отображаться в отдельной таблице,
     как показано ниже:
 
-    <Image img="/images/cloud/manage/backups/view_backups_azure.png" alt="Просмотр резервных копий, хранящихся в вашем бакете" size="md" />
+    <Image img="/images/cloud/manage/backups/view_backups_azure.webp" alt="Просмотр резервных копий, хранящихся в вашем бакете" size="md" />
   </Step>
 </Steps>
 
@@ -459,7 +459,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
     команду восстановления именно для нее. В команду нужно будет добавить строку подключения
     к вашей учетной записи хранилища Azure.
 
-    <Image img="/images/cloud/manage/backups/restore_backups_azure.png" alt="Восстановление резервных копий в Azure" size="md" />
+    <Image img="/images/cloud/manage/backups/restore_backups_azure.webp" alt="Восстановление резервных копий в Azure" size="md" />
 
     <Warning>
       **Перемещение резервных копий в другое место**

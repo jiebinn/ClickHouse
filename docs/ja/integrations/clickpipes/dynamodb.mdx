@@ -29,7 +29,7 @@ import { Image } from "/snippets/ja/components/Image.jsx";
 まず、DynamoDB テーブルで Kinesis ストリーム を有効にし、変更をリアルタイムで取得できるようにします。データの取りこぼしを防ぐため、スナップショットを作成する前にこの設定を行います。
 AWS のガイドは[こちら](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/kds.html)を参照してください。
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-kinesis-stream.png" size="lg" alt="DynamoDB Kinesis Stream" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-kinesis-stream.webp" size="lg" alt="DynamoDB Kinesis Stream" border />
 
 <div id="2-create-the-snapshot">
   ## 2. スナップショットを作成する
@@ -38,7 +38,7 @@ AWS のガイドは[こちら](https://docs.aws.amazon.com/amazondynamodb/latest
 次に、DynamoDBテーブルのスナップショットを作成します。これは、AWS から S3 へのエクスポートで行えます。AWS のガイドは[こちら](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/S3DataExport.HowItWorks.html)を参照してください。
 **DynamoDB JSON フォーマットで「Full export」を実行してください。**
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-s3-export.png" size="md" alt="DynamoDB S3 エクスポート" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-s3-export.webp" size="md" alt="DynamoDB S3 エクスポート" border />
 
 <div id="3-load-the-snapshot-into-clickhouse">
   ## 3. スナップショットをClickHouse に読み込む
@@ -139,7 +139,7 @@ https://{bucket}.s3.amazonaws.com/{prefix}/AWSDynamoDB/{export-id}/data/*
   * `ApproximateCreationDateTime`: `version`
   * 以下のように、他のフィールドを適切な宛先カラムにマッピングします
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-map-columns.png" size="md" alt="DynamoDB Map Columns" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-map-columns.webp" size="md" alt="DynamoDB Map Columns" border />
 
 <div id="5-cleanup-optional">
   ## 5. クリーンアップ (任意)

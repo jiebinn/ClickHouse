@@ -45,7 +45,7 @@ Prepara una cuenta nueva de AWS, un proyecto de GCP o una suscripción de Azure 
   <Step>
     ### Elige un proveedor de Cloud
 
-    <Image img="/images/cloud/reference/byoc-onboarding-1.png" size="lg" alt="BYOC choose CSP" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-1.webp" size="lg" alt="BYOC choose CSP" background="black" />
   </Step>
 
   <Step>
@@ -53,7 +53,7 @@ Prepara una cuenta nueva de AWS, un proyecto de GCP o una suscripción de Azure 
 
     La configuración inicial de BYOC puede realizarse con una [plantilla de CloudFormation (AWS)](https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/byoc.yaml), un [módulo de Terraform (GCP)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/gcp) o un [módulo de Terraform (Azure)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/azure). Esto crea una identidad con privilegios elevados (rol de IAM/cuenta de servicio/entidad de servicio), lo que permite a los controladores de BYOC de ClickHouse Cloud administrar tu infraestructura.
 
-    <Image img="/images/cloud/reference/byoc-onboarding-2.png" size="lg" alt="BYOC initialize account" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-2.webp" size="lg" alt="BYOC initialize account" background="black" />
 
     <Note>
       Los buckets de almacenamiento, la VPC/VNet, el clúster de Kubernetes y los recursos de cómputo necesarios para ejecutar ClickHouse no se incluyen en esta configuración inicial. Se aprovisionarán en el siguiente paso.
@@ -84,7 +84,7 @@ Prepara una cuenta nueva de AWS, un proyecto de GCP o una suscripción de Azure 
 
     * **Zonas de disponibilidad**: Si planeas usar peering de VPC, alinear las zonas de disponibilidad entre las cuentas de origen y de BYOC puede ayudar a reducir los costos del tráfico entre zonas. Por ejemplo, en AWS, los sufijos de las zonas de disponibilidad (`a`, `b`, `c`) pueden representar distintos ID de zonas físicas según la cuenta. Consulta la [guía de AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/use-consistent-availability-zones-in-vpcs-across-different-aws-accounts.html) para obtener más detalles.
 
-    <Image img="/images/cloud/reference/byoc-onboarding-3.png" size="lg" alt="BYOC set up infrastructure" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-3.webp" size="lg" alt="BYOC set up infrastructure" background="black" />
   </Step>
 </Steps>
 
@@ -94,7 +94,7 @@ Prepara una cuenta nueva de AWS, un proyecto de GCP o una suscripción de Azure 
 
 Una vez aprovisionada tu infraestructura BYOC, ya puedes lanzar tu primer servicio de ClickHouse. Abre la consola de ClickHouse Cloud, selecciona tu entorno BYOC y sigue las indicaciones para crear un nuevo servicio.
 
-<Image img="/images/cloud/reference/byoc-new-service-1.png" size="md" alt="BYOC crear nuevo servicio" />
+<Image img="/images/cloud/reference/byoc-new-service-1.webp" size="md" alt="BYOC crear nuevo servicio" />
 
 Durante la creación del servicio, configurarás las siguientes opciones:
 

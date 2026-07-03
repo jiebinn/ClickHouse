@@ -31,11 +31,11 @@ import ScalePlanFeatureBadge from "/snippets/ru/components/ScalePlanFeatureBadge
 
 Чтобы выполнить горизонтальное масштабирование кластера, отправьте через API запрос `PATCH`, изменив число реплик. На снимках экрана ниже показан вызов API для масштабирования кластера с `3` реплик до `6`, а также соответствующий ответ.
 
-<Image img="/images/cloud/manage/scaling-patch-request.png" size="lg" alt="PATCH-запрос на масштабирование" border />
+<Image img="/images/cloud/manage/scaling-patch-request.webp" size="lg" alt="PATCH-запрос на масштабирование" border />
 
 *Запрос `PATCH` для обновления `numReplicas`*
 
-<Image img="/images/cloud/manage/scaling-patch-response.png" size="md" alt="Ответ на PATCH-запрос масштабирования" border />
+<Image img="/images/cloud/manage/scaling-patch-response.webp" size="md" alt="Ответ на PATCH-запрос масштабирования" border />
 
 *Ответ на запрос `PATCH`*
 
@@ -47,10 +47,10 @@ import ScalePlanFeatureBadge from "/snippets/ru/components/ScalePlanFeatureBadge
 
 Чтобы выполнить горизонтальное масштабирование сервиса через интерфейс, можно изменить количество реплик сервиса на странице **Настройки**.
 
-<Image img="/images/cloud/manage/scaling-configure.png" size="md" alt="Параметры масштабирования" border />
+<Image img="/images/cloud/manage/scaling-configure.webp" size="md" alt="Параметры масштабирования" border />
 
 *Параметры масштабирования сервиса в консоли ClickHouse Cloud*
 
 После масштабирования сервиса панель мониторинга метрик в облачной консоли должна показывать корректное выделение ресурсов для сервиса. На снимке экрана ниже показано, что кластер масштабирован до общего объёма памяти `96 GiB`, то есть до `6` реплик с выделением по `16 GiB` памяти для каждой.
 
-<Image img="/images/cloud/manage/scaling-memory-allocation.png" size="md" alt="Выделение памяти при масштабировании" border />
+<Image img="/images/cloud/manage/scaling-memory-allocation.webp" size="md" alt="Выделение памяти при масштабировании" border />

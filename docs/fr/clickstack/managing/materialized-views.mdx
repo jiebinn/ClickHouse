@@ -36,7 +36,7 @@ La principale raison d&#39;utiliser des vues matérialisées est que les donnée
 
 Les vues matérialisées dans ClickHouse sont mises à jour en continu à mesure que les données arrivent dans la table source et se comportent davantage comme des index toujours à jour. Cela diffère de nombreuses autres bases de données, où les vues matérialisées sont des instantanés statiques qui doivent être actualisés périodiquement, comme les [Refreshable Materialized Views](/fr/concepts/features/materialized-views/refreshable-materialized-view) de ClickHouse.
 
-<Image img="/images/materialized-view/materialized-view-diagram.png" size="md" alt="Schéma d’une vue matérialisée" />
+<Image img="/images/materialized-view/materialized-view-diagram.webp" size="md" alt="Schéma d’une vue matérialisée" />
 
 Les vues matérialisées incrémentielles ne calculent que les modifications de la vue à mesure que de nouvelles données arrivent, en déplaçant le calcul au moment de l&#39;insertion. Comme ClickHouse est hautement optimisé pour l&#39;ingestion, le coût incrémental de maintenance de la vue pour chaque bloc inséré reste faible par rapport aux gains obtenus lors de l&#39;exécution des requêtes. Le coût du calcul de l&#39;agrégation est amorti sur les insertions au lieu d&#39;être payé de nouveau à chaque lecture. Interroger les résultats pré-agrégés coûte donc bien moins cher que de les recalculer, ce qui réduit les coûts d&#39;exploitation et offre des performances quasi en temps réel pour les visualisations en aval, même à l&#39;échelle du pétaoctet.
 
@@ -124,7 +124,7 @@ Consolider les vues de cette manière réduit la surcharge à l’insertion, lim
 
 Une fois que vous avez identifié une visualisation, ou un ensemble de visualisations, que vous souhaitez accélérer, l’étape suivante consiste à repérer les requêtes sous-jacentes. En pratique, cela signifie examiner la configuration de la visualisation et passer en revue le SQL généré, en prêtant une attention particulière aux métriques d’agrégation utilisées et aux fonctions appliquées.
 
-<Image img="/images/clickstack/materialized_views/generated_sql.png" size="lg" alt="SQL généré" />
+<Image img="/images/clickstack/materialized_views/generated_sql.webp" size="lg" alt="SQL généré" />
 
 <Note>
   Lorsqu’aucun panneau de débogage n’est disponible dans HyperDX pour un composant, les utilisateurs peuvent inspecter la console du navigateur, où toutes les requêtes sont consignées.
@@ -231,7 +231,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
 
     Accédez à la **source** concernée dans HyperDX et ouvrez la boîte de dialogue **Edit configuration**. Faites défiler jusqu’à la section des vues matérialisées.
 
-    <Image img="/images/clickstack/materialized_views/edit_source.png" size="lg" alt="Modifier les sources" />
+    <Image img="/images/clickstack/materialized_views/edit_source.webp" size="lg" alt="Modifier les sources" />
   </Step>
 
   <Step>
@@ -239,7 +239,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
 
     Sélectionnez **Add materialized view**, puis choisissez la base de données et la table cible sur lesquelles repose la vue matérialisée.
 
-    <Image img="/images/clickstack/materialized_views/add_view.png" size="lg" alt="Modifier les sources" />
+    <Image img="/images/clickstack/materialized_views/add_view.webp" size="lg" alt="Modifier les sources" />
   </Step>
 
   <Step>
@@ -254,7 +254,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
 
     Pour les dimensions, spécifiez toutes les colonnes, à l’exception de l’horodatage, selon lesquelles la vue effectue le regroupement.
 
-    <Image img="/images/clickstack/materialized_views/select_metrics.png" size="lg" alt="Sélectionner les métriques" />
+    <Image img="/images/clickstack/materialized_views/select_metrics.webp" size="lg" alt="Sélectionner les métriques" />
   </Step>
 
   <Step>
@@ -262,7 +262,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
 
     Sélectionnez la **granularité temporelle** de la vue matérialisée, par exemple une minute.
 
-    <Image img="/images/clickstack/materialized_views/select_time_granularity.png" size="lg" alt="Sélectionner la granularité temporelle" />
+    <Image img="/images/clickstack/materialized_views/select_time_granularity.webp" size="lg" alt="Sélectionner la granularité temporelle" />
   </Step>
 
   <Step>
@@ -275,7 +275,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
       Un guide complet sur le rétroremplissage des vues matérialisées est disponible dans [&quot;Rétroremplir des données.&quot;](/fr/guides/clickhouse/data-modelling/backfilling#scenario-2-adding-materialized-views-to-existing-tables)
     </Note>
 
-    <Image img="/images/clickstack/materialized_views/select_min_time.png" size="lg" alt="Sélectionner l’heure minimale" />
+    <Image img="/images/clickstack/materialized_views/select_min_time.webp" size="lg" alt="Sélectionner l’heure minimale" />
 
     Si l’heure de début exacte n’est pas connue, vous pouvez la déterminer en interrogeant l’horodatage minimal de la table cible, par exemple :
 
@@ -289,7 +289,7 @@ Les vues matérialisées doivent être enregistrées pour la **source** dans Hyp
 
     Enregistrez la configuration de la source.
 
-    <Image img="/images/clickstack/materialized_views/save_source.png" size="lg" alt="Enregistrer la source" />
+    <Image img="/images/clickstack/materialized_views/save_source.webp" size="lg" alt="Enregistrer la source" />
   </Step>
 </Steps>
 
@@ -312,7 +312,7 @@ ClickStack fournit des indicateurs visuels clairs pour confirmer si une vue mat�
 * **Éclair vert** indique que la requête est accélérée par une vue matérialisée.
 * **Éclair orange** indique que la requête est exécutée sur la table source.
 
-<Image img="/images/clickstack/materialized_views/accelerated_visual.png" size="lg" alt="Visualisation accélérée" />
+<Image img="/images/clickstack/materialized_views/accelerated_visual.webp" size="lg" alt="Visualisation accélérée" />
 
 2. **Inspectez les détails de l&#39;optimisation** Cliquez sur l&#39;icône en forme d&#39;éclair pour ouvrir un panneau de détails affichant :
 

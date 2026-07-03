@@ -211,9 +211,9 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
     3. صفِّ باستخدام `source:mysql-error` أو `source:mysql-slow` لعرض السجلات الخاصة بـ MySQL
     4. ينبغي أن ترى إدخالات سجل مهيكلة تتضمن حقولًا مثل `level` و`error_code` و`message` (لسجلات الأخطاء)، و`query_time` و`rows_examined` و`query` (لسجلات الاستعلامات البطيئة)
 
-    <Image img="/images/clickstack/mysql/search-view.png" alt="عرض البحث" />
+    <Image img="/images/clickstack/mysql/search-view.webp" alt="عرض البحث" />
 
-    <Image img="/images/clickstack/mysql/log-view.png" alt="عرض السجل" />
+    <Image img="/images/clickstack/mysql/log-view.webp" alt="عرض السجل" />
   </Step>
 </Steps>
 
@@ -344,9 +344,9 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
       إذا لم تظهر لك السجلات الأربعون كلها فورًا، فانتظر نحو دقيقة حتى ينتهي collector من المعالجة. وإذا لم تظهر السجلات بعد الانتظار، فنفّذ `docker restart clickstack-demo` ثم تحقّق مرة أخرى بعد دقيقة إضافية. هذه مشكلة معروفة في filelog receiver الخاص بـ OpenTelemetry عند التحميل المجمّع لملفات موجودة مسبقًا باستخدام `start_at: beginning`. أما عمليات النشر في بيئة production التي تستخدم `start_at: end` فتعالج السجلات لحظة كتابتها بشكل real-time، ولا تواجه هذه المشكلة.
     </Note>
 
-    <Image img="/images/clickstack/mysql/search-view.png" alt="عرض Search" />
+    <Image img="/images/clickstack/mysql/search-view.webp" alt="عرض Search" />
 
-    <Image img="/images/clickstack/mysql/log-view.png" alt="عرض السجل" />
+    <Image img="/images/clickstack/mysql/log-view.webp" alt="عرض السجل" />
 
     <Info>
       **عرض المنطقة الزمنية**
@@ -373,11 +373,11 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
     1. افتح HyperDX وانتقل إلى قسم Dashboards
     2. انقر على **Import Dashboard** في الزاوية العلوية اليمنى من قائمة النقاط الثلاث
 
-    <Image img="/images/clickstack/import-dashboard.png" alt="زر استيراد لوحة المعلومات" />
+    <Image img="/images/clickstack/import-dashboard.webp" alt="زر استيراد لوحة المعلومات" />
 
     3. ارفع ملف `mysql-logs-dashboard.json` ثم انقر على **Finish Import**
 
-    <Image img="/images/clickstack/mysql/finish-import.png" alt="إنهاء الاستيراد" />
+    <Image img="/images/clickstack/mysql/finish-import.webp" alt="إنهاء الاستيراد" />
   </Step>
 
   <Step>
@@ -385,7 +385,7 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
 
     سيتم إنشاء لوحة المعلومات مع إعداد جميع التصورات مسبقًا.
 
-    <Image img="/images/clickstack/mysql/example-dashboard.png" alt="لوحة معلومات نموذجية" />
+    <Image img="/images/clickstack/mysql/example-dashboard.webp" alt="لوحة معلومات نموذجية" />
 
     <Note>
       بالنسبة إلى مجموعة البيانات التجريبية، اضبط النطاق الزمني على **2025-11-14 00:00:00 - 2025-11-15 00:00:00 (UTC)** (عدّله وفق منطقتك الزمنية المحلية). لن تتضمن لوحة المعلومات المستوردة نطاقًا زمنيًا محددًا افتراضيًا.

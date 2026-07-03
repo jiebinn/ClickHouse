@@ -115,7 +115,7 @@ Prenons le schéma ClickStack par défaut pour les traces, dans lequel les méta
 
 Un utilisateur peut filtrer les traces à l’aide de la syntaxe Lucene, par exemple `ResourceAttributes.k8s.pod.name:"checkout-675775c4cc-f2p9c"` :
 
-<Image img="/images/clickstack/performance_guide/trace_filtering.png" size="lg" alt="Filtrage des traces" />
+<Image img="/images/clickstack/performance_guide/trace_filtering.webp" size="lg" alt="Filtrage des traces" />
 
 Cela produit un prédicat SQL similaire à :
 
@@ -139,7 +139,7 @@ Désormais, les **nouvelles** données stockeront le nom du pod dans une colonne
 
 Les utilisateurs peuvent désormais interroger efficacement les noms de pod à l’aide de la syntaxe Lucene, par exemple `PodName:"checkout-675775c4cc-f2p9c"`
 
-<Image img="/images/clickstack/performance_guide/trace_filtering_v2.png" size="lg" alt="Filtrage des traces v2" />
+<Image img="/images/clickstack/performance_guide/trace_filtering_v2.webp" size="lg" alt="Filtrage des traces v2" />
 
 Pour les données nouvellement insérées, cela évite complètement l’accès à la structure Map et réduit considérablement les E/S.
 
@@ -758,7 +758,7 @@ Le même exemple, où `SeverityText` devient la première colonne de la clé pri
 
     Configurez le ClickStack UI pour utiliser `otel_logs_merge` comme table pour la source de données de logs.
 
-    <Image img="/images/clickstack/performance_guide/select_merge_table.png" size="lg" alt="Sélectionner la table Merge" />
+    <Image img="/images/clickstack/performance_guide/select_merge_table.webp" size="lg" alt="Sélectionner la table Merge" />
 
     À ce stade, les écritures continuent d’aller vers `otel_logs` avec la clé primaire d’origine, tandis que les lectures utilisent la table Merge. Cela n’entraîne aucun changement visible pour les utilisateurs ni aucun impact sur l’ingestion.
   </Step>

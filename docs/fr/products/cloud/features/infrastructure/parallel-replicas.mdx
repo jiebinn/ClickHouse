@@ -33,7 +33,7 @@ que sur le shard spécifié, ou bien elle peut être envoyée à la table distri
 cas chaque shard exécutera la requête donnée. Le serveur sur lequel la table distribuée
 a été interrogée agrégera les données et renverra la réponse au client :
 
-<Image img="/images/deployment-guides/parallel-replicas-1.png" size="md" alt="architecture shardée" />
+<Image img="/images/deployment-guides/parallel-replicas-1.webp" size="md" alt="architecture shardée" />
 
 La figure ci-dessus illustre ce qui se passe lorsqu&#39;un client interroge une table distribuée :
 
@@ -76,7 +76,7 @@ infinie, le besoin de shards devient moins important.
 
 La figure ci-dessous montre l&#39;architecture de ClickHouse Cloud :
 
-<Image img="/images/deployment-guides/parallel-replicas-2.png" size="md" alt="architecture non shardée" />
+<Image img="/images/deployment-guides/parallel-replicas-2.webp" size="md" alt="architecture non shardée" />
 
 Cette architecture permet d&#39;ajouter et de supprimer des répliques presque
 instantanément, ce qui garantit une très forte scalabilité du cluster. Le cluster
@@ -105,7 +105,7 @@ comme unité de travail.
 
 Voyons maintenant comment cela fonctionne en pratique à l&#39;aide de la figure ci-dessous :
 
-<Image img="/images/deployment-guides/parallel-replicas-3.png" size="md" alt="Répliques parallèles" />
+<Image img="/images/deployment-guides/parallel-replicas-3.webp" size="md" alt="Répliques parallèles" />
 
 Avec les répliques parallèles :
 
@@ -169,7 +169,7 @@ Nous verrons dans les sections suivantes comment ces facteurs sont pris en compt
 
 Pour répondre aux points (1) et (2) de la liste ci-dessus, nous avons introduit le concept d&#39;annonce. Visualisons son fonctionnement à l&#39;aide de la figure ci-dessous :
 
-<Image img="/images/deployment-guides/parallel-replicas-4.png" size="md" alt="Annonces" />
+<Image img="/images/deployment-guides/parallel-replicas-4.webp" size="md" alt="Annonces" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -214,7 +214,7 @@ une annonce avec toutes les parts.
 
 La figure ci-dessous illustre le fonctionnement de la coordination dynamique :
 
-<Image img="/images/deployment-guides/parallel-replicas-5.png" size="md" alt="Coordination dynamique - partie 1" />
+<Image img="/images/deployment-guides/parallel-replicas-5.webp" size="md" alt="Coordination dynamique - partie 1" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -227,7 +227,7 @@ La figure ci-dessous illustre le fonctionnement de la coordination dynamique :
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-6.png" size="md" alt="Coordination dynamique - partie 2" />
+<Image img="/images/deployment-guides/parallel-replicas-6.webp" size="md" alt="Coordination dynamique - partie 2" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -240,7 +240,7 @@ La figure ci-dessous illustre le fonctionnement de la coordination dynamique :
   </li>
 </ol>
 
-<Image img="/images/deployment-guides/parallel-replicas-7.png" size="md" alt="Coordination dynamique - partie 3" />
+<Image img="/images/deployment-guides/parallel-replicas-7.webp" size="md" alt="Coordination dynamique - partie 3" />
 
 <ol className="docs-ordered-list">
   <li>
@@ -518,7 +518,7 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=0
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-8.png" size="lg" alt="EXPLAIN sans parallel_replica" />
+<Image img="/images/deployment-guides/parallel-replicas-8.webp" size="lg" alt="EXPLAIN sans parallel_replica" />
 
 Et maintenant avec la réplique parallèle :
 
@@ -533,4 +533,4 @@ SETTINGS allow_experimental_parallel_reading_from_replicas=2
 FORMAT TSV;
 ```
 
-<Image img="/images/deployment-guides/parallel-replicas-9.png" size="lg" alt="EXPLAIN avec parallel_replica" />
+<Image img="/images/deployment-guides/parallel-replicas-9.webp" size="lg" alt="EXPLAIN avec parallel_replica" />

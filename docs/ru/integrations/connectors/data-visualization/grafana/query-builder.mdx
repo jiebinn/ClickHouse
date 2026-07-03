@@ -52,7 +52,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 | Limit        | Добавляет оператор [LIMIT](/ru/reference/statements/select/limit) в конец запроса. Если указано значение `0`, он не добавляется. Для некоторых визуализаций может потребоваться значение `0`, чтобы показать все данные. |
 | Filters      | Список фильтров, применяемых в условии `WHERE`.                                                                                                                                                                       |
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_table_query.png" alt="Пример агрегатного табличного запроса" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_table_query.webp" alt="Пример агрегатного табличного запроса" border />
 
 Данные для этого типа запроса отображаются в виде таблицы.
 
@@ -82,7 +82,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 | Фильтры           | Список фильтров, которые будут применены в условии `WHERE`.                                                                                                                         |
 | Фильтр сообщения  | Текстовое поле для удобной фильтрации журналов с помощью `LIKE %value%`. Исключается, если поле ввода пусто.                                                                        |
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_logs_query.png" alt="Пример запроса к журналам OTel" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_logs_query.webp" alt="Пример запроса к журналам OTel" border />
 
 <br />
 
@@ -90,7 +90,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 
 Дополнительные столбцы, выбранные в запросе, можно просмотреть в раскрытой строке журнала:
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_logs_query_fields.png" alt="Пример дополнительных полей в запросе журналов" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_logs_query_fields.webp" alt="Пример дополнительных полей в запросе журналов" border />
 
 <div id="time-series">
   ### Временные ряды
@@ -123,7 +123,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 | Limit        | Добавляет оператор [LIMIT](/ru/reference/statements/select/limit) в конец запроса. Если установить значение `0`, он не будет добавлен; это рекомендуется для некоторых датасетов временных рядов, чтобы показать визуализацию целиком. |
 | Filters      | Список фильтров, применяемых в операторе `WHERE`.                                                                                                                                                                                   |
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_time_series_query.png" alt="Пример запроса временных рядов" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_time_series_query.webp" alt="Пример запроса временных рядов" border />
 
 Этот тип запроса отображает данные на панели временных рядов.
 
@@ -162,7 +162,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 | Фильтры                | Список фильтров, которые будут применены в операторе `WHERE`.                                                                                                                          |
 | Trace ID               | Trace ID для фильтрации. Используется только в режиме Trace ID и при открытии [ссылки на данные](#data-links) для Trace ID.                                                            |
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_trace_query.png" alt="Пример запроса трассировки OTel" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_trace_query.webp" alt="Пример запроса трассировки OTel" border />
 
 Этот тип запроса отображает данные в виде таблицы в режиме Trace Search и на панели трассировки в режиме Trace ID.
 
@@ -180,7 +180,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 Вы можете переключаться между типами запросов, чтобы выбрать визуализацию, которая лучше всего подходит для вашего запроса.
 Это переключение также влияет на отображение в режиме панели мониторинга, особенно при работе с данными временных рядов.
 
-<Image size="md" img="/images/integrations/data-visualization/grafana/demo_raw_sql_query.png" alt="Пример SQL-запроса в исходном виде" border />
+<Image size="md" img="/images/integrations/data-visualization/grafana/demo_raw_sql_query.webp" alt="Пример SQL-запроса в исходном виде" border />
 
 <div id="data-links">
   ## Ссылки на данные
@@ -193,13 +193,13 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
   Пример ссылок на трассировки в таблице
 
-  <Image size="sm" img="/images/integrations/data-visualization/grafana/trace_id_in_table.png" alt="Ссылки на трассировки в таблице" border />
+  <Image size="sm" img="/images/integrations/data-visualization/grafana/trace_id_in_table.webp" alt="Ссылки на трассировки в таблице" border />
 </div>
 
 <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' }}>
   Пример ссылок на трассировки в журналах
 
-  <Image size="md" img="/images/integrations/data-visualization/grafana/trace_id_in_logs.png" alt="Ссылки на трассировки в журналах" border />
+  <Image size="md" img="/images/integrations/data-visualization/grafana/trace_id_in_logs.webp" alt="Ссылки на трассировки в журналах" border />
 </div>
 
 <div id="how-to-make-a-data-link">
@@ -226,7 +226,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
 <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between' }}>
   Пример просмотра трассировки (справа) из запроса к журналам (слева)
 
-  <Image size="md" img="/images/integrations/data-visualization/grafana/demo_data_links.png" alt="Пример перехода по ссылкам на данные" border />
+  <Image size="md" img="/images/integrations/data-visualization/grafana/demo_data_links.webp" alt="Пример перехода по ссылкам на данные" border />
 </div>
 
 <div id="macros">

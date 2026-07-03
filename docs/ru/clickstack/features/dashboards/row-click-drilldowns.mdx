@@ -44,7 +44,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     Упорядочьте по `Requests` по убыванию, чтобы самые загруженные сервисы были вверху. Эта таблица — каталог: одна строка на сервис с оценкой по RED.
 
-    <Image img="/images/clickstack/dashboards/row-click-catalog.png" alt="Таблица инвентаризации сервисов со столбцами RED (Requests, Errors, P95 Duration) для каждого сервиса, упорядоченная по объёму запросов, над трендом requests over time" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-catalog.webp" alt="Таблица инвентаризации сервисов со столбцами RED (Requests, Errors, P95 Duration) для каждого сервиса, упорядоченная по объёму запросов, над трендом requests over time" size="lg" />
 
     <Tip>
       **Ставьте столбец группировки первым**
@@ -71,7 +71,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     При наведении на строку у правого края таблицы появляется ссылка с подсказкой, описывающей действие (`Open dashboard "Service Detail"`). Щелчок по строке открывает панель мониторинга `Service Detail`, где фильтр `Service` установлен в значение выбранной строки, поэтому все плитки (ключевые показатели RED, процентиль latency, разбивка по конечным точкам) сразу ограничиваются этим сервисом.
 
-    <Image img="/images/clickstack/dashboards/row-click-drilldown.png" alt="Панель мониторинга Service Detail после щелчка по строке: фильтр Service установлен на выбранный сервис, а ключевые показатели RED, процентили latency и разбивка по конечным точкам ограничены этим сервисом" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-drilldown.webp" alt="Панель мониторинга Service Detail после щелчка по строке: фильтр Service установлен на выбранный сервис, а ключевые показатели RED, процентили latency и разбивка по конечным точкам ограничены этим сервисом" size="lg" />
   </Step>
 </Steps>
 
@@ -100,7 +100,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     Теперь при нажатии на строку сервиса открывается страница Search для этого источника трассировок, отфильтрованная по `ServiceName = <service>`, и вы сразу попадаете на спаны только этого сервиса в том же временном диапазоне.
 
-    <Image img="/images/clickstack/dashboards/row-click-search-drilldown.png" alt="Страница Search, открытая для источника трассировок после нажатия на строку и отфильтрованная по выбранному сервису" size="lg" />
+    <Image img="/images/clickstack/dashboards/row-click-search-drilldown.webp" alt="Страница Search, открытая для источника трассировок после нажатия на строку и отфильтрованная по выбранному сервису" size="lg" />
   </Step>
 </Steps>
 
@@ -112,7 +112,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
 Действия по щелчку на строке настраиваются прямо в плитке таблицы; отдельной страницы для них нет. Добавьте плитку или измените существующую и задайте для нее тип визуализации **Table**. После этого на панели инструментов редактора рядом с **Display Settings** появится кнопка **Row Click Action**. Она показывается только для плиток таблиц, а ее метка отражает текущее действие: `Row Click Action: Default`, `Row Click Action: Search` или `Row Click Action: Dashboard`. Нажмите ее, чтобы открыть выдвижную панель.
 
-<Image img="/images/clickstack/dashboards/row-click-drawer.png" alt="Выдвижная панель Row Click Action в режиме Dashboard, где в качестве цели выбрана панель мониторинга Service Detail, а фильтр ServiceName шаблонизируется на основе строки, по которой щелкнули" size="lg" />
+<Image img="/images/clickstack/dashboards/row-click-drawer.webp" alt="Выдвижная панель Row Click Action в режиме Dashboard, где в качестве цели выбрана панель мониторинга Service Detail, а фильтр ServiceName шаблонизируется на основе строки, по которой щелкнули" size="lg" />
 
 Выдвижная панель предлагает три действия:
 

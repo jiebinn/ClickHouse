@@ -11,14 +11,14 @@ title: ClickPipes 常见问题
   对于流式 ClickPipes，ClickPipes 副本会访问远程数据源 (例如 Kafka broker) ，
   拉取数据、进行处理，并将其摄取到目标 ClickHouse 服务。
 
-  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_1.png" size="lg" alt="ClickPipes 副本 - 流式 ClickPipes" border force />
+  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_1.webp" size="lg" alt="ClickPipes 副本 - 流式 ClickPipes" border force />
 
   对于对象存储 ClickPipes，
   ClickPipes 副本负责协调数据加载任务
    (识别要复制的文件、维护状态以及移动分区) ，
   而数据则由 ClickHouse 服务直接拉取。
 
-  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_2.png" size="lg" alt="ClickPipes 副本 - 对象存储 ClickPipes" border force />
+  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_2.webp" size="lg" alt="ClickPipes 副本 - 对象存储 ClickPipes" border force />
 </Accordion>
 
 <Accordion title="默认的副本数量和规格是多少？">
@@ -38,7 +38,7 @@ title: ClickPipes 常见问题
   请注意，对于 Kafka ClickPipes，你还需要相应地调整 Kafka broker 分区数。
   每个流式 ClickPipe 的“settings”下都提供了扩缩容控制项。
 
-  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_3.png" size="lg" alt="ClickPipes 副本 - 我需要多少个 ClickPipes 副本？" border force />
+  <Image img="/images/cloud/manage/jan2025_faq/external_clickpipes_pricing_faq_3.webp" size="lg" alt="ClickPipes 副本 - 我需要多少个 ClickPipes 副本？" border force />
 </Accordion>
 
 <Accordion title="ClickPipes 的定价结构是什么样的？">

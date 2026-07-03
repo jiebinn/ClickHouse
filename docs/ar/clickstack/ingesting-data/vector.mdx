@@ -112,7 +112,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى خدمة Managed ClickStack الخاصة بك، ثم اختر &quot;ClickStack&quot; من القائمة الجانبية اليسرى. إذا كنت قد أكملت الإعداد الأولي بالفعل، فسيؤدي ذلك إلى فتح واجهة ClickStack في علامة تبويب جديدة، وستتم مصادقتك تلقائيًا. وإذا لم تكن قد أكملت ذلك بعد، يمكنك متابعة الإعداد الأولي واختيار “Launch ClickStack” بعد تحديد Vector كمصدر للإدخال.
 
-        <Image img="/images/clickstack/launch-clickstack-vector.png" alt="تشغيل ClickStack لـ Vector" size="lg" />
+        <Image img="/images/clickstack/launch-clickstack-vector.webp" alt="تشغيل ClickStack لـ Vector" size="lg" />
       </Step>
 
       <Step>
@@ -120,7 +120,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         أنشئ مصدر بيانات للسجلات. إذا لم تكن هناك أي مصادر بيانات، فسيُطلب منك إنشاء واحد عند تسجيل الدخول لأول مرة. وإلا، فانتقل إلى إعدادات الفريق وأضف مصدر بيانات جديدًا.
 
-        <Image img="/images/clickstack/create-vector-datasource.png" alt="إنشاء مصدر بيانات - vector" size="lg" />
+        <Image img="/images/clickstack/create-vector-datasource.webp" alt="إنشاء مصدر بيانات - vector" size="lg" />
 
         يفترض هذا التكوين أعلاه مخططًا بأسلوب Nginx، مع استخدام العمود `time_local` كطابع زمني. وينبغي، حيثما أمكن، أن يكون هذا هو عمود الطابع الزمني المعرَّف في المفتاح الأساسي. هذا العمود مطلوب.
 
@@ -136,7 +136,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى عرض السجلات لاستكشاف البيانات والبدء في استخدام ClickStack.
 
-        <Image img="/images/clickstack/nginx-logs-vector-search.png" alt="سجلات Nginx في ClickStack" size="lg" />
+        <Image img="/images/clickstack/nginx-logs-vector-search.webp" alt="سجلات Nginx في ClickStack" size="lg" />
       </Step>
     </Steps>
   </Tab>
@@ -150,7 +150,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         أنشئ أولًا قاعدة بيانات. يمكن القيام بذلك عبر [واجهة مستخدم ClickHouse على الويب](/ar/concepts/features/interfaces/http#web-ui) على [http://localhost:8123/play](http://localhost:8123/play). استخدم اسم المستخدم وكلمة المرور الافتراضيين `api:api`.
 
-        <Image img="/images/clickstack/play-ui-clickstack.png" alt="واجهة Play في ClickStack" size="lg" />
+        <Image img="/images/clickstack/play-ui-clickstack.webp" alt="واجهة Play في ClickStack" size="lg" />
 
         في المثال أدناه، نستخدم `logs`:
 
@@ -229,7 +229,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى واجهة ClickStack على [http://localhost:8080](http://localhost:8080). أنشئ مستخدمًا إذا لم تكن قد أكملت خطوات الإعداد.
 
-        <Image img="/images/use-cases/observability/hyperdx-login.png" alt="تسجيل الدخول إلى ClickStack" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-login.webp" alt="تسجيل الدخول إلى ClickStack" size="lg" />
       </Step>
 
       <Step>
@@ -237,7 +237,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى إعدادات الفريق وأضف مصدر بيانات جديدًا.
 
-        <Image img="/images/clickstack/create-vector-datasource-oss.png" alt="إنشاء مصدر بيانات - vector" size="lg" />
+        <Image img="/images/clickstack/create-vector-datasource-oss.webp" alt="إنشاء مصدر بيانات - vector" size="lg" />
 
         تفترض الإعدادات أعلاه مخططًا على نمط Nginx، مع استخدام العمود `time_local` كطابع زمني. ويُفترض، متى أمكن، أن يكون هذا هو عمود الطابع الزمني المعرَّف في المفتاح الأساسي. هذا العمود إلزامي.
 
@@ -253,7 +253,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى عرض السجلات لاستعراض البيانات وبدء استخدام ClickStack.
 
-        <Image img="/images/clickstack/nginx-logs-vector-search.png" alt="سجلات Nginx في ClickStack" size="lg" />
+        <Image img="/images/clickstack/nginx-logs-vector-search.webp" alt="سجلات Nginx في ClickStack" size="lg" />
       </Step>
     </Steps>
   </Tab>
@@ -386,7 +386,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى خدمة Managed ClickStack الخاصة بك وحدد &quot;ClickStack&quot; من القائمة الموجودة على الجانب الأيسر. إذا كنت قد أكملت بالفعل عملية التهيئة، فسيؤدي ذلك إلى فتح واجهة مستخدم ClickStack في علامة تبويب جديدة، وستتم مصادقتك تلقائيًا. وإذا لم تكن قد أكملت ذلك بعد، فيمكنك متابعة عملية التهيئة وتحديد “Launch ClickStack” بمجرد اختيار Vector كمصدر للإدخال.
 
-        <Image img="/images/clickstack/launch-clickstack-vector.png" alt="تشغيل ClickStack لـ Vector" size="lg" />
+        <Image img="/images/clickstack/launch-clickstack-vector.webp" alt="تشغيل ClickStack لـ Vector" size="lg" />
       </Step>
 
       <Step>
@@ -394,7 +394,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         أنشئ مصدر بيانات للسجلات. إذا لم تكن هناك أي مصادر بيانات، فسيُطلب منك إنشاء واحد عند أول تسجيل دخول. بخلاف ذلك، انتقل إلى إعدادات الفريق وأضف مصدر بيانات جديدًا.
 
-        <Image img="/images/clickstack/create-vector-datasource.png" alt="إنشاء مصدر بيانات - vector" size="lg" />
+        <Image img="/images/clickstack/create-vector-datasource.webp" alt="إنشاء مصدر بيانات - vector" size="lg" />
 
         يفترض هذا الإعداد مخطط Nginx مع استخدام العمود `time_local` كطابع زمني. وهذا هو عمود الطابع الزمني المصرَّح به في المفتاح الأساسي. هذا العمود إلزامي.
 
@@ -429,7 +429,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى عرض البحث ليوم `October 20th, 2025` لاستكشاف البيانات وبدء استخدام ClickStack.
 
-        <Image img="/images/clickstack/nginx-logs-vector-search.png" alt="واجهة مستخدم HyperDX" size="lg" />
+        <Image img="/images/clickstack/nginx-logs-vector-search.webp" alt="واجهة مستخدم HyperDX" size="lg" />
       </Step>
     </Steps>
   </Tab>
@@ -457,7 +457,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         أنشئ أولًا قاعدة بيانات. يمكن تنفيذ ذلك عبر [واجهة الويب لـ ClickHouse](/ar/concepts/features/interfaces/http#web-ui) على [http://localhost:8123/play](http://localhost:8123/play). استخدم اسم المستخدم وكلمة المرور الافتراضيين `api:api`.
 
-        <Image img="/images/clickstack/play-ui-clickstack.png" alt="واجهة Play في ClickStack" size="lg" />
+        <Image img="/images/clickstack/play-ui-clickstack.webp" alt="واجهة Play في ClickStack" size="lg" />
 
         أنشئ قاعدة بيانات `logs`:
 
@@ -558,7 +558,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         أنشئ مصدر بيانات للسجلات عبر `Team -> Sources`
 
-        <Image img="/images/clickstack/create-vector-datasource-oss.png" alt="إنشاء مصدر بيانات - vector" size="lg" />
+        <Image img="/images/clickstack/create-vector-datasource-oss.webp" alt="إنشاء مصدر بيانات - vector" size="lg" />
 
         يفترض هذا التكوين مخطط Nginx مع استخدام العمود `time_local` كطابع زمني. وهذا هو عمود الطابع الزمني المعرَّف في المفتاح الأساسي. هذا العمود إلزامي.
 
@@ -593,7 +593,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى واجهة ClickStack على [http://localhost:8080](http://localhost:8080). أنشئ مستخدمًا إذا لم تكن قد أكملت onboarding.
 
-        <Image img="/images/use-cases/observability/hyperdx-login.png" alt="تسجيل الدخول إلى ClickStack" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-login.webp" alt="تسجيل الدخول إلى ClickStack" size="lg" />
       </Step>
 
       <Step>
@@ -601,7 +601,7 @@ import VectorSampleData from '/snippets/ar/_vector_sample_data.mdx';
 
         انتقل إلى عرض البحث ليوم `20 أكتوبر 2025` لاستكشاف البيانات والبدء في استخدام ClickStack.
 
-        <Image img="/images/clickstack/nginx-logs-vector-search.png" alt="HyperDX UI" size="lg" />
+        <Image img="/images/clickstack/nginx-logs-vector-search.webp" alt="HyperDX UI" size="lg" />
       </Step>
     </Steps>
   </Tab>

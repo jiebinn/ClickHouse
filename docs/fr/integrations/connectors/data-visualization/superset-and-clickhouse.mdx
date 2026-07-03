@@ -27,7 +27,7 @@ import ClickHouseSupportedBadge from "/snippets/fr/components/ClickHouseSupporte
 
 Dans ce guide, vous allez créer un tableau de bord dans Superset à partir de données issues d&#39;une base de données ClickHouse. Le tableau de bord ressemblera à ceci :
 
-<Image size="md" img="/images/integrations/data-visualization/superset_12.png" alt="Tableau de bord Superset affichant les prix de l’immobilier au Royaume-Uni avec plusieurs visualisations, dont des diagrammes circulaires et des tableaux" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_12.webp" alt="Tableau de bord Superset affichant les prix de l’immobilier au Royaume-Uni avec plusieurs visualisations, dont des diagrammes circulaires et des tableaux" border />
 
 <br />
 
@@ -67,13 +67,13 @@ Dans ce guide, vous allez créer un tableau de bord dans Superset à partir de d
 
 1. Dans Superset, sélectionnez **Data** dans le menu supérieur, puis **Databases** dans le menu déroulant. Ajoutez une nouvelle base de données en cliquant sur le bouton **+ Database** :
 
-<Image size="lg" img="/images/integrations/data-visualization/superset_01.png" alt="Interface de Superset montrant le menu Database avec le bouton + Database mis en évidence" border />
+<Image size="lg" img="/images/integrations/data-visualization/superset_01.webp" alt="Interface de Superset montrant le menu Database avec le bouton + Database mis en évidence" border />
 
 <br />
 
 2. À la première étape, sélectionnez **ClickHouse Connect** comme type de base de données :
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_02.png" alt="Assistant de connexion à la base de données de Superset montrant l'option ClickHouse Connect sélectionnée" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_02.webp" alt="Assistant de connexion à la base de données de Superset montrant l'option ClickHouse Connect sélectionnée" border />
 
 <br />
 
@@ -83,7 +83,7 @@ Dans ce guide, vous allez créer un tableau de bord dans Superset à partir de d
 * Saisissez les informations de connexion que vous avez relevées précédemment.
 * Indiquez le **DISPLAY NAME** : vous pouvez choisir le nom que vous voulez. Si vous vous connectez à plusieurs bases de données ClickHouse, choisissez un nom plus explicite.
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_03.png" alt="Formulaire de configuration de connexion de Superset montrant les paramètres de connexion ClickHouse" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_03.webp" alt="Formulaire de configuration de connexion de Superset montrant les paramètres de connexion ClickHouse" border />
 
 <br />
 
@@ -97,7 +97,7 @@ Dans ce guide, vous allez créer un tableau de bord dans Superset à partir de d
 
 2. Cliquez sur le bouton d’ajout d’un jeu de données. Sélectionnez votre nouvelle base de données comme source de données, et vous devriez voir les tables définies dans votre base de données :
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_04.png" alt="Boîte de dialogue de création d’un jeu de données dans Superset affichant les tables disponibles de la base de données ClickHouse" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_04.webp" alt="Boîte de dialogue de création d’un jeu de données dans Superset affichant les tables disponibles de la base de données ClickHouse" border />
 
 <br />
 
@@ -111,38 +111,38 @@ Si vous connaissez déjà Superset, vous vous sentirez tout de suite à l’aise
 
 1. Vous commencez par un tableau de bord. Dans le menu supérieur de Superset, sélectionnez **Dashboards**. Cliquez sur le bouton en haut à droite pour ajouter un nouveau tableau de bord. Le tableau de bord suivant s’appelle **UK property prices** :
 
-<Image size="md" img="/images/integrations/data-visualization/superset_05.png" alt="Tableau de bord Superset vide nommé UK property prices, prêt à recevoir des graphiques" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_05.webp" alt="Tableau de bord Superset vide nommé UK property prices, prêt à recevoir des graphiques" border />
 
 <br />
 
 2. Pour créer un nouveau graphique, sélectionnez **Charts** dans le menu supérieur, puis cliquez sur le bouton pour ajouter un nouveau graphique. De nombreuses options s’affichent. L’exemple suivant montre un graphique **Pie Chart** utilisant le jeu de données **uk&#95;price&#95;paid** dans la liste déroulante **CHOOSE A DATASET** :
 
-<Image size="md" img="/images/integrations/data-visualization/superset_06.png" alt="Interface de création de graphique Superset avec le type de visualisation Pie Chart sélectionné" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_06.webp" alt="Interface de création de graphique Superset avec le type de visualisation Pie Chart sélectionné" border />
 
 <br />
 
 3. Les graphiques en secteurs de Superset nécessitent une **Dimension** et une **Metric** ; tous les autres paramètres sont facultatifs. Vous pouvez choisir les champs de votre choix pour la dimension et la métrique ; dans cet exemple, le champ ClickHouse `district` est utilisé comme dimension et `AVG(price)` comme métrique.
 
-<Image size="md" img="/images/integrations/data-visualization/superset_08.png" alt="Configuration de la dimension montrant le champ district sélectionné pour le graphique en secteurs" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_08.webp" alt="Configuration de la dimension montrant le champ district sélectionné pour le graphique en secteurs" border />
 
-<Image size="md" img="/images/integrations/data-visualization/superset_09.png" alt="Configuration de la métrique montrant la fonction d’agrégation AVG(price) pour le graphique en secteurs" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_09.webp" alt="Configuration de la métrique montrant la fonction d’agrégation AVG(price) pour le graphique en secteurs" border />
 
 <br />
 
 5. Si vous préférez les graphiques en anneau aux graphiques en secteurs, vous pouvez définir cette option et d’autres sous **CUSTOMIZE** :
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_10.png" alt="Panneau Customize montrant l’option de graphique en anneau et d’autres paramètres de configuration du graphique en secteurs" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_10.webp" alt="Panneau Customize montrant l’option de graphique en anneau et d’autres paramètres de configuration du graphique en secteurs" border />
 
 <br />
 
 6. Cliquez sur le bouton **SAVE** pour enregistrer le graphique, puis sélectionnez **UK property prices** dans la liste déroulante **ADD TO DASHBOARD** ; **SAVE &amp; GO TO DASHBOARD** enregistre alors le graphique et l’ajoute au tableau de bord :
 
-<Image size="md" img="/images/integrations/data-visualization/superset_11.png" alt="Boîte de dialogue d’enregistrement du graphique avec liste déroulante de sélection du tableau de bord et bouton Save & Go to Dashboard" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_11.webp" alt="Boîte de dialogue d’enregistrement du graphique avec liste déroulante de sélection du tableau de bord et bouton Save & Go to Dashboard" border />
 
 <br />
 
 7. C’est tout. Créer des tableaux de bord dans Superset à partir des données de ClickHouse ouvre tout un monde d’analyses de données ultra-rapides !
 
-<Image size="md" img="/images/integrations/data-visualization/superset_12.png" alt="Tableau de bord Superset finalisé avec plusieurs visualisations des données sur les prix de l’immobilier au Royaume-Uni provenant de ClickHouse" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_12.webp" alt="Tableau de bord Superset finalisé avec plusieurs visualisations des données sur les prix de l’immobilier au Royaume-Uni provenant de ClickHouse" border />
 
 <br />

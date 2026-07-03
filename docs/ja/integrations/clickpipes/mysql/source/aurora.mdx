@@ -26,7 +26,7 @@ import { Image } from "/snippets/ja/components/Image.jsx";
 
 MySQL でバイナリログを有効にするには、自動バックアップ機能を有効にする必要があります。自動バックアップは、RDS Console で **Modify** &gt; **Additional configuration** &gt; **Backup** に移動し、**Enable automated backups** チェックボックスをオンにすることで、インスタンスに設定できます (まだ有効になっていない場合) 。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/rds-backups.png" alt="Aurora で自動バックアップを有効にする" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/rds-backups.webp" alt="Aurora で自動バックアップを有効にする" size="lg" border />
 
 レプリケーションの用途に応じて、**バックアップ保持期間** は十分に長めの値に設定することを推奨します。
 
@@ -58,13 +58,13 @@ mysql=> call mysql.rds_set_configuration('binlog retention hours', 72);
   MySQL クラスターを使用している場合、以下のパラメータは DB インスタンスグループではなく、[DB cluster](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_WorkingWithParamGroups.CreatingCluster.html) のパラメータグループにあります。
 </Tip>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/aurora_config.png" alt="Aurora でパラメータグループを確認する場所" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/aurora_config.webp" alt="Aurora でパラメータグループを確認する場所" size="lg" border />
 
 <br />
 
 パラメータグループのリンクをクリックすると、その詳細ページに移動します。右上に **Edit** ボタンが表示されるはずです。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/edit_button.png" alt="パラメータグループの編集" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/edit_button.webp" alt="パラメータグループの編集" size="lg" border />
 
 <br />
 
@@ -72,15 +72,15 @@ mysql=> call mysql.rds_set_configuration('binlog retention hours', 72);
 
 1. `binlog_format` を `ROW` に設定します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_format.png" alt="Binlog フォーマットを ROW に設定" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_format.webp" alt="Binlog フォーマットを ROW に設定" size="lg" border />
 
 2. `binlog_row_metadata` を `FULL` に設定します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_metadata.png" alt="Binlog 行メタデータ" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_metadata.webp" alt="Binlog 行メタデータ" size="lg" border />
 
 3. `binlog_row_image` を `FULL` に設定します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_image.png" alt="Binlog 行イメージ" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_image.webp" alt="Binlog 行イメージ" size="lg" border />
 
 <br />
 
@@ -107,7 +107,7 @@ GTID ベースのレプリケーションは、Amazon Aurora MySQL v2 (MySQL 5.7
 7. 右上の **Save Changes** をクリックします。
 8. 変更を反映するため、インスタンスを再起動します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/enable_gtid.png" alt="GTID が有効" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/enable_gtid.webp" alt="GTID が有効" size="lg" border />
 
 <div id="configure-database-user">
   ## データベースユーザーを設定する
@@ -144,9 +144,9 @@ GTID ベースのレプリケーションは、Amazon Aurora MySQL v2 (MySQL 5.7
 
 Aurora MySQL インスタンスへのトラフィックを制限するには、[ドキュメントに記載されている固定 NAT IP](/ja/integrations/clickpipes/home#list-of-static-ips) を Aurora のセキュリティグループの **Inbound rules** に追加します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/security-group-in-rds-mysql.png" alt="Aurora MySQL でセキュリティグループはどこで確認できますか？" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/security-group-in-rds-mysql.webp" alt="Aurora MySQL でセキュリティグループはどこで確認できますか？" size="lg" border />
 
-<Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/rds/edit_inbound_rules.png" alt="上記のセキュリティグループのインバウンドルールを編集" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/rds/edit_inbound_rules.webp" alt="上記のセキュリティグループのインバウンドルールを編集" size="lg" border />
 
 <div id="private-access-via-aws-privatelink">
   ### AWS PrivateLink 経由のプライベートアクセス

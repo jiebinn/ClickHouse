@@ -27,7 +27,7 @@ ClickHouse Cloud のバックアップは、「フル」バックアップと「
 
 1 日目には、バックアップチェーンを開始するためにフルバックアップが取得されます。2 日目には増分バックアップが取得され、フルバックアップと増分バックアップの両方から復元できるようになります。7 日目までに、チェーンには 1 つのフルバックアップと 6 つの増分バックアップが含まれ、そのうち最新の 2 つの増分バックアップがユーザーに表示されます。8 日目には新しいフルバックアップが取得され、9 日目に新しいチェーン内に 2 つのバックアップがそろうと、以前のチェーンは破棄されます。
 
-<Image img="/images/cloud/manage/backup-chain.png" size="lg" alt="ClickHouse Cloudにおけるバックアップチェーンの例" />
+<Image img="/images/cloud/manage/backup-chain.webp" size="lg" alt="ClickHouse Cloudにおけるバックアップチェーンの例" />
 
 <div id="default-backup-policy">
   ### デフォルトのバックアップポリシー

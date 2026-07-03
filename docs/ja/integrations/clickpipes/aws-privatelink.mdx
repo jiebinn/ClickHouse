@@ -221,19 +221,19 @@ VPC エンドポイントサービスは[プライベート DNS で設定](https
 
 1. ClickHouse Cloud サービスの SQL Console にアクセスします。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.png" alt="ClickPipes サービス" size="md" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.webp" alt="ClickPipes サービス" size="md" border />
 
 2. 左側のメニューで `Data Sources` ボタンを選択し、「Set up a ClickPipe」をクリックします。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="インポートを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="インポートを選択" size="lg" border />
 
 3. データソースとして Kafka または Postgres のいずれかを選択します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.png" alt="データソースを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.webp" alt="データソースを選択" size="lg" border />
 
 4. `Reverse private endpoint` オプションを選択します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.png" alt="リバースプライベートエンドポイントを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.webp" alt="リバースプライベートエンドポイントを選択" size="lg" border />
 
 5. 既存のリバースプライベートエンドポイントを選択するか、新規作成します。
 
@@ -244,11 +244,11 @@ VPC エンドポイントサービスは[プライベート DNS で設定](https
   同一リージョン内のアクセスには、VPC リソースを作成する方法を推奨します。
 </Info>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.png" alt="リバースプライベートエンドポイントを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.webp" alt="リバースプライベートエンドポイントを選択" size="lg" border />
 
 6. 選択したエンドポイントタイプに必要なパラメータを入力します。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.png" alt="リバースプライベートエンドポイントを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.webp" alt="リバースプライベートエンドポイントを選択" size="lg" border />
 
 * VPC リソースの場合は、設定共有 ARN と設定 ID を入力します。
   * MSK マルチ VPC の場合は、クラスター ARN と、作成したエンドポイントで使用する認証方法を入力します。
@@ -260,7 +260,7 @@ VPC エンドポイントサービスは[プライベート DNS で設定](https
    エンドポイントの準備が完了すると、ページは自動的に更新されます。
    VPC エンドポイントサービスでは、AWS コンソールで接続リクエストを承認する必要がある場合があります。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.png" alt="リバースプライベートエンドポイントを選択" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.webp" alt="リバースプライベートエンドポイントを選択" size="lg" border />
 
 8. エンドポイントの準備が完了したら、DNS 名を使ってデータソースに接続できます。
 
@@ -281,11 +281,11 @@ VPC エンドポイントサービスは[プライベート DNS で設定](https
 
 1. サイドバーで `Settings` ボタンを見つけてクリックします。
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.png" alt="ClickHouse Cloud の設定" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.webp" alt="ClickHouse Cloud の設定" size="lg" border />
 
 2. `ClickPipe reverse private endpoints` セクションで `Reverse private endpoints` をクリックします。
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.png" alt="ClickHouse Cloud の設定" size="md" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.webp" alt="ClickHouse Cloud の設定" size="md" border />
 
    リバースプライベートエンドポイントの詳細情報がフライアウトに表示されます。
 

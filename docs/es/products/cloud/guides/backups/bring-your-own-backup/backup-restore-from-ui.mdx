@@ -45,7 +45,7 @@ Siga los pasos que se indican a continuación en su cuenta de AWS:
 
     * a. Obtenga el ARN en la página de configuración del servicio de ClickHouse Cloud, en la sección Información de seguridad de red, que tendrá un aspecto similar a este:
 
-    <Image img="/images/cloud/manage/backups/arn.png" alt="ARN de AWS S3" size="lg" />
+    <Image img="/images/cloud/manage/backups/arn.webp" alt="ARN de AWS S3" size="lg" />
 
     * b. Para este rol, cree la política de confianza de la siguiente manera:
 
@@ -124,7 +124,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     En la página Settings, haz clic en Set up external backup:
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Cambiar el backup externo" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Cambiar el backup externo" size="lg" />
   </Step>
 
   <Step>
@@ -132,7 +132,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     En la siguiente pantalla, proporciona el ARN del rol de IAM de AWS que acabas de crear y la URL del bucket de S3 con el siguiente formato:
 
-    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.png" alt="Configurar el ARN del rol de IAM de AWS y los detalles del bucket de S3" size="lg" />
+    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.webp" alt="Configurar el ARN del rol de IAM de AWS y los detalles del bucket de S3" size="lg" />
   </Step>
 
   <Step>
@@ -157,7 +157,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
     La página Backups mostrará estos backups de tu bucket en una tabla independiente,
     como se muestra a continuación:
 
-    <Image img="/images/cloud/manage/backups/view_backups.png" alt="Ver los backups almacenados en tu bucket" size="lg" />
+    <Image img="/images/cloud/manage/backups/view_backups.webp" alt="Ver los backups almacenados en tu bucket" size="lg" />
   </Step>
 </Steps>
 
@@ -189,7 +189,7 @@ Siga los pasos que se indican a continuación para restaurar copias de seguridad
     Haga clic en el enlace “access or restore a backup”, situado encima de la lista de copias de seguridad en la
     interfaz de usuario, para obtener el comando SQL con el que restaurar la copia de seguridad. El comando tendrá este aspecto:
 
-    <Image img="/images/cloud/manage/backups/backup_command.png" alt="Obtener el comando SQL usado para restaurar la copia de seguridad" size="md" />
+    <Image img="/images/cloud/manage/backups/backup_command.webp" alt="Obtener el comando SQL usado para restaurar la copia de seguridad" size="md" />
 
     <Warning>
       **Mover copias de seguridad a otra ubicación**
@@ -273,7 +273,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     En la página `Settings`, haz clic en `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Cambiar el backup externo" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Cambiar el backup externo" size="lg" />
   </Step>
 
   <Step>
@@ -281,7 +281,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     En el cuadro de diálogo emergente, introduce la ruta del bucket de GCP, la clave HMAC y el secreto creados en la sección anterior.
 
-    <Image img="/images/cloud/manage/backups/gcp_configure.png" alt="Configurar la clave HMAC y el secreto de GCP" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_configure.webp" alt="Configurar la clave HMAC y el secreto de GCP" size="md" />
   </Step>
 
   <Step>
@@ -305,7 +305,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     La página `Backups` debería mostrar estos backups de tu bucket en una tabla independiente, como se muestra a continuación:
 
-    <Image img="/images/cloud/manage/backups/gcp_stored_backups.png" alt="Ver los backups almacenados en tu bucket" size="lg" />
+    <Image img="/images/cloud/manage/backups/gcp_stored_backups.webp" alt="Ver los backups almacenados en tu bucket" size="lg" />
   </Step>
 </Steps>
 
@@ -331,7 +331,7 @@ Sigue estos pasos para restaurar copias de seguridad de GCP:
     de esa copia de seguridad concreta. Tendrás que añadir tu clave de acceso secreta
     al comando:
 
-    <Image img="/images/cloud/manage/backups/gcp_restore_command.png" alt="Obtener el comando SQL para restaurar la copia de seguridad" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_restore_command.webp" alt="Obtener el comando SQL para restaurar la copia de seguridad" size="md" />
 
     <Warning>
       **Mover copias de seguridad a otra ubicación**
@@ -400,7 +400,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
 
     En la página `Settings`, haz clic en `Change external backup`
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="Cambiar el backup externo" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="Cambiar el backup externo" size="lg" />
   </Step>
 
   <Step>
@@ -409,7 +409,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
     En la siguiente pantalla, proporciona la cadena de conexión y el Container Name de la
     cuenta de almacenamiento de Azure que creaste en la sección anterior:
 
-    <Image img="/images/cloud/manage/backups/azure_connection_details.png" alt="Proporciona la cadena de conexión y el nombre del contenedor de tu cuenta de almacenamiento de Azure" size="md" />
+    <Image img="/images/cloud/manage/backups/azure_connection_details.webp" alt="Proporciona la cadena de conexión y el nombre del contenedor de tu cuenta de almacenamiento de Azure" size="md" />
   </Step>
 
   <Step>
@@ -433,7 +433,7 @@ Sigue los pasos que se indican a continuación en la consola de ClickHouse Cloud
     La página Backups debería mostrar estos backups en tu bucket en una tabla independiente,
     como se muestra a continuación:
 
-    <Image img="/images/cloud/manage/backups/view_backups_azure.png" alt="Ver los backups almacenados en tu bucket" size="md" />
+    <Image img="/images/cloud/manage/backups/view_backups_azure.webp" alt="Ver los backups almacenados en tu bucket" size="md" />
   </Step>
 </Steps>
 
@@ -460,7 +460,7 @@ Para restaurar copias de seguridad desde Azure, siga los pasos que se indican a 
     comando de restauración de esa copia de seguridad concreta. Tendrá que añadir la cadena de conexión de su cuenta de almacenamiento de Azure
     al comando.
 
-    <Image img="/images/cloud/manage/backups/restore_backups_azure.png" alt="Restaurar copias de seguridad en Azure" size="md" />
+    <Image img="/images/cloud/manage/backups/restore_backups_azure.webp" alt="Restaurar copias de seguridad en Azure" size="md" />
 
     <Warning>
       **Mover copias de seguridad a otra ubicación**

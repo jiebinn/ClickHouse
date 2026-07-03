@@ -29,32 +29,32 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
 سجّل الدخول إلى حسابك في Retool وانتقل إلى علامة التبويب *Resources*. اختر &quot;Create New&quot; -&gt; &quot;Resource&quot;:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_01.png" size="lg" border alt="إنشاء مورد جديد" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_01.webp" size="lg" border alt="إنشاء مورد جديد" />
 
 <br />
 
 حدّد &quot;JDBC&quot; من قائمة الموصلات المتاحة:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_02.png" size="lg" border alt="اختيار موصل JDBC" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_02.webp" size="lg" border alt="اختيار موصل JDBC" />
 
 <br />
 
 في معالج الإعداد، تأكد من اختيار `com.clickhouse.jdbc.ClickHouseDriver` كـ &quot;Driver name&quot;:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_03.png" size="lg" border alt="تحديد برنامج التشغيل الصحيح" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_03.webp" size="lg" border alt="تحديد برنامج التشغيل الصحيح" />
 
 <br />
 
 أدخل بيانات اعتماد ClickHouse بالتنسيق التالي: `jdbc:clickhouse://HOST:PORT/DATABASE?user=USERNAME&password=PASSWORD`.
 إذا كان المثيل لديك يتطلب SSL أو كنت تستخدم ClickHouse Cloud، فأضف `&ssl=true` إلى سلسلة الاتصال، بحيث تصبح بالشكل `jdbc:clickhouse://HOST:PORT/DATABASE?user=USERNAME&password=PASSWORD&ssl=true`
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_04.png" size="lg" border alt="إدخال بيانات الاعتماد" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_04.webp" size="lg" border alt="إدخال بيانات الاعتماد" />
 
 <br />
 
 بعد ذلك، اختبر الاتصال:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_05.png" size="lg" border alt="اختبار الاتصال" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_05.webp" size="lg" border alt="اختبار الاتصال" />
 
 <br />
 

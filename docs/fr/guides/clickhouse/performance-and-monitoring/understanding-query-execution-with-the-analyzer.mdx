@@ -29,7 +29,7 @@ INSERT INTO session_events SELECT * FROM generateRandom('clientId UUID,
 
 Maintenant que nous avons des données dans ClickHouse, nous voulons exécuter quelques requêtes et comprendre comment elles s’exécutent. L’exécution d’une requête se décompose en de nombreuses étapes. Chaque étape de l’exécution d’une requête peut être analysée et dépannée à l’aide de la requête `EXPLAIN` correspondante. Ces étapes sont résumées dans le schéma ci-dessous :
 
-<Image img="/images/guides/developer/analyzer1.png" alt="Étapes de la requête Explain" size="md" />
+<Image img="/images/guides/developer/analyzer1.webp" alt="Étapes de la requête Explain" size="md" />
 
 Voyons maintenant chaque composant à l’œuvre lors de l’exécution d’une requête. Nous allons prendre quelques requêtes, puis les examiner à l’aide de l’instruction `EXPLAIN`.
 
@@ -64,7 +64,7 @@ EXPLAIN AST SELECT min(timestamp), max(timestamp) FROM session_events;
 
 Le résultat est un arbre syntaxique abstrait qui peut être visualisé comme ci-dessous :
 
-<Image img="/images/guides/developer/analyzer2.png" alt="Sortie AST" size="md" />
+<Image img="/images/guides/developer/analyzer2.webp" alt="Sortie AST" size="md" />
 
 Chaque nœud a des nœuds enfants, et l’ensemble de l’arbre représente la structure globale de votre requête. Il s’agit d’une structure logique qui facilite le traitement d’une requête. Du point de vue de l’utilisateur final (sauf s’il s’intéresse à l’exécution des requêtes), ce n’est pas très utile ; cet outil est principalement destiné aux développeurs.
 
@@ -349,7 +349,7 @@ digraph
 
 Vous pouvez ensuite copier cette sortie et la coller [ici](https://dreampuf.github.io/GraphvizOnline), ce qui générera le graph suivant :
 
-<Image img="/images/guides/developer/analyzer3.png" alt="Sortie du graph" size="md" />
+<Image img="/images/guides/developer/analyzer3.webp" alt="Sortie du graph" size="md" />
 
 Un rectangle blanc correspond à un nœud du pipeline, le rectangle gris aux étapes du plan de requête, et le `x` suivi d’un nombre indique le nombre d’entrées/sorties utilisées. Si vous ne souhaitez pas les afficher sous une forme compacte, vous pouvez toujours ajouter `compact=0` :
 
@@ -389,7 +389,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer4.png" alt="Sortie du graphe compact" size="md" />
+<Image img="/images/guides/developer/analyzer4.webp" alt="Sortie du graphe compact" size="md" />
 
 Pourquoi ClickHouse ne lit-il pas la table avec plusieurs threads ? Essayons d&#39;ajouter davantage de données à notre table :
 
@@ -448,7 +448,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer5.png" alt="Résultat du graphe parallèle" size="md" />
+<Image img="/images/guides/developer/analyzer5.webp" alt="Résultat du graphe parallèle" size="md" />
 
 L’Executor a donc décidé de ne pas paralléliser les opérations, car le volume de données n&#39;était pas suffisant. En ajoutant davantage de lignes, l’Executor a ensuite décidé d’utiliser plusieurs threads, comme le montre le graphe.
 

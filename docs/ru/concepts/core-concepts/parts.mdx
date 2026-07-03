@@ -34,7 +34,7 @@ ORDER BY (town, street);
 
 Часть данных создается каждый раз, когда в таблицу вставляется набор строк. Это показано на следующей диаграмме:
 
-<Image img="/images/managing-data/core-concepts/part.png" size="lg" />
+<Image img="/images/managing-data/core-concepts/part.webp" size="lg" />
 
 <br />
 
@@ -58,7 +58,7 @@ ORDER BY (town, street);
 
 Чтобы управлять количеством частей в таблице, [задача фонового слияния](/ru/concepts/core-concepts/merges) периодически объединяет более мелкие части в более крупные, пока они не достигнут [настраиваемого](/ru/reference/settings/merge-tree-settings#max_bytes_to_merge_at_max_space_in_pool) сжатого размера (обычно ~150 ГБ). Слитые части помечаются как неактивные и удаляются через [настраиваемый](/ru/reference/settings/merge-tree-settings#old_parts_lifetime) интервал времени. Со временем этот процесс формирует иерархическую структуру слитых частей, поэтому такая таблица называется MergeTree:
 
-<Image img="/images/managing-data/core-concepts/merges.png" size="lg" />
+<Image img="/images/managing-data/core-concepts/merges.webp" size="lg" />
 
 <br />
 

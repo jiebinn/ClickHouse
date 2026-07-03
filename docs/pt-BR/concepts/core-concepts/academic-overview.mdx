@@ -42,7 +42,7 @@ O ClickHouse foi projetado para enfrentar cinco desafios centrais do gerenciamen
 <a id="page-1-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 1: Linha do tempo do ClickHouse.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.png" alt="Figura 1: Linha do tempo do ClickHouse." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.webp" alt="Figura 1: Linha do tempo do ClickHouse." />
 </Frame>
 
 <div id="2-architecture">
@@ -52,7 +52,7 @@ O ClickHouse foi projetado para enfrentar cinco desafios centrais do gerenciamen
 <a id="page-2-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 2: A arquitetura de alto nível do mecanismo de banco de dados ClickHouse.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.png" alt="Figura 2: A arquitetura de alto nível do mecanismo de banco de dados ClickHouse." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.webp" alt="Figura 2: A arquitetura de alto nível do mecanismo de banco de dados ClickHouse." />
 </Frame>
 
 Como mostra a [Figura 2,](#page-2-0) o mecanismo do ClickHouse é dividido em três camadas principais: a camada de processamento de consultas (descrita na Seção [4)](#page-6-0), a camada de armazenamento (Seção [3)](#page-1-1) e a camada de integração (Seção [5)](#page-9-0). Além delas, uma camada de acesso gerencia as sessões de usuário e a comunicação com aplicações por diferentes protocolos. Há também componentes ortogonais para threads, cache, controle de acesso baseado em funções, backups e monitoramento contínuo. O ClickHouse é desenvolvido em C++ como um único binário com vinculação estática, sem dependências.
@@ -82,7 +82,7 @@ As linhas podem ser inseridas em dois modos: no modo de inserção síncrona, ca
 <a id="page-2-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 3: Inserts e merges para tabelas com engine MergeTree\*.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.png" alt="Figura 3: Inserts e merges para tabelas com engine MergeTree*." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.webp" alt="Figura 3: Inserts e merges para tabelas com engine MergeTree*." />
 </Frame>
 
 A [Figura 3](#page-2-1) ilustra quatro inserts síncronos e dois assíncronos em uma tabela com engine MergeTree*. Dois merges reduziram o número de partes ativas de cinco, inicialmente, para duas.
@@ -106,7 +106,7 @@ A [Figura 4](#page-3-1) mostra um índice de chave primária na coluna EventTime
 <a id="page-3-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 4: Avaliação de filtros com um índice de chave primária.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.png" alt="Figura 4: Avaliação de filtros com um índice de chave primária." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.webp" alt="Figura 4: Avaliação de filtros com um índice de chave primária." />
 </Frame>
 
 Segundo, os usuários podem criar **projeções de tabela**, ou seja, versões alternativas de uma tabela que contêm as mesmas linhas ordenadas por uma chave primária diferente <sup>[[71]](#page-13-13)</sup>. As projeções permitem acelerar consultas que filtram por colunas diferentes da chave primária da tabela principal, ao custo de maior sobrecarga para inserções, mesclagens e consumo de espaço. Por padrão, as projeções são preenchidas de forma preguiçosa apenas a partir de partes recém-inseridas na tabela principal, mas não a partir de partes existentes, a menos que o usuário materialize a projeção por completo. O otimizador de consultas escolhe entre ler da tabela principal ou de uma projeção com base nos custos estimados de I/O. Se não existir nenhuma projeção para uma parte, a execução da consulta recorre à parte correspondente da tabela principal.
@@ -126,7 +126,7 @@ A [Figura 5](#page-4-1) mostra uma visão materializada definida sobre uma tabel
 <a id="page-4-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 5: Mesclagens de agregação em visões materializadas.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.png" alt="Figura 5: Mesclagens de agregação em visões materializadas." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.webp" alt="Figura 5: Mesclagens de agregação em visões materializadas." />
 </Frame>
 
 **Mesclagens TTL (time-to-live)** fornecem expiração para dados históricos. Diferentemente das mesclagens de exclusão e agregação, as mesclagens TTL processam apenas uma parte por vez. Mesclagens TTL são definidas em termos de regras com gatilhos e ações. Um gatilho é uma expressão que calcula um timestamp para cada linha, que é comparado com o momento em que a mesclagem TTL é executada. Embora isso permita que os usuários controlem ações na granularidade da linha, verificamos que é suficiente checar se todas as linhas satisfazem uma determinada condição e executar a ação sobre a parte inteira. As ações possíveis incluem 1. mover a parte para outro volume (por exemplo, armazenamento mais barato e mais lento), 2. recomprimir a parte (por exemplo, com um codec mais pesado), 3. excluir a parte e 4. fazer roll-up, isto é, agregar as linhas usando uma chave de agrupamento e funções de agregação.
@@ -170,7 +170,7 @@ Como exemplo, a [Figura 6](#page-5-3) mostra uma tabela replicada inicialmente v
 <a id="page-5-3" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 6: Replicação em um cluster de três nós.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.png" alt="Figura 6: Replicação em um cluster de três nós." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.webp" alt="Figura 6: Replicação em um cluster de três nós." />
 </Frame>
 
 Existem três otimizações para acelerar a sincronização: primeiro, novos nós adicionados ao cluster não reproduzem o log de replicação do zero; em vez disso, eles simplesmente copiam o estado do nó que gravou a última entrada do log de replicação. Segundo, as mesclagens são reproduzidas repetindo-as localmente ou buscando a parte resultante em outro nó. O comportamento exato é configurável e permite equilibrar o consumo de CPU e a E/S de rede. Por exemplo, a replicação entre data centers normalmente prefere mesclagens locais para minimizar os custos operacionais. Terceiro, os nós reproduzem em paralelo entradas mutuamente independentes do log de replicação. Isso inclui, por exemplo, fetches de novas partes inseridas consecutivamente na mesma tabela ou operações em tabelas diferentes.
@@ -186,7 +186,7 @@ Na prática, a maioria dos casos de uso do ClickHouse com alta intensidade de es
 <a id="page-6-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 7: Paralelização entre unidades SIMD, núcleos e nós.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.png" alt="Figura 7: Paralelização entre unidades SIMD, núcleos e nós." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.webp" alt="Figura 7: Paralelização entre unidades SIMD, núcleos e nós." />
 </Frame>
 
 Como ilustrado na [Figura 7,](#page-6-1) o ClickHouse paraleliza consultas no nível dos elementos de dados, dos fragmentos de dados e dos shards da tabela. Vários elementos de dados podem ser processados de uma só vez dentro dos operadores usando instruções SIMD. Em um único nó, a engine de consulta executa operadores simultaneamente em múltiplas threads. O ClickHouse usa o mesmo modelo de vetorização do MonetDB/X100 <sup>[[11]](#page-12-0)</sup>, ou seja, os operadores produzem, transferem e consomem múltiplas linhas (fragmentos de dados) em vez de linhas individuais, para minimizar a sobrecarga das chamadas de função virtual. Se uma tabela de origem for dividida em shards distintos, múltiplos nós poderão examinar os shards simultaneamente. Como resultado, todos os recursos de hardware são plenamente utilizados, e o processamento de consultas pode escalar horizontalmente com a adição de nós e verticalmente com a adição de núcleos.
@@ -206,7 +206,7 @@ A passagem de várias linhas entre operadores cria uma oportunidade para vetoriz
 <a id="page-7-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 8: Um plano de operadores físicos com três faixas.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.png" alt="Figura 8: Um plano de operadores físicos com três faixas." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.webp" alt="Figura 8: Um plano de operadores físicos com três faixas." />
 </Frame>
 
 O ClickHouse segue a abordagem convencional <sup>[[31]](#page-12-13)</sup> de transformar consultas SQL em um grafo direcionado de operadores do plano físico. A entrada do plano de operadores é representada por operadores source especiais que leem dados no formato nativo ou em qualquer um dos formatos de terceiros compatíveis (consulte a Seção [5)](#page-9-0). Da mesma forma, um operador sink especial converte o resultado para o formato de saída desejado. O plano de operadores físicos é expandido, no momento da compilação da consulta, em faixas de execução independentes com base em um número máximo configurável de threads de trabalho (por padrão, o número de núcleos) e no tamanho da tabela de origem. As faixas dividem os dados a serem processados por operadores paralelos em intervalos sem sobreposição. Para maximizar as oportunidades de processamento paralelo, as faixas são mescladas o mais tarde possível.
@@ -259,7 +259,7 @@ Como as junções estão entre as operações de banco de dados mais caras, é i
 <a id="page-8-3" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 9: Hash join paralelo com três partições de tabela hash.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.png" alt="Figura 9: Hash join paralelo com três partições de tabela hash." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.webp" alt="Figura 9: Hash join paralelo com três partições de tabela hash." />
 </Frame>
 
 ### <a id="page-9-1" style={{display:"block",scrollMarginTop:"80px"}} />4.5 Isolamento de carga de trabalho
@@ -283,7 +283,7 @@ Conectividade externa. O ClickHouse fornece [50+](https://clickhou.se/query-inte
 <a id="bonus-figure" />
 
 <Frame caption="Figura bônus: opções de interoperabilidade do ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.png" alt="Figura bônus: opções de interoperabilidade do ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.webp" alt="Figura bônus: opções de interoperabilidade do ClickBench." />
 </Frame>
 
 Acesso temporário com **funções de tabela** de integração. As funções de tabela podem ser invocadas na cláusula FROM de consultas SELECT para ler dados remotos em consultas exploratórias ad hoc. Como alternativa, podem ser usadas para gravar dados em armazenamentos remotos com instruções INSERT INTO TABLE FUNCTION.
@@ -337,7 +337,7 @@ A [Figura 10](#page-10-0) mostra os tempos de execução relativos totais a frio
 <a id="page-10-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 10: Tempos de execução relativos a frio e com cache aquecido do ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.png" alt="Figura 10: Tempos de execução relativos a frio e com cache aquecido do ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.webp" alt="Figura 10: Tempos de execução relativos a frio e com cache aquecido do ClickBench." />
 </Frame>
 
 Para acompanhar, ao longo do tempo, o desempenho de SELECTs em cargas de trabalho mais diversas, [usamos](https://clickhou.se/performance-over-years) uma combinação de quatro benchmarks chamada VersionsBench <sup>[[19]](#page-12-30)</sup>. Esse benchmark é executado uma vez por mês quando um novo lançamento é publicado, para avaliar seu desempenho <sup>[[20]](#page-12-31)</sup> e identificar alterações de código que possam tê-lo degradado: os benchmarks individuais incluem: 1. ClickBench (descrito acima), 2. 15 consultas do MgBench <sup>[[21]](#page-12-32)</sup>, 3. 13 consultas sobre uma tabela de fatos desnormalizada do Star Schema Benchmark <sup>[[57]](#page-13-26)</sup> com 600 milhões de linhas. 4. 4 consultas sobre [NYC Taxi Rides](https://clickhou.se/nyc-taxi-rides-benchmark) com 3,4 bilhões de linhas <sup>[[70]](#page-13-27)</sup>.
@@ -347,7 +347,7 @@ A [Figura 11](#page-10-5) mostra a evolução dos tempos de execução do Versio
 <a id="page-10-5" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 11: tempos de execução relativos com cache aquecido do VersionsBench 2018-2024.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.png" alt="Figura 11: tempos de execução relativos com cache aquecido do VersionsBench 2018-2024." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.webp" alt="Figura 11: tempos de execução relativos com cache aquecido do VersionsBench 2018-2024." />
 </Frame>
 
 <div id="6-2-2-normalized-tables">
@@ -359,7 +359,7 @@ No data warehousing clássico, os dados costumam ser modelados com esquemas estr
 <a id="page-10-6" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 12: Tempos de execução com cache aquecido (em segundos) para consultas TPC-H.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.png" alt="Figura 12: Tempos de execução com cache aquecido (em segundos) para consultas TPC-H." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.webp" alt="Figura 12: Tempos de execução com cache aquecido (em segundos) para consultas TPC-H." />
 </Frame>
 
 <div id="7-related-work">

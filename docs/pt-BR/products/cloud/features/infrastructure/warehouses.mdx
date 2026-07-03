@@ -23,7 +23,7 @@ Cada serviço do ClickHouse Cloud inclui:
 * um endpoint (ou vários endpoints criados pelo console da UI do ClickHouse Cloud) para se conectar ao serviço (por exemplo, `https://dv2fzne24g.us-east-1.aws.clickhouse.cloud:8443`) em conexões locais e de aplicativos de terceiros
 * uma pasta de armazenamento de objetos onde o serviço armazena todos os dados e parte dos metadados:
 
-<Image img="/images/cloud/reference/compute-compute-1.png" size="md" alt="Serviço único no ClickHouse Cloud" />
+<Image img="/images/cloud/reference/compute-compute-1.webp" size="md" alt="Serviço único no ClickHouse Cloud" />
 
 <br />
 
@@ -37,7 +37,7 @@ Isso significa que você pode escolher o tamanho de compute adequado para o seu 
 
 Compute-compute separation também permite separar operações de leitura de operações de gravação para que não interfiram umas nas outras:
 
-<Image img="/images/cloud/reference/compute-compute-2.png" size="md" alt="Separação de compute no ClickHouse Cloud" />
+<Image img="/images/cloud/reference/compute-compute-2.webp" size="md" alt="Separação de compute no ClickHouse Cloud" />
 
 <br />
 
@@ -54,7 +54,7 @@ Por exemplo, na captura de tela abaixo, você pode ver um warehouse &quot;DWH Pr
 * Serviço primário `DWH Prod`
 * Serviço secundário `DWH Prod Subservice`
 
-<Image img="/images/cloud/reference/compute-compute-8.png" size="lg" alt="Exemplo de warehouse com serviços primário e secundário" background="white" />
+<Image img="/images/cloud/reference/compute-compute-8.webp" size="lg" alt="Exemplo de warehouse com serviços primário e secundário" background="white" />
 
 <br />
 
@@ -79,7 +79,7 @@ Como todos os serviços em um warehouse compartilham o mesmo conjunto de tabelas
 Isso significa que todos os usuários do banco de dados criados no Serviço 1 também poderão usar o Serviço 2 com as mesmas permissões (grants para tabelas, views etc.) e vice-versa.
 Um endpoint diferente é usado para cada serviço, mas o mesmo nome de usuário e a mesma senha são usados em todos eles. Em outras palavras, **os usuários são compartilhados entre serviços que trabalham com o mesmo armazenamento**, como mostrado na figura abaixo:
 
-<Image img="/images/cloud/reference/compute-compute-3.png" size="md" alt="Acesso de usuários entre serviços que compartilham os mesmos dados" />
+<Image img="/images/cloud/reference/compute-compute-3.webp" size="md" alt="Acesso de usuários entre serviços que compartilham os mesmos dados" />
 
 <br />
 
@@ -97,7 +97,7 @@ Isso permite impedir que usuários utilizem serviços específicos.
 
 No exemplo abaixo, Alice está impedida de acessar o serviço 2 no warehouse:
 
-<Image img="/images/cloud/reference/compute-compute-4.png" size="md" alt="Configurações de controle de acesso à rede" />
+<Image img="/images/cloud/reference/compute-compute-4.webp" size="md" alt="Configurações de controle de acesso à rede" />
 
 <br />
 
@@ -124,7 +124,7 @@ Os serviços podem ser de um destes tipos:
 Às vezes, convém isolar workloads críticos de leitura da sobrecarga de escrita/merge tornando um serviço read-only.
 Você pode fazer isso com o segundo serviço e quaisquer serviços adicionais que criar; no entanto, o primeiro serviço sempre será read-write, como mostrado na figura abaixo:
 
-<Image img="/images/cloud/reference/compute-compute-5.png" size="lg" alt="Serviços read-write e read-only em um warehouse" />
+<Image img="/images/cloud/reference/compute-compute-5.webp" size="lg" alt="Serviços read-write e read-only em um warehouse" />
 
 <br />
 
@@ -231,7 +231,7 @@ Consulte a calculadora de preços na página de [preços](https://clickhouse.com
 
 Para criar um warehouse, você precisa criar um segundo serviço que compartilhará dados com um serviço existente. Isso pode ser feito clicando no sinal de mais em qualquer um dos serviços existentes:
 
-<Image img="/images/cloud/reference/compute-compute-7.png" size="md" alt="Criando um novo serviço em um warehouse" />
+<Image img="/images/cloud/reference/compute-compute-7.webp" size="md" alt="Criando um novo serviço em um warehouse" />
 
 <br />
 

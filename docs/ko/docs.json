@@ -3085,7 +3085,7 @@
             },
             {
               "group": "Rust",
-              "icon": "/images/integrations/logos/rust.png",
+              "icon": "/images/integrations/logos/rust.webp",
               "pages": [],
               "root": "ko/integrations/language-clients/rust"
             },

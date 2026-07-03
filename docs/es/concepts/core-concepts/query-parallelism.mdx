@@ -127,7 +127,7 @@ Nota: Lea el plan de operadores anterior de abajo hacia arriba. Cada línea repr
 
 La [web UI integrada](/es/concepts/features/interfaces/http) de ClickHouse (disponible en el endpoint `/play`) puede representar el plan físico anterior como una visualización gráfica. En este ejemplo, establecemos `max_threads` en `4` para mantener la visualización compacta y mostrar solo 4 lane de procesamiento paralelas:
 
-<Image img="/images/guides/best-practices/query-parallelism_05.png" alt="Pipeline de consulta" />
+<Image img="/images/guides/best-practices/query-parallelism_05.webp" alt="Pipeline de consulta" />
 
 Nota: Lea la visualización de izquierda a derecha. Cada fila representa una lane de procesamiento paralelo que transmite datos bloque por bloque, aplicando transformaciones como filtrado, agregación y etapas finales de procesamiento. En este ejemplo, puede ver cuatro lane paralelas correspondientes a la configuración `max_threads = 4`.
 

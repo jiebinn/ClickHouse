@@ -22,7 +22,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Selecione o botão `Data Sources` no menu à esquerda e clique em &quot;Set up a ClickPipe&quot;.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="Selecionar importações" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="Selecionar importações" size="md" />
   </Step>
 
   <Step>
@@ -30,7 +30,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Selecione a fonte de dados do Kafka na lista.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step1.png" alt="Selecione o tipo de fonte de dados" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step1.webp" alt="Selecione o tipo de fonte de dados" size="md" />
   </Step>
 
   <Step>
@@ -38,7 +38,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Preencha o formulário informando um nome para o seu ClickPipe, uma descrição (opcional), suas credenciais e outros detalhes de conexão.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step2.png" alt="Preencha os detalhes da conexão" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step2.webp" alt="Preencha os detalhes da conexão" size="md" />
   </Step>
 
   <Step>
@@ -65,7 +65,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
        * **SSH Port**: A porta SSH no host bastion (o padrão é `22`).
        * **SSH User**: O nome de usuário usado para autenticação no host bastion.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_ssh_tunnel.png" alt="Configuração do túnel SSH" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_ssh_tunnel.webp" alt="Configuração do túnel SSH" size="md" />
 
     3. Para usar autenticação baseada em chave, clique em &quot;Revoke and regenerate key pair&quot; para gerar um novo par de chaves e copie a chave pública gerada para o seu servidor SSH em `~/.ssh/authorized_keys`.
     4. Clique em &quot;Verify Connection&quot; para verificar a conexão.
@@ -80,7 +80,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Selecione seu tópico, e a UI exibirá um documento de exemplo desse tópico.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step3.png" alt="Selecione seu tópico" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step3.webp" alt="Selecione seu tópico" size="md" />
   </Step>
 
   <Step>
@@ -88,11 +88,11 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Na próxima etapa, você pode escolher se deseja fazer a ingestão de dados em uma nova tabela do ClickHouse ou reutilizar uma já existente. Siga as instruções na tela para modificar o nome da tabela, o esquema e as configurações. Você pode ver uma prévia em tempo real das alterações na tabela de amostra na parte superior.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a.png" alt="Defina a tabela, o esquema e as configurações" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a.webp" alt="Defina a tabela, o esquema e as configurações" size="md" />
 
     Você também pode personalizar as configurações avançadas usando os controles disponíveis
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_table_settings.png" alt="Defina controles avançados" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_table_settings.webp" alt="Defina controles avançados" size="md" />
   </Step>
 
   <Step>
@@ -103,7 +103,7 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
     * `Full access`: com acesso total ao cluster. Isso pode ser útil se você usar uma visão materializada ou um Dicionário com a tabela de destino.
     * `Only destination table`: apenas com permissões `INSERT` na tabela de destino.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step5.png" alt="Permissões" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step5.webp" alt="Permissões" size="md" />
   </Step>
 
   <Step>
@@ -111,6 +111,6 @@ Os ClickPipes do Kafka podem ser implantados e gerenciados manualmente pela UI d
 
     Ao clicar em &quot;Create ClickPipe&quot;, o ClickPipe será criado e executado. Ele passará a aparecer na seção Data Sources.
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_overview.png" alt="Ver Overview" size="md" />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_overview.webp" alt="Ver Overview" size="md" />
   </Step>
 </Steps>

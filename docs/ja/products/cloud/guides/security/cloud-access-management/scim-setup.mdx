@@ -53,11 +53,11 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
 
     組織管理者として **ClickHouse Cloud Console** にサインインし、**組織設定 → SAML and SCIM settings → SCIM Configuration** を開きます。
 
-    ![組織設定で SCIM 設定タブに移動する](/images/cloud/security/scim-okta/scim-okta-01.png)
+    ![組織設定で SCIM 設定タブに移動する](/images/cloud/security/scim-okta/scim-okta-01.webp)
 
     `Enable SCIM` をクリックします。SCIM は SAML SSO の接続後に有効になります。オプションがグレーアウトしている場合は、先に SAML の設定を完了してください。
 
-    ![Enable SCIM を切り替える](/images/cloud/security/scim-okta/scim-okta-02.png)
+    ![Enable SCIM を切り替える](/images/cloud/security/scim-okta/scim-okta-02.webp)
 
     次の形式の **SCIM エンドポイント URL** が生成されます。
 
@@ -81,7 +81,7 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
 
     `Generate key` をクリックします。トークンは **一度だけ**、キー (`scim_` プレフィックス付き) とシークレットとして表示されます。両方をすぐにコピーし、安全なシークレットマネージャーに保存してください。後から再取得することはできません。紛失した場合は、そのトークンを取り消して新しいものを生成してください。
 
-    ![新しい SCIM API key を生成する](/images/cloud/security/scim-okta/scim-okta-07.png)
+    ![新しい SCIM API key を生成する](/images/cloud/security/scim-okta/scim-okta-07.webp)
   </Step>
 
   <Step>
@@ -112,11 +112,11 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
 
     **General** タブで **App Settings** セクションを見つけて `Edit` をクリックします。**Provisioning** で `SCIM` を選択し、`Save` をクリックします。
 
-    ![Okta アプリケーション設定でプロビジョニングモードを SCIM に設定する](/images/cloud/security/scim-okta/scim-okta-03.png)
+    ![Okta アプリケーション設定でプロビジョニングモードを SCIM に設定する](/images/cloud/security/scim-okta/scim-okta-03.webp)
 
     これで、アプリケーションに **Provisioning** タブが表示されます。
 
-    ![アプリケーションに Provisioning タブが表示された状態](/images/cloud/security/scim-okta/scim-okta-05.png)
+    ![アプリケーションに Provisioning タブが表示された状態](/images/cloud/security/scim-okta/scim-okta-05.webp)
   </Step>
 
   <Step>
@@ -136,13 +136,13 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
       * **Username** — SCIM トークンのキー (`scim_` で始まります) 。
       * **Password** — SCIM トークンのシークレット。
 
-    ![SCIM コネクタ URL を入力し、一意識別子を userName に設定する](/images/cloud/security/scim-okta/scim-okta-06.png)
+    ![SCIM コネクタ URL を入力し、一意識別子を userName に設定する](/images/cloud/security/scim-okta/scim-okta-06.webp)
 
-    ![SCIM 認証用の API 認証情報を入力する](/images/cloud/security/scim-okta/scim-okta-08.png)
+    ![SCIM 認証用の API 認証情報を入力する](/images/cloud/security/scim-okta/scim-okta-08.webp)
 
     `Test Connector Configuration` をクリックします。緑色の確認メッセージが表示されるはずです。失敗した場合は、[Troubleshooting](#troubleshooting) に進んでください。
 
-    ![SCIM 接続をテストする](/images/cloud/security/scim-okta/scim-okta-09.png)
+    ![SCIM 接続をテストする](/images/cloud/security/scim-okta/scim-okta-09.webp)
 
     `Save` をクリックします。
   </Step>
@@ -159,11 +159,11 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
     | Deactivate Users       | 有効化 | Okta で割り当て解除または無効化されると、ClickHouse Cloud からユーザーを削除します |
     | Sync Password          | 無効化 | 使用しません — サインインはパスワードではなく SAML 経由で行われます               |
 
-    ![ユーザー向けの SCIM Provisioning アクションを有効にする](/images/cloud/security/scim-okta/scim-okta-10.png)
+    ![ユーザー向けの SCIM Provisioning アクションを有効にする](/images/cloud/security/scim-okta/scim-okta-10.webp)
 
     `Save` をクリックし、アプリケーションの **Sign On** / **Provisioning** タブに戻って、設定が反映されていることを確認します。
 
-    ![Provisioning の設定を保存して Sign On タブに戻る](/images/cloud/security/scim-okta/scim-okta-10b.png)
+    ![Provisioning の設定を保存して Sign On タブに戻る](/images/cloud/security/scim-okta/scim-okta-10b.webp)
   </Step>
 
   <Step>
@@ -196,21 +196,21 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
 
     **Okta でグループを作成します。** 先ほど設定した各ロールマッピングに対して、**表示名が完全に一致する** Okta グループを作成するか、既存のグループを特定します。たとえば、マッピングが `ClickHouse-Admins → Admin` であれば、Okta で `ClickHouse-Admins` という名前のグループを作成します。
 
-    ![Okta で新しいグループを作成する](/images/cloud/security/scim-okta/scim-okta-13.png)
+    ![Okta で新しいグループを作成する](/images/cloud/security/scim-okta/scim-okta-13.webp)
 
     作成したグループを開き、`Assign people` をクリックしてメンバーを追加します。
 
-    ![グループの Assign people をクリックする](/images/cloud/security/scim-okta/scim-okta-14.png)
+    ![グループの Assign people をクリックする](/images/cloud/security/scim-okta/scim-okta-14.webp)
 
-    ![ユーザーをグループに割り当てる](/images/cloud/security/scim-okta/scim-okta-15.png)
+    ![ユーザーをグループに割り当てる](/images/cloud/security/scim-okta/scim-okta-15.webp)
 
     次に、ロールのメンバーシップとアプリへのアクセスを同期した状態に保つため、同じグループに SCIM アプリケーションも割り当てます。
 
-    ![アプリケーションをグループに割り当てる](/images/cloud/security/scim-okta/scim-okta-16.png)
+    ![アプリケーションをグループに割り当てる](/images/cloud/security/scim-okta/scim-okta-16.webp)
 
     **グループをプッシュします。** アプリケーションの **Provisioning** タブで `Push Groups → Find groups by name` をクリックし、グループを検索して `Save` をクリックします。これを各ロールグループに対して繰り返します。プロビジョニングが完了すると、それぞれの **Push Status** は **Active (Pushed)** と表示されるはずです。
 
-    ![アプリケーションの Push Groups タブで名前による Group Push を設定する](/images/cloud/security/scim-okta/scim-okta-17.png)
+    ![アプリケーションの Push Groups タブで名前による Group Push を設定する](/images/cloud/security/scim-okta/scim-okta-17.webp)
 
     **ユーザーを割り当てます。** 方法は 2 つあります。
 
@@ -227,7 +227,7 @@ ClickHouse Cloud は、ユーザーとグループのライフサイクルを自
 
 Provisioning の設定が完了したら、ClickHouse Cloud Console の **Settings → Users and roles** に戻り、同期されたユーザーが想定どおりのロールで表示されていることを確認します。
 
-![Users and roles でユーザー同期を確認](/images/cloud/security/scim-okta/scim-okta-18.png)
+![Users and roles でユーザー同期を確認](/images/cloud/security/scim-okta/scim-okta-18.webp)
 
 チーム全体を割り当てる**前に**、1～2 人のテストユーザーでこの簡単なテスト計画を実施してください。各手順は数秒以内に成功するはずです。成功しない場合は、Okta の Tasks キューと [Troubleshooting](#troubleshooting) セクションを確認してください。
 

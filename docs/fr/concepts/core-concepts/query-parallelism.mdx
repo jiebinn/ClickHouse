@@ -127,7 +127,7 @@ Remarque : lisez le plan des opérateurs ci-dessus de bas en haut. Chaque ligne
 
 L’[interface web intégrée](/fr/concepts/features/interfaces/http) de ClickHouse (disponible sur l’endpoint `/play`) peut représenter le plan physique ci-dessus sous forme de visualisation graphique. Dans cet exemple, nous définissons `max_threads` sur `4` afin de conserver une visualisation compacte, avec seulement 4 voies de traitement parallèles affichées :
 
-<Image img="/images/guides/best-practices/query-parallelism_05.png" alt="Pipeline de requête" />
+<Image img="/images/guides/best-practices/query-parallelism_05.webp" alt="Pipeline de requête" />
 
 Remarque : lisez la visualisation de gauche à droite. Chaque ligne représente une voie de traitement parallèle qui fait circuler les blocs de données bloc par bloc, en appliquant des transformations telles que le filtrage, l’agrégation et les étapes finales de traitement. Dans cet exemple, vous pouvez voir quatre voies parallèles correspondant au paramètre `max_threads = 4`.
 

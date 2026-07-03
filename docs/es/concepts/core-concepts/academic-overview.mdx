@@ -42,7 +42,7 @@ ClickHouse está diseñado para abordar cinco desafíos clave de la gestión mod
 <a id="page-1-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 1: Cronología de ClickHouse.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.png" alt="Figura 1: Cronología de ClickHouse." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.webp" alt="Figura 1: Cronología de ClickHouse." />
 </Frame>
 
 <div id="2-architecture">
@@ -52,7 +52,7 @@ ClickHouse está diseñado para abordar cinco desafíos clave de la gestión mod
 <a id="page-2-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 2: Arquitectura de alto nivel del motor de base de datos ClickHouse.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.png" alt="Figura 2: Arquitectura de alto nivel del motor de base de datos ClickHouse." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.webp" alt="Figura 2: Arquitectura de alto nivel del motor de base de datos ClickHouse." />
 </Frame>
 
 Como se muestra en la [Figura 2,](#page-2-0) el motor de ClickHouse se divide en tres capas principales: la capa de procesamiento de consultas (descrita en la Sección [4)](#page-6-0), la capa de almacenamiento (Sección [3)](#page-1-1) y la capa de integración (Sección [5)](#page-9-0). Además, una capa de acceso gestiona las sesiones de usuario y la comunicación con las aplicaciones mediante distintos protocolos. También hay componentes ortogonales para la gestión de hilos, el almacenamiento en caché, el control de acceso basado en roles, las copias de seguridad y la monitorización continua. ClickHouse está desarrollado en C++ como un único binario enlazado estáticamente y sin dependencias.
@@ -82,7 +82,7 @@ Las filas pueden insertarse de dos maneras: en el modo de insert síncrono, cada
 <a id="page-2-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 3: Inserts y merges para tablas con motor MergeTree\*.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.png" alt="Figura 3: Inserts y merges para tablas con motor MergeTree*." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.webp" alt="Figura 3: Inserts y merges para tablas con motor MergeTree*." />
 </Frame>
 
 La [Figura 3](#page-2-1) ilustra cuatro inserts síncronos y dos asíncronos en una tabla con motor MergeTree*. Dos merges redujeron el número de partes activas de cinco inicialmente a dos.
@@ -106,7 +106,7 @@ La [Figura 4](#page-3-1) muestra un índice de clave primaria en la columna Even
 <a id="page-3-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 4: Evaluación de filtros con un índice de clave primaria.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.png" alt="Figura 4: Evaluación de filtros con un índice de clave primaria." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.webp" alt="Figura 4: Evaluación de filtros con un índice de clave primaria." />
 </Frame>
 
 En segundo lugar, los usuarios pueden crear **proyecciones de tabla**, es decir, versiones alternativas de una tabla que contienen las mismas filas ordenadas por una clave primaria distinta <sup>[[71]](#page-13-13)</sup>. Las proyecciones permiten acelerar las consultas que filtran por columnas distintas de la clave primaria de la tabla principal, a costa de una mayor sobrecarga en inserciones, fusiones y consumo de espacio. De forma predeterminada, las proyecciones se rellenan de forma diferida solo a partir de partes recién insertadas en la tabla principal, pero no a partir de las partes existentes, a menos que el usuario materialice por completo la proyección. El optimizador de consultas elige entre leer desde la tabla principal o desde una proyección en función de los costos estimados de E/S. Si no existe una proyección para una parte, la ejecución de la consulta recurre a la parte correspondiente de la tabla principal.
@@ -126,7 +126,7 @@ La [Figura 5](#page-4-1) muestra una vista materializada definida sobre una tabl
 <a id="page-4-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 5: Fusiones de agregación en vistas materializadas.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.png" alt="Figura 5: Fusiones de agregación en vistas materializadas." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.webp" alt="Figura 5: Fusiones de agregación en vistas materializadas." />
 </Frame>
 
 Las **fusiones TTL (time-to-live)** proporcionan envejecimiento para los datos históricos. A diferencia de las fusiones de eliminación y agregación, las fusiones TTL procesan solo una parte a la vez. Las fusiones TTL se definen en términos de reglas con triggers y acciones. Un trigger es una expresión que calcula una marca de tiempo para cada fila, que se compara con el momento en que se ejecuta la fusión TTL. Aunque esto permite a los usuarios controlar acciones con granularidad de fila, observamos que es suficiente comprobar si todas las filas cumplen una condición determinada y ejecutar la acción sobre toda la parte. Las acciones posibles incluyen 1. mover la parte a otro volumen (p. ej., almacenamiento más barato y más lento), 2. recomprimir la parte (p. ej., con un códec más pesado), 3. eliminar la parte, y 4. realizar un roll-up, es decir, agregar las filas usando una clave de agrupación y funciones de agregación.
@@ -170,7 +170,7 @@ Como ejemplo, la [Figura 6](#page-5-3) muestra una tabla replicada inicialmente 
 <a id="page-5-3" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 6: Replicación en un clúster de tres nodos.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.png" alt="Figura 6: Replicación en un clúster de tres nodos." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.webp" alt="Figura 6: Replicación en un clúster de tres nodos." />
 </Frame>
 
 Existen tres optimizaciones para acelerar la sincronización: en primer lugar, los nuevos nodos añadidos al clúster no reproducen el registro de replicación desde cero, sino que simplemente copian el estado del nodo que escribió la última entrada del registro de replicación. En segundo lugar, las fusiones se reproducen repitiéndolas localmente o recuperando la parte resultante desde otro nodo. El comportamiento exacto es configurable y permite equilibrar el consumo de CPU y la E/S de red. Por ejemplo, la replicación entre centros de datos suele preferir las fusiones locales para minimizar los costes operativos. En tercer lugar, los nodos reproducen en paralelo entradas mutuamente independientes del registro de replicación. Esto incluye, por ejemplo, la recuperación de nuevas partes insertadas consecutivamente en la misma tabla, u operaciones en tablas diferentes.
@@ -186,7 +186,7 @@ En la práctica, la mayoría de los casos de uso de ClickHouse orientados a la t
 <a id="page-6-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 7: Paralelización entre unidades SIMD, núcleos y nodos.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.png" alt="Figura 7: Paralelización entre unidades SIMD, núcleos y nodos." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.webp" alt="Figura 7: Paralelización entre unidades SIMD, núcleos y nodos." />
 </Frame>
 
 Como se muestra en la [Figura 7,](#page-6-1) ClickHouse paraleliza las consultas a nivel de elementos de datos, fragmentos de datos y segmentos de tabla. Se pueden procesar varios elementos de datos a la vez dentro de los operadores mediante instrucciones SIMD. En un único nodo, el motor de consultas ejecuta operadores simultáneamente en varios hilos. ClickHouse utiliza el mismo modelo de vectorización que MonetDB/X100 <sup>[[11]](#page-12-0)</sup>; es decir, los operadores producen, transfieren y consumen múltiples filas (fragmentos de datos) en lugar de filas individuales para minimizar la sobrecarga de las llamadas a funciones virtuales. Si una tabla de origen se divide en segmentos de tabla disjuntos, varios nodos pueden escanear los segmentos simultáneamente. Como resultado, todos los recursos de hardware se aprovechan al máximo, y el procesamiento de consultas puede escalar horizontalmente añadiendo nodos y verticalmente añadiendo núcleos.
@@ -206,7 +206,7 @@ Pasar varias filas entre operadores crea una oportunidad para la vectorización.
 <a id="page-7-1" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 8: Un plan de operadores físicos con tres carriles.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.png" alt="Figura 8: Un plan de operadores físicos con tres carriles." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.webp" alt="Figura 8: Un plan de operadores físicos con tres carriles." />
 </Frame>
 
 ClickHouse sigue el enfoque convencional <sup>[[31]](#page-12-13)</sup> de transformar las consultas SQL en un grafo dirigido de operadores de plan físico. La entrada del plan de operadores está representada por operadores source especiales que leen datos en formato nativo o en cualquiera de los formatos de terceros compatibles (consulte la Sección [5)](#page-9-0). Del mismo modo, un operador sink especial convierte el resultado al formato de salida deseado. El plan de operadores físicos se despliega, en el momento de compilar la consulta, en carriles de ejecución independientes en función de un número máximo configurable de hilos de trabajo (de forma predeterminada, el número de núcleos) y del tamaño de la tabla de origen. Los carriles dividen los datos que deben procesar los operadores paralelos en rangos no superpuestos. Para maximizar las oportunidades de procesamiento en paralelo, los carriles se fusionan lo más tarde posible.
@@ -259,7 +259,7 @@ Dado que los joins se encuentran entre las operaciones de base de datos más cos
 <a id="page-8-3" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 9: Hash join paralelo con tres particiones de tabla hash.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.png" alt="Figura 9: Hash join paralelo con tres particiones de tabla hash." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.webp" alt="Figura 9: Hash join paralelo con tres particiones de tabla hash." />
 </Frame>
 
 ### <a id="page-9-1" style={{display:"block",scrollMarginTop:"80px"}} />4.5 Aislamiento de cargas de trabajo
@@ -283,7 +283,7 @@ Conectividad externa. ClickHouse proporciona [más de 50](https://clickhou.se/qu
 <a id="bonus-figure" />
 
 <Frame caption="Figura adicional: opciones de interoperabilidad de ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.png" alt="Figura adicional: opciones de interoperabilidad de ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.webp" alt="Figura adicional: opciones de interoperabilidad de ClickBench." />
 </Frame>
 
 Acceso temporal con **funciones de tabla** de integración. Las funciones de tabla pueden invocarse en la cláusula FROM de consultas SELECT para leer datos remotos en consultas exploratorias ad hoc. Como alternativa, pueden usarse para escribir datos en almacenes remotos mediante sentencias INSERT INTO TABLE FUNCTION.
@@ -337,7 +337,7 @@ La [Figura 10](#page-10-0) muestra los tiempos de ejecución relativos totales e
 <a id="page-10-0" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 10: Tiempos de ejecución relativos en frío y en caliente de ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.png" alt="Figura 10: Tiempos de ejecución relativos en frío y en caliente de ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.webp" alt="Figura 10: Tiempos de ejecución relativos en frío y en caliente de ClickBench." />
 </Frame>
 
 Para seguir la evolución del rendimiento de las consultas SELECT en cargas de trabajo más diversas a lo largo del tiempo, [usamos](https://clickhou.se/performance-over-years) una combinación de cuatro benchmarks denominada VersionsBench <sup>[[19]](#page-12-30)</sup>. Este benchmark se ejecuta una vez al mes cuando se publica una nueva versión para evaluar su rendimiento <sup>[[20]](#page-12-31)</sup> e identificar cambios en el código que puedan haberlo degradado: los benchmarks individuales incluyen: 1. ClickBench (descrito antes), 2. 15 consultas de MgBench <sup>[[21]](#page-12-32)</sup>, 3. 13 consultas sobre una tabla de hechos desnormalizada de Star Schema Benchmark <sup>[[57]](#page-13-26)</sup> con 600 millones de filas. 4. 4 consultas sobre [NYC Taxi Rides](https://clickhou.se/nyc-taxi-rides-benchmark) con 3,4 mil millones de filas <sup>[[70]](#page-13-27)</sup>.
@@ -347,7 +347,7 @@ La [Figura 11](#page-10-5) muestra la evolución de los tiempos de ejecución de
 <a id="page-10-5" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 11: Tiempos de ejecución relativos con caché caliente de VersionsBench 2018-2024.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.png" alt="Figura 11: Tiempos de ejecución relativos con caché caliente de VersionsBench 2018-2024." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.webp" alt="Figura 11: Tiempos de ejecución relativos con caché caliente de VersionsBench 2018-2024." />
 </Frame>
 
 <div id="6-2-2-normalized-tables">
@@ -359,7 +359,7 @@ En el almacenamiento de datos clásico, los datos suelen modelarse mediante esqu
 <a id="page-10-6" style={{display:"block",scrollMarginTop:"80px"}} />
 
 <Frame caption="Figura 12: Tiempos de ejecución en caliente (en segundos) de consultas TPC-H.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.png" alt="Figura 12: Tiempos de ejecución en caliente (en segundos) de consultas TPC-H." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.webp" alt="Figura 12: Tiempos de ejecución en caliente (en segundos) de consultas TPC-H." />
 </Frame>
 
 <div id="7-related-work">

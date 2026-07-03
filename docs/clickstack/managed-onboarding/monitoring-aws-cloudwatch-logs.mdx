@@ -263,11 +263,11 @@ docker compose logs -f otel-collector
 
 Open your service in the [ClickHouse Cloud console](https://console.clickhouse.cloud) and select **ClickStack** from the left menu.
 
-<Image img="/images/use-cases/observability/clickstack-cloud-v2.png" size="lg" alt="Launch ClickStack" border/>
+<Image img="/images/use-cases/observability/clickstack-cloud-v2.webp" size="lg" alt="Launch ClickStack" border/>
 
 In the **Search** view, switch the source to `Logs` and set the time range to **Last 15 minutes**. CloudWatch events should appear within a couple of poll intervals.
 
-<Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.png" size="lg" alt="ClickStack Search view with CloudWatch logs"/>
+<Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.webp" size="lg" alt="ClickStack Search view with CloudWatch logs"/>
 
 Each event carries the source group and stream as resource attributes:
 
@@ -278,11 +278,11 @@ Each event carries the source group and stream as resource attributes:
 
 Modify the search to `Timestamp, SeverityText as level, ResourceAttributes['aws.region'], ResourceAttributes['cloudwatch.log.group.name'], ResourceAttributes['cloudwatch.log.stream'], Body` to include these attributes:
 
-<Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.png" size="lg" alt="ClickStack Search view with CloudWatch logs and attributes"/>
+<Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.webp" size="lg" alt="ClickStack Search view with CloudWatch logs and attributes"/>
 
 Select a log entry to inspect is metadata:
 
-<Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.png" size="lg" alt="CloudWatch attributes in the log detail view"/>
+<Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.webp" size="lg" alt="CloudWatch attributes in the log detail view"/>
 
 If nothing shows up:
 
@@ -298,11 +298,11 @@ A pre-built dashboard with log volume, severity breakdown, and error distributio
 
 <TrackedLink href={'/examples/cloudwatch-logs-dashboard.json'} download="cloudwatch-logs-dashboard.json" eventName="docs.cloudwatch_logs_monitoring.dashboard_download">Download `cloudwatch-logs-dashboard.json`</TrackedLink>, then in the ClickStack UI navigate to **Dashboards**, click **Import**.
 
-<Image img="/images/clickstack/clickstack-import-dashboard.png" size="lg" alt="Import dashboard button"/>
+<Image img="/images/clickstack/clickstack-import-dashboard.webp" size="lg" alt="Import dashboard button"/>
 
 Upload the JSON file and click **Finish Import**.
 
-<Image img="/images/clickstack/cloudwatch/finish-clickstack-import.png" size="lg" alt="Finish import dialog"/>
+<Image img="/images/clickstack/cloudwatch/finish-clickstack-import.webp" size="lg" alt="Finish import dialog"/>
 </Step>
 <Step>
 ## Further reading {#further-reading}

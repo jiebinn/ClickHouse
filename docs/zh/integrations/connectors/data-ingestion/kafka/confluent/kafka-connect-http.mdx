@@ -69,7 +69,7 @@ ORDER BY tuple()
 
 创建一个 Kafka topic 和一个 HTTP Sink 连接器实例：
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.png" size="sm" alt="展示如何创建 HTTP Sink 连接器的 Confluent Cloud 界面" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.webp" size="sm" alt="展示如何创建 HTTP Sink 连接器的 Confluent Cloud 界面" border />
 
 <br />
 
@@ -86,7 +86,7 @@ ORDER BY tuple()
   这个 HTTP Url 很容易出错。请确保转义准确无误，以避免问题。
 </Note>
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.png" size="lg" alt="展示 HTTP Sink 连接器身份验证设置的 Confluent Cloud 界面" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.webp" size="lg" alt="展示 HTTP Sink 连接器身份验证设置的 Confluent Cloud 界面" border />
 
 <br />
 
@@ -100,7 +100,7 @@ ORDER BY tuple()
     * `Retry on HTTP codes` - 400-500，但应按需调整；例如，如果你在 ClickHouse 前面使用了 HTTP proxy，这个设置可能需要变更。
     * `Maximum Reties` - 默认值 (10) 比较合适，但也可根据需要调整，以获得更稳健的重试行为。
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.png" size="sm" alt="展示 HTTP Sink 连接器高级配置选项的 Confluent Cloud 界面" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.webp" size="sm" alt="展示 HTTP Sink 连接器高级配置选项的 Confluent Cloud 界面" border />
 
 <div id="5-testing-the-connectivity">
   #### 5. 测试连通性
@@ -108,7 +108,7 @@ ORDER BY tuple()
 
 在您的 HTTP Sink 配置的 topic 中创建一条消息
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.png" size="md" alt="Confluent Cloud 界面，展示如何在 Kafka topic 中创建测试消息" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.webp" size="md" alt="Confluent Cloud 界面，展示如何在 Kafka topic 中创建测试消息" border />
 
 <br />
 

@@ -45,7 +45,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
 
     Нажмите переключатель рядом с `Enable SAML single sign-on`. Оставьте этот экран открытым: в процессе настройки вам нужно будет несколько раз к нему возвращаться.
 
-    <Image img="/images/cloud/security/saml-self-serve-1.png" size="lg" alt="Начало настройки SAML" force />
+    <Image img="/images/cloud/security/saml-self-serve-1.webp" size="lg" alt="Начало настройки SAML" force />
   </Step>
 
   <Step>
@@ -62,7 +62,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
       ClickHouse не поддерживает вход, инициированный провайдером идентификации. Чтобы упростить пользователям доступ к ClickHouse Cloud, создайте для них закладку, используя URL для входа в следующем формате: `https://console.clickhouse.cloud/?connection={orgId}`, где `{orgID}` — идентификатор вашей организации на странице сведений об организации.
     </Tip>
 
-    <Image img="/images/cloud/security/saml-self-serve-2.png" size="lg" alt="Создание приложения провайдера идентификации" force />
+    <Image img="/images/cloud/security/saml-self-serve-2.webp" size="lg" alt="Создание приложения провайдера идентификации" force />
   </Step>
 
   <Step>
@@ -70,7 +70,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
 
     Получите `Metadata URL` у своего SAML-провайдера. Вернитесь в ClickHouse Cloud, нажмите `Next: Provide metadata URL` и вставьте URL в текстовое поле.
 
-    <Image img="/images/cloud/security/saml-self-serve-3.png" size="lg" alt="Добавьте URL метаданных" force />
+    <Image img="/images/cloud/security/saml-self-serve-3.webp" size="lg" alt="Добавьте URL метаданных" force />
   </Step>
 
   <Step>
@@ -78,7 +78,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
 
     Нажмите `Next: Verify your domains`. Введите свой домен в текстовое поле и нажмите `Check domain`. Система сгенерирует случайный код подтверждения, который нужно добавить в TXT-запись у вашего DNS-провайдера.
 
-    <Image img="/images/cloud/security/saml-self-serve-4.png" size="lg" alt="Добавьте домен для подтверждения" force />
+    <Image img="/images/cloud/security/saml-self-serve-4.webp" size="lg" alt="Добавьте домен для подтверждения" force />
   </Step>
 
   <Step>
@@ -90,7 +90,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
       Обновление и подтверждение DNS-записи может занять несколько минут. Вы можете покинуть страницу настройки и вернуться позже, чтобы завершить процесс, не начиная его заново.
     </Note>
 
-    <Image img="/images/cloud/security/saml-self-serve-5.png" size="lg" alt="Подтвердите свой домен" force />
+    <Image img="/images/cloud/security/saml-self-serve-5.webp" size="lg" alt="Подтвердите свой домен" force />
   </Step>
 
   <Step>
@@ -217,7 +217,7 @@ ClickHouse Cloud поддерживает единый вход (SSO) через
 <Accordion title="Создание веб-приложения Google">
   1. Перейдите в консоль администратора Google (admin.google.com).
 
-  <Image img="/images/cloud/security/saml-google-app.png" size="md" alt="Приложение Google SAML" force />
+  <Image img="/images/cloud/security/saml-google-app.webp" size="md" alt="Приложение Google SAML" force />
 
   2. Нажмите **Apps**, затем слева выберите **Web and mobile apps**.
 
@@ -273,7 +273,7 @@ Azure (Microsoft) SAML также может называться Azure Active D
 
   5. Введите имя, выберите **Integrate any other application you don&#39;t find in the gallery (Non-gallery)**, затем нажмите **Create**.
 
-     <Image img="/images/cloud/security/saml-azure-app.png" size="md" alt="Приложение Azure не из галереи" force />
+     <Image img="/images/cloud/security/saml-azure-app.webp" size="md" alt="Приложение Azure не из галереи" force />
 
   6. Слева нажмите **Users and groups** и назначьте пользователей.
 
@@ -299,7 +299,7 @@ Azure (Microsoft) SAML также может называться Azure Active D
       | (A) email                            | Basic                   | user.mail        |
       | (U) /identity/claims/name            | Omitted                 | user.mail        |
 
-      <Image img="/images/cloud/security/saml-azure-claims.png" size="md" alt="Атрибуты и утверждения" force />
+      <Image img="/images/cloud/security/saml-azure-claims.webp" size="md" alt="Атрибуты и утверждения" force />
 
   11. Скопируйте metadata URL и вернитесь к разделу [Добавьте metadata URL в конфигурацию SAML](#add-metadata-url), чтобы продолжить процесс.
 </Accordion>

@@ -27,7 +27,7 @@ We conducted comprehensive performance testing using `pgbench`, the standard Pos
 All performance tests were conducted using a client VM with the same compute capacity, collocated in the same region and availability zone as the PostgreSQL database to ensure fair comparison.
 
 ### Test 1: IO Intensive - Read+Write (500 GB dataset) {#test1}
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="IO Intensive Read+Write benchmark results" size="md" border/>
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="IO Intensive Read+Write benchmark results" size="md" border/>
 
 **Performance improvement over RDS (16k IOPS):**
 - **326% higher TPS** (4.3x faster)
@@ -61,7 +61,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
 ```
 
 ### Test 2: IO Intensive - Read-Only (500 GB dataset) {#test2}
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="IO Intensive Read-Only benchmark results" size="md" border/>
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="IO Intensive Read-Only benchmark results" size="md" border/>
 
 **Performance improvement over RDS (16k IOPS):**
 - **802% higher TPS** (9.0x faster)
@@ -92,7 +92,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
 ```
 
 ### Test 3: CPU Intensive (data fits in memory) {#test3}
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="CPU Intensive benchmark results" size="md" border/>
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="CPU Intensive benchmark results" size="md" border/>
 
 **Performance improvement:**
 - **12.3% higher TPS** than RDS PostgreSQL

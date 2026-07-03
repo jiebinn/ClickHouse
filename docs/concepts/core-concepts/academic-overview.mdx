@@ -35,13 +35,13 @@ ClickHouse is designed to address five key challenges of modern analytical data 
 
 <a id="page-1-0" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 1: ClickHouse timeline.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.png" alt="Figure 1: ClickHouse timeline." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_1_Figure_0.webp" alt="Figure 1: ClickHouse timeline." />
 </Frame>
 
 ## 2 ARCHITECTURE {#2-architecture}
 <a id="page-2-0" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 2: The high-level architecture of the ClickHouse database engine.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.png" alt="Figure 2: The high-level architecture of the ClickHouse database engine." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_0.webp" alt="Figure 2: The high-level architecture of the ClickHouse database engine." />
 </Frame>
 
 As shown by [Figure 2,](#page-2-0) the ClickHouse engine is split into three main layers: the query processing layer (described in Section [4)](#page-6-0), the storage layer (Section [3)](#page-1-1), and the integration layer (Section [5)](#page-9-0). Besides these, an access layer manages user sessions and communication with applications via different protocols. There are orthogonal components for threading, caching, role-based access control, backups, and continuous monitoring. ClickHouse is built in C++ as a single, statically-linked binary without dependencies.
@@ -68,7 +68,7 @@ Rows can be inserted in two modes: In synchronous insert mode, each INSERT state
 
 <a id="page-2-1" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 3: Inserts and merges for MergeTree\*-engine tables.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.png" alt="Figure 3: Inserts and merges for MergeTree*-engine tables." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_2_Figure_5.webp" alt="Figure 3: Inserts and merges for MergeTree*-engine tables." />
 </Frame>
 
 [Figure 3](#page-2-1) illustrates four synchronous and two asynchronous inserts into a MergeTree*-engine table. Two merges reduced the number of active parts from initially fve to two.
@@ -90,7 +90,7 @@ First, users can define a **primary key index** for a table. The primary key col
 
 <a id="page-3-1" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 4: Evaluating filters with a primary key index.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.png" alt="Figure 4: Evaluating filters with a primary key index." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_3_Figure_7.webp" alt="Figure 4: Evaluating filters with a primary key index." />
 </Frame>
 
 Second, users can create **table projections**, i.e., alternative versions of a table that contain the same rows sorted by a different primary key <sup>[\[71\]](#page-13-13)</sup>. Projections allow to speed up queries that filter on columns different than the main table's primary key at the cost of an increased overhead for inserts, merges, and space consumption. By default, projections are populated lazily only from parts newly inserted into the main table but not from existing parts unless the user materializes the projection in full. The query optimizer chooses between reading from the main table or a projection based on estimated I/O costs. If no projection exists for a part, query execution falls back to the corresponding main table part.
@@ -108,7 +108,7 @@ Business intelligence and observability use cases often need to handle data gene
 
 <a id="page-4-1" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 5: Aggregating merges in materialized views.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.png" alt="Figure 5: Aggregating merges in materialized views." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_4_Figure_6.webp" alt="Figure 5: Aggregating merges in materialized views." />
 </Frame>
 
 **TTL (time-to-live) merges** provide aging for historical data. Unlike deleting and aggregating merges, TTL merges process only one part at a time. TTL merges are defined in terms of rules with triggers and actions. A trigger is an expression computing a timestamp for every row, which is compared against the time at which the TTL merge runs. While this allows users to control actions at row granularity, we found it sufficient to check whether all rows satisfy a given condition and run the action on the entire part. Possible actions include 1. move the part to another volume (e.g. cheaper and slower storage), 2. re-compress the part (e.g. with a more heavy-weight codec), 3. delete the part, and 4. roll-up, i.e. aggregate the rows using a grouping key and aggregate functions.
@@ -145,7 +145,7 @@ As an example, [Figure 6](#page-5-3) shows an initially empty replicated table i
 
 <a id="page-5-3" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 6: Replication in a cluster of three nodes.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.png" alt="Figure 6: Replication in a cluster of three nodes." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_5_Figure_8.webp" alt="Figure 6: Replication in a cluster of three nodes." />
 </Frame>
 
 Three optimizations to speed up synchronization exist: First, new nodes added to the cluster do replay the replication log from scratch, instead they simply copy the state of the node which wrote the last replication log entry. Second, merges are replayed by repeating them locally or by fetching the result part from another node. The exact behavior is configurable and allows to balance CPU consumption and network I/O. For example, cross-data-center replication typically prefers local merges to minimize operating costs. Third, nodes replay mutually independent replication log entries in parallel. This includes, for example, fetches of new parts inserted consecutively into the same table, or operations on different tables.
@@ -158,7 +158,7 @@ In practice, most of ClickHouse's write-heavy decision making use cases even tol
 ## <a id="page-6-0" style={{display:"block",scrollMarginTop:"80px"}}></a>4 QUERY PROCESSING LAYER {#4-query-processing-layer}
 <a id="page-6-1" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 7: Parallelization across SIMD units, cores and nodes.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.png" alt="Figure 7: Parallelization across SIMD units, cores and nodes." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_6_Figure_0.webp" alt="Figure 7: Parallelization across SIMD units, cores and nodes." />
 </Frame>
 
 As illustrated by [Figure 7,](#page-6-1) ClickHouse parallelizes queries at the level of data elements, data chunks, and table shards. Multiple data elements can be processed within operators at once using SIMD instructions. On a single node, the query engine executes operators simultaneously in multiple threads. ClickHouse uses the same vectorization model as MonetDB/X100 <sup>[\[11\]](#page-12-0)</sup>, i.e. operators produce, pass, and consume multiple rows (data chunks) instead of single rows to minimize the overhead of virtual function calls. If a source table is split into disjoint table shards, multiple nodes can scan the shards simultaneously. As a result, all hardware resources are fully utilized, and query processing can be scaled horizontally by adding nodes and vertically by adding cores.
@@ -171,7 +171,7 @@ Passing multiple rows between operators creates an opportunity for vectorization
 ### 4.2 Multi-Core Parallelization {#4-2-multi-core-parallelization}
 <a id="page-7-1" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 8: A physical operator plan with three lanes.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.png" alt="Figure 8: A physical operator plan with three lanes." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_7_Figure_1.webp" alt="Figure 8: A physical operator plan with three lanes." />
 </Frame>
 
 ClickHouse follows the conventional approach <sup>[\[31\]](#page-12-13)</sup> of transforming SQL queries into a directed graph of physical plan operators. The input of the operator plan is represented by special source operators that read data in the native or any of the supported 3rd-party formats (see Section [5)](#page-9-0). Likewise, a special sink operator converts the result into the desired output format. The physical operator plan is unfolded at query compilation time into independent execution lanes based on a configurable maximum number of worker threads (by default, the number of cores) and the source table size. Lanes decompose the data to be processed by parallel operators into non-overlapping ranges. To maximize the opportunity for parallel processing, lanes are merged as late as possible.
@@ -219,7 +219,7 @@ Since joins are among the most expensive database operations, it is important to
 
 <a id="page-8-3" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 9: Parallel hash join with three hash table partitions.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.png" alt="Figure 9: Parallel hash join with three hash table partitions." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_8_Figure_7.webp" alt="Figure 9: Parallel hash join with three hash table partitions." />
 </Frame>
 
 ### <a id="page-9-1" style={{display:"block",scrollMarginTop:"80px"}}></a>4.5 Workload Isolation {#4-5-workload-isolation}
@@ -240,7 +240,7 @@ External Connectivity. ClickHouse provides [50+](https://clickhou.se/query-integ
 
 <a id="bonus-figure"></a>
 <Frame caption="Bonus Figure: Interoperability options of ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.png" alt="Bonus Figure: Interoperability options of ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_14.webp" alt="Bonus Figure: Interoperability options of ClickBench." />
 </Frame>
 
 Temporary access with Integration **Table Functions**. Table functions can be invoked in the FROM clause of SELECT queries to read remote data for exploratory ad-hoc queries. Alternatively, they can be used to write data to remote stores using INSERT INTO TABLE FUNCTION statements.
@@ -281,7 +281,7 @@ Filter and aggregation queries on denormalized fact tables historically represen
 
 <a id="page-10-0" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 10: Relative cold and hot runtimes of ClickBench.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.png" alt="Figure 10: Relative cold and hot runtimes of ClickBench." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_0.webp" alt="Figure 10: Relative cold and hot runtimes of ClickBench." />
 </Frame>
 
 To track the performance of SELECTs in more diverse workloads over time, we [use](https://clickhou.se/performance-over-years) a combination of four benchmarks called VersionsBench <sup>[\[19\]](#page-12-30)</sup>. This benchmark is executed once per month when a new release is published to assess its performance <sup>[\[20\]](#page-12-31)</sup> and identify code changes that potentially degraded performance: Individual benchmarks include: 1. ClickBench (described above), 2. 15 MgBench <sup>[\[21\]](#page-12-32)</sup> queries, 3. 13 queries against a denormalized Star Schema Benchmark <sup>[\[57\]](#page-13-26)</sup> fact table with 600 million rows. 4. 4 queries against [NYC Taxi Rides](https://clickhou.se/nyc-taxi-rides-benchmark) with 3.4 billion rows <sup>[\[70\]](#page-13-27)</sup>.
@@ -290,7 +290,7 @@ To track the performance of SELECTs in more diverse workloads over time, we [use
 
 <a id="page-10-5" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 11: Relative hot runtimes of VersionsBench 2018-2024.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.png" alt="Figure 11: Relative hot runtimes of VersionsBench 2018-2024." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_12.webp" alt="Figure 11: Relative hot runtimes of VersionsBench 2018-2024." />
 </Frame>
 
 #### 6.2.2 Normalized tables {#6-2-2-normalized-tables}
@@ -298,7 +298,7 @@ In classical warehousing, data is often modeled using star or snowfake schemas. 
 
 <a id="page-10-6" style={{display:"block",scrollMarginTop:"80px"}}></a>
 <Frame caption="Figure 12: Hot runtimes (in seconds) for TPC-H queries.">
-  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.png" alt="Figure 12: Hot runtimes (in seconds) for TPC-H queries." />
+  <img src="/images/managing-data/core-concepts/_vldb2024_10_Figure_13.webp" alt="Figure 12: Hot runtimes (in seconds) for TPC-H queries." />
 </Frame>
 
 ## 7 RELATED WORK {#7-related-work}

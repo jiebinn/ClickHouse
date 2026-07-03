@@ -27,7 +27,7 @@ Esta guía ofrece instrucciones paso a paso para migrar su base de datos Postgre
 
 Para seguir estos pasos, usaremos una base de datos Postgres de RDS de ejemplo como base de datos de origen. Algo así:
 
-<Image img="/images/managed-postgres/pg_dump_restore/source-setup.png" alt="Configuración de la base de datos PostgreSQL de origen" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/source-setup.webp" alt="Configuración de la base de datos PostgreSQL de origen" size="xl" border />
 
 Esto es lo que tenemos:
 
@@ -62,7 +62,7 @@ Aquí:
 
 Esto es lo que verás al ejecutar este comando:
 
-<Image img="/images/managed-postgres/pg_dump_restore/dump-command.png" alt="Ejecución del comando pg_dump" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/dump-command.webp" alt="Ejecución del comando pg_dump" size="xl" border />
 
 <div id="migration-pgdump-pg-restore-restore">
   ## Migrar el dump a ClickHouse Managed Postgres
@@ -76,7 +76,7 @@ Ahora que tenemos el dump, podemos restaurarlo en nuestra instancia de ClickHous
 
 Primero, asegúrate de tener ya creada una instancia de Managed Postgres, preferiblemente en la misma región que el origen. Puedes seguir la guía rápida [aquí](/es/products/managed-postgres/quickstart#create-postgres-database). Esto es lo que vamos a aprovisionar para esta guía:
 
-<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.png" alt="Crear una instancia de ClickHouse Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.webp" alt="Crear una instancia de ClickHouse Managed Postgres" size="md" border />
 
 <div id="migration-pgdump-pg-restore-restore-dump">
   ### Restaurar el dump
@@ -100,7 +100,7 @@ Aquí también hay un par de opciones que conviene tener en cuenta:
 
 En nuestro caso, se ve así:
 
-<Image img="/images/managed-postgres/pg_dump_restore/restore-command.png" alt="Ejecución del comando pg_restore" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/restore-command.webp" alt="Ejecución del comando pg_restore" size="xl" border />
 
 <div id="migration-pgdump-pg-restore-verify">
   ## Verifica la migración
@@ -109,7 +109,7 @@ En nuestro caso, se ve así:
 Una vez completado el proceso de restauración, puedes conectarte a tu instancia de Managed Postgres y verificar que todos tus datos y objetos se hayan migrado correctamente. Puedes usar cualquier cliente de PostgreSQL para conectarte y ejecutar consultas.
 Así es como se ve nuestra configuración de Managed Postgres después de la migración:
 
-<Image img="/images/managed-postgres/pg_dump_restore/target-setup.png" alt="Configuración de la base de datos de destino de Managed Postgres" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/target-setup.webp" alt="Configuración de la base de datos de destino de Managed Postgres" size="xl" border />
 
 Vemos que todas nuestras tablas, índices, vistas y secuencias están intactas, y que los recuentos de datos coinciden.
 

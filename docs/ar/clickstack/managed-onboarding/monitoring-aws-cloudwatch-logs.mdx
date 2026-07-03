@@ -267,11 +267,11 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
 
     افتح خدمتك في [وحدة تحكم ClickHouse Cloud](https://console.clickhouse.cloud) واختر **ClickStack** من القائمة اليمنى.
 
-    <Image img="/images/use-cases/observability/clickstack-cloud-v2.png" size="lg" alt="تشغيل ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-cloud-v2.webp" size="lg" alt="تشغيل ClickStack" border />
 
     في عرض **Search**، غيّر المصدر إلى `Logs` واضبط النطاق الزمني على **آخر 15 دقيقة**. من المفترض أن تظهر أحداث CloudWatch خلال بضع فترات poll.
 
-    <Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.png" size="lg" alt="عرض Search في ClickStack مع سجلات CloudWatch" />
+    <Image img="/images/clickstack/cloudwatch/log-search-view-clickstack.webp" size="lg" alt="عرض Search في ClickStack مع سجلات CloudWatch" />
 
     يتضمن كل حدث مجموعة السجل وstream المصدر ضمن resource attributes:
 
@@ -282,11 +282,11 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
 
     عدّل البحث إلى `Timestamp, SeverityText as level, ResourceAttributes['aws.region'], ResourceAttributes['cloudwatch.log.group.name'], ResourceAttributes['cloudwatch.log.stream'], Body` لتضمين هذه السمات:
 
-    <Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.png" size="lg" alt="عرض Search في ClickStack مع سجلات CloudWatch والسمات" />
+    <Image img="/images/clickstack/cloudwatch/log-search-attributes-clickstack.webp" size="lg" alt="عرض Search في ClickStack مع سجلات CloudWatch والسمات" />
 
     حدّد log entry لفحص بياناته الوصفية:
 
-    <Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.png" size="lg" alt="سمات CloudWatch في عرض تفاصيل السجل" />
+    <Image img="/images/clickstack/cloudwatch/error-log-column-values-clickstack.webp" size="lg" alt="سمات CloudWatch في عرض تفاصيل السجل" />
 
     إذا لم يظهر شيء:
 
@@ -303,11 +303,11 @@ import { TrackedLink } from "/snippets/ar/components/GalaxyTrackedLink/GalaxyTra
 
     <TrackedLink href={'/ar/examples/cloudwatch-logs-dashboard.json'} download="cloudwatch-logs-dashboard.json" eventName="docs.cloudwatch_logs_monitoring.dashboard_download">نزّل `cloudwatch-logs-dashboard.json`</TrackedLink>، ثم انتقل في ClickStack UI إلى **Dashboards** وانقر على **Import**.
 
-    <Image img="/images/clickstack/clickstack-import-dashboard.png" size="lg" alt="زر استيراد لوحة المعلومات" />
+    <Image img="/images/clickstack/clickstack-import-dashboard.webp" size="lg" alt="زر استيراد لوحة المعلومات" />
 
     ارفَع ملف JSON ثم انقر على **Finish Import**.
 
-    <Image img="/images/clickstack/cloudwatch/finish-clickstack-import.png" size="lg" alt="مربع حوار إتمام الاستيراد" />
+    <Image img="/images/clickstack/cloudwatch/finish-clickstack-import.webp" size="lg" alt="مربع حوار إتمام الاستيراد" />
   </Step>
 
   <Step>

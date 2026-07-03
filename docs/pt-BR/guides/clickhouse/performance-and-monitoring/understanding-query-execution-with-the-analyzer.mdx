@@ -29,7 +29,7 @@ INSERT INTO session_events SELECT * FROM generateRandom('clientId UUID,
 
 Agora que temos alguns dados no ClickHouse, queremos executar algumas consultas e entender como elas são executadas. A execução de uma consulta é dividida em várias etapas. Cada etapa da execução da consulta pode ser analisada e ter problemas investigados usando a consulta `EXPLAIN` correspondente. Essas etapas estão resumidas no gráfico abaixo:
 
-<Image img="/images/guides/developer/analyzer1.png" alt="Etapas da consulta EXPLAIN" size="md" />
+<Image img="/images/guides/developer/analyzer1.webp" alt="Etapas da consulta EXPLAIN" size="md" />
 
 Vamos ver cada elemento em ação durante a execução da consulta. Vamos usar algumas consultas e depois examiná-las com a instrução `EXPLAIN`.
 
@@ -64,7 +64,7 @@ EXPLAIN AST SELECT min(timestamp), max(timestamp) FROM session_events;
 
 A saída é uma Árvore Sintática Abstrata que pode ser visualizada como mostrado abaixo:
 
-<Image img="/images/guides/developer/analyzer2.png" alt="Saída da AST" size="md" />
+<Image img="/images/guides/developer/analyzer2.webp" alt="Saída da AST" size="md" />
 
 Cada nó tem filhos correspondentes, e a árvore como um todo representa a estrutura geral da sua consulta. Trata-se de uma estrutura lógica que ajuda no processamento de uma consulta. Do ponto de vista do usuário final (a menos que haja interesse na execução de consultas), ela não é tão útil; essa ferramenta é usada principalmente por desenvolvedores.
 
@@ -349,7 +349,7 @@ digraph
 
 Em seguida, você pode copiar essa saída e colá-la [aqui](https://dreampuf.github.io/GraphvizOnline) para gerar o seguinte grafo:
 
-<Image img="/images/guides/developer/analyzer3.png" alt="Saída do grafo" size="md" />
+<Image img="/images/guides/developer/analyzer3.webp" alt="Saída do grafo" size="md" />
 
 Um retângulo branco corresponde a um nó do pipeline, o retângulo cinza corresponde às etapas do plano de consulta, e o `x` seguido de um número corresponde à quantidade de entradas/saídas em uso. Caso não queira visualizá-los no formato compacto, você sempre pode adicionar `compact=0`:
 
@@ -389,7 +389,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer4.png" alt="Saída compacta do grafo" size="md" />
+<Image img="/images/guides/developer/analyzer4.webp" alt="Saída compacta do grafo" size="md" />
 
 Por que o ClickHouse não lê os dados da tabela usando várias threads? Vamos tentar adicionar mais dados à nossa tabela:
 
@@ -448,7 +448,7 @@ digraph
 }
 ```
 
-<Image img="/images/guides/developer/analyzer5.png" alt="Saída do grafo em paralelo" size="md" />
+<Image img="/images/guides/developer/analyzer5.webp" alt="Saída do grafo em paralelo" size="md" />
 
 Assim, o executor decidiu não paralelizar as operações porque o volume de dados não era grande o suficiente. Ao adicionar mais linhas, o executor passou a usar várias threads, como mostrado no grafo.
 

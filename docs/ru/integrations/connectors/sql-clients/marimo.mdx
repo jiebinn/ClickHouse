@@ -37,15 +37,15 @@ marimo edit clickhouse_demo.py
 
 Перейдите на панель источников данных в левой части редактора marimo и нажмите «Add database».
 
-<Image img="/images/integrations/sql-clients/marimo/panel-arrow.png" size="sm" border alt="Добавить новую базу данных" />
+<Image img="/images/integrations/sql-clients/marimo/panel-arrow.webp" size="sm" border alt="Добавить новую базу данных" />
 
 Затем вам будет предложено указать данные для подключения к базе данных.
 
-<Image img="/images/integrations/sql-clients/marimo/add-db-details.png" size="md" border alt="Укажите данные для подключения к базе данных" />
+<Image img="/images/integrations/sql-clients/marimo/add-db-details.webp" size="md" border alt="Укажите данные для подключения к базе данных" />
 
 После этого появится ячейка, которую можно запустить, чтобы установить соединение.
 
-<Image img="/images/integrations/sql-clients/marimo/run-cell.png" size="md" border alt="Запустите ячейку, чтобы подключиться к ClickHouse" />
+<Image img="/images/integrations/sql-clients/marimo/run-cell.webp" size="md" border alt="Запустите ячейку, чтобы подключиться к ClickHouse" />
 
 <div id="run-sql">
   ## 3. Выполните SQL-запрос
@@ -53,7 +53,7 @@ marimo edit clickhouse_demo.py
 
 После настройки подключения вы можете создать новую SQL-ячейку и выбрать движок ClickHouse.
 
-<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.png" size="md" border alt="Выберите SQL-движок" />
+<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.webp" size="md" border alt="Выберите SQL-движок" />
 
 В этом руководстве мы будем использовать датасет New York Taxi.
 
@@ -111,14 +111,14 @@ FROM gcs(
 SELECT * FROM trips LIMIT 1000;
 ```
 
-<Image img="/images/integrations/sql-clients/marimo/results.png" size="lg" border alt="Результаты в датафрейме" />
+<Image img="/images/integrations/sql-clients/marimo/results.webp" size="lg" border alt="Результаты в датафрейме" />
 
 Теперь вы можете просматривать результаты в датафрейме. Я хочу визуализировать самые дорогие поездки из заданной точки посадки. marimo предоставляет несколько компонентов интерфейса, которые помогут вам в этом. Я буду использовать выпадающий список для выбора места и Altair для построения диаграмм.
 
-<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.png" size="lg" border alt="Сочетание выпадающего списка, таблицы и диаграммы" />
+<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.webp" size="lg" border alt="Сочетание выпадающего списка, таблицы и диаграммы" />
 
 Реактивная модель выполнения marimo распространяется и на SQL-запросы, поэтому изменения в SQL автоматически запускают последующие вычисления для зависимых ячеек (или, при желании, помечают ячейки как устаревшие, если вычисления слишком затратны). Поэтому при обновлении запроса меняются и диаграмма, и таблица.
 
 Вы также можете переключиться в App View, чтобы получить более чистый интерфейс для изучения данных.
 
-<Image img="/images/integrations/sql-clients/marimo/run-app-view.png" size="md" border alt="Режим App View" />
+<Image img="/images/integrations/sql-clients/marimo/run-app-view.webp" size="md" border alt="Режим App View" />

@@ -45,7 +45,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
   <Step>
     ### 选择云提供商
 
-    <Image img="/images/cloud/reference/byoc-onboarding-1.png" size="lg" alt="BYOC choose CSP" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-1.webp" size="lg" alt="BYOC choose CSP" background="black" />
   </Step>
 
   <Step>
@@ -53,7 +53,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
 
     初始 BYOC 设置既可通过 [CloudFormation template (AWS)](https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/byoc.yaml)，也可通过 [Terraform module (GCP)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/gcp) 或 [Terraform module (Azure)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/azure) 完成。该步骤会创建一个高权限身份 (IAM 角色/服务账号/服务主体) ，使 ClickHouse Cloud 的 BYOC 控制器能够管理您的基础设施。
 
-    <Image img="/images/cloud/reference/byoc-onboarding-2.png" size="lg" alt="BYOC initialize account" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-2.webp" size="lg" alt="BYOC initialize account" background="black" />
 
     <Note>
       运行 ClickHouse 所需的存储桶、VPC/VNet、Kubernetes 集群和计算资源不包含在此初始设置中。它们将在下一步中进行预配。
@@ -84,7 +84,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
 
     * **Availability Zones**：如果您计划使用 VPC peering，使源账户与 BYOC 账户的可用区对齐，有助于降低跨可用区流量成本。例如，在 AWS 中，可用区后缀 (`a`、`b`、`c`) 在不同账户之间可能对应不同的物理可用区 ID。详情请参阅 [AWS 指南](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/use-consistent-availability-zones-in-vpcs-across-different-aws-accounts.html)。
 
-    <Image img="/images/cloud/reference/byoc-onboarding-3.png" size="lg" alt="BYOC set up infrastructure" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-3.webp" size="lg" alt="BYOC set up infrastructure" background="black" />
   </Step>
 </Steps>
 
@@ -94,7 +94,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
 
 在 BYOC 基础设施预配完成后，您就可以开始创建第一个 ClickHouse 服务。打开 ClickHouse Cloud 控制台，选择您的 BYOC 环境，并按照提示创建新服务。
 
-<Image img="/images/cloud/reference/byoc-new-service-1.png" size="md" alt="BYOC 创建新服务" />
+<Image img="/images/cloud/reference/byoc-new-service-1.webp" size="md" alt="BYOC 创建新服务" />
 
 在创建服务过程中，您需要配置以下选项：
 

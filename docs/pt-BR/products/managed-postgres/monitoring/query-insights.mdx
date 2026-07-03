@@ -64,7 +64,7 @@ tem um padrão familiar — taxa de acerto do buffer na faixa dos 90% mais altos
 acompanhando o tráfego da aplicação, taxa de erros estável ou zerada e latências
 percentis acompanhando umas às outras de perto.
 
-<Image img="/images/managed-postgres/monitoring/query-insights-overview.png" alt="Visão geral do Query Insights mostrando os seis cartões de estatísticas: consultas por segundo, percentis de latência da consulta, gráfico de rosca de detalhamento das operações, gráfico de área de linhas retornadas, gráfico de rosca da taxa de acerto do buffer em 95,2 por cento e gráfico de colunas de erros" size="lg" border />
+<Image img="/images/managed-postgres/monitoring/query-insights-overview.webp" alt="Visão geral do Query Insights mostrando os seis cartões de estatísticas: consultas por segundo, percentis de latência da consulta, gráfico de rosca de detalhamento das operações, gráfico de área de linhas retornadas, gráfico de rosca da taxa de acerto do buffer em 95,2 por cento e gráfico de colunas de erros" size="lg" border />
 
 <div id="slow-patterns">
   ## Padrões lentos
@@ -75,7 +75,7 @@ investigação começa. Há uma linha para cada padrão de consulta normalizado,
 com os valores literais removidos para que execuções da mesma instrução
 se consolidem na mesma linha.
 
-<Image img="/images/managed-postgres/monitoring/query-insights-patterns.png" alt="Tabela de padrões de consultas lentas mostrando uma linha por consulta normalizada, com colunas de Banco de dados, Usuário, Operação, Chamadas, Erros, Latência média, P95, Latência máxima, Tempo total de execução, Linhas retornadas e Acerto no cache" size="lg" border />
+<Image img="/images/managed-postgres/monitoring/query-insights-patterns.webp" alt="Tabela de padrões de consultas lentas mostrando uma linha por consulta normalizada, com colunas de Banco de dados, Usuário, Operação, Chamadas, Erros, Latência média, P95, Latência máxima, Tempo total de execução, Linhas retornadas e Acerto no cache" size="lg" border />
 
 <div id="sort">
   ### Ordene pelo que você suspeita
@@ -128,7 +128,7 @@ comando executado, não uma linha por padrão. Use-o quando quiser o fluxo bruto
 eventos em vez de um agregado, por exemplo para conferir se uma correção
 foi aplicada ou para encontrar o momento exato em que um erro ocorreu.
 
-<Image img="/images/managed-postgres/monitoring/query-insights-recent-queries.png" alt="Tabela de Consultas recentes com menus suspensos de filtro para Database, User, Operation e Application, e colunas para Time, Operation, Query, Duration, Rows, Database, User e Blks read" size="lg" border />
+<Image img="/images/managed-postgres/monitoring/query-insights-recent-queries.webp" alt="Tabela de Consultas recentes com menus suspensos de filtro para Database, User, Operation e Application, e colunas para Time, Operation, Query, Duration, Rows, Database, User e Blks read" size="lg" border />
 
 As colunas padrão são Time, Operation, Query, Duration, Rows,
 Database, User e Blks read. Abra o seletor de **Colunas** para
@@ -160,9 +160,9 @@ O painel lateral tem um layout único com rolagem e cinco seções:
 * **Execuções recentes** — as execuções individuais do mesmo padrão,
   com contadores por execução.
 
-<Image img="/images/managed-postgres/monitoring/query-insights-detail-aggregate.png" alt="Painel lateral de detalhes da consulta mostrando o bloco de código do Padrão de consulta e a grade de Uso agregado de recursos com treze cartões de estatísticas, incluindo total de chamadas, percentis de latência, tempo total de execução, linhas retornadas, taxa de acerto de cache, blocos lidos, blocos atendidos pelo cache, tempo de CPU, bytes de WAL e erros" size="md" border />
+<Image img="/images/managed-postgres/monitoring/query-insights-detail-aggregate.webp" alt="Painel lateral de detalhes da consulta mostrando o bloco de código do Padrão de consulta e a grade de Uso agregado de recursos com treze cartões de estatísticas, incluindo total de chamadas, percentis de latência, tempo total de execução, linhas retornadas, taxa de acerto de cache, blocos lidos, blocos atendidos pelo cache, tempo de CPU, bytes de WAL e erros" size="md" border />
 
-<Image img="/images/managed-postgres/monitoring/query-insights-detail-recent.png" alt="Continuação do painel lateral de detalhes da consulta, mostrando a seção Contexto da consulta com banco de dados, usuário, operação e aplicação, e um cartão de Execuções recentes com timestamp, status OK, função do servidor, ID do host e contadores por execução para duração, linhas, acerto de cache, CPU, blocos compartilhados lidos e blocos compartilhados atendidos pelo cache" size="md" border />
+<Image img="/images/managed-postgres/monitoring/query-insights-detail-recent.webp" alt="Continuação do painel lateral de detalhes da consulta, mostrando a seção Contexto da consulta com banco de dados, usuário, operação e aplicação, e um cartão de Execuções recentes com timestamp, status OK, função do servidor, ID do host e contadores por execução para duração, linhas, acerto de cache, CPU, blocos compartilhados lidos e blocos compartilhados atendidos pelo cache" size="md" border />
 
 <div id="counters">
   ### Contadores por execução

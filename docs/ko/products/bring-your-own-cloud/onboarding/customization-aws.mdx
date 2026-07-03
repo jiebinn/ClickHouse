@@ -24,9 +24,9 @@ ClickHouse Cloud가 새 VPC를 프로비저닝하는 대신 기존 VPC를 사용
     3. 각 서브넷이 ClickHouse 배포에 충분한 IP 주소를 제공할 수 있도록 최소 `/23` CIDR 범위(예: `10.0.0.0/23`)를 사용하는지 확인합니다.
     4. 각 서브넷에 `kubernetes.io/role/internal-elb=1` 및 `clickhouse-byoc="true"` 태그를 추가하여 로드 밸런서가 올바르게 구성되도록 합니다.
 
-    <Image img="/images/cloud/reference/byoc-subnet-1.png" size="lg" alt="BYOC VPC 서브넷" />
+    <Image img="/images/cloud/reference/byoc-subnet-1.webp" size="lg" alt="BYOC VPC 서브넷" />
 
-    <Image img="/images/cloud/reference/byoc-subnet-2.png" size="lg" alt="BYOC VPC 서브넷 태그" />
+    <Image img="/images/cloud/reference/byoc-subnet-2.webp" size="lg" alt="BYOC VPC 서브넷 태그" />
   </Step>
 
   <Step>
@@ -34,7 +34,7 @@ ClickHouse Cloud가 새 VPC를 프로비저닝하는 대신 기존 VPC를 사용
 
     VPC에 S3 Gateway Endpoint가 아직 구성되어 있지 않다면, VPC와 Amazon S3 간의 안전한 프라이빗 통신을 위해 이를 생성해야 합니다. 이 엔드포인트를 사용하면 ClickHouse 서비스가 퍼블릭 인터넷을 거치지 않고 S3에 액세스할 수 있습니다. 예시 구성은 아래 스크린샷을 참고하십시오.
 
-    <Image img="/images/cloud/reference/byoc-s3-endpoint.png" size="lg" alt="BYOC S3 Endpoint" />
+    <Image img="/images/cloud/reference/byoc-s3-endpoint.webp" size="lg" alt="BYOC S3 Endpoint" />
   </Step>
 
   <Step>
@@ -82,7 +82,7 @@ ClickHouse Cloud가 새 VPC를 프로비저닝하는 대신 기존 VPC를 사용
     4. 구성에 퍼블릭 로드 밸런서가 필요하면 선택적으로 **Public subnet IDs**를 입력합니다.
     5. **Set up Infrastructure**를 클릭하여 프로비저닝을 시작합니다.
 
-    <Image img="/images/cloud/reference/byoc-aws-existing-vpc-ui.png" size="lg" alt="Use existing VPC가 선택된 ClickHouse Cloud BYOC 설정 UI" />
+    <Image img="/images/cloud/reference/byoc-aws-existing-vpc-ui.webp" size="lg" alt="Use existing VPC가 선택된 ClickHouse Cloud BYOC 설정 UI" />
 
     <Note>
       새 리전 설정에는 최대 40분이 소요될 수 있습니다.

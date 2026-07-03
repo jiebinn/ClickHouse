@@ -56,7 +56,7 @@ GRANT SELECT ON system.* TO holistics_user;
 
     يمكنك العثور على هذه التفاصيل بالنقر على زر **Connect** في وحدة تحكم ClickHouse Cloud واختيار **HTTPS**.
 
-    <Image size="md" img="/images/integrations/data-visualization/holistics_01.png" alt="موضع زر Connect في وحدة تحكم ClickHouse Cloud" border />
+    <Image size="md" img="/images/integrations/data-visualization/holistics_01.webp" alt="موضع زر Connect في وحدة تحكم ClickHouse Cloud" border />
   </Step>
 
   <Step>
@@ -66,7 +66,7 @@ GRANT SELECT ON system.* TO holistics_user;
 
     1. **اتصال مباشر (موصى به):** اسمح بعناوين IP الخاصة بـ Holistics في جدار الحماية لديك أو في IP Access List الخاصة بـ ClickHouse Cloud. يمكنك العثور على قائمة عناوين IP في [دليل IP Whitelisting](https://docs.holistics.io/docs/connect/ip-whitelisting).
 
-       <Image size="md" img="/images/integrations/data-visualization/holistics_02.png" alt="مثال على السماح بعناوين IP في ClickHouse Cloud" border />
+       <Image size="md" img="/images/integrations/data-visualization/holistics_02.webp" alt="مثال على السماح بعناوين IP في ClickHouse Cloud" border />
 
     2. **نفق SSH عكسي:** إذا كانت قاعدة بياناتك موجودة في شبكة خاصة ‏(VPC) ولا يمكن إتاحتها على الإنترنت العام، فاستخدم [Reverse SSH Tunnel](https://docs.holistics.io/docs/connect/connect-tunnel).
   </Step>
@@ -76,11 +76,11 @@ GRANT SELECT ON system.* TO holistics_user;
 
     1. في Holistics، انتقل إلى **Settings → Data Sources**.
 
-       <Image size="md" img="/images/integrations/data-visualization/holistics_03.png" alt="الانتقال إلى Data Sources في إعدادات Holistics" border />
+       <Image size="md" img="/images/integrations/data-visualization/holistics_03.webp" alt="الانتقال إلى Data Sources في إعدادات Holistics" border />
 
     2. انقر على **New Data Source** ثم اختر **ClickHouse**.
 
-       <Image size="md" img="/images/integrations/data-visualization/holistics_04.png" alt="اختيار ClickHouse من قائمة مصادر البيانات الجديدة" border />
+       <Image size="md" img="/images/integrations/data-visualization/holistics_04.webp" alt="اختيار ClickHouse من قائمة مصادر البيانات الجديدة" border />
 
     3. املأ النموذج بالتفاصيل التي جمعتها في الخطوة 1.
 
@@ -91,11 +91,11 @@ GRANT SELECT ON system.* TO holistics_user;
        | **Require SSL**   | بدّل إلى **ON** إذا كنت تستخدم المنفذ 8443 (مطلوب لـ ClickHouse Cloud). |
        | **Database Name** | `default` (أو اسم DB الخاص بك)                                          |
 
-       <Image size="md" img="/images/integrations/data-visualization/holistics_05.png" alt="إدخال تفاصيل اتصال ClickHouse في Holistics" border />
+       <Image size="md" img="/images/integrations/data-visualization/holistics_05.webp" alt="إدخال تفاصيل اتصال ClickHouse في Holistics" border />
 
     4. انقر على **Test Connection**.
 
-       <Image size="md" img="/images/integrations/data-visualization/holistics_06.png" alt="نجاح اختبار اتصال ClickHouse في Holistics" border />
+       <Image size="md" img="/images/integrations/data-visualization/holistics_06.webp" alt="نجاح اختبار اتصال ClickHouse في Holistics" border />
 
        * **نجاح:** انقر على **Save**.
        * **فشل:** تحقق من اسم المستخدم/كلمة المرور، وتأكد من السماح [بعناوين IP الخاصة بـ Holistics](https://docs.holistics.io/docs/connect/ip-whitelisting).

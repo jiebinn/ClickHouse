@@ -127,7 +127,7 @@ FROM
 
 ClickHouse&#39;s [組み込み web UI](/ja/concepts/features/interfaces/http) (`/play` エンドポイントで利用可能) では、上記の物理プランをグラフィカルに可視化できます。この例では、可視化をコンパクトに保つために `max_threads` を `4` に設定し、4 本の並列処理レーンだけを表示しています。
 
-<Image img="/images/guides/best-practices/query-parallelism_05.png" alt="クエリパイプライン" />
+<Image img="/images/guides/best-practices/query-parallelism_05.webp" alt="クエリパイプライン" />
 
 注: 可視化は左から右に向かって読んでください。各行は 1 本の並列処理レーンを表しており、データブロックをブロック単位でストリーミングしながら、フィルタリング、集約、最終処理ステージなどの変換を適用します。この例では、`max_threads = 4` の設定に対応する 4 本の並列レーンを確認できます。
 

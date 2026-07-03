@@ -443,7 +443,7 @@ Query id: c7e11e7b-d970-4e35-936c-ecfc24e3b879
 
 最適化の候補を特定したら、それぞれが性能にどう影響するかをより正確に把握できるよう、1 つずつ実装することをお勧めします。以下は一般的な進め方を示した図です。
 
-<Image img="/images/guides/best-practices/query_optimization_diagram_1.png" size="lg" alt="最適化ワークフロー" />
+<Image img="/images/guides/best-practices/query_optimization_diagram_1.webp" size="lg" alt="最適化ワークフロー" />
 
 *最後に、外れ値には注意してください。ユーザーが場当たり的に高コストなクエリを試したり、別の理由でシステムに負荷がかかっていたりして、クエリの実行が遅くなることは珍しくありません。`normalized_query_hash` フィールドでグループ化すると、継続的に実行されている高コストなクエリを特定できます。そうしたクエリこそ、優先的に調査すべき対象である可能性が高いでしょう。*
 

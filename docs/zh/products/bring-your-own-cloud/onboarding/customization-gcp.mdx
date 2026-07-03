@@ -23,7 +23,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
     2. 在该私有子网中，至少分配 1 个供 GKE 集群 Pod (容器组) 使用的辅助 IPv4 范围。该辅助范围至少应为 `/23`，以便为 GKE 集群 Pod (容器组) 提供足够的 IP 地址。
     3. 在该子网上启用 **Private Google Access**。这样，GKE 节点无需外部 IP 地址即可访问 Google API 和服务。
 
-    <Image img="/images/cloud/reference/byoc-gcp-subnet.png" size="lg" alt="BYOC GCP 子网详情，显示主 IPv4 范围和辅助 IPv4 范围，且已启用 Private Google Access" />
+    <Image img="/images/cloud/reference/byoc-gcp-subnet.webp" size="lg" alt="BYOC GCP 子网详情，显示主 IPv4 范围和辅助 IPv4 范围，且已启用 Private Google Access" />
   </Step>
 
   <Step>
@@ -46,6 +46,6 @@ import { Image } from "/snippets/zh/components/Image.jsx";
     3. 输入您为 ClickHouse 分配的 **Subnet name**。
     4. 点击 **Set up Infrastructure** 开始预配。
 
-    <Image img="/images/cloud/reference/byoc-gcp-existing-vpc-ui.png" size="lg" alt="适用于 GCP 的 ClickHouse Cloud BYOC 设置界面，其中已选择 Use existing VPC" />
+    <Image img="/images/cloud/reference/byoc-gcp-existing-vpc-ui.webp" size="lg" alt="适用于 GCP 的 ClickHouse Cloud BYOC 设置界面，其中已选择 Use existing VPC" />
   </Step>
 </Steps>

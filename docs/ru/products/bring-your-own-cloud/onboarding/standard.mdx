@@ -45,7 +45,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
   <Step>
     ### Выберите облачного провайдера
 
-    <Image img="/images/cloud/reference/byoc-onboarding-1.png" size="lg" alt="BYOC choose CSP" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-1.webp" size="lg" alt="BYOC choose CSP" background="black" />
   </Step>
 
   <Step>
@@ -53,7 +53,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     Первичную настройку BYOC можно выполнить с помощью [CloudFormation template (AWS)](https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/byoc.yaml), [Terraform module (GCP)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/gcp) или [Terraform module (Azure)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/azure). При этом создается высокопривилегированная учетная запись (роль IAM/сервисная учетная запись/сервисный субъект), которая позволяет контроллерам BYOC из ClickHouse Cloud управлять вашей инфраструктурой.
 
-    <Image img="/images/cloud/reference/byoc-onboarding-2.png" size="lg" alt="BYOC initialize account" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-2.webp" size="lg" alt="BYOC initialize account" background="black" />
 
     <Note>
       Бакеты хранилища, VPC/VNet, кластер Kubernetes и вычислительные ресурсы, необходимые для запуска ClickHouse, не входят в эту первоначальную настройку. Они будут подготовлены на следующем шаге.
@@ -84,7 +84,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
     * **Зоны доступности**: Если вы планируете использовать пиринг VPC, согласование зон доступности между исходной учетной записью и учетной записью BYOC может помочь сократить затраты на межзонный трафик. Например, в AWS суффиксы зон доступности (`a`, `b`, `c`) могут обозначать разные идентификаторы физических зон в разных учетных записях. Подробнее см. в [руководстве AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/use-consistent-availability-zones-in-vpcs-across-different-aws-accounts.html).
 
-    <Image img="/images/cloud/reference/byoc-onboarding-3.png" size="lg" alt="BYOC set up infrastructure" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-3.webp" size="lg" alt="BYOC set up infrastructure" background="black" />
   </Step>
 </Steps>
 
@@ -94,7 +94,7 @@ import { Image } from "/snippets/ru/components/Image.jsx";
 
 После того как ваша BYOC-инфраструктура будет подготовлена, можно запускать первый сервис ClickHouse. Откройте консоль ClickHouse Cloud, выберите свою BYOC-среду и следуйте подсказкам, чтобы создать новый сервис.
 
-<Image img="/images/cloud/reference/byoc-new-service-1.png" size="md" alt="BYOC создание нового сервиса" />
+<Image img="/images/cloud/reference/byoc-new-service-1.webp" size="md" alt="BYOC создание нового сервиса" />
 
 При создании сервиса вы настроите следующие параметры:
 

@@ -37,15 +37,15 @@ marimo edit clickhouse_demo.py
 
 在 marimo 编辑器左侧的数据源面板中，点击“Add database”。
 
-<Image img="/images/integrations/sql-clients/marimo/panel-arrow.png" size="sm" border alt="添加新数据库" />
+<Image img="/images/integrations/sql-clients/marimo/panel-arrow.webp" size="sm" border alt="添加新数据库" />
 
 系统会提示你填写数据库信息。
 
-<Image img="/images/integrations/sql-clients/marimo/add-db-details.png" size="md" border alt="填写数据库信息" />
+<Image img="/images/integrations/sql-clients/marimo/add-db-details.webp" size="md" border alt="填写数据库信息" />
 
 随后，你会看到一个可运行的单元格，用于建立连接。
 
-<Image img="/images/integrations/sql-clients/marimo/run-cell.png" size="md" border alt="运行单元格以连接到 ClickHouse" />
+<Image img="/images/integrations/sql-clients/marimo/run-cell.webp" size="md" border alt="运行单元格以连接到 ClickHouse" />
 
 <div id="run-sql">
   ## 3. 运行 SQL
@@ -53,7 +53,7 @@ marimo edit clickhouse_demo.py
 
 设置好连接后，您可以新建一个 SQL 单元格，并选择 ClickHouse 引擎。
 
-<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.png" size="md" border alt="选择 SQL 引擎" />
+<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.webp" size="md" border alt="选择 SQL 引擎" />
 
 本指南将使用 New York Taxi 数据集。
 
@@ -111,14 +111,14 @@ FROM gcs(
 SELECT * FROM trips LIMIT 1000;
 ```
 
-<Image img="/images/integrations/sql-clients/marimo/results.png" size="lg" border alt="DataFrame 中的结果" />
+<Image img="/images/integrations/sql-clients/marimo/results.webp" size="lg" border alt="DataFrame 中的结果" />
 
 现在，你已经可以在 DataFrame 中查看结果了。接下来，我想将某个给定上车地点对应的最高费用下车点可视化。marimo 提供了多个 UI 组件来帮助你实现这一点。我会使用下拉菜单选择地点，并用 Altair 绘制图表。
 
-<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.png" size="lg" border alt="下拉菜单、表和图表的组合" />
+<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.webp" size="lg" border alt="下拉菜单、表和图表的组合" />
 
 marimo 的反应式执行模型也扩展到了 SQL 查询中，因此你对 SQL 的更改会自动触发依赖单元的后续计算 (对于开销较大的计算，也可以选择仅将单元标记为过时) 。因此，查询一更新，图表和表也会随之变化。
 
 你还可以切换到 App View，以获得一个更简洁的数据探索界面。
 
-<Image img="/images/integrations/sql-clients/marimo/run-app-view.png" size="md" border alt="运行 App View" />
+<Image img="/images/integrations/sql-clients/marimo/run-app-view.webp" size="md" border alt="运行 App View" />

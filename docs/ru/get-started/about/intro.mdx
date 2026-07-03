@@ -51,7 +51,7 @@ LIMIT 8;
 
 Вы можете [выполнить этот запрос в Песочнице ClickHouse](https://sql.clickhouse.com?query=U0VMRUNUIE1vYmlsZVBob25lTW9kZWwsIENPVU5UKCkgQVMgYyAKRlJPTSBtZXRyaWNhLmhpdHMgCldIRVJFIAogICAgICBSZWdpb25JRCA9IDIyOSAKICBBTkQgRXZlbnREYXRlID49ICcyMDEzLTA3LTAxJyAKICBBTkQgRXZlbnREYXRlIDw9ICcyMDEzLTA3LTMxJyAKICBBTkQgTW9iaWxlUGhvbmUgIT0gMCAKICBBTkQgTW9iaWxlUGhvbmVNb2RlbCBub3QgaW4gWycnLCAnaVBhZCddIApHUk9VUCBCWSBNb2JpbGVQaG9uZU1vZGVsCk9SREVSIEJZIGMgREVTQyAKTElNSVQgODs\&chart=eyJ0eXBlIjoicGllIiwiY29uZmlnIjp7InhheGlzIjoiTW9iaWxlUGhvbmVNb2RlbCIsInlheGlzIjoiYyJ9fQ\&run_query=true), который выбирает и фильтрует [всего несколько из более чем 100](https://sql.clickhouse.com/?query=U0VMRUNUIG5hbWUKRlJPTSBzeXN0ZW0uY29sdW1ucwpXSEVSRSBkYXRhYmFzZSA9ICdtZXRyaWNhJyBBTkQgdGFibGUgPSAnaGl0cyc7\&tab=results\&run_query=true) существующих столбцов, и возвращает результат за миллисекунды:
 
-<Image img="/images/column-oriented-example-query.png" alt="Пример запроса в столбцовой базе данных" size="lg" />
+<Image img="/images/column-oriented-example-query.webp" alt="Пример запроса в столбцовой базе данных" size="lg" />
 
 Как видно из раздела статистики на диаграмме выше, запрос обработал 100 миллионов строк за 92 миллисекунды — это чуть более 1 миллиарда строк в секунду или чуть менее 7 ГБ данных в секунду.
 

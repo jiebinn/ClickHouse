@@ -59,7 +59,7 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     2. اختر `ClickHouse`، ثم املأ الإعدادات بإدخال مضيف ClickHouse والمنفذ واسم المستخدم وكلمة المرور، ثم انقر على &quot;Test Connection&quot;.
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_1.png" size="lg" border alt="أضِف ClickHouse كوجهة" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_1.webp" size="lg" border alt="أضِف ClickHouse كوجهة" />
 
     3. انقر على &quot;Add DataSource&quot; في الأسفل، وستتم إضافة مثيل ClickHouse.
   </Step>
@@ -77,7 +77,7 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
 
     2. حدِّد `MySQL`، ثم املأ الإعدادات بإدخال مضيف MySQL والمنفذ واسم المستخدم وكلمة المرور، ثم انقر على &quot;Test Connection&quot;.
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_2.png" size="lg" border alt="إضافة MySQL كمصدر" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_2.webp" size="lg" border alt="إضافة MySQL كمصدر" />
 
     3. انقر على &quot;Add DataSource&quot; في الأسفل، وستتم إضافة مثيل MySQL.
   </Step>
@@ -88,19 +88,19 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
     1. في BladePipe، انقر على &quot;DataJob&quot; &gt; &quot;Create DataJob&quot;.
 
     2. حدِّد مثيلَي MySQL وClickHouse اللذين تمت إضافتهما، ثم انقر على &quot;Test Connection&quot; للتأكد من اتصال BladePipe بهما. بعد ذلك، حدِّد قواعد البيانات المطلوب نقلها.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_3.png" size="lg" border alt="حدد المصدر والوجهة" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_3.webp" size="lg" border alt="حدد المصدر والوجهة" />
 
     3. حدِّد &quot;Incremental&quot; كنوع DataJob، مع خيار &quot;Full Data&quot;.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_4.png" size="lg" border alt="حدد نوع المزامنة" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_4.webp" size="lg" border alt="حدد نوع المزامنة" />
 
     4. حدِّد الجداول المطلوب نسخها.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_5.png" size="lg" border alt="حدد الجداول" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_5.webp" size="lg" border alt="حدد الجداول" />
 
     5. حدِّد الأعمدة المطلوب نسخها.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_6.png" size="lg" border alt="حدد الأعمدة" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_6.webp" size="lg" border alt="حدد الأعمدة" />
 
     6. أكِّد إنشاء DataJob، وسيبدأ تشغيله تلقائيًا.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_8.png" size="lg" border alt="DataJob قيد التشغيل" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_8.webp" size="lg" border alt="DataJob قيد التشغيل" />
   </Step>
 
   <Step>
@@ -115,6 +115,6 @@ import PartnerBadge from "/snippets/ar/components/PartnerBadge/PartnerBadge.jsx"
     </Note>
 
     2. أنشئ <a href="https://doc.bladepipe.com/operation/job_manage/create_job/create_period_verification_correction_job" target="_blank">DataJob للتحقق</a>. بعد اكتمال DataJob للتحقق، راجع النتائج للتأكد من أن البيانات في ClickHouse مطابقة للبيانات في MySQL.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_9.png" size="lg" border alt="التحقق من البيانات" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_9.webp" size="lg" border alt="التحقق من البيانات" />
   </Step>
 </Steps>

@@ -45,7 +45,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
   <Step>
     ### اختر موفر خدمة سحابية
 
-    <Image img="/images/cloud/reference/byoc-onboarding-1.png" size="lg" alt="BYOC choose CSP" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-1.webp" size="lg" alt="BYOC choose CSP" background="black" />
   </Step>
 
   <Step>
@@ -53,7 +53,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     يمكن تنفيذ إعداد BYOC الأولي باستخدام [CloudFormation template (AWS)](https://s3.us-east-2.amazonaws.com/clickhouse-public-resources.clickhouse.cloud/cf-templates/byoc.yaml)، أو [Terraform module (GCP)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/gcp)، أو [Terraform module (Azure)](https://github.com/ClickHouse/terraform-byoc-onboarding/tree/main/modules/azure). يؤدي ذلك إلى إنشاء هوية عالية الامتيازات (IAM role/service account/service principal)، ما يتيح لوحدات التحكم الخاصة بـ BYOC من ClickHouse Cloud إدارة بنيتك التحتية.
 
-    <Image img="/images/cloud/reference/byoc-onboarding-2.png" size="lg" alt="BYOC initialize account" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-2.webp" size="lg" alt="BYOC initialize account" background="black" />
 
     <Note>
       لا يشمل هذا الإعداد الأولي حاويات التخزين، أو VPC/VNet، أو عنقود Kubernetes، أو موارد compute اللازمة لتشغيل ClickHouse. سيتم توفيرها في الخطوة التالية.
@@ -84,7 +84,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     * **Availability Zones**: إذا كنت تخطط لاستخدام VPC peering، فإن مواءمة Availability Zones بين الحساب المصدر وحساب BYOC قد تساعد في تقليل تكاليف حركة المرور بين مناطق التوافر. على سبيل المثال، في AWS، قد تشير لواحق Availability Zones (`a` و`b` و`c`) إلى معرّفات مناطق فعلية مختلفة عبر الحسابات. راجع [دليل AWS](https://docs.aws.amazon.com/prescriptive-guidance/latest/patterns/use-consistent-availability-zones-in-vpcs-across-different-aws-accounts.html) لمزيد من التفاصيل.
 
-    <Image img="/images/cloud/reference/byoc-onboarding-3.png" size="lg" alt="BYOC set up infrastructure" background="black" />
+    <Image img="/images/cloud/reference/byoc-onboarding-3.webp" size="lg" alt="BYOC set up infrastructure" background="black" />
   </Step>
 </Steps>
 
@@ -94,7 +94,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 بعد توفير البنية التحتية لـ BYOC، تصبح جاهزًا لإطلاق أول خدمة ClickHouse. افتح وحدة تحكم ClickHouse Cloud، وحدد بيئة BYOC الخاصة بك، ثم اتبع الإرشادات لإنشاء خدمة جديدة.
 
-<Image img="/images/cloud/reference/byoc-new-service-1.png" size="md" alt="BYOC إنشاء خدمة جديدة" />
+<Image img="/images/cloud/reference/byoc-new-service-1.webp" size="md" alt="BYOC إنشاء خدمة جديدة" />
 
 أثناء إنشاء الخدمة، ستُهيّئ الخيارات التالية:
 

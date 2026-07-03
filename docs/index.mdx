@@ -131,8 +131,8 @@ export const HighlightedClickHouse = () => {
     const assetBase = typeof window !== 'undefined' && window.location.pathname.startsWith('/docs') ? '/docs' : '';
     return (
         <span className="relative inline-block px-8 py-3 -ml-4">
-            <img src={`${assetBase}/images/highlight-lightmode.png`} className="block dark:hidden absolute top-0 right-0 bottom-0 left-[10px] w-full h-full object-fill pointer-events-none select-none" alt="" aria-hidden="true" />
-            <img src={`${assetBase}/images/highlight-darkmode.png`} className="hidden dark:block absolute top-0 right-0 bottom-0 left-[10px] w-full h-full object-fill pointer-events-none select-none" alt="" aria-hidden="true" />
+            <img src={`${assetBase}/images/highlight-lightmode.webp`} className="block dark:hidden absolute top-0 right-0 bottom-0 left-[10px] w-full h-full object-fill pointer-events-none select-none" alt="" aria-hidden="true" />
+            <img src={`${assetBase}/images/highlight-darkmode.webp`} className="hidden dark:block absolute top-0 right-0 bottom-0 left-[10px] w-full h-full object-fill pointer-events-none select-none" alt="" aria-hidden="true" />
             <span className="relative z-10 text-white dark:text-[#1c1c1c]">ClickHouse</span>
         </span>
     );

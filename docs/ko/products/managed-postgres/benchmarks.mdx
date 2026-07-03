@@ -36,7 +36,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
   ### 테스트 1: IO 집약적 - 읽기+쓰기 (500 GB 데이터셋)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="IO 집약적 읽기+쓰기 벤치마크 결과" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="IO 집약적 읽기+쓰기 벤치마크 결과" size="md" border />
 
 **RDS(16k IOPS) 대비 성능 개선:**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### 테스트 2: IO 집약적 - 읽기 전용 (500 GB 데이터셋)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="IO 집약적 읽기 전용 벤치마크 결과" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="IO 집약적 읽기 전용 벤치마크 결과" size="md" border />
 
 **RDS(16k IOPS) 대비 성능 향상:**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### 테스트 3: CPU 집약적(CPU Intensive) (데이터가 메모리에 모두 올라감)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="CPU 집약적 벤치마크 결과" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="CPU 집약적 벤치마크 결과" size="md" border />
 
 **성능 개선:**
 

@@ -46,15 +46,15 @@ ClickHouse BYOC в GCP поддерживает два варианта прив
     3. Нажмите &quot;Create connection&quot;.
     4. Заполните необходимые поля в соответствии с вашими требованиями. Ниже приведен снимок экрана создания пиринга в рамках одного проекта GCP.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.png" size="md" alt="BYOC Создание пирингового соединения" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.webp" size="md" alt="BYOC Создание пирингового соединения" border />
 
     Чтобы пиринг VPC в GCP работал, нужны 2 соединения между 2 сетями (то есть соединение от сети BYOC к существующей сети VPC и соединение от существующей сети VPC к сети BYOC). Поэтому аналогичным образом нужно создать еще 1 соединение в обратном направлении; ниже приведен снимок экрана создания второго пирингового соединения:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.png" size="md" alt="BYOC Подтверждение пирингового соединения" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.webp" size="md" alt="BYOC Подтверждение пирингового соединения" border />
 
     После создания обоих соединений статус этих 2 соединений должен измениться на &quot;Active&quot; после обновления страницы Google Cloud Console:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.png" size="lg" alt="BYOC Подтверждение пирингового соединения" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.webp" size="lg" alt="BYOC Подтверждение пирингового соединения" border />
 
     Теперь сервис ClickHouse должен быть доступен из VPC, связанной пирингом.
   </Step>
@@ -89,15 +89,15 @@ GCP PSC (Private Service Connect) обеспечивает безопасное 
 
     ClickHouse Support предоставит вам имя сервиса PSC. Его также можно получить в консоли ClickHouse Cloud: в разделе &quot;Organization&quot; -&gt; &quot;Infrastructure&quot; нажмите на имя инфраструктуры, чтобы просмотреть подробности.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.png" size="lg" alt="Конечная точка BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.webp" size="lg" alt="Конечная точка BYOC PSC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.png" size="lg" alt="Конечная точка BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.webp" size="lg" alt="Конечная точка BYOC PSC" border />
 
     Имя сервиса PSC также можно найти в консоли GCP Private Service Connect в разделе &quot;Published services&quot; (отфильтруйте по имени сервиса или найдите сервисы ClickHouse)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.png" size="lg" alt="Конечная точка BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.webp" size="lg" alt="Конечная точка BYOC PSC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.png" size="lg" alt="Конечная точка BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.webp" size="lg" alt="Конечная точка BYOC PSC" border />
   </Step>
 
   <Step>
@@ -115,13 +115,13 @@ GCP PSC (Private Service Connect) обеспечивает безопасное 
     * Нажмите &quot;Add Endpoint&quot; и немного подождите, пока конечная точка будет создана.
     * Статус конечной точки должен измениться на &quot;Accepted&quot;; если этого не произошло автоматически, обратитесь в ClickHouse Support.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.png" size="lg" alt="Создание конечной точки PSC BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.webp" size="lg" alt="Создание конечной точки PSC BYOC" border />
 
     2. **Получите PSC Connection ID**:
 
     * Откройте сведения о конечной точке и получите &quot;PSC Connection ID&quot;, который будет использоваться на шаге [Добавьте PSC Connection ID конечной точки в список разрешенных для сервиса](#step-5-add-endpoint-id-allowlist)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.png" size="lg" alt="Сведения о конечной точке PSC BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.webp" size="lg" alt="Сведения о конечной точке PSC BYOC" border />
   </Step>
 
   <Step>

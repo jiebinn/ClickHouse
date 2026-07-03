@@ -36,7 +36,7 @@ import { Image } from "/snippets/ja/components/Image.jsx";
   ### テスト 1: I/O 集約型 - 読み取り+書き込み (500 GB データセット)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="I/O 集約型の読み取り+書き込みベンチマーク結果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="I/O 集約型の読み取り+書き込みベンチマーク結果" size="md" border />
 
 **RDS (16k IOPS) に対するパフォーマンス改善:**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### テスト 2: I/O 集約型 - 読み取り専用 (500 GB データセット)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="I/O 集約型の読み取り専用ベンチマーク結果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="I/O 集約型の読み取り専用ベンチマーク結果" size="md" border />
 
 **RDS (16k IOPS) に対するパフォーマンス改善:**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### テスト 3: CPU 高負荷 (データがメモリに収まる)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="CPU 高負荷ベンチマークの結果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="CPU 高負荷ベンチマークの結果" size="md" border />
 
 **パフォーマンス改善:**
 

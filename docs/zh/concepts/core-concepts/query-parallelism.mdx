@@ -127,7 +127,7 @@ FROM
 
 ClickHouse 的[嵌入式 web UI](/zh/concepts/features/interfaces/http) (可通过 `/play` 端点访问) 可以将上面的物理计划渲染为图形化视图。在此示例中，我们将 `max_threads` 设置为 `4`，以使可视化更紧凑，因此只显示 4 条并行处理通道：
 
-<Image img="/images/guides/best-practices/query-parallelism_05.png" alt="查询管道" />
+<Image img="/images/guides/best-practices/query-parallelism_05.webp" alt="查询管道" />
 
 注意：请从左到右阅读该可视化图。每一行代表一条并行处理通道，数据以数据块为单位流式传输，并依次应用过滤、聚合和最终处理等转换。在这个示例中，你可以看到与 `max_threads = 4` 设置对应的四条并行通道。
 

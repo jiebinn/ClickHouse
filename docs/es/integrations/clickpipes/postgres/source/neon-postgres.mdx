@@ -68,11 +68,11 @@ La publicación `clickpipes` contendrá el conjunto de eventos de cambio generad
 En Neon, puedes habilitar la replicación lógica desde la UI. Esto es necesario para que el CDC de ClickPipes replique los datos.
 Ve a la pestaña **Settings** y luego a la sección **Logical Replication**.
 
-<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-enable-replication.png" alt="Habilitar la replicación lógica" border />
+<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-enable-replication.webp" alt="Habilitar la replicación lógica" border />
 
 Haz clic en **Enable** para completar este paso. Una vez habilitada, deberías ver el siguiente mensaje de confirmación.
 
-<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-enabled-replication.png" alt="Replicación lógica habilitada" border />
+<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-enabled-replication.webp" alt="Replicación lógica habilitada" border />
 
 Verifiquemos la siguiente configuración en tu instancia de Neon Postgres:
 
@@ -89,7 +89,7 @@ SHOW max_replication_slots; -- debe ser 10
 Si tienes el plan Neon Enterprise, puedes incluir en la lista de permitidos las [ClickPipes IPs](/es/integrations/clickpipes/home#list-of-static-ips) para permitir la replicación desde ClickPipes hacia tu instancia de Neon Postgres.
 Para hacerlo, haz clic en la pestaña **Settings** y ve a la sección **IP Allow**.
 
-<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-ip-allow.png" alt="Pantalla para permitir IP" border />
+<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-ip-allow.webp" alt="Pantalla para permitir IP" border />
 
 <div id="copy-connection-details">
   ## Copiar los detalles de conexión
@@ -99,7 +99,7 @@ Ahora que ya tenemos el usuario y la publicación listos, y la replicación habi
 Ve al **Dashboard** y, en el cuadro de texto donde aparece la cadena de conexión,
 cambia la vista a **Solo parámetros**. Necesitaremos estos parámetros en el siguiente paso.
 
-<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-conn-details.png" alt="Detalles de conexión" border />
+<Image size="lg" img="/images/integrations/data-ingestion/clickpipes/postgres/source/setup/neon-postgres/neon-conn-details.webp" alt="Detalles de conexión" border />
 
 <div id="whats-next">
   ## ¿Qué sigue?

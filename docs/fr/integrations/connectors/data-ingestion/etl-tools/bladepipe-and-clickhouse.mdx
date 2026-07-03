@@ -59,7 +59,7 @@ La prise en charge d’autres sources est prévue.
 
     2. Sélectionnez `ClickHouse`, puis renseignez les paramètres en indiquant l&#39;hôte et le port de votre instance ClickHouse, ainsi que le nom d&#39;utilisateur et le mot de passe, puis cliquez sur &quot;Test Connection&quot;.
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_1.png" size="lg" border alt="Ajouter ClickHouse comme cible" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_1.webp" size="lg" border alt="Ajouter ClickHouse comme cible" />
 
     3. Cliquez sur &quot;Add DataSource&quot; en bas de la page pour ajouter une instance ClickHouse.
   </Step>
@@ -77,7 +77,7 @@ La prise en charge d’autres sources est prévue.
 
     2. Sélectionnez `MySQL`, puis renseignez les paramètres en indiquant l&#39;hôte et le port MySQL, le nom d&#39;utilisateur et le mot de passe, puis cliquez sur &quot;Test Connection&quot;.
 
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_2.png" size="lg" border alt="Ajouter MySQL comme source" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_2.webp" size="lg" border alt="Ajouter MySQL comme source" />
 
     3. Cliquez sur &quot;Add DataSource&quot; en bas de la page, puis une instance MySQL est ajoutée.
   </Step>
@@ -88,19 +88,19 @@ La prise en charge d’autres sources est prévue.
     1. Dans BladePipe, cliquez sur &quot;DataJob&quot; &gt; &quot;Create DataJob&quot;.
 
     2. Sélectionnez les instances MySQL et ClickHouse ajoutées, puis cliquez sur &quot;Test Connection&quot; pour vérifier que BladePipe est bien connecté à ces instances. Sélectionnez ensuite les bases de données à déplacer.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_3.png" size="lg" border alt="Sélectionner la source et la cible" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_3.webp" size="lg" border alt="Sélectionner la source et la cible" />
 
     3. Sélectionnez &quot;Incremental&quot; comme type de DataJob, ainsi que l’option &quot;Full Data&quot;.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_4.png" size="lg" border alt="Sélectionner le type de synchronisation" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_4.webp" size="lg" border alt="Sélectionner le type de synchronisation" />
 
     4. Sélectionnez les tables à répliquer.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_5.png" size="lg" border alt="Sélectionner les tables" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_5.webp" size="lg" border alt="Sélectionner les tables" />
 
     5. Sélectionnez les colonnes à répliquer.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_6.png" size="lg" border alt="Sélectionner les colonnes" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_6.webp" size="lg" border alt="Sélectionner les colonnes" />
 
     6. Confirmez la création du DataJob, puis le DataJob s’exécute automatiquement.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_8.png" size="lg" border alt="Le DataJob est en cours d’exécution" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_8.webp" size="lg" border alt="Le DataJob est en cours d’exécution" />
   </Step>
 
   <Step>
@@ -115,6 +115,6 @@ La prise en charge d’autres sources est prévue.
     </Note>
 
     2. Créez un <a href="https://doc.bladepipe.com/operation/job_manage/create_job/create_period_verification_correction_job" target="_blank">DataJob de vérification</a>. Une fois le DataJob de vérification terminé, examinez les résultats pour confirmer que les données dans ClickHouse sont identiques à celles de MySQL.
-       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_9.png" size="lg" border alt="Vérifier les données" />
+       <Image img="/images/integrations/data-ingestion/etl-tools/bp_ck_9.webp" size="lg" border alt="Vérifier les données" />
   </Step>
 </Steps>

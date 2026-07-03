@@ -29,32 +29,32 @@ import PartnerBadge from "/snippets/ru/components/PartnerBadge/PartnerBadge.jsx"
 
 Войдите в свою учетную запись Retool и перейдите на вкладку *Resources*. Выберите &quot;Create New&quot; -&gt; &quot;Resource&quot;:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_01.png" size="lg" border alt="Создание нового ресурса" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_01.webp" size="lg" border alt="Создание нового ресурса" />
 
 <br />
 
 Выберите &quot;JDBC&quot; из списка доступных коннекторов:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_02.png" size="lg" border alt="Выбор коннектора JDBC" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_02.webp" size="lg" border alt="Выбор коннектора JDBC" />
 
 <br />
 
 В мастере настройки убедитесь, что в поле &quot;Driver name&quot; выбрано значение `com.clickhouse.jdbc.ClickHouseDriver`:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_03.png" size="lg" border alt="Выбор правильного драйвера" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_03.webp" size="lg" border alt="Выбор правильного драйвера" />
 
 <br />
 
 Укажите свои учетные данные ClickHouse в следующем формате: `jdbc:clickhouse://HOST:PORT/DATABASE?user=USERNAME&password=PASSWORD`.
 Если для вашего экземпляра требуется SSL или вы используете ClickHouse Cloud, добавьте `&ssl=true` в строку подключения, чтобы получилось `jdbc:clickhouse://HOST:PORT/DATABASE?user=USERNAME&password=PASSWORD&ssl=true`
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_04.png" size="lg" border alt="Указание ваших учетных данных" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_04.webp" size="lg" border alt="Указание ваших учетных данных" />
 
 <br />
 
 После этого проверьте подключение:
 
-<Image img="/images/integrations/tools/data-integration/retool/retool_05.png" size="lg" border alt="Проверка подключения" />
+<Image img="/images/integrations/tools/data-integration/retool/retool_05.webp" size="lg" border alt="Проверка подключения" />
 
 <br />
 

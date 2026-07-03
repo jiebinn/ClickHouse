@@ -41,7 +41,7 @@ Pour intégrer votre code Glue à ClickHouse, vous pouvez utiliser notre connect
     4. <h3 id="use-in-glue-job">Utiliser dans un job Glue</h3>
        Dans votre job Glue, sélectionnez l’onglet `Job details`, puis développez la section `Advanced properties`. Dans la section `Connections`, sélectionnez la connexion que vous venez de créer. Le connecteur injecte automatiquement les JARs requis dans l’environnement d’exécution du job.
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.png" size="md" alt="Glue Notebook connections config" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.webp" size="md" alt="Glue Notebook connections config" force="true" />
 
     <Note>
       Les JARs utilisés dans le connecteur Glue sont compilés pour `Spark 3.3`, `Scala 2` et `Python 3`. Veillez à sélectionner ces versions lors de la configuration de votre job Glue.
@@ -55,7 +55,7 @@ Pour intégrer votre code Glue à ClickHouse, vous pouvez utiliser notre connect
     2. Assurez-vous que le job Glue a accès à ce bucket.
     3. Dans l’onglet `Job details`, faites défiler vers le bas et développez le menu déroulant `Advanced properties`, puis indiquez le chemin des JARs dans `Dependent JARs path` :
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.png" size="md" alt="Glue Notebook JAR path options" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.webp" size="md" alt="Glue Notebook JAR path options" force="true" />
   </Tab>
 </Tabs>
 

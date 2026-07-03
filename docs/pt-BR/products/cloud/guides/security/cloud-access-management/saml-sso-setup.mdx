@@ -45,7 +45,7 @@ Você precisará de permissões de administrador no seu IdP, da capacidade de ad
 
     Clique no botão de alternância ao lado de `Enable SAML single sign-on`. Deixe esta tela aberta, pois você precisará consultá-la várias vezes durante o processo de configuração.
 
-    <Image img="/images/cloud/security/saml-self-serve-1.png" size="lg" alt="Iniciar a configuração do SAML" force />
+    <Image img="/images/cloud/security/saml-self-serve-1.webp" size="lg" alt="Iniciar a configuração do SAML" force />
   </Step>
 
   <Step>
@@ -62,7 +62,7 @@ Você precisará de permissões de administrador no seu IdP, da capacidade de ad
       O ClickHouse não oferece suporte a login iniciado pelo provedor de identidade. Para facilitar o acesso dos seus usuários ao ClickHouse Cloud, crie um favorito para eles usando este formato de URL de login: `https://console.clickhouse.cloud/?connection={orgId}`, em que `{orgId}` é o Organization ID na página de detalhes da organização.
     </Tip>
 
-    <Image img="/images/cloud/security/saml-self-serve-2.png" size="lg" alt="Criar aplicativo no provedor de identidade" force />
+    <Image img="/images/cloud/security/saml-self-serve-2.webp" size="lg" alt="Criar aplicativo no provedor de identidade" force />
   </Step>
 
   <Step>
@@ -70,7 +70,7 @@ Você precisará de permissões de administrador no seu IdP, da capacidade de ad
 
     Obtenha a `Metadata URL` do seu provedor SAML. Volte ao ClickHouse Cloud, clique em `Next: Provide metadata URL` e cole a URL na caixa de texto.
 
-    <Image img="/images/cloud/security/saml-self-serve-3.png" size="lg" alt="Adicionar URL de metadados" force />
+    <Image img="/images/cloud/security/saml-self-serve-3.webp" size="lg" alt="Adicionar URL de metadados" force />
   </Step>
 
   <Step>
@@ -78,7 +78,7 @@ Você precisará de permissões de administrador no seu IdP, da capacidade de ad
 
     Clique em `Next: Verify your domains`. Insira seu domínio na caixa de texto e clique em `Check domain`. O sistema gerará um código de verificação aleatório para adicionar a um registro TXT no seu provedor de DNS.
 
-    <Image img="/images/cloud/security/saml-self-serve-4.png" size="lg" alt="Adicionar domínio para verificar" force />
+    <Image img="/images/cloud/security/saml-self-serve-4.webp" size="lg" alt="Adicionar domínio para verificar" force />
   </Step>
 
   <Step>
@@ -90,7 +90,7 @@ Você precisará de permissões de administrador no seu IdP, da capacidade de ad
       Pode levar alguns minutos para que o registro DNS seja atualizado e validado. Você pode sair da página de configuração e voltar mais tarde para concluir o processo sem precisar recomeçar.
     </Note>
 
-    <Image img="/images/cloud/security/saml-self-serve-5.png" size="lg" alt="Verifique seu domínio" force />
+    <Image img="/images/cloud/security/saml-self-serve-5.webp" size="lg" alt="Verifique seu domínio" force />
   </Step>
 
   <Step>
@@ -217,7 +217,7 @@ Você configurará um aplicativo SAML no Google para cada organização e dever�
 <Accordion title="Criar um aplicativo da Web no Google">
   1. Acesse o console de administração do Google (admin.google.com).
 
-  <Image img="/images/cloud/security/saml-google-app.png" size="md" alt="Aplicativo SAML do Google" force />
+  <Image img="/images/cloud/security/saml-google-app.webp" size="md" alt="Aplicativo SAML do Google" force />
 
   2. Clique em **Apps** e, em seguida, em **Web and mobile apps** no lado esquerdo.
 
@@ -273,7 +273,7 @@ O SAML do Azure (Microsoft) também pode ser chamado de Azure Active Directory (
 
   5. Digite um nome, selecione **Integrate any other application you don&#39;t find in the gallery (Non-gallery)** e clique em **Create**.
 
-     <Image img="/images/cloud/security/saml-azure-app.png" size="md" alt="Aplicativo do Azure fora da galeria" force />
+     <Image img="/images/cloud/security/saml-azure-app.webp" size="md" alt="Aplicativo do Azure fora da galeria" force />
 
   6. Clique em **Users and groups** no menu à esquerda e atribua os usuários.
 
@@ -299,7 +299,7 @@ O SAML do Azure (Microsoft) também pode ser chamado de Azure Active Directory (
       | (A) email                            | Basic         | user.mail        |
       | (U) /identity/claims/name            | Omitted       | user.mail        |
 
-      <Image img="/images/cloud/security/saml-azure-claims.png" size="md" alt="Atributos e declarações" force />
+      <Image img="/images/cloud/security/saml-azure-claims.webp" size="md" alt="Atributos e declarações" force />
 
   11. Copie a URL de metadados e volte para [Adicionar a URL de metadados à sua configuração SAML](#add-metadata-url) para continuar o processo.
 </Accordion>

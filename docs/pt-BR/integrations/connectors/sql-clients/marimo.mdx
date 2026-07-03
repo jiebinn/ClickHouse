@@ -37,15 +37,15 @@ Isso deve abrir um navegador no localhost.
 
 Navegue até o painel de fontes de dados no lado esquerdo do editor do marimo e clique em &#39;Add database&#39;.
 
-<Image img="/images/integrations/sql-clients/marimo/panel-arrow.png" size="sm" border alt="Adicionar um novo banco de dados" />
+<Image img="/images/integrations/sql-clients/marimo/panel-arrow.webp" size="sm" border alt="Adicionar um novo banco de dados" />
 
 Você deverá preencher os detalhes do banco de dados.
 
-<Image img="/images/integrations/sql-clients/marimo/add-db-details.png" size="md" border alt="Preencha os detalhes do banco de dados" />
+<Image img="/images/integrations/sql-clients/marimo/add-db-details.webp" size="md" border alt="Preencha os detalhes do banco de dados" />
 
 Em seguida, você terá uma célula que poderá ser executada para estabelecer uma conexão.
 
-<Image img="/images/integrations/sql-clients/marimo/run-cell.png" size="md" border alt="Execute a célula para se conectar ao ClickHouse" />
+<Image img="/images/integrations/sql-clients/marimo/run-cell.webp" size="md" border alt="Execute a célula para se conectar ao ClickHouse" />
 
 <div id="run-sql">
   ## 3. Executar SQL
@@ -53,7 +53,7 @@ Em seguida, você terá uma célula que poderá ser executada para estabelecer u
 
 Depois de configurar uma conexão, você pode criar uma nova célula SQL e escolher o mecanismo do ClickHouse.
 
-<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.png" size="md" border alt="Escolha o mecanismo SQL" />
+<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.webp" size="md" border alt="Escolha o mecanismo SQL" />
 
 Para este guia, usaremos o dataset New York Taxi.
 
@@ -111,14 +111,14 @@ FROM gcs(
 SELECT * FROM trips LIMIT 1000;
 ```
 
-<Image img="/images/integrations/sql-clients/marimo/results.png" size="lg" border alt="Resultados em um DataFrame" />
+<Image img="/images/integrations/sql-clients/marimo/results.webp" size="lg" border alt="Resultados em um DataFrame" />
 
 Agora, você pode ver os resultados em um DataFrame. Quero visualizar as corridas mais caras a partir de um determinado local de embarque. O marimo fornece vários componentes de UI para ajudar nisso. Vou usar uma lista suspensa para selecionar o local e o Altair para criar os gráficos.
 
-<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.png" size="lg" border alt="Combinação de lista suspensa, tabela e gráfico" />
+<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.webp" size="lg" border alt="Combinação de lista suspensa, tabela e gráfico" />
 
 O modelo de execução reativa do marimo também se estende às consultas SQL, então alterações no SQL acionam automaticamente os cálculos subsequentes das células dependentes (ou, opcionalmente, marcam células como desatualizadas no caso de cálculos mais caros). Por isso, o gráfico e a tabela mudam quando a consulta é atualizada.
 
 Você também pode alternar para o App View para ter uma interface limpa para explorar seus dados.
 
-<Image img="/images/integrations/sql-clients/marimo/run-app-view.png" size="md" border alt="Executar App View" />
+<Image img="/images/integrations/sql-clients/marimo/run-app-view.webp" size="md" border alt="Executar App View" />

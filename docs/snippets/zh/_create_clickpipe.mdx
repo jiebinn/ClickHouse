@@ -14,7 +14,7 @@ import GCSConnection from '/snippets/es/clickpipes/object-storage/google-cloud-s
 
     **1.** 在 ClickHouse Cloud 中，先在主导航菜单中选择 **数据源**，然后点击 **Create ClickPipe**。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="选择导入源" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="选择导入源" size="lg" border />
 
     {props.provider === 's3' && <S3DataSource />}
 
@@ -40,7 +40,7 @@ import GCSConnection from '/snippets/es/clickpipes/object-storage/google-cloud-s
     选择数据格式 (当前支持部分 ClickHouse 格式) ，以及是否启用持续摄取。
     更多详情请参阅概览页面中的“持续摄取”部分。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step3_object_storage.png" alt="设置数据格式和 topic" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step3_object_storage.webp" alt="设置数据格式和 topic" size="lg" border />
   </Step>
 
   <Step>
@@ -50,16 +50,16 @@ import GCSConnection from '/snippets/es/clickpipes/object-storage/google-cloud-s
     按照界面提示修改表名、schema 和设置。
     您可以在顶部的样本表中实时预览这些更改。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a.png" alt="设置表、schema 和设置" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a.webp" alt="设置表、schema 和设置" size="lg" border />
 
     您还可以使用提供的控件自定义高级设置。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a3.png" alt="设置高级选项" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4a3.webp" alt="设置高级选项" size="lg" border />
 
     或者，您也可以选择将数据摄取到现有的 ClickHouse 表中。
     在这种情况下，UI 将允许您把源字段映射到所选目标表中的 ClickHouse 字段。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4b.png" alt="使用现有表" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step4b.webp" alt="使用现有表" size="lg" border />
 
     <Info>
       您还可以将[虚拟列](/zh/reference/functions/table-functions/s3#virtual-columns) (例如 `_path` 或 `_size`) 映射到字段。
@@ -76,7 +76,7 @@ import GCSConnection from '/snippets/es/clickpipes/object-storage/google-cloud-s
     * `Full access`：拥有对集群的完全访问权限。如果目标表使用了 materialized view 或 字典，则需要此权限。
     * `Only destination table`：仅拥有对目标表的 `INSERT` 权限。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step5.png" alt="权限" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_step5.webp" alt="权限" size="lg" border />
   </Step>
 
   <Step>
@@ -84,17 +84,17 @@ import GCSConnection from '/snippets/es/clickpipes/object-storage/google-cloud-s
 
     点击“Complete Setup”后，系统将注册您的 ClickPipe，您随后即可在汇总表中看到它。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_success.png" alt="成功提示" size="sm" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_success.webp" alt="成功提示" size="sm" border />
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_remove.png" alt="移除提示" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_remove.webp" alt="移除提示" size="lg" border />
 
     汇总表提供了用于查看源端或 ClickHouse 中目标表样本数据的控件。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_destination.png" alt="查看目标端" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_destination.webp" alt="查看目标端" size="lg" border />
 
     以及用于删除 ClickPipe 和查看摄取任务摘要的控件。
 
-    <Image img="/images/integrations/data-ingestion/clickpipes/cp_overview.png" alt="查看概览" size="lg" border />
+    <Image img="/images/integrations/data-ingestion/clickpipes/cp_overview.webp" alt="查看概览" size="lg" border />
 
     **恭喜！** 您已成功设置第一个 ClickPipe。
     如果这是一个配置为持续摄取的 ClickPipe，它将持续运行，并从远程数据源实时摄取数据。

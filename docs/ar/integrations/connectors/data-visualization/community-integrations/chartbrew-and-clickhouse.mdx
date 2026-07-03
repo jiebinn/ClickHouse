@@ -24,7 +24,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 في هذا الدليل، ستربط Chartbrew بـ ClickHouse، وتنفّذ استعلام SQL، وتنشئ تصورًا. وفي النهاية، قد تبدو لوحة المعلومات لديك على النحو التالي:
 
-<Image img="/images/integrations/data-visualization/chartbrew_01.png" size="lg" alt="لوحة معلومات Chartbrew" />
+<Image img="/images/integrations/data-visualization/chartbrew_01.webp" size="lg" alt="لوحة معلومات Chartbrew" />
 
 <Tip>
   **أضف بعض البيانات**
@@ -46,7 +46,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 2. انقر على **Create connection** ثم اختر **ClickHouse** من خيارات قواعد البيانات المتاحة.
 
-   <Image img="/images/integrations/data-visualization/chartbrew_02.png" size="lg" alt="اختيار اتصال ClickHouse في Chartbrew" />
+   <Image img="/images/integrations/data-visualization/chartbrew_02.webp" size="lg" alt="اختيار اتصال ClickHouse في Chartbrew" />
 
 3. أدخل تفاصيل الاتصال بقاعدة بيانات ClickHouse:
 
@@ -57,13 +57,13 @@ import { Image } from "/snippets/ar/components/Image.jsx";
    * **Username**: اسم مستخدم ClickHouse الخاص بك.
    * **Password**: كلمة مرور ClickHouse الخاصة بك.
 
-   <Image img="/images/integrations/data-visualization/chartbrew_03.png" size="lg" alt="إعدادات اتصال ClickHouse في Chartbrew" />
+   <Image img="/images/integrations/data-visualization/chartbrew_03.webp" size="lg" alt="إعدادات اتصال ClickHouse في Chartbrew" />
 
 4. انقر على **Test connection** للتحقق من أن Chartbrew يستطيع الاتصال بـ ClickHouse.
 
 5. إذا نجح الاختبار، فانقر على **Save connection**. سيجلب Chartbrew المخطط تلقائيًا من ClickHouse.
 
-   <Image img="/images/integrations/data-visualization/chartbrew_04.png" size="lg" alt="مخطط JSON لـ ClickHouse في Chartbrew" />
+   <Image img="/images/integrations/data-visualization/chartbrew_04.webp" size="lg" alt="مخطط JSON لـ ClickHouse في Chartbrew" />
 
 <div id="3-create-a-dataset-and-run-a-sql-query">
   ## 3. أنشئ مجموعة بيانات وشغّل استعلام SQL
@@ -72,7 +72,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 1. انقر على زر **Create dataset** أو انتقل إلى علامة التبويب **Datasets** لإنشاء مجموعة بيانات.
 2. حدِّد اتصال ClickHouse الذي أنشأته سابقًا.
 
-<Image img="/images/integrations/data-visualization/chartbrew_05.png" size="lg" alt="حدِّد اتصال ClickHouse لمجموعة البيانات" />
+<Image img="/images/integrations/data-visualization/chartbrew_05.webp" size="lg" alt="حدِّد اتصال ClickHouse لمجموعة البيانات" />
 
 اكتب استعلام SQL لجلب البيانات التي تريد تمثيلها بصريًا. على سبيل المثال، يحسب هذا الاستعلام متوسط السعر المدفوع سنويًا من مجموعة البيانات `uk_price_paid`:
 
@@ -83,13 +83,13 @@ import { Image } from "/snippets/ar/components/Image.jsx";
   ORDER BY year;
 ```
 
-<Image img="/images/integrations/data-visualization/chartbrew_07.png" size="lg" alt="استعلام ClickHouse SQL في Chartbrew" />
+<Image img="/images/integrations/data-visualization/chartbrew_07.webp" size="lg" alt="استعلام ClickHouse SQL في Chartbrew" />
 
 انقر على **Run query** لجلب البيانات.
 
 إذا لم تكن متأكدًا من كيفية كتابة الاستعلام، يمكنك استخدام **مساعد الذكاء الاصطناعي في Chartbrew** لإنشاء استعلامات SQL استنادًا إلى مخطط قاعدة البيانات لديك.
 
-<Image img="/images/integrations/data-visualization/chartbrew_06.png" size="lg" alt="مساعد ClickHouse SQL المدعوم بالذكاء الاصطناعي في Chartbrew" />
+<Image img="/images/integrations/data-visualization/chartbrew_06.webp" size="lg" alt="مساعد ClickHouse SQL المدعوم بالذكاء الاصطناعي في Chartbrew" />
 
 بعد استرجاع البيانات، انقر على **Configure dataset** لضبط معلمات التصور.
 
@@ -102,11 +102,11 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 3. اختر نوع المخطط (مثل مخطط خطي أو مخطط أعمدة أو مخطط دائري) وأضِفه إلى لوحة المعلومات.
 4. انقر على **Complete dataset** لإكمال الإعداد.
 
-<Image img="/images/integrations/data-visualization/chartbrew_08.png" size="lg" alt="لوحة معلومات Chartbrew مع بيانات ClickHouse" />
+<Image img="/images/integrations/data-visualization/chartbrew_08.webp" size="lg" alt="لوحة معلومات Chartbrew مع بيانات ClickHouse" />
 
 يمكنك إنشاء أي عدد تريده من مجموعات البيانات لتصور جوانب مختلفة من بياناتك. وباستخدام مجموعات البيانات هذه، يمكنك إنشاء لوحات معلومات متعددة لمتابعة مقاييس مختلفة.
 
-<Image img="/images/integrations/data-visualization/chartbrew_01.png" size="lg" alt="لوحة معلومات Chartbrew مع بيانات ClickHouse" />
+<Image img="/images/integrations/data-visualization/chartbrew_01.webp" size="lg" alt="لوحة معلومات Chartbrew مع بيانات ClickHouse" />
 
 <div id="5-automate-data-updates">
   ## 5. أتمتة تحديثات البيانات
@@ -118,7 +118,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 2. اضبط الفاصل الزمني للتحديث (مثلًا: كل ساعة أو كل يوم).
 3. احفظ الإعدادات لتفعيل التحديث التلقائي.
 
-<Image img="/images/integrations/data-visualization/chartbrew_09.png" size="lg" alt="إعدادات تحديث مجموعة بيانات Chartbrew" />
+<Image img="/images/integrations/data-visualization/chartbrew_09.webp" size="lg" alt="إعدادات تحديث مجموعة بيانات Chartbrew" />
 
 <div id="learn-more">
   ## تعرّف على المزيد

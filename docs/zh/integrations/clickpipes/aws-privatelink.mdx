@@ -222,19 +222,19 @@ VPC endpoint service 可以[配置私有 DNS](https://docs.aws.amazon.com/vpc/la
 
 1. 进入你的 ClickHouse Cloud 服务的 SQL 控制台。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.png" alt="ClickPipes 服务" size="md" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.webp" alt="ClickPipes 服务" size="md" border />
 
 2. 在左侧菜单中选择 `Data Sources` 按钮，然后点击“Set up a ClickPipe”
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="选择导入" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="选择导入" size="lg" border />
 
 3. 选择 Kafka 或 Postgres 作为数据源。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.png" alt="选择数据源" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.webp" alt="选择数据源" size="lg" border />
 
 4. 选择 `Reverse private endpoint` 选项。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.png" alt="选择反向专用终结点" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.webp" alt="选择反向专用终结点" size="lg" border />
 
 5. 从现有反向专用终结点中选择一个，或创建新的反向专用终结点。
 
@@ -245,11 +245,11 @@ VPC endpoint service 可以[配置私有 DNS](https://docs.aws.amazon.com/vpc/la
   对于同一区域访问，建议创建 VPC 资源。
 </Info>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.png" alt="选择反向专用终结点" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.webp" alt="选择反向专用终结点" size="lg" border />
 
 6. 为所选端点类型提供必填参数。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.png" alt="选择反向专用终结点" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.webp" alt="选择反向专用终结点" size="lg" border />
 
 * 对于 VPC 资源，请提供 configuration share ARN 和 configuration ID。
   * 对于 MSK multi-VPC，请提供 cluster ARN 以及已创建端点使用的身份验证方法。
@@ -261,7 +261,7 @@ VPC endpoint service 可以[配置私有 DNS](https://docs.aws.amazon.com/vpc/la
    端点就绪后，页面会自动刷新。
    VPC endpoint service 可能需要你在 AWS 控制台中接受连接请求。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.png" alt="选择反向专用终结点" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.webp" alt="选择反向专用终结点" size="lg" border />
 
 8. 端点就绪后，你可以使用 DNS 名称连接到数据源。
 
@@ -282,11 +282,11 @@ VPC endpoint service 可以[配置私有 DNS](https://docs.aws.amazon.com/vpc/la
 
 1. 在侧边栏中找到 `Settings` 按钮并点击。
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.png" alt="ClickHouse Cloud 设置" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.webp" alt="ClickHouse Cloud 设置" size="lg" border />
 
 2. 在 `ClickPipe reverse private endpoints` 部分中，点击 `Reverse private endpoints`。
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.png" alt="ClickHouse Cloud 设置" size="md" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.webp" alt="ClickHouse Cloud 设置" size="md" border />
 
    弹出面板中会显示反向专用终结点的详细信息。
 

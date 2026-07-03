@@ -26,22 +26,22 @@ formats suivants :
 
     Depuis la page d’accueil de ClickHouse Cloud, sélectionnez votre service comme indiqué ci-dessous :
 
-    <Image img="/images/cloud/migrate/csv_01.png" alt="upload_file_02" />
+    <Image img="/images/cloud/migrate/csv_01.webp" alt="upload_file_02" />
 
     Si votre service est inactif, vous devrez le sortir de veille.
 
     Sélectionnez `Data sources` dans l’onglet de gauche, comme indiqué ci-dessous :
 
-    <Image img="/images/cloud/migrate/csv_02.png" alt="upload_file_03" />
+    <Image img="/images/cloud/migrate/csv_02.webp" alt="upload_file_03" />
 
     Sélectionnez ensuite `Upload a file` sur la partie droite de la page des sources de données :
 
-    <Image img="/images/cloud/migrate/csv_03.png" alt="upload_file_04" />
+    <Image img="/images/cloud/migrate/csv_03.webp" alt="upload_file_04" />
 
     Une boîte de dialogue s’ouvrira pour vous permettre de sélectionner le fichier que vous souhaitez
     utiliser pour insérer des données dans une table de votre service Cloud.
 
-    <Image img="/images/cloud/migrate/csv_04.png" alt="upload_file_05" />
+    <Image img="/images/cloud/migrate/csv_04.webp" alt="upload_file_05" />
   </Step>
 
   <Step>
@@ -50,7 +50,7 @@ formats suivants :
     Une fois le fichier téléversé, vous pourrez configurer la table dans laquelle vous souhaitez
     insérer les données. Un aperçu de la table avec les trois premières lignes s’affiche.
 
-    <Image img="/images/cloud/migrate/csv_08.png" alt="upload_file_08" />
+    <Image img="/images/cloud/migrate/csv_08.webp" alt="upload_file_08" />
 
     Vous pouvez maintenant sélectionner une table de destination. Les options sont :
 
@@ -62,7 +62,7 @@ formats suivants :
     Vous pouvez indiquer dans quelle base de données vous souhaitez téléverser les données et, dans le cas d’une
     nouvelle table, le nom de la table qui sera créée. Vous pourrez également sélectionner la clé de tri :
 
-    <Image img="/images/cloud/migrate/csv_05.png" alt="upload_file_05" />
+    <Image img="/images/cloud/migrate/csv_05.webp" alt="upload_file_05" />
 
     Les colonnes lues à partir du fichier sont affichées en tant que `Source field`s et, pour chaque champ, vous
     pouvez modifier :
@@ -71,7 +71,7 @@ formats suivants :
     * la valeur par défaut
     * si la colonne doit être [Nullable](/fr/reference/data-types/nullable) ou non
 
-    <Image img="/images/cloud/migrate/csv_06.png" alt="upload_file_06" />
+    <Image img="/images/cloud/migrate/csv_06.webp" alt="upload_file_06" />
 
     <Info>
       **Exclure des champs**
@@ -91,20 +91,20 @@ formats suivants :
     Vous pouvez spécifier une expression de clé de partitionnement et une expression de
     clé primaire.
 
-    <Image img="/images/cloud/migrate/csv_07.png" alt="upload_file_07" />
+    <Image img="/images/cloud/migrate/csv_07.webp" alt="upload_file_07" />
 
     Cliquez sur `Import to ClickHouse` (illustré ci-dessus) pour importer les données. L’importation des données sera placée en file d’attente, comme
     l’indique le badge d’état `queued` dans la colonne `Status`, comme illustré ci-dessous. Vous pouvez également cliquer sur
     `Open as query` (illustré ci-dessus) pour ouvrir la requête d’insertion dans la console SQL. La requête insérera
     le fichier qui a été téléversé dans un bucket S3 à l’aide de la fonction de table `URL`.
 
-    <Image img="/images/cloud/migrate/csv_09.png" alt="upload_file_09" />
+    <Image img="/images/cloud/migrate/csv_09.webp" alt="upload_file_09" />
 
     Si la tâche échoue, vous verrez un badge d’état `failed` dans la colonne `Status` de
     l’onglet `Data upload history`. Vous pouvez cliquer sur `View Details` pour obtenir plus d’informations
     sur la raison de l’échec du téléversement. Il se peut que vous deviez modifier la configuration de la table ou nettoyer
     les données en fonction du message d’erreur lié à l’insertion échouée.
 
-    <Image img="/images/cloud/migrate/csv_10.png" alt="upload_file_11" />
+    <Image img="/images/cloud/migrate/csv_10.webp" alt="upload_file_11" />
   </Step>
 </Steps>

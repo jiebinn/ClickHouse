@@ -29,7 +29,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 أولاً، ستحتاج إلى تمكين دفق Kinesis على جدول DynamoDB لالتقاط التغييرات في الوقت الفعلي. نريد تنفيذ ذلك قبل إنشاء اللقطة لتجنّب فقدان أي بيانات.
 يمكنك العثور على دليل AWS [هنا](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/kds.html).
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-kinesis-stream.png" size="lg" alt="دفق Kinesis في DynamoDB" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-kinesis-stream.webp" size="lg" alt="دفق Kinesis في DynamoDB" border />
 
 <div id="2-create-the-snapshot">
   ## 2. إنشاء اللقطة
@@ -38,7 +38,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 بعد ذلك، سننشئ لقطة من جدول DynamoDB. ويمكن تحقيق ذلك عبر تصدير من AWS إلى S3. يمكنك الاطلاع على دليل AWS [هنا](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/S3DataExport.HowItWorks.html).
 **ستحتاج إلى إجراء &quot;Full export&quot; بتنسيق DynamoDB JSON.**
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-s3-export.png" size="md" alt="تصدير DynamoDB إلى S3" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-s3-export.webp" size="md" alt="تصدير DynamoDB إلى S3" border />
 
 <div id="3-load-the-snapshot-into-clickhouse">
   ## 3. تحميل اللقطة إلى ClickHouse
@@ -139,7 +139,7 @@ https://{bucket}.s3.amazonaws.com/{prefix}/AWSDynamoDB/{export-id}/data/*
   * `ApproximateCreationDateTime`: `version`
   * عيّن الحقول الأخرى إلى أعمدة الوجهة المناسبة كما هو موضح أدناه
 
-<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-map-columns.png" size="md" alt="تعيين أعمدة DynamoDB" border />
+<Image img="/images/integrations/data-ingestion/dbms/dynamodb/dynamodb-map-columns.webp" size="md" alt="تعيين أعمدة DynamoDB" border />
 
 <div id="5-cleanup-optional">
   ## 5. التنظيف (اختياري)

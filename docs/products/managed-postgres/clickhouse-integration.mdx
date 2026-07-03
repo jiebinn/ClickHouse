@@ -16,7 +16,7 @@ Every Managed Postgres instance comes with built-in CDC capabilities to any of y
 
 To access this, click on **ClickHouse Integration** in the sidebar of your Postgres instance.
 
-<Image img="/images/managed-postgres/clickhouse-integration-intro.png" alt="ClickHouse integration landing page showing the integration option in the sidebar" size="md" border/>
+<Image img="/images/managed-postgres/clickhouse-integration-intro.webp" alt="ClickHouse integration landing page showing the integration option in the sidebar" size="md" border/>
 
 <Note>
 Before you proceed, ensure that your Postgres service is accessible to the ClickPipes service. This should be the case by default, but if you've restricted IP access you may need to grant access to some source IPs from [this](/integrations/clickpipes/home#list-of-static-ips) list based on the region where your **ClickHouse service** is located.
@@ -38,7 +38,7 @@ Fill in the replication settings:
   - **Initial load only**: One-time snapshot of existing data with no ongoing updates
   - **CDC only**: Skip the initial snapshot and only capture new changes going forward
 
-<Image img="/images/managed-postgres/replication-service-step.png" alt="Replication service configuration showing integration name, destination service, and replication method options" size="md" border/>
+<Image img="/images/managed-postgres/replication-service-step.webp" alt="Replication service configuration showing integration name, destination service, and replication method options" size="md" border/>
 
 Click **Next** to proceed.
 </Step>
@@ -53,7 +53,7 @@ Fine-tune how data is replicated:
 - **Snapshot number of rows per partition**: Rows per partition during the initial snapshot (default: 100000)
 - **Snapshot number of tables in parallel**: How many tables are snapshotted concurrently (default: 1)
 
-<Image img="/images/managed-postgres/integration-replication-settings.png" alt="Replication settings step showing sync interval, parallel threads, pull batch size, and snapshot configuration options" size="md" border/>
+<Image img="/images/managed-postgres/integration-replication-settings.webp" alt="Replication settings step showing sync interval, parallel threads, pull batch size, and snapshot configuration options" size="md" border/>
 
 Click **Next** to proceed.
 </Step>
@@ -69,7 +69,7 @@ Choose a destination database and select which tables to replicate:
 
 Expand schemas and select individual tables to replicate. You can also customize destination table names and column settings.
 
-<Image img="/images/managed-postgres/select-tables-step.png" alt="Select tables step showing database selection, replication options, and table picker grouped by schema" size="md" border/>
+<Image img="/images/managed-postgres/select-tables-step.webp" alt="Select tables step showing database selection, replication options, and table picker grouped by schema" size="md" border/>
 
 Click **Replicate data to ClickHouse** to start the replication.
 </Step>
@@ -78,7 +78,7 @@ Click **Replicate data to ClickHouse** to start the replication.
 
 Once the ClickPipe starts, you'll see it listed in the same menu. The initial snapshot of all data may take some time depending on the size of your tables.
 
-<Image img="/images/managed-postgres/integration-running.png" alt="ClickHouse integration list showing a running ClickPipe with its destination service and status" size="md" border/>
+<Image img="/images/managed-postgres/integration-running.webp" alt="ClickHouse integration list showing a running ClickPipe with its destination service and status" size="md" border/>
 
 Click on the integration name to view detailed status, monitor progress, view errors, and manage the ClickPipe. See [Lifecycle of a Postgres ClickPipe](/integrations/clickpipes/postgres/lifecycle) to understand the different states your ClickPipe may be in.
 </Step>

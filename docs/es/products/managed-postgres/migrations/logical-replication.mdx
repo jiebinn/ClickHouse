@@ -51,7 +51,7 @@ Para que la replicación lógica funcione, debemos asegurarnos de que la base de
 
 Asegúrate de que tu base de datos de origen esté configurada de esta manera:
 
-<Image img="/images/managed-postgres/logical_replication/source-setup.png" alt="Configuración de la replicación de PostgreSQL de origen" size="md" border />
+<Image img="/images/managed-postgres/logical_replication/source-setup.webp" alt="Configuración de la replicación de PostgreSQL de origen" size="md" border />
 
 <div id="migration-logical-replication-schema-dump">
   ## Dump únicamente del esquema de la base de datos de origen
@@ -76,7 +76,7 @@ Aquí:
 
 En nuestro caso, tenemos dos tablas: `events` y `users`. `events` tiene un millón de filas y `users` tiene mil filas.
 
-<Image img="/images/managed-postgres/pg_dump_restore/source-setup.png" alt="Configuración de las tablas PostgreSQL de origen" size="xl" border />
+<Image img="/images/managed-postgres/pg_dump_restore/source-setup.webp" alt="Configuración de las tablas PostgreSQL de origen" size="xl" border />
 
 <div id="migration-pgdump-pg-restore-create-pg">
   ### Crear una instancia de Managed Postgres
@@ -84,7 +84,7 @@ En nuestro caso, tenemos dos tablas: `events` y `users`. `events` tiene un mill�
 
 Primero, asegúrate de tener configurada una instancia de Managed Postgres, preferiblemente en la misma región que el origen. Puedes seguir la guía de inicio rápido [aquí](/es/products/managed-postgres/quickstart#create-postgres-database). Esto es lo que vamos a aprovisionar para esta guía:
 
-<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.png" alt="Crear una instancia de ClickHouse Managed Postgres" size="md" border />
+<Image img="/images/managed-postgres/pg_dump_restore/create-pg-for-migration.webp" alt="Crear una instancia de ClickHouse Managed Postgres" size="md" border />
 
 <div id="migration-logical-replication-restore-schema">
   ## Restaura el esquema en ClickHouse Managed Postgres
@@ -107,7 +107,7 @@ Aquí:
 
 En nuestro caso, después de ejecutar este comando, tenemos las dos tablas y están vacías:
 
-<Image img="/images/managed-postgres/logical_replication/target-initial-setup.png" alt="Configuración inicial del destino ClickHouse Managed Postgres" size="xl" border />
+<Image img="/images/managed-postgres/logical_replication/target-initial-setup.webp" alt="Configuración inicial del destino ClickHouse Managed Postgres" size="xl" border />
 
 <div id="migration-logical-replication-setup-replication">
   ## Configurar la replicación lógica
@@ -145,7 +145,7 @@ Esto creará automáticamente un slot de replicación en la base de datos de ori
 
 En nuestro caso, después de configurar la suscripción, los datos comenzaron a llegar:
 
-<Image img="/images/managed-postgres/logical_replication/migration-result.png" alt="Resultado de la migración después de la replicación lógica" size="xl" border />
+<Image img="/images/managed-postgres/logical_replication/migration-result.webp" alt="Resultado de la migración después de la replicación lógica" size="xl" border />
 
 Las nuevas filas insertadas en la base de datos de origen ahora se replicarán en la base de datos de destino de ClickHouse Managed Postgres casi en tiempo real.
 

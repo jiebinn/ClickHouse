@@ -316,15 +316,15 @@ Para uma carga de trabalho em execução no Kubernetes, o próprio coletor gatew
 
     Abra seu serviço no [console do ClickHouse Cloud](https://console.clickhouse.cloud) e selecione **ClickStack** no menu à esquerda.
 
-    <Image img="/images/use-cases/observability/clickstack-cloud-v2.png" size="lg" alt="Abrir o ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-cloud-v2.webp" size="lg" alt="Abrir o ClickStack" border />
 
     Na visualização **Busca**, altere a fonte para `Logs` e defina o intervalo de tempo como **Últimos 15 minutos**. Os logs de contêiner de todo o cluster devem aparecer em alguns segundos, enriquecidos com atributos como `k8s.namespace.name`, `k8s.pod.name` e `k8s.node.name`.
 
-    <Image img="/images/use-cases/observability/clickstack-search-with-k8-logs.png" size="lg" alt="Visualização Busca do ClickStack com logs do Kubernetes" />
+    <Image img="/images/use-cases/observability/clickstack-search-with-k8-logs.webp" size="lg" alt="Visualização Busca do ClickStack com logs do Kubernetes" />
 
     Para ver métricas e eventos de infraestrutura em contexto, abra o dashboard integrado **Kubernetes** navegando até **Dashboards** -&gt; **Kubernetes**. As abas `Pods`, `Nodes` e `Namespaces` devem estar todas preenchidas.
 
-    <Image img="/images/use-cases/observability/clickstack-dashboard-kubernetes.png" size="lg" alt="Dashboard Kubernetes do ClickStack" border />
+    <Image img="/images/use-cases/observability/clickstack-dashboard-kubernetes.webp" size="lg" alt="Dashboard Kubernetes do ClickStack" border />
 
     Se nada aparecer:
 

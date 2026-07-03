@@ -69,7 +69,7 @@ ORDER BY tuple()
 
 Crie um tópico do Kafka e uma instância do conector HTTP Sink:
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.png" size="sm" alt="Interface do Confluent Cloud mostrando como criar um conector HTTP Sink" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.webp" size="sm" alt="Interface do Confluent Cloud mostrando como criar um conector HTTP Sink" border />
 
 <br />
 
@@ -86,7 +86,7 @@ Configure o conector HTTP Sink:
   Esta `HTTP Url` é propensa a erros. Certifique-se de escapar tudo corretamente para evitar problemas.
 </Note>
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.png" size="lg" alt="Interface do Confluent Cloud mostrando as configurações de autenticação do conector HTTP Sink" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.webp" size="lg" alt="Interface do Confluent Cloud mostrando as configurações de autenticação do conector HTTP Sink" border />
 
 <br />
 
@@ -100,7 +100,7 @@ Configure o conector HTTP Sink:
     * `Retry on HTTP codes` - 400-500, mas ajuste conforme necessário; por exemplo, isso pode mudar se você tiver um proxy HTTP na frente do ClickHouse.
     * `Maximum Reties` - o padrão (10) é adequado, mas fique à vontade para ajustar se quiser tentativas de repetição mais robustas.
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.png" size="sm" alt="Interface do Confluent Cloud mostrando opções avançadas de configuração do conector HTTP Sink" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.webp" size="sm" alt="Interface do Confluent Cloud mostrando opções avançadas de configuração do conector HTTP Sink" border />
 
 <div id="5-testing-the-connectivity">
   #### 5. Testando a conectividade
@@ -108,7 +108,7 @@ Configure o conector HTTP Sink:
 
 Crie uma mensagem em um tópico configurado no seu HTTP Sink
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.png" size="md" alt="Interface do Confluent Cloud mostrando como criar uma mensagem de teste em um tópico do Kafka" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.webp" size="md" alt="Interface do Confluent Cloud mostrando como criar uma mensagem de teste em um tópico do Kafka" border />
 
 <br />
 

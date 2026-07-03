@@ -53,11 +53,11 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
 
     Войдите в **консоль ClickHouse Cloud** с правами администратора организации и откройте **Organization settings → SAML and SCIM settings → SCIM Configuration**.
 
-    ![Перейдите на вкладку конфигурации SCIM в настройках организации](/images/cloud/security/scim-okta/scim-okta-01.png)
+    ![Перейдите на вкладку конфигурации SCIM в настройках организации](/images/cloud/security/scim-okta/scim-okta-01.webp)
 
     Нажмите `Enable SCIM`. SCIM становится доступен после подключения SAML SSO — если опция неактивна, сначала завершите настройку SAML.
 
-    ![Переключатель Enable SCIM](/images/cloud/security/scim-okta/scim-okta-02.png)
+    ![Переключатель Enable SCIM](/images/cloud/security/scim-okta/scim-okta-02.webp)
 
     Будет сгенерирован **URL конечной точки SCIM** в формате:
 
@@ -81,7 +81,7 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
 
     Нажмите `Generate key`. Токен отображается **один раз** в виде key (с префиксом `scim_`) и secret. Сразу скопируйте оба значения и сохраните их в защищённом менеджере secrets — позже получить их снова не получится. Если вы их потеряете, отзовите токен и сгенерируйте новый.
 
-    ![Генерация нового SCIM API key](/images/cloud/security/scim-okta/scim-okta-07.png)
+    ![Генерация нового SCIM API key](/images/cloud/security/scim-okta/scim-okta-07.webp)
   </Step>
 
   <Step>
@@ -112,11 +112,11 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
 
     На вкладке **General** найдите раздел **App Settings** и нажмите `Edit`. В разделе **Provisioning** выберите `SCIM`, затем нажмите `Save`.
 
-    ![Установите режим Provisioning на SCIM в настройках приложения Okta](/images/cloud/security/scim-okta/scim-okta-03.png)
+    ![Установите режим Provisioning на SCIM в настройках приложения Okta](/images/cloud/security/scim-okta/scim-okta-03.webp)
 
     Теперь в приложении отображается вкладка **Provisioning**.
 
-    ![На странице приложения теперь отображается вкладка Provisioning](/images/cloud/security/scim-okta/scim-okta-05.png)
+    ![На странице приложения теперь отображается вкладка Provisioning](/images/cloud/security/scim-okta/scim-okta-05.webp)
   </Step>
 
   <Step>
@@ -136,13 +136,13 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
       * **Username** — **ключ** токена SCIM (начинается с `scim_`).
       * **Password** — **секрет** токена SCIM.
 
-    ![Введите URL коннектора SCIM и задайте уникальный идентификатор userName](/images/cloud/security/scim-okta/scim-okta-06.png)
+    ![Введите URL коннектора SCIM и задайте уникальный идентификатор userName](/images/cloud/security/scim-okta/scim-okta-06.webp)
 
-    ![Введите учетные данные API для аутентификации SCIM](/images/cloud/security/scim-okta/scim-okta-08.png)
+    ![Введите учетные данные API для аутентификации SCIM](/images/cloud/security/scim-okta/scim-okta-08.webp)
 
     Нажмите `Test Connector Configuration`. Вы должны увидеть зеленое подтверждение. Если проверка не пройдет, перейдите к разделу [Troubleshooting](#troubleshooting).
 
-    ![Проверьте подключение SCIM](/images/cloud/security/scim-okta/scim-okta-09.png)
+    ![Проверьте подключение SCIM](/images/cloud/security/scim-okta/scim-okta-09.webp)
 
     Нажмите `Save`.
   </Step>
@@ -159,11 +159,11 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
     | Деактивация пользователей         | Включить  | Удаляет пользователя из ClickHouse Cloud при снятии назначения или деактивации в Okta |
     | Синхронизация пароля              | Отключить | Не используется — вход выполняется через SAML, а не по паролю                         |
 
-    ![Включение действий SCIM Provisioning для пользователей](/images/cloud/security/scim-okta/scim-okta-10.png)
+    ![Включение действий SCIM Provisioning для пользователей](/images/cloud/security/scim-okta/scim-okta-10.webp)
 
     Нажмите `Save`, затем вернитесь на вкладки **Sign On** / **Provisioning** приложения, чтобы убедиться, что настройки применены.
 
-    ![Сохранение настроек Provisioning и возврат на вкладку Sign On](/images/cloud/security/scim-okta/scim-okta-10b.png)
+    ![Сохранение настроек Provisioning и возврат на вкладку Sign On](/images/cloud/security/scim-okta/scim-okta-10b.webp)
   </Step>
 
   <Step>
@@ -196,21 +196,21 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
 
     **Создайте группы в Okta.** Для каждого сопоставления ролей, которое вы настроили ранее, создайте или найдите в Okta группу с **точно таким же отображаемым именем**. Например, если в сопоставлении указано `ClickHouse-Admins → Admin`, создайте в Okta группу с именем `ClickHouse-Admins`.
 
-    ![Создать новую группу в Okta](/images/cloud/security/scim-okta/scim-okta-13.png)
+    ![Создать новую группу в Okta](/images/cloud/security/scim-okta/scim-okta-13.webp)
 
     Откройте только что созданную группу и нажмите `Assign people`, чтобы добавить в нее пользователя.
 
-    ![Нажмите Assign people для группы](/images/cloud/security/scim-okta/scim-okta-14.png)
+    ![Нажмите Assign people для группы](/images/cloud/security/scim-okta/scim-okta-14.webp)
 
-    ![Назначить пользователя группе](/images/cloud/security/scim-okta/scim-okta-15.png)
+    ![Назначить пользователя группе](/images/cloud/security/scim-okta/scim-okta-15.webp)
 
     Затем назначьте приложение SCIM той же группе, чтобы назначение ролей и доступ к приложению оставались синхронизированы.
 
-    ![Назначить приложение группе](/images/cloud/security/scim-okta/scim-okta-16.png)
+    ![Назначить приложение группе](/images/cloud/security/scim-okta/scim-okta-16.webp)
 
     **Отправьте группы.** На вкладке **Provisioning** приложения нажмите `Push Groups → Find groups by name`, найдите нужную группу и нажмите `Save`. Повторите это для каждой ролевой группы. После Provisioning у каждой из них должен отображаться **Push Status** со значением **Active (Pushed)**.
 
-    ![Настройка Group Push по имени на вкладке Push Groups приложения](/images/cloud/security/scim-okta/scim-okta-17.png)
+    ![Настройка Group Push по имени на вкладке Push Groups приложения](/images/cloud/security/scim-okta/scim-okta-17.webp)
 
     **Назначьте пользователей.** У вас есть два варианта:
 
@@ -227,7 +227,7 @@ ClickHouse Cloud поддерживает SCIM 2.0 (System for Cross-domain Iden
 
 После настройки провижининга вернитесь в **Settings → Users and roles** в консоли ClickHouse Cloud, чтобы убедиться, что синхронизированные пользователи появились с ожидаемыми ролями.
 
-![Проверьте синхронизацию пользователей в Users and roles](/images/cloud/security/scim-okta/scim-okta-18.png)
+![Проверьте синхронизацию пользователей в Users and roles](/images/cloud/security/scim-okta/scim-okta-18.webp)
 
 Выполните эту короткую проверку с одним или двумя тестовыми пользователями **до** назначения всей команды. Каждый шаг должен выполняться в течение нескольких секунд; если это не так, проверьте очередь задач Okta и раздел [Устранение неполадок](#troubleshooting).
 

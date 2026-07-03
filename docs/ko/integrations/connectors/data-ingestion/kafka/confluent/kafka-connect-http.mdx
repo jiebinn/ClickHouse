@@ -69,7 +69,7 @@ ORDER BY tuple()
 
 Kafka 토픽과 HTTP Sink 커넥터 인스턴스를 생성합니다:
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.png" size="sm" alt="HTTP Sink 커넥터를 생성하는 방법을 보여주는 Confluent Cloud 인터페이스" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_http_sink.webp" size="sm" alt="HTTP Sink 커넥터를 생성하는 방법을 보여주는 Confluent Cloud 인터페이스" border />
 
 <br />
 
@@ -86,7 +86,7 @@ HTTP Sink 커넥터를 구성합니다:
   이 HTTP Url은 오류가 발생하기 쉽습니다. 문제를 방지하려면 이스케이프 처리를 정확히 하십시오.
 </Note>
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.png" size="lg" alt="HTTP Sink 커넥터의 인증 설정을 보여주는 Confluent Cloud 인터페이스" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_auth.webp" size="lg" alt="HTTP Sink 커넥터의 인증 설정을 보여주는 Confluent Cloud 인터페이스" border />
 
 <br />
 
@@ -100,7 +100,7 @@ HTTP Sink 커넥터를 구성합니다:
     * `Retry on HTTP codes` - 400-500으로 설정하되 필요에 따라 조정하십시오. 예를 들어 ClickHouse 앞단에 HTTP 프록시가 있는 경우 달라질 수 있습니다.
     * `Maximum Reties` - 기본값(10)이 적절하지만, 재시도 안정성을 높이려면 조정해도 됩니다.
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.png" size="sm" alt="HTTP Sink 커넥터의 고급 구성 옵션을 보여주는 Confluent Cloud 인터페이스" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/http_advanced.webp" size="sm" alt="HTTP Sink 커넥터의 고급 구성 옵션을 보여주는 Confluent Cloud 인터페이스" border />
 
 <div id="5-testing-the-connectivity">
   #### 5. 연결 테스트
@@ -108,7 +108,7 @@ HTTP Sink 커넥터를 구성합니다:
 
 HTTP Sink에 구성한 토픽에 메시지를 생성하세요
 
-<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.png" size="md" alt="Kafka 토픽에서 테스트 메시지를 생성하는 방법을 보여주는 Confluent Cloud 인터페이스" border />
+<Image img="/images/integrations/data-ingestion/kafka/confluent/create_message_in_topic.webp" size="md" alt="Kafka 토픽에서 테스트 메시지를 생성하는 방법을 보여주는 Confluent Cloud 인터페이스" border />
 
 <br />
 

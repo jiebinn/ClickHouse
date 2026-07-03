@@ -46,15 +46,15 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     3. انقر على &quot;Create connection&quot;.
     4. أدخل الحقول المطلوبة وفقًا لاحتياجاتك. في ما يلي لقطة شاشة لإنشاء peering داخل مشروع GCP نفسه.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.png" size="md" alt="BYOC إنشاء peering connection" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-1.webp" size="md" alt="BYOC إنشاء peering connection" border />
 
     يتطلب GCP VPC peering وجود اتصالين بين الشبكتين لكي يعمل (أي اتصال من شبكة BYOC إلى شبكة VPC الحالية، واتصال من شبكة VPC الحالية إلى شبكة BYOC). لذلك، تحتاج أيضًا إلى إنشاء اتصال آخر مماثل في الاتجاه المعاكس. في ما يلي لقطة شاشة لإنشاء peering connection الثاني:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.png" size="md" alt="BYOC قبول peering connection" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-2.webp" size="md" alt="BYOC قبول peering connection" border />
 
     بعد إنشاء الاتصالين، يجب أن تصبح حالة الاتصالين &quot;Active&quot; بعد تحديث صفحة Google Cloud Console:
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.png" size="lg" alt="BYOC قبول peering connection" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-gcp-3.webp" size="lg" alt="BYOC قبول peering connection" border />
 
     يجب أن تصبح خدمة ClickHouse الآن متاحة من شبكة VPC المترابطة.
   </Step>
@@ -89,15 +89,15 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
     سيوفّر لك ClickHouse Support اسم خدمة PSC. ويمكنك أيضًا العثور عليه في ClickHouse Cloud console ضمن &quot;Organization&quot; -&gt; &quot;Infrastructure&quot;، ثم النقر على اسم البنية التحتية لعرض التفاصيل.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.png" size="lg" alt="نقطة نهاية BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-1.webp" size="lg" alt="نقطة نهاية BYOC PSC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.png" size="lg" alt="نقطة نهاية BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-2.webp" size="lg" alt="نقطة نهاية BYOC PSC" border />
 
     يمكنك أيضًا العثور على اسم خدمة PSC في وحدة تحكم GCP Private Service Connect ضمن &quot;Published services&quot; (صفِّ حسب اسم الخدمة أو ابحث عن خدمات ClickHouse)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.png" size="lg" alt="نقطة نهاية BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-3.webp" size="lg" alt="نقطة نهاية BYOC PSC" border />
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.png" size="lg" alt="نقطة نهاية BYOC PSC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-4.webp" size="lg" alt="نقطة نهاية BYOC PSC" border />
   </Step>
 
   <Step>
@@ -115,13 +115,13 @@ import { Image } from "/snippets/ar/components/Image.jsx";
     * انقر على &quot;Add Endpoint&quot;، ثم انتظر قليلًا حتى يتم إنشاء نقطة النهاية.
     * يجب أن تصبح حالة نقطة النهاية &quot;Accepted&quot;، وتواصل مع ClickHouse Support إذا لم يتم قبولها تلقائيًا.
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.png" size="lg" alt="إنشاء نقطة نهاية PSC لـ BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-5.webp" size="lg" alt="إنشاء نقطة نهاية PSC لـ BYOC" border />
 
     2. **الحصول على معرّف اتصال PSC**:
 
     * انقر على تفاصيل نقطة النهاية واحصل على &quot;PSC Connection ID&quot; لاستخدامه في الخطوة [Add endpoint&#39;s PSC Connection ID to service allowlist](#step-5-add-endpoint-id-allowlist)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.png" size="lg" alt="تفاصيل نقطة نهاية PSC لـ BYOC" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-gcp-6.webp" size="lg" alt="تفاصيل نقطة نهاية PSC لـ BYOC" border />
   </Step>
 
   <Step>

@@ -17,11 +17,11 @@ O ClickHouse Cloud fornece uma API com OpenAPI que permite gerenciar programatic
 
 1. Você pode usar a aba **API Keys** no menu à esquerda para criar e gerenciar suas chaves de API.
 
-<Image img="/images/cloud/manage/openapi1.png" size="sm" alt="Aba API Keys" border />
+<Image img="/images/cloud/manage/openapi1.webp" size="sm" alt="Aba API Keys" border />
 
 2. A página **API Keys** exibirá inicialmente uma solicitação para criar sua primeira chave de API, como mostrado abaixo. Depois que a primeira chave for criada, você poderá criar novas chaves usando o botão `New API Key`, que aparece no canto superior direito.
 
-<Image img="/images/cloud/manage/openapi2.png" size="md" alt="Página API Keys" border />
+<Image img="/images/cloud/manage/openapi2.webp" size="md" alt="Página API Keys" border />
 
 3. Para criar uma chave de API, especifique o nome da chave, as permissões e o tempo de expiração e, em seguida, clique em `Generate API Key`.
 
@@ -41,7 +41,7 @@ O ClickHouse Cloud fornece uma API com OpenAPI que permite gerenciar programatic
 
 4. A próxima tela exibirá o ID da chave e o segredo da chave. Copie esses valores e guarde-os em um local seguro, como um cofre. Esses valores não serão exibidos depois que você sair desta tela.
 
-<Image img="/images/cloud/manage/openapi4.png" size="md" alt="Detalhes da chave de API" border />
+<Image img="/images/cloud/manage/openapi4.webp" size="md" alt="Detalhes da chave de API" border />
 
 5. A ClickHouse Cloud API usa [HTTP Basic Authentication](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) para verificar a validade das suas chaves de API. Veja um exemplo de como usar suas chaves de API para enviar solicitações à ClickHouse Cloud API com `curl`:
 
@@ -60,7 +60,7 @@ $ curl --user $KEY_ID:$KEY_SECRET https://api.clickhouse.cloud/v1/organizations
   Excluir uma chave de API é uma ação permanente. Todos os serviços que usam a chave perderão imediatamente o acesso ao ClickHouse Cloud.
 </Note>
 
-<Image img="/images/cloud/manage/openapi5.png" size="md" alt="Página de gerenciamento de API Keys" border />
+<Image img="/images/cloud/manage/openapi5.webp" size="md" alt="Página de gerenciamento de API Keys" border />
 
 <div id="endpoints">
   ## Endpoints

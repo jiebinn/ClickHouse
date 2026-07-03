@@ -115,7 +115,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 يمكن للمستخدم تصفية التتبعات باستخدام صيغة Lucene، مثل `ResourceAttributes.k8s.pod.name:"checkout-675775c4cc-f2p9c"`:
 
-<Image img="/images/clickstack/performance_guide/trace_filtering.png" size="lg" alt="تصفية التتبعات" />
+<Image img="/images/clickstack/performance_guide/trace_filtering.webp" size="lg" alt="تصفية التتبعات" />
 
 ويؤدي ذلك إلى مسند SQL مشابه لما يلي:
 
@@ -139,7 +139,7 @@ MATERIALIZED ResourceAttributes['k8s.pod.name']
 
 يمكن للمستخدمين الآن الاستعلام عن أسماء الكبسولات بكفاءة باستخدام بناء جملة Lucene، مثل `PodName:"checkout-675775c4cc-f2p9c"`
 
-<Image img="/images/clickstack/performance_guide/trace_filtering_v2.png" size="lg" alt="تصفية التتبعات v2" />
+<Image img="/images/clickstack/performance_guide/trace_filtering_v2.webp" size="lg" alt="تصفية التتبعات v2" />
 
 بالنسبة إلى البيانات المُدرجة حديثًا، يُلغي هذا الحاجة إلى الوصول إلى `map` بالكامل ويقلّل بشكل كبير من عمليات الإدخال/الإخراج.
 
@@ -757,7 +757,7 @@ has(LogAttributeItems, concat('k8s.pod.name', '=', 'checkout'))
 
     اضبط ClickStack UI لاستخدام `otel_logs_merge` بصفته الجدول الخاص بمصدر بيانات السجلات.
 
-    <Image img="/images/clickstack/performance_guide/select_merge_table.png" size="lg" alt="اختر جدول Merge" />
+    <Image img="/images/clickstack/performance_guide/select_merge_table.webp" size="lg" alt="اختر جدول Merge" />
 
     في هذه المرحلة، تستمر عمليات الكتابة إلى `otel_logs` باستخدام المفتاح الأساسي الأصلي، بينما تستخدم عمليات القراءة جدول Merge. لا يوجد أي تغيير مرئي للمستخدمين أو أي تأثير على استيعاب البيانات.
   </Step>

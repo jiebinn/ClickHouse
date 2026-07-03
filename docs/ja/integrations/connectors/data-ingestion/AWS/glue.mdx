@@ -41,7 +41,7 @@ Glue コードを ClickHouse と統合するには、次のいずれかの方法
     4. <h3 id="use-in-glue-job">Glue ジョブで使用する</h3>
        Glue ジョブで `Job details` タブを選択し、`Advanced properties` ウィンドウを展開します。`Connections` セクションで、先ほど作成した接続を選択します。コネクタは必要な JAR をジョブランタイムに自動的に追加します。
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.png" size="md" alt="Glue Notebook の接続設定" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.webp" size="md" alt="Glue Notebook の接続設定" force="true" />
 
     <Note>
       Glue コネクタで使用される JAR は、`Spark 3.3`、`Scala 2`、`Python 3` 向けにビルドされています。Glue ジョブを設定する際は、これらのバージョンを選択してください。
@@ -55,7 +55,7 @@ Glue コードを ClickHouse と統合するには、次のいずれかの方法
     2. Glue ジョブがこのバケットにアクセスできることを確認します。
     3. `Job details` タブで下にスクロールし、`Advanced properties` のドロップダウンを展開して、`Dependent JARs path` に JAR のパスを入力します。
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.png" size="md" alt="Glue Notebook の JAR パスオプション" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.webp" size="md" alt="Glue Notebook の JAR パスオプション" force="true" />
   </Tab>
 </Tabs>
 

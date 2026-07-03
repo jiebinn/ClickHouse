@@ -38,11 +38,11 @@ Vários tipos de falha podem ocorrer durante a ingestão de dados, o que pode re
       <Tab title="via EventBridge">
         **a.** Nas propriedades do bucket do S3, navegue até **Event notifications &gt; Amazon EventBridge** e habilite o envio de notificações para o EventBridge. Clique em **Save changes**.
 
-        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_s3_enable.png" alt="Habilitando notificações do Amazon EventBridge nas propriedades do bucket do S3" size="lg" border />
+        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_s3_enable.webp" alt="Habilitando notificações do Amazon EventBridge nas propriedades do bucket do S3" size="lg" border />
 
         **b.** No Console da AWS, navegue até **Amazon EventBridge &gt; Rules &gt; Create rule**. Dê um nome à regra (por exemplo, `S3ObjectCreated`), escolha o barramento de eventos **default** e clique em **Next**. Na etapa **Build event pattern**, selecione **AWS events or EventBridge partner events** como origem do evento e, em seguida, insira manualmente o seguinte padrão de evento, substituindo `<bucket-name>` pelo nome do seu bucket:
 
-        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_define.png" alt="Definindo o nome da regra do EventBridge e o barramento de eventos" size="lg" border />
+        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_define.webp" alt="Definindo o nome da regra do EventBridge e o barramento de eventos" size="lg" border />
 
         ```json
         {
@@ -60,9 +60,9 @@ Vários tipos de falha podem ocorrer durante a ingestão de dados, o que pode re
 
         **c.** Na etapa **Select target(s)**, escolha **AWS service** como tipo de destino e selecione **SQS queue**. Selecione a fila criada na etapa anterior. Deixe **Use execution role (recommended)** marcado para que o EventBridge crie automaticamente a IAM role necessária e, em seguida, clique em **Next** e conclua o assistente.
 
-        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_target.png" alt="Definindo a fila do SQS como destino da regra do EventBridge" size="lg" border />
+        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_target.webp" alt="Definindo a fila do SQS como destino da regra do EventBridge" size="lg" border />
 
-        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_created.png" alt="Regra do EventBridge criada com sucesso" size="lg" border />
+        <Image img="/images/integrations/data-ingestion/clickpipes/object-storage/amazon-s3/cp_eb_rule_created.webp" alt="Regra do EventBridge criada com sucesso" size="lg" border />
 
         **d.** Edite a política de acesso da fila do SQS para permitir que o EventBridge envie mensagens para ela. Substitua `<sqs-queue-arn>` e `<eventbridge-rule-arn>` pelos valores apropriados:
 

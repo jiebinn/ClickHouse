@@ -32,7 +32,7 @@ El registro binario es un conjunto de archivos de registro que contienen informa
 
 La función de copias de seguridad automatizadas determina si el registro binario de MySQL está activado o desactivado. Puede configurarse en la consola de AWS:
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/rds-backups.png" alt="Habilitación de copias de seguridad automatizadas en RDS" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/rds-backups.webp" alt="Habilitación de copias de seguridad automatizadas en RDS" size="lg" border />
 
 Se recomienda establecer una retención de copias de seguridad lo bastante prolongada en función del caso de uso de la replicación.
 
@@ -54,25 +54,25 @@ mysql=> call mysql.rds_set_configuration('binlog retention hours', 24);
 
 Puede encontrar el grupo de parámetros haciendo clic en su instancia de MariaDB en la RDS Console y, a continuación, navegando a la pestaña `Configurations`.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/rds_config.png" alt="Dónde encontrar el grupo de parámetros en RDS" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/rds_config.webp" alt="Dónde encontrar el grupo de parámetros en RDS" size="lg" border />
 
 Al hacer clic en el enlace del grupo de parámetros, accederá a la página del grupo de parámetros. Verá un botón `Edit` en la esquina superior derecha:
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/edit_button.png" alt="Editar grupo de parámetros" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/edit_button.webp" alt="Editar grupo de parámetros" size="lg" border />
 
 Los ajustes `binlog_format`, `binlog_row_metadata` y `binlog_row_image` deben establecerse de la siguiente manera:
 
 1. `binlog_format` en `ROW`.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_format.png" alt="Formato de binlog en ROW" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_format.webp" alt="Formato de binlog en ROW" size="lg" border />
 
 2. `binlog_row_metadata` en `FULL`
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_metadata.png" alt="Metadatos de fila de binlog en FULL" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_metadata.webp" alt="Metadatos de fila de binlog en FULL" size="lg" border />
 
 3. `binlog_row_image` en `FULL`
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_image.png" alt="Imagen de fila de binlog en FULL" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/parameter_group/binlog_row_image.webp" alt="Imagen de fila de binlog en FULL" size="lg" border />
 
 A continuación, haga clic en `Save Changes` en la esquina superior derecha. Es posible que deba reiniciar su instancia para que los cambios surtan efecto. Si ve `Pending reboot` junto al enlace del grupo de parámetros en la pestaña `Configurations` de la instancia de RDS, es un buen indicio de que debe reiniciar la instancia.
 
@@ -123,9 +123,9 @@ Conéctese a su instancia de RDS MariaDB como administrador y ejecute los siguie
 
 Si desea restringir el tráfico hacia su instancia de RDS, añada las [IP estáticas de NAT documentadas](/es/integrations/clickpipes/home#list-of-static-ips) a las `reglas de entrada` de su grupo de seguridad de RDS.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/security-group-in-rds-mysql.png" alt="¿Dónde encontrar el grupo de seguridad en RDS?" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/mysql/source/rds/security-group-in-rds-mysql.webp" alt="¿Dónde encontrar el grupo de seguridad en RDS?" size="lg" border />
 
-<Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/rds/edit_inbound_rules.png" alt="Editar las reglas de entrada del grupo de seguridad anterior" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/rds/edit_inbound_rules.webp" alt="Editar las reglas de entrada del grupo de seguridad anterior" size="lg" border />
 
 <div id="private-access-via-aws-privatelink">
   ### Acceso privado mediante AWS PrivateLink

@@ -40,7 +40,7 @@ ClickHouse BYOC на AWS поддерживает два варианта при
     5. Укажите ID целевой VPC в поле VPC Accepter. (При необходимости выберите другую учетную запись)
     6. Нажмите Create Peering Connection.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-1.png" size="lg" alt="BYOC Создание пирингового соединения" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-1.webp" size="lg" alt="BYOC Создание пирингового соединения" border />
   </Step>
 
   <Step>
@@ -48,7 +48,7 @@ ClickHouse BYOC на AWS поддерживает два варианта при
 
     Перейдите в учетную запись, с которой настраивается пиринг; на странице (VPC -&gt; Peering connections -&gt; Actions -&gt; Accept request) можно одобрить этот запрос на пиринг VPC.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-2.png" size="lg" alt="BYOC Принятие пирингового соединения" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-2.webp" size="lg" alt="BYOC Принятие пирингового соединения" border />
   </Step>
 
   <Step>
@@ -63,7 +63,7 @@ ClickHouse BYOC на AWS поддерживает два варианта при
     5. Введите CIDR-диапазон целевой VPC в поле Destination.
     6. Выберите “Peering Connection” и ID пирингового соединения в поле Target.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-3.png" size="lg" alt="BYOC Добавление таблицы маршрутизации" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-3.webp" size="lg" alt="BYOC Добавление таблицы маршрутизации" border />
   </Step>
 
   <Step>
@@ -78,7 +78,7 @@ ClickHouse BYOC на AWS поддерживает два варианта при
     5. Введите CIDR-диапазон ClickHouse VPC в поле Destination.
     6. Выберите “Peering Connection” и ID пирингового соединения в поле Target.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-4.png" size="lg" alt="BYOC Добавление таблицы маршрутизации" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-4.webp" size="lg" alt="BYOC Добавление таблицы маршрутизации" border />
   </Step>
 
   <Step>
@@ -123,7 +123,7 @@ AWS PrivateLink обеспечивает безопасное приватное
        * ClickHouse Support предоставит вам Service name конечной точки
        * Вы также можете найти его в консоли AWS VPC в разделе &quot;Endpoint Services&quot; (отфильтруйте по имени сервиса или найдите сервисы ClickHouse)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-1.png" size="lg" alt="Конечная точка сервиса BYOC PrivateLink" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-1.webp" size="lg" alt="Конечная точка сервиса BYOC PrivateLink" border />
 
     2. **Создайте конечную точку VPC**:
        * Перейдите в консоль AWS VPC → Endpoints → Create Endpoint
@@ -147,7 +147,7 @@ AWS PrivateLink обеспечивает безопасное приватное
        * В консоли VPC перейдите в &quot;Endpoint Connections&quot;
        * Найдите запрос на подключение от ClickHouse и нажмите &quot;Accept&quot;, чтобы подтвердить его
 
-    <Image img="/images/cloud/reference/byoc-privatelink-2.png" size="lg" alt="Подтверждение BYOC PrivateLink" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-2.webp" size="lg" alt="Подтверждение BYOC PrivateLink" border />
   </Step>
 
   <Step>

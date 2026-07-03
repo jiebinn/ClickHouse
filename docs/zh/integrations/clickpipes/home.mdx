@@ -20,7 +20,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
 
 ClickPipes 既可以通过 ClickPipes UI 手动部署和管理，也可以通过 [OpenAPI](/zh/integrations/clickpipes/programmatic-access/openapi) 和 [Terraform](/zh/integrations/clickpipes/programmatic-access/terraform) 以编程方式进行部署和管理。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.png" alt="ClickPipes 架构" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/clickpipes_stack.webp" alt="ClickPipes 架构" size="lg" border />
 
 <div id="supported-data-sources">
   ## 支持的数据源
@@ -30,7 +30,7 @@ ClickPipes 既可以通过 ClickPipes UI 手动部署和管理，也可以通过
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Apache Kafka](/zh/integrations/clickpipes/kafka/index)        | <img src="/images/integrations/logos/kafka.svg" alt="Apache Kafka 徽标" width="32" />                  | 流式   | 稳定版本        | 配置 ClickPipes，开始将 Apache Kafka 中的流式数据摄取到 ClickHouse Cloud。                                                                                         |
 | Confluent Cloud                                             | <img src="/images/integrations/logos/confluent.svg" alt="Confluent Cloud 徽标" width="32" />           | 流式   | 稳定版本        | 通过我们的直接集成，充分发挥 Confluent 与 ClickHouse Cloud 的组合优势。                                                                                                 |
-| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.png" alt="Redpanda 徽标" width="32" />              | 流式   | 稳定版本        | 配置 ClickPipes，开始将 Redpanda 中的流式数据摄取到 ClickHouse Cloud。                                                                                             |
+| Redpanda                                                    | <img src="/images/integrations/logos/logo_redpanda.webp" alt="Redpanda 徽标" width="32" />              | 流式   | 稳定版本        | 配置 ClickPipes，开始将 Redpanda 中的流式数据摄取到 ClickHouse Cloud。                                                                                             |
 | AWS MSK                                                     | <img src="/images/integrations/logos/msk.svg" alt="AWS MSK 徽标" width="32" />                         | 流式   | 稳定版本        | 配置 ClickPipes，开始将 AWS MSK 中的流式数据摄取到 ClickHouse Cloud。                                                                                              |
 | Azure Event Hubs                                            | <img src="/images/integrations/logos/azure_event_hubs.svg" alt="Azure Event Hubs 徽标" width="32" />   | 流式   | 稳定版本        | 配置 ClickPipes，开始将 Azure Event Hubs 中的流式数据摄取到 ClickHouse Cloud。有关说明，请参阅 [Azure Event Hubs FAQ](/zh/integrations/clickpipes/kafka/faq#azure-eventhubs)。 |
 | WarpStream                                                  | <img src="/images/integrations/logos/warpstream.svg" alt="WarpStream 徽标" width="32" />               | 流式   | 稳定版本        | 配置 ClickPipes，开始将 WarpStream 中的流式数据摄取到 ClickHouse Cloud。                                                                                           |
@@ -126,7 +126,7 @@ ClickHouse Cloud 为大多数使用场景提供了合理的默认设置。不过
 1. 创建自定义角色 `CREATE ROLE my_clickpipes_role SETTINGS ...`。详情请参见 [CREATE ROLE](/zh/reference/statements/create/role) 语法。
 2. 在创建 ClickPipes 的过程中，在 `Details and Settings` 步骤将该自定义角色添加给 ClickPipes 用户。
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.png" alt="分配自定义角色" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_custom_role.webp" alt="分配自定义角色" size="lg" border />
 
 <div id="clickpipes-advanced-settings">
   ## 调整 ClickPipes 高级设置
@@ -151,7 +151,7 @@ ClickPipes 提供了适用于大多数场景的合理默认设置。如果你的
 | `Parallel view processing`           | false         | 是否启用以[并发而非顺序](/zh/reference/settings/session-settings#parallel_view_processing)方式推送到已附加视图。                     |
 | `Use cluster function`               | true          | 是否在多个节点上并行处理文件。                                                                                             |
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.png" alt="ClickPipes 的高级设置" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_advanced_settings.webp" alt="ClickPipes 的高级设置" size="lg" border />
 
 <div id="clickpipes-advanced-settings-streaming">
   ### 流式 ClickPipes

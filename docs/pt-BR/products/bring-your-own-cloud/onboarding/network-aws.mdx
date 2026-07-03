@@ -40,7 +40,7 @@ Para criar ou excluir o peering de VPC para o ClickHouse BYOC, siga estas etapas
     5. Defina VPC Accepter como o ID da VPC de destino. (Selecione outra conta, se aplicável)
     6. Clique em Create Peering Connection.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-1.png" size="lg" alt="BYOC Criar conexão de peering" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-1.webp" size="lg" alt="BYOC Criar conexão de peering" border />
   </Step>
 
   <Step>
@@ -48,7 +48,7 @@ Para criar ou excluir o peering de VPC para o ClickHouse BYOC, siga estas etapas
 
     Acesse a conta de peering e, na página (VPC -&gt; Peering connections -&gt; Actions -&gt; Accept request), o cliente poderá aprovar esta solicitação de peering de VPC.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-2.png" size="lg" alt="BYOC Aceitar conexão de peering" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-2.webp" size="lg" alt="BYOC Aceitar conexão de peering" border />
   </Step>
 
   <Step>
@@ -63,7 +63,7 @@ Para criar ou excluir o peering de VPC para o ClickHouse BYOC, siga estas etapas
     5. Insira o intervalo CIDR da VPC de destino em Destination.
     6. Selecione “Peering Connection” e o ID da conexão de peering em Target.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-3.png" size="lg" alt="BYOC Adicionar tabela de rotas" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-3.webp" size="lg" alt="BYOC Adicionar tabela de rotas" border />
   </Step>
 
   <Step>
@@ -78,7 +78,7 @@ Para criar ou excluir o peering de VPC para o ClickHouse BYOC, siga estas etapas
     5. Insira o intervalo CIDR da VPC do ClickHouse em Destination.
     6. Selecione “Peering Connection” e o ID da conexão de peering em Target.
 
-    <Image img="/images/cloud/reference/byoc-vpcpeering-4.png" size="lg" alt="BYOC Adicionar tabela de rotas" border />
+    <Image img="/images/cloud/reference/byoc-vpcpeering-4.webp" size="lg" alt="BYOC Adicionar tabela de rotas" border />
   </Step>
 
   <Step>
@@ -123,7 +123,7 @@ O AWS PrivateLink fornece conectividade segura e privada aos seus serviços Clic
        * O suporte do ClickHouse fornecerá o nome do serviço de endpoint
        * Você também pode encontrá-lo no Console da AWS VPC em &quot;Endpoint Services&quot; (filtre pelo nome do serviço ou procure pelos serviços ClickHouse)
 
-    <Image img="/images/cloud/reference/byoc-privatelink-1.png" size="lg" alt="Endpoint de serviço BYOC PrivateLink" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-1.webp" size="lg" alt="Endpoint de serviço BYOC PrivateLink" border />
 
     2. **Criar o endpoint de VPC**:
        * Navegue até o AWS VPC Console → Endpoints → Create Endpoint
@@ -147,7 +147,7 @@ O AWS PrivateLink fornece conectividade segura e privada aos seus serviços Clic
        * No VPC Console, vá para &quot;Endpoint Connections&quot;
        * Encontre a solicitação de conexão do ClickHouse e clique em &quot;Accept&quot; para aprová-la
 
-    <Image img="/images/cloud/reference/byoc-privatelink-2.png" size="lg" alt="Aprovação do BYOC PrivateLink" border />
+    <Image img="/images/cloud/reference/byoc-privatelink-2.webp" size="lg" alt="Aprovação do BYOC PrivateLink" border />
   </Step>
 
   <Step>

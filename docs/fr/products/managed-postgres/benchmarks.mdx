@@ -36,7 +36,7 @@ Tous les tests de performance ont été effectués à l’aide d’une VM client
   ### Test 1 : E/S intensives - Lecture+écriture (jeu de données de 500 GB)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="Résultats du benchmark E/S intensives Lecture+écriture" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="Résultats du benchmark E/S intensives Lecture+écriture" size="md" border />
 
 **Amélioration des performances par rapport à RDS (16k IOPS) :**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### Test 2 : E/S intensives - lecture seule (jeu de données de 500 Go)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="Résultats du benchmark E/S intensives en lecture seule" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="Résultats du benchmark E/S intensives en lecture seule" size="md" border />
 
 **Amélioration des performances par rapport à RDS (16k IOPS) :**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### Test 3 : charge CPU élevée (les données tiennent en mémoire)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="Résultats du benchmark à forte charge CPU" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="Résultats du benchmark à forte charge CPU" size="md" border />
 
 **Amélioration des performances :**
 

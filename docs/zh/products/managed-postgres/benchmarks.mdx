@@ -36,7 +36,7 @@ import { Image } from "/snippets/zh/components/Image.jsx";
   ### 测试 1：IO 密集型——读+写 (500 GB 数据集)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.png" alt="IO 密集型读+写基准测试结果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readwrite.webp" alt="IO 密集型读+写基准测试结果" size="md" border />
 
 **相较于 RDS (16k IOPS) 的性能提升：**
 
@@ -78,7 +78,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30
   ### 测试 2：IO 密集型 - 只读 (500 GB 数据集)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.png" alt="IO 密集型只读基准测试结果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/io-intensive-readonly.webp" alt="IO 密集型只读基准测试结果" size="md" border />
 
 **相较于 RDS (16k IOPS) 的性能提升：**
 
@@ -116,7 +116,7 @@ pgbench -c 256 -j 16 -T 600 -M prepared -P 30 -S
   ### 测试 3：CPU 密集型 (数据可放入内存)
 </div>
 
-<Image img="/images/managed-postgres/benchmarks/compute-intensive.png" alt="CPU 密集型基准测试结果" size="md" border />
+<Image img="/images/managed-postgres/benchmarks/compute-intensive.webp" alt="CPU 密集型基准测试结果" size="md" border />
 
 **性能提升：**
 

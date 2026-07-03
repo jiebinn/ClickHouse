@@ -41,7 +41,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
     4. <h3 id="use-in-glue-job">Использование в задаче Glue</h3>
        В задаче Glue выберите вкладку `Job details` и раскройте раздел `Advanced properties`. В разделе `Connections` выберите только что созданное подключение. Коннектор автоматически добавит необходимые JAR-файлы в среду выполнения задачи.
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.png" size="md" alt="Конфигурация подключений Glue Notebook" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.webp" size="md" alt="Конфигурация подключений Glue Notebook" force="true" />
 
     <Note>
       JAR-файлы, используемые в коннекторе Glue, собраны для `Spark 3.3`, `Scala 2` и `Python 3`. При настройке задачи Glue обязательно выберите эти версии.
@@ -55,7 +55,7 @@ import ClickHouseSupportedBadge from "/snippets/ru/components/ClickHouseSupporte
     2. Убедитесь, что задача Glue имеет доступ к этому бакету.
     3. На вкладке `Job details` прокрутите страницу вниз, раскройте список `Advanced properties` и укажите путь к JAR-файлам в поле `Dependent JARs path`:
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.png" size="md" alt="Параметры пути к JAR-файлам в Glue Notebook" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.webp" size="md" alt="Параметры пути к JAR-файлам в Glue Notebook" force="true" />
   </Tab>
 </Tabs>
 

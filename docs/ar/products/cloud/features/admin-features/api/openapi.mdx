@@ -17,11 +17,11 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 1. يمكنك استخدام علامة التبويب **مفاتيح واجهة برمجة تطبيقات** في القائمة اليمنى لإنشاء مفاتيح واجهة برمجة التطبيقات الخاصة بك وإدارتها.
 
-<Image img="/images/cloud/manage/openapi1.png" size="sm" alt="علامة التبويب مفاتيح واجهة برمجة تطبيقات" border />
+<Image img="/images/cloud/manage/openapi1.webp" size="sm" alt="علامة التبويب مفاتيح واجهة برمجة تطبيقات" border />
 
 2. ستعرض صفحة **مفاتيح واجهة برمجة تطبيقات** في البداية رسالةً تطلب منك إنشاء أول مفتاح واجهة برمجة تطبيقات، كما هو موضح أدناه. بعد إنشاء مفتاحك الأول، يمكنك إنشاء مفاتيح جديدة باستخدام زر `New API Key` الذي يظهر في الزاوية العلوية اليمنى.
 
-<Image img="/images/cloud/manage/openapi2.png" size="md" alt="صفحة مفاتيح واجهة برمجة تطبيقات" border />
+<Image img="/images/cloud/manage/openapi2.webp" size="md" alt="صفحة مفاتيح واجهة برمجة تطبيقات" border />
 
 3. لإنشاء مفتاح واجهة برمجة تطبيقات، حدِّد اسم المفتاح وأذونات المفتاح ووقت انتهاء الصلاحية، ثم انقر على `Generate API Key`.
 
@@ -41,7 +41,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 4. ستعرض الشاشة التالية معرّف المفتاح وسرّ المفتاح. انسخ هاتين القيمتين واحفظهما في مكان آمن، مثل خزنة. لن تُعرض هذه القيم بعد مغادرة هذه الشاشة.
 
-<Image img="/images/cloud/manage/openapi4.png" size="md" alt="تفاصيل مفتاح واجهة برمجة تطبيقات" border />
+<Image img="/images/cloud/manage/openapi4.webp" size="md" alt="تفاصيل مفتاح واجهة برمجة تطبيقات" border />
 
 5. تستخدم واجهة برمجة تطبيقات ClickHouse Cloud [HTTP Basic Authentication](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) للتحقق من صحة مفاتيح واجهة برمجة تطبيقات الخاصة بك. إليك مثالًا على كيفية استخدام مفاتيح واجهة برمجة تطبيقات لإرسال طلبات إلى واجهة برمجة تطبيقات ClickHouse Cloud باستخدام `curl`:
 
@@ -60,7 +60,7 @@ $ curl --user $KEY_ID:$KEY_SECRET https://api.clickhouse.cloud/v1/organizations
   حذف مفتاح واجهة برمجة تطبيقات إجراء دائم. وستفقد أي خدمات تستخدم هذا المفتاح إمكانية الوصول إلى ClickHouse Cloud فورًا.
 </Note>
 
-<Image img="/images/cloud/manage/openapi5.png" size="md" alt="صفحة إدارة مفاتيح واجهة برمجة تطبيقات" border />
+<Image img="/images/cloud/manage/openapi5.webp" size="md" alt="صفحة إدارة مفاتيح واجهة برمجة تطبيقات" border />
 
 <div id="endpoints">
   ## نقاط النهاية

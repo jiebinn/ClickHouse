@@ -37,15 +37,15 @@ marimo edit clickhouse_demo.py
 
 انتقل إلى لوحة مصادر البيانات في الجانب الأيسر من محرر marimo وانقر على &#39;Add database&#39;.
 
-<Image img="/images/integrations/sql-clients/marimo/panel-arrow.png" size="sm" border alt="إضافة قاعدة بيانات جديدة" />
+<Image img="/images/integrations/sql-clients/marimo/panel-arrow.webp" size="sm" border alt="إضافة قاعدة بيانات جديدة" />
 
 سيُطلب منك إدخال تفاصيل قاعدة البيانات.
 
-<Image img="/images/integrations/sql-clients/marimo/add-db-details.png" size="md" border alt="أدخل تفاصيل قاعدة البيانات" />
+<Image img="/images/integrations/sql-clients/marimo/add-db-details.webp" size="md" border alt="أدخل تفاصيل قاعدة البيانات" />
 
 بعد ذلك، ستظهر لك خلية يمكن تشغيلها لإنشاء اتصال.
 
-<Image img="/images/integrations/sql-clients/marimo/run-cell.png" size="md" border alt="شغّل الخلية للاتصال بـ ClickHouse" />
+<Image img="/images/integrations/sql-clients/marimo/run-cell.webp" size="md" border alt="شغّل الخلية للاتصال بـ ClickHouse" />
 
 <div id="run-sql">
   ## 3. تشغيل SQL
@@ -53,7 +53,7 @@ marimo edit clickhouse_demo.py
 
 بمجرد إعداد اتصال، يمكنك إنشاء خلية SQL جديدة واختيار محرك ClickHouse.
 
-<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.png" size="md" border alt="اختر محرك SQL" />
+<Image img="/images/integrations/sql-clients/marimo/choose-sql-engine.webp" size="md" border alt="اختر محرك SQL" />
 
 في هذا الدليل، سنستخدم مجموعة بيانات New York Taxi.
 
@@ -111,14 +111,14 @@ FROM gcs(
 SELECT * FROM trips LIMIT 1000;
 ```
 
-<Image img="/images/integrations/sql-clients/marimo/results.png" size="lg" border alt="النتائج في إطار بيانات" />
+<Image img="/images/integrations/sql-clients/marimo/results.webp" size="lg" border alt="النتائج في إطار بيانات" />
 
 الآن يمكنك عرض النتائج في إطار بيانات. أودّ تصور أعلى نقاط النزول تكلفةً انطلاقًا من موقع التقاط معيّن. يوفّر marimo عدة مكوّنات لواجهة المستخدم لمساعدتك. سأستخدم قائمة منسدلة لاختيار الموقع وaltair لإنشاء المخططات.
 
-<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.png" size="lg" border alt="مزيج من قائمة منسدلة وجدول ومخطط" />
+<Image img="/images/integrations/sql-clients/marimo/dropdown-cell-chart.webp" size="lg" border alt="مزيج من قائمة منسدلة وجدول ومخطط" />
 
 يمتد نموذج التنفيذ التفاعلي في marimo إلى استعلامات SQL أيضًا، لذا فإن التغييرات التي تُجريها على SQL ستُشغّل تلقائيًا العمليات الحسابية اللاحقة للخلايا التابعة (أو يمكن اختياريًا تمييز الخلايا على أنها غير محدّثة في حال كانت العمليات الحسابية مكلفة). لذلك يتغير المخطط والجدول عند تحديث الاستعلام.
 
 يمكنك أيضًا تبديل App View للحصول على واجهة نظيفة لاستكشاف بياناتك.
 
-<Image img="/images/integrations/sql-clients/marimo/run-app-view.png" size="md" border alt="تشغيل عرض التطبيق" />
+<Image img="/images/integrations/sql-clients/marimo/run-app-view.webp" size="md" border alt="تشغيل عرض التطبيق" />

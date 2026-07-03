@@ -51,7 +51,7 @@ LIMIT 8;
 
 Vous pouvez [exécuter cette requête dans le ClickHouse SQL Playground](https://sql.clickhouse.com?query=U0VMRUNUIE1vYmlsZVBob25lTW9kZWwsIENPVU5UKCkgQVMgYyAKRlJPTSBtZXRyaWNhLmhpdHMgCldIRVJFIAogICAgICBSZWdpb25JRCA9IDIyOSAKICBBTkQgRXZlbnREYXRlID49ICcyMDEzLTA3LTAxJyAKICBBTkQgRXZlbnREYXRlIDw9ICcyMDEzLTA3LTMxJyAKICBBTkQgTW9iaWxlUGhvbmUgIT0gMCAKICBBTkQgTW9iaWxlUGhvbmVNb2RlbCBub3QgaW4gWycnLCAnaVBhZCddIApHUk9VUCBCWSBNb2JpbGVQaG9uZU1vZGVsCk9SREVSIEJZIGMgREVTQyAKTElNSVQgODs\&chart=eyJ0eXBlIjoicGllIiwiY29uZmlnIjp7InhheGlzIjoiTW9iaWxlUGhvbmVNb2RlbCIsInlheGlzIjoiYyJ9fQ\&run_query=true) qui sélectionne et filtre [quelques-unes seulement parmi plus de 100](https://sql.clickhouse.com/?query=U0VMRUNUIG5hbWUKRlJPTSBzeXN0ZW0uY29sdW1ucwpXSEVSRSBkYXRhYmFzZSA9ICdtZXRyaWNhJyBBTkQgdGFibGUgPSAnaGl0cyc7\&tab=results\&run_query=true) colonnes existantes, et renvoie le résultat en quelques millisecondes :
 
-<Image img="/images/column-oriented-example-query.png" alt="Exemple de requête dans une base de données orientée colonnes" size="lg" />
+<Image img="/images/column-oriented-example-query.webp" alt="Exemple de requête dans une base de données orientée colonnes" size="lg" />
 
 Comme vous pouvez le voir dans la section des statistiques du schéma ci-dessus, la requête a traité 100 millions de lignes en 92 millisecondes, soit un débit de plus d’un milliard de lignes par seconde, ou un peu moins de 7 Go de données transférées par seconde.
 

@@ -27,7 +27,7 @@ import ClickHouseSupportedBadge from "/snippets/pt-BR/components/ClickHouseSuppo
 
 Neste guia, você vai criar um dashboard no Superset com dados de um banco de dados do ClickHouse. O dashboard ficará assim:
 
-<Image size="md" img="/images/integrations/data-visualization/superset_12.png" alt="Dashboard do Superset mostrando preços de imóveis do Reino Unido com várias visualizações, incluindo gráficos de pizza e tabelas" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_12.webp" alt="Dashboard do Superset mostrando preços de imóveis do Reino Unido com várias visualizações, incluindo gráficos de pizza e tabelas" border />
 
 <br />
 
@@ -67,13 +67,13 @@ Neste guia, você vai criar um dashboard no Superset com dados de um banco de da
 
 1. No Superset, selecione **Data** no menu superior e, em seguida, **Databases** no menu suspenso. Adicione um novo banco de dados clicando no botão **+ Database**:
 
-<Image size="lg" img="/images/integrations/data-visualization/superset_01.png" alt="Interface do Superset mostrando o menu Database com o botão + Database destacado" border />
+<Image size="lg" img="/images/integrations/data-visualization/superset_01.webp" alt="Interface do Superset mostrando o menu Database com o botão + Database destacado" border />
 
 <br />
 
 2. Na primeira etapa, selecione **ClickHouse Connect** como o tipo de banco de dados:
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_02.png" alt="Assistente de conexão de banco de dados do Superset mostrando a opção ClickHouse Connect selecionada" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_02.webp" alt="Assistente de conexão de banco de dados do Superset mostrando a opção ClickHouse Connect selecionada" border />
 
 <br />
 
@@ -83,7 +83,7 @@ Neste guia, você vai criar um dashboard no Superset com dados de um banco de da
 * Insira as informações de conexão que você coletou anteriormente.
 * Especifique o **DISPLAY NAME**: pode ser qualquer nome de sua preferência. Se você for se conectar a vários bancos de dados do ClickHouse, use um nome mais descritivo.
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_03.png" alt="Formulário de configuração de conexão do Superset mostrando os parâmetros de conexão do ClickHouse" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_03.webp" alt="Formulário de configuração de conexão do Superset mostrando os parâmetros de conexão do ClickHouse" border />
 
 <br />
 
@@ -97,7 +97,7 @@ Neste guia, você vai criar um dashboard no Superset com dados de um banco de da
 
 2. Clique no botão para adicionar um conjunto de dados. Selecione seu novo banco de dados como fonte de dados, e você verá as tabelas definidas no seu banco de dados:
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_04.png" alt="Caixa de diálogo de criação de conjunto de dados no Superset mostrando as tabelas disponíveis no banco de dados ClickHouse" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_04.webp" alt="Caixa de diálogo de criação de conjunto de dados no Superset mostrando as tabelas disponíveis no banco de dados ClickHouse" border />
 
 <br />
 
@@ -111,38 +111,38 @@ Se você já conhece o Superset, vai se sentir em casa nesta próxima seção. S
 
 1. Você começa com um dashboard. No menu superior do Superset, selecione **Dashboards**. Clique no botão no canto superior direito para adicionar um novo dashboard. O dashboard a seguir se chama **UK property prices**:
 
-<Image size="md" img="/images/integrations/data-visualization/superset_05.png" alt="Dashboard vazio do Superset chamado UK property prices, pronto para receber gráficos" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_05.webp" alt="Dashboard vazio do Superset chamado UK property prices, pronto para receber gráficos" border />
 
 <br />
 
 2. Para criar um novo gráfico, selecione **Charts** no menu superior e clique no botão para adicionar um novo gráfico. Você verá várias opções. O exemplo a seguir mostra um gráfico **Pie Chart** usando o conjunto de dados **uk&#95;price&#95;paid** no menu suspenso **CHOOSE A DATASET**:
 
-<Image size="md" img="/images/integrations/data-visualization/superset_06.png" alt="Interface de criação de gráfico do Superset com o tipo de visualização Pie Chart selecionado" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_06.webp" alt="Interface de criação de gráfico do Superset com o tipo de visualização Pie Chart selecionado" border />
 
 <br />
 
 3. Os gráficos de pizza do Superset precisam de uma **Dimension** e uma **Metric**; o restante das configurações é opcional. Você pode escolher seus próprios campos para a dimensão e a métrica; este exemplo usa o campo `district` do ClickHouse como dimensão e `AVG(price)` como métrica.
 
-<Image size="md" img="/images/integrations/data-visualization/superset_08.png" alt="Configuração de dimensão mostrando o campo district selecionado para o gráfico de pizza" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_08.webp" alt="Configuração de dimensão mostrando o campo district selecionado para o gráfico de pizza" border />
 
-<Image size="md" img="/images/integrations/data-visualization/superset_09.png" alt="Configuração de métrica mostrando a função de agregação AVG(price) para o gráfico de pizza" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_09.webp" alt="Configuração de métrica mostrando a função de agregação AVG(price) para o gráfico de pizza" border />
 
 <br />
 
 5. Se você prefere gráficos de rosca a gráficos de pizza, pode definir isso e outras opções em **CUSTOMIZE**:
 
-<Image size="sm" img="/images/integrations/data-visualization/superset_10.png" alt="Painel de personalização mostrando a opção de gráfico de rosca e outras configurações do gráfico de pizza" border />
+<Image size="sm" img="/images/integrations/data-visualization/superset_10.webp" alt="Painel de personalização mostrando a opção de gráfico de rosca e outras configurações do gráfico de pizza" border />
 
 <br />
 
 6. Clique no botão **SAVE** para salvar o gráfico, depois selecione **UK property prices** no menu suspenso **ADD TO DASHBOARD**; em seguida, **SAVE &amp; GO TO DASHBOARD** salva o gráfico e o adiciona ao dashboard:
 
-<Image size="md" img="/images/integrations/data-visualization/superset_11.png" alt="Caixa de diálogo para salvar gráfico com menu suspenso de seleção de dashboard e botão Save & Go to Dashboard" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_11.webp" alt="Caixa de diálogo para salvar gráfico com menu suspenso de seleção de dashboard e botão Save & Go to Dashboard" border />
 
 <br />
 
 7. É isso. Criar dashboards no Superset com base em dados no ClickHouse abre todo um mundo de análises de dados extremamente rápidas!
 
-<Image size="md" img="/images/integrations/data-visualization/superset_12.png" alt="Dashboard completo do Superset com várias visualizações de dados de preços de imóveis do Reino Unido no ClickHouse" border />
+<Image size="md" img="/images/integrations/data-visualization/superset_12.webp" alt="Dashboard completo do Superset com várias visualizações de dados de preços de imóveis do Reino Unido no ClickHouse" border />
 
 <br />

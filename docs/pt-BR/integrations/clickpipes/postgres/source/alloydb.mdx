@@ -34,14 +34,14 @@ Para habilitar essas flags:
 
 1. No Google Cloud Console, acesse a página [Clusters](https://console.cloud.google.com/alloydb/clusters) do AlloyDB. No menu **Actions** da sua instância primária, clique em **Edit**.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/1_edit_instance.png" alt="Editar a configuração da instância primária" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/1_edit_instance.webp" alt="Editar a configuração da instância primária" size="lg" border />
 
 2. Role a página para baixo até **Advanced configuration options** e expanda a seção. Em **Flags**, clique em **Add a database flag**.
 
    * Adicione a flag [`allowdb.enable_pglogical`](https://cloud.google.com/alloydb/docs/reference/alloydb-flags#alloydb.enable_pglogical) e defina o valor como `on`
    * Adicione a flag [`alloydb.logical_decoding`](https://cloud.google.com/alloydb/docs/reference/alloydb-flags#alloydb.logical_decoding) e defina o valor como `on`
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/2_set_flags.png" alt="Definir as flags allowdb.enable_pglogical e alloydb.logical_decoding como on" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/2_set_flags.webp" alt="Definir as flags allowdb.enable_pglogical e alloydb.logical_decoding como on" size="lg" border />
 
 3. Clique em **Update instance** para salvar as alterações de configuração. É importante observar que essa ação **reinicia a instância primária.**
 
@@ -53,7 +53,7 @@ Para habilitar essas flags:
 
    O resultado deve ser `logical`.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/3_verify_logical_replication.png" alt="Verificar se a replicação lógica está habilitada" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/3_verify_logical_replication.webp" alt="Verificar se a replicação lógica está habilitada" size="lg" border />
 
 <div id="create-a-clickpipes-user-and-manage-replication-permissions">
   ## Crie um usuário do ClickPipes e gerencie as permissões de replicação
@@ -119,7 +119,7 @@ Em seguida, você deve permitir conexões do ClickPipes à sua instância do All
 
     3. Marque a caixa de seleção **Enable Public IP** para permitir conexões com a instância pela internet pública. Em **Authorized external networks**, insira a [lista de endereços IP estáticos do ClickPipes](/pt-BR/integrations/clickpipes/home#list-of-static-ips) da região em que seu serviço está implantado.
 
-       <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/4_configure_network_security.png" alt="Configurar a rede para acesso público com uma lista de permissões de IPs" size="lg" border />
+       <Image img="/images/integrations/data-ingestion/clickpipes/postgres/source/alloydb/4_configure_network_security.webp" alt="Configurar a rede para acesso público com uma lista de permissões de IPs" size="lg" border />
 
     <Note>
       O AlloyDB espera que os endereços sejam especificados em [notação CIDR](https://cloud.google.com/alloydb/docs/connection-overview#public-ip). Você pode adaptar a lista fornecida de endereços IP estáticos do ClickPipes a essa notação adicionando `/32` a cada endereço.

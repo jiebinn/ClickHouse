@@ -23,7 +23,7 @@ import ScalePlanFeatureBadge from "/snippets/ru/components/ScalePlanFeatureBadge
 * конечную точку (или несколько конечных точек, созданных через консоль ClickHouse Cloud) для подключения к сервису (например, `https://dv2fzne24g.us-east-1.aws.clickhouse.cloud:8443`) для локальных подключений и подключений сторонних приложений
 * папку в объектном хранилище, где сервис хранит все данные и часть метаданных:
 
-<Image img="/images/cloud/reference/compute-compute-1.png" size="md" alt="Один сервис в ClickHouse Cloud" />
+<Image img="/images/cloud/reference/compute-compute-1.webp" size="md" alt="Один сервис в ClickHouse Cloud" />
 
 <br />
 
@@ -37,7 +37,7 @@ Compute-compute separation означает, что у каждого серви
 
 Compute-compute separation также позволяет отделить операции чтения от операций записи, чтобы они не мешали друг другу:
 
-<Image img="/images/cloud/reference/compute-compute-2.png" size="md" alt="Разделение вычислительных ресурсов в ClickHouse Cloud" />
+<Image img="/images/cloud/reference/compute-compute-2.webp" size="md" alt="Разделение вычислительных ресурсов в ClickHouse Cloud" />
 
 <br />
 
@@ -54,7 +54,7 @@ Compute-compute separation также позволяет отделить опе
 * Основной сервис `DWH Prod`
 * Вторичный сервис `DWH Prod Subservice`
 
-<Image img="/images/cloud/reference/compute-compute-8.png" size="lg" alt="Пример хранилища с основным и вторичным сервисами" background="white" />
+<Image img="/images/cloud/reference/compute-compute-8.webp" size="lg" alt="Пример хранилища с основным и вторичным сервисами" background="white" />
 
 <br />
 
@@ -79,7 +79,7 @@ Compute-compute separation также позволяет отделить опе
 Это означает, что все пользователи базы данных, созданные в Service 1, смогут использовать и Service 2 с теми же разрешениями (привилегиями на таблицы, представления и т. д.), и наоборот.
 Для каждого сервиса используется отдельная конечная точка, но одни и те же имя пользователя и пароль действуют во всех сервисах. Иными словами, **пользователи общие для сервисов, работающих с одним и тем же хранилищем**, как показано на рисунке ниже:
 
-<Image img="/images/cloud/reference/compute-compute-3.png" size="md" alt="Доступ пользователей между сервисами, использующими одни и те же данные" />
+<Image img="/images/cloud/reference/compute-compute-3.webp" size="md" alt="Доступ пользователей между сервисами, использующими одни и те же данные" />
 
 <br />
 
@@ -97,7 +97,7 @@ Compute-compute separation также позволяет отделить опе
 
 В примере ниже Alice не имеет доступа к сервису 2 в хранилище:
 
-<Image img="/images/cloud/reference/compute-compute-4.png" size="md" alt="Параметры управления сетевым доступом" />
+<Image img="/images/cloud/reference/compute-compute-4.webp" size="md" alt="Параметры управления сетевым доступом" />
 
 <br />
 
@@ -124,7 +124,7 @@ Compute-compute separation также позволяет отделить опе
 Иногда требуется изолировать критически важные рабочие нагрузки на чтение от накладных расходов на запись и слияние, сделав сервис доступным только для чтения.
 Это можно сделать для второго сервиса и любых дополнительных сервисов, которые вы создадите; однако первый сервис всегда будет с возможностью чтения и записи, как показано на рисунке ниже:
 
-<Image img="/images/cloud/reference/compute-compute-5.png" size="lg" alt="Сервисы с возможностью чтения и записи и только для чтения в хранилище" />
+<Image img="/images/cloud/reference/compute-compute-5.webp" size="lg" alt="Сервисы с возможностью чтения и записи и только для чтения в хранилище" />
 
 <br />
 
@@ -231,7 +231,7 @@ SETTINGS distributed_ddl_task_timeout=0
 
 Чтобы создать хранилище, нужно создать второй сервис, который будет использовать общие данные с существующим сервисом. Для этого нажмите значок плюса на любом из существующих сервисов:
 
-<Image img="/images/cloud/reference/compute-compute-7.png" size="md" alt="Создание нового сервиса в хранилище" />
+<Image img="/images/cloud/reference/compute-compute-7.webp" size="md" alt="Создание нового сервиса в хранилище" />
 
 <br />
 

@@ -45,7 +45,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
 
     点击 `Enable SAML single sign-on` 旁边的开关。请保持此页面处于打开状态，因为在设置过程中你需要多次返回查看这里的信息。
 
-    <Image img="/images/cloud/security/saml-self-serve-1.png" size="lg" alt="开始设置 SAML" force />
+    <Image img="/images/cloud/security/saml-self-serve-1.webp" size="lg" alt="开始设置 SAML" force />
   </Step>
 
   <Step>
@@ -62,7 +62,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
       ClickHouse 不支持由身份提供商发起的登录。为了方便用户访问 ClickHouse Cloud，请按以下登录 URL 格式为用户创建书签：`https://console.clickhouse.cloud/?connection={orgId}`，其中 `{orgID}` 是“Organization details”页面中的 Organization ID。
     </Tip>
 
-    <Image img="/images/cloud/security/saml-self-serve-2.png" size="lg" alt="创建身份提供商应用程序" force />
+    <Image img="/images/cloud/security/saml-self-serve-2.webp" size="lg" alt="创建身份提供商应用程序" force />
   </Step>
 
   <Step>
@@ -70,7 +70,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
 
     从您的 SAML 提供商处获取 `Metadata URL`。返回 ClickHouse Cloud，点击 `Next: Provide metadata URL`，然后将该 URL 粘贴到文本框中。
 
-    <Image img="/images/cloud/security/saml-self-serve-3.png" size="lg" alt="添加元数据 URL" force />
+    <Image img="/images/cloud/security/saml-self-serve-3.webp" size="lg" alt="添加元数据 URL" force />
   </Step>
 
   <Step>
@@ -78,7 +78,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
 
     点击 `Next: Verify your domains`。在文本框中输入你的域名，然后点击 `Check domain`。系统会生成一个随机验证码，你需要将其添加为 DNS 提供商中的一条 TXT 记录。
 
-    <Image img="/images/cloud/security/saml-self-serve-4.png" size="lg" alt="添加要验证的域名" force />
+    <Image img="/images/cloud/security/saml-self-serve-4.webp" size="lg" alt="添加要验证的域名" force />
   </Step>
 
   <Step>
@@ -90,7 +90,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
       DNS 记录更新并完成验证可能需要几分钟。您可以先离开设置页面，稍后再回来继续完成该过程，无需重新开始。
     </Note>
 
-    <Image img="/images/cloud/security/saml-self-serve-5.png" size="lg" alt="验证您的域名" force />
+    <Image img="/images/cloud/security/saml-self-serve-5.webp" size="lg" alt="验证您的域名" force />
   </Step>
 
   <Step>
@@ -217,7 +217,7 @@ ClickHouse Cloud 支持通过安全断言标记语言 (SAML) 进行单点登录 
 <Accordion title="创建 Google Web 应用">
   1. 前往 Google Admin 控制台 (admin.google.com) 。
 
-  <Image img="/images/cloud/security/saml-google-app.png" size="md" alt="Google SAML 应用" force />
+  <Image img="/images/cloud/security/saml-google-app.webp" size="md" alt="Google SAML 应用" force />
 
   2. 点击 **Apps**，然后点击左侧的 **Web and mobile apps**。
 
@@ -273,7 +273,7 @@ Azure (Microsoft) SAML 也称为 Azure Active Directory (AD) 或 Microsoft Entra
 
   5. 输入名称，选择 **Integrate any other application you don&#39;t find in the gallery (Non-gallery)**，然后点击 **Create**。
 
-     <Image img="/images/cloud/security/saml-azure-app.png" size="md" alt="Azure 非库应用" force />
+     <Image img="/images/cloud/security/saml-azure-app.webp" size="md" alt="Azure 非库应用" force />
 
   6. 点击左侧的 **Users and groups**，然后分配用户。
 
@@ -299,7 +299,7 @@ Azure (Microsoft) SAML 也称为 Azure Active Directory (AD) 或 Microsoft Entra
       | (A) email                            | Basic         | user.mail        |
       | (U) /identity/claims/name            | Omitted       | user.mail        |
 
-      <Image img="/images/cloud/security/saml-azure-claims.png" size="md" alt="属性和声明" force />
+      <Image img="/images/cloud/security/saml-azure-claims.webp" size="md" alt="属性和声明" force />
 
   11. 复制元数据 URL，然后返回 [将元数据 URL 添加到你的 SAML 配置](#add-metadata-url) 继续后续流程。
 </Accordion>

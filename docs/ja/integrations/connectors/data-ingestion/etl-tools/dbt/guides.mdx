@@ -38,7 +38,7 @@ import ClickHouseSupportedBadge from "/snippets/ja/components/ClickHouseSupporte
 
 dbt は、リレーショナル性の高いデータのモデリングで特に威力を発揮します。例として、以下のリレーショナルスキーマを持つ小規模な IMDB データセットを用意しています。このデータセットは [relational dataset repository](https://relational.fit.cvut.cz/dataset/IMDb) から取得したものです。dbt で一般的に扱うスキーマと比べると非常に単純ですが、手頃なサンプルとして適しています。
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_01.png" size="lg" alt="IMDB テーブルスキーマ" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_01.webp" size="lg" alt="IMDB テーブルスキーマ" />
 
 これらのテーブルの一部を、以下に示すように使用します。
 
@@ -209,13 +209,13 @@ LIMIT 5;
 
 3. この時点で、お好みのテキストエディターが必要です。以下の例では、広く使われている VS Code を使用します。IMDB ディレクトリを開くと、yml ファイルと sql ファイルが一式表示されるはずです。
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_02.png" size="lg" alt="新しい dbt プロジェクト" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_02.webp" size="lg" alt="新しい dbt プロジェクト" />
 
 4. `dbt_project.yml` ファイルを更新し、最初のモデル `actor_summary` を指定して、プロファイルを `clickhouse_imdb` に設定します。
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_03.png" size="lg" alt="dbt プロファイル" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_03.webp" size="lg" alt="dbt プロファイル" />
 
-   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_04.png" size="lg" alt="dbt プロファイル" />
+   <Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_04.webp" size="lg" alt="dbt プロファイル" />
 
 5. 次に、dbt に ClickHouse インスタンスの接続情報を指定する必要があります。以下を `~/.dbt/profiles.yml` に追加してください。
 
@@ -681,7 +681,7 @@ AND event_time > subtractMinutes(now(), 15) ORDER BY event_time LIMIT 100;
 
 これは以下の図のようになります。
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_05.png" size="lg" alt="dbt の増分更新" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_05.webp" size="lg" alt="dbt の増分更新" />
 
 この戦略は、非常に大規模なモデルでは課題が生じる可能性があります。詳細については、[制限事項](/ja/integrations/connectors/data-ingestion/etl-tools/dbt/index#limitations) を参照してください。
 
@@ -812,7 +812,7 @@ ClickHouse 22.8 では [論理削除](/ja/snippets/delete)、ClickHouse 25.7 で
 
 このプロセスを以下に示します。
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_06.png" size="lg" alt="論理削除インクリメンタル" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_06.webp" size="lg" alt="論理削除インクリメンタル" />
 
 <div id="insert_overwrite-mode-experimental">
   ### `insert_overwrite` モード (実験的)
@@ -832,7 +832,7 @@ ClickHouse 22.8 では [論理削除](/ja/snippets/delete)、ClickHouse 25.7 で
 * INSERT 操作が正常に完了するまで元のテーブルを変更しないため、他の戦略より安全です。途中で障害が発生した場合でも、元のテーブルは変更されません。
 * データエンジニアリングにおける「パーティション不変性」というベストプラクティスに沿っています。これにより、インクリメンタル処理や並列データ処理、ロールバックなどが簡単になります。
 
-<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_07.png" size="lg" alt="insert overwrite incremental" />
+<Image img="/images/integrations/data-ingestion/etl-tools/dbt/dbt_07.webp" size="lg" alt="insert overwrite incremental" />
 
 <div id="creating-a-snapshot">
   ## スナップショットの作成

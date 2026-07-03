@@ -21,7 +21,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona el servicio con Managed ClickStack en la página principal de ClickHouse Cloud.
 
-        <Image img="/images/clickstack/select_service.png" alt="Seleccionar servicio" size="lg" />
+        <Image img="/images/clickstack/select_service.webp" alt="Seleccionar servicio" size="lg" />
       </Step>
 
       <Step>
@@ -29,7 +29,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona `ClickStack` en el menú de la izquierda para ir a la UI de ClickStack, donde se te autenticará automáticamente.
 
-        <Image img="/images/use-cases/observability/hyperdx.png" alt="UI de ClickStack" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx.webp" alt="UI de ClickStack" size="lg" />
       </Step>
 
       <Step>
@@ -73,7 +73,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Al volver a la vista `Search`, deberías ver que los datos han empezado a cargarse (ajusta el marco temporal a `Last 1 hour` si los datos no aparecen):
 
-        <Image img="/images/use-cases/observability/hyperdx-10.png" alt="Búsqueda de HyperDX" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-10.webp" alt="Búsqueda de HyperDX" size="lg" />
 
         La carga de datos tardará unos minutos. Espera a que finalice antes de pasar a los siguientes pasos.
       </Step>
@@ -85,7 +85,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona `Client Sessions` en el menú de la izquierda.
 
-        <Image img="/images/use-cases/observability/hyperdx-11.png" alt="Sesiones" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-11.webp" alt="Sesiones" size="lg" />
 
         Esta vista nos permite ver las sesiones del front-end de nuestra tienda de comercio electrónico. Las sesiones permanecen como Anonymous hasta que los usuarios pasan por caja e intentan completar una compra.
 
@@ -93,7 +93,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona una traza con un fallo y un correo electrónico asociado. La vista siguiente nos permite reproducir la sesión del usuario y revisar el problema. Pulsa play para ver la sesión.
 
-        <Image img="/images/use-cases/observability/hyperdx-12.png" alt="Reproducción de sesión" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-12.webp" alt="Reproducción de sesión" size="lg" />
 
         La reproducción muestra al usuario navegando por el sitio y añadiendo artículos al carrito. Si quieres, puedes avanzar hasta un punto posterior de la sesión donde intenta completar el pago.
 
@@ -103,7 +103,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         El usuario no pudo realizar el pedido, sin que hubiera ningún error evidente. Desplázate hasta la parte inferior del panel izquierdo, que contiene los eventos de red y de consola del navegador del usuario. Verás que se produjo un error 500 al hacer una llamada a `/api/checkout`.
 
-        <Image img="/images/use-cases/observability/hyperdx-13.png" alt="Error en la sesión" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-13.webp" alt="Error en la sesión" size="lg" />
 
         Selecciona este error `500`. Ni `Overview` ni `Column Values` indican el origen del problema, más allá de que el error es inesperado, lo que provoca un `Internal Error`.
       </Step>
@@ -113,19 +113,19 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Ve a la pestaña `Trace` para ver la traza distribuida completa.
 
-        <Image img="/images/use-cases/observability/hyperdx-14.png" alt="Traza de la sesión" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-14.webp" alt="Traza de la sesión" size="lg" />
 
         Desplázate hacia abajo en la traza para ver el origen del error: el span del servicio `checkout`. Selecciona el span del servicio `Payment`.
 
-        <Image img="/images/use-cases/observability/hyperdx-15.png" alt="Span" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-15.webp" alt="Span" size="lg" />
 
         Selecciona la pestaña `Column Values` y desplázate hacia abajo. Podemos ver que el problema está asociado a que la caché está llena.
 
-        <Image img="/images/use-cases/observability/hyperdx-16.png" alt="Valores de columna" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-16.webp" alt="Valores de columna" size="lg" />
 
         Al volver a subir y regresar a la traza, podemos ver que los logs están correlacionados con el span gracias a la configuración anterior. Esto aporta más contexto.
 
-        <Image img="/images/use-cases/observability/hyperdx-17.png" alt="Log correlacionado" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-17.webp" alt="Log correlacionado" size="lg" />
 
         Hemos determinado que la caché se está llenando en el servicio de pagos, lo que impide que los pagos se completen.
       </Step>
@@ -137,7 +137,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona `Logs` en las fuentes y aplica un filtro al servicio `payment`.
 
-        <Image img="/images/use-cases/observability/hyperdx-18.png" alt="Logs" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-18.webp" alt="Logs" size="lg" />
 
         Podemos ver que, aunque el problema es reciente, el número de pagos afectados es elevado. Además, parece que una caché relacionada con los pagos con Visa está causando problemas.
       </Step>
@@ -149,7 +149,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona `Metrics` como fuente de datos. Completa el generador de gráficos para representar el `Maximum` de `visa_validation_cache.size (Gauge)` y pulsa el botón `play`. La caché fue aumentando claramente hasta alcanzar un tamaño máximo, tras lo cual se generaron errores.
 
-        <Image img="/images/use-cases/observability/hyperdx-19.png" alt="Métricas" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-19.webp" alt="Métricas" size="lg" />
       </Step>
     </Steps>
   </Tab>
@@ -163,7 +163,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Visita [http://localhost:8080](http://localhost:8080) para acceder a la UI de ClickStack.
 
-        <Image img="/images/use-cases/observability/hyperdx.png" alt="UI de ClickStack" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx.webp" alt="UI de ClickStack" size="lg" />
       </Step>
 
       <Step>
@@ -171,7 +171,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Ve a [`Team Settings`](http://localhost:8080/team) y copia la `Ingestion API Key` de la sección `API Keys`. Esta API key garantiza que la ingestión de datos a través del collector de OpenTelemetry sea segura.
 
-        <Image img="/images/use-cases/observability/copy_api_key.png" alt="Copiar API key" size="lg" />
+        <Image img="/images/use-cases/observability/copy_api_key.webp" alt="Copiar API key" size="lg" />
       </Step>
 
       <Step>
@@ -222,7 +222,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Al volver a la vista `Search`, deberías ver que los datos han empezado a cargarse (ajusta el intervalo de tiempo a `Last 1 hour` si los datos no se muestran):
 
-        <Image img="/images/use-cases/observability/hyperdx-10.png" alt="Búsqueda de HyperDX" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-10.webp" alt="Búsqueda de HyperDX" size="lg" />
 
         La carga de datos tardará unos minutos. Espera a que termine antes de continuar con los siguientes pasos.
       </Step>
@@ -234,7 +234,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona [`Client Sessions`](http://localhost:8080/sessions?from=1747312320000\&to=1747312920000\&sessionSource=l1324572572) en el menú de la izquierda.
 
-        <Image img="/images/use-cases/observability/hyperdx-11.png" alt="Sesiones" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-11.webp" alt="Sesiones" size="lg" />
 
         Esta vista nos permite ver las sesiones del front-end de nuestra tienda de comercio electrónico. Las sesiones permanecen como Anonymous hasta que los usuarios pasan por caja e intentan completar una compra.
 
@@ -242,7 +242,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona un trace con un fallo y una dirección de correo electrónico asociada. La vista siguiente nos permite reproducir la sesión del usuario y revisar su problema. Pulsa play para ver la sesión.
 
-        <Image img="/images/use-cases/observability/hyperdx-12.png" alt="Session replay" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-12.webp" alt="Session replay" size="lg" />
 
         La reproducción muestra al usuario navegando por el sitio y añadiendo artículos al carrito. No dudes en avanzar hasta un punto posterior de la sesión, donde intenta completar el pago.
 
@@ -252,7 +252,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         El usuario no pudo completar el pedido, sin ningún error evidente. Desplázate hasta la parte inferior del panel izquierdo, que contiene los eventos de `Network` y `Console` del navegador del usuario. Verás que se produjo un error 500 al hacer una llamada a `/api/checkout`.
 
-        <Image img="/images/use-cases/observability/hyperdx-13.png" alt="Error en la sesión" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-13.webp" alt="Error en la sesión" size="lg" />
 
         Selecciona este error `500`. Ni `Overview` ni `Column Values` indican el origen del problema, más allá de que el error es inesperado y provoca un `Internal Error`.
       </Step>
@@ -262,19 +262,19 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Ve a la pestaña `Trace` para ver la traza distribuida completa.
 
-        <Image img="/images/use-cases/observability/hyperdx-14.png" alt="Traza de sesión" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-14.webp" alt="Traza de sesión" size="lg" />
 
         Desplázate por la traza hasta ver el origen del error: el span del servicio `checkout`. Selecciona el span del servicio `Payment`.
 
-        <Image img="/images/use-cases/observability/hyperdx-15.png" alt="Span" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-15.webp" alt="Span" size="lg" />
 
         Selecciona la pestaña `Column Values` y desplázate hacia abajo. Podemos ver que el problema está relacionado con una caché llena.
 
-        <Image img="/images/use-cases/observability/hyperdx-16.png" alt="Valores de columna" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-16.webp" alt="Valores de columna" size="lg" />
 
         Al volver hacia arriba en la traza, vemos que los logs están correlacionados con el span gracias a la configuración anterior. Esto aporta más contexto.
 
-        <Image img="/images/use-cases/observability/hyperdx-17.png" alt="Log correlacionado" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-17.webp" alt="Log correlacionado" size="lg" />
 
         Hemos comprobado que se está llenando una caché en el servicio `Payment`, lo que impide que los pagos se completen.
       </Step>
@@ -286,7 +286,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Selecciona `Logs` entre las fuentes y aplica un filtro al servicio `payment`.
 
-        <Image img="/images/use-cases/observability/hyperdx-18.png" alt="Logs" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-18.webp" alt="Logs" size="lg" />
 
         Podemos ver que, aunque la incidencia es reciente, el número de pagos afectados es alto. Además, una cache relacionada con los pagos con Visa parece estar causando problemas.
       </Step>
@@ -298,7 +298,7 @@ Esta guía presenta tanto ClickStack Open Source como Managed ClickStack con un 
 
         Seleccione `Metrics` como fuente de datos. Complete el creador de gráficos para representar el `Maximum` de `visa_validation_cache.size (Gauge)` y pulse el botón `play`. La caché iba aumentando claramente hasta alcanzar un tamaño máximo, a partir del cual se generaron errores.
 
-        <Image img="/images/use-cases/observability/hyperdx-19.png" alt="Métricas" size="lg" />
+        <Image img="/images/use-cases/observability/hyperdx-19.webp" alt="Métricas" size="lg" />
       </Step>
     </Steps>
   </Tab>

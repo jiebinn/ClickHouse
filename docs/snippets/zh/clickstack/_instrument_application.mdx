@@ -23,7 +23,7 @@ title: 为应用接入遥测
 
     打开 [http://localhost:5001](http://localhost:5001)。你会看到年份选择器、汇总统计信息、活动图表、热门用户和域名表，以及一个搜索框。可以随意点一点：切换年份，深入查看具体帖子。
 
-    <Image img="/images/clickstack/getting-started/hackernews_main.png" alt="在本地运行的 HackerNews Analyzer 应用" />
+    <Image img="/images/clickstack/getting-started/hackernews_main.webp" alt="在本地运行的 HackerNews Analyzer 应用" />
 
     此时，应用程序已经运行，但尚未接入遥测。ClickStack 中还没有数据：它正在等待遥测数据。这就是“之前”的状态。
   </Step>
@@ -118,15 +118,15 @@ title: 为应用接入遥测
 
     1. 前往 **搜索**，将时间范围过滤到最近 5 分钟。`hn-analyzer-api` 的日志会不断流入。
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.png" alt="ClickStack 日志" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_logs.webp" alt="ClickStack 日志" />
 
     2. 点开一个请求，沿着 trace 向上查看。你会看到 Express handler span、一个指向 ClickHouse 集群且显示真实网络耗时的子 HTTP span，以及同一条 trace 上已关联的 `console.log` 记录。
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.png" alt="ClickStack 链路追踪" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_traces.webp" alt="ClickStack 链路追踪" />
 
     3. 打开 **Session Replay**，回放带可拖动进度条的浏览器会话视频，并与 trace 时间线同步。
 
-    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.png" alt="ClickStack 会话" />
+    <Image img="/images/clickstack/getting-started/instrument_app_clickstack_sessions.webp" alt="ClickStack 会话" />
 
     日志、指标、链路追踪和会话回放都会汇集到同一个 UI 中，共享同一种查询语言，并自动完成关联。
   </Step>

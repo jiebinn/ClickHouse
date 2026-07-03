@@ -45,7 +45,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     * a. ClickHouse Cloud 서비스 설정 페이지의 Network security information에서 ARN을 확인합니다. 형식은 다음과 비슷합니다:
 
-    <Image img="/images/cloud/manage/backups/arn.png" alt="AWS S3 ARN" size="lg" />
+    <Image img="/images/cloud/manage/backups/arn.webp" alt="AWS S3 ARN" size="lg" />
 
     * b. 이 역할에 대해 다음과 같이 신뢰 정책을 생성합니다:
 
@@ -124,7 +124,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     설정 페이지에서 &quot;Set up external backup&quot;을 클릭하십시오.
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="외부 백업 변경" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="외부 백업 변경" size="lg" />
   </Step>
 
   <Step>
@@ -132,7 +132,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     다음 화면에서 방금 생성한 AWS IAM Role ARN과 다음 형식의 S3 버킷 URL을 입력하십시오.
 
-    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.png" alt="AWS IAM Role ARN 및 S3 버킷 세부 정보 구성" size="lg" />
+    <Image img="/images/cloud/manage/backups/configure_arn_s3_details.webp" alt="AWS IAM Role ARN 및 S3 버킷 세부 정보 구성" size="lg" />
   </Step>
 
   <Step>
@@ -157,7 +157,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
     아래와 같이 Backups 페이지에 사용자의 버킷에 있는 백업이 별도의 테이블로
     표시됩니다.
 
-    <Image img="/images/cloud/manage/backups/view_backups.png" alt="버킷에 저장된 백업 보기" size="lg" />
+    <Image img="/images/cloud/manage/backups/view_backups.webp" alt="버킷에 저장된 백업 보기" size="lg" />
   </Step>
 </Steps>
 
@@ -189,7 +189,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
     UI의 백업 목록 위에 있는 &quot;access or restore a backup&quot; 링크를 클릭하여 백업을 복원하는
     SQL 명령을 확인하십시오. 명령은 다음과 같은 형태입니다.
 
-    <Image img="/images/cloud/manage/backups/backup_command.png" alt="백업 복원에 사용할 SQL 명령 가져오기" size="md" />
+    <Image img="/images/cloud/manage/backups/backup_command.webp" alt="백업 복원에 사용할 SQL 명령 가져오기" size="md" />
 
     <Warning>
       **백업을 다른 위치로 이동하는 경우**
@@ -273,7 +273,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     `설정` 페이지에서 `외부 백업 변경`을 클릭합니다.
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="외부 백업 변경" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="외부 백업 변경" size="lg" />
   </Step>
 
   <Step>
@@ -281,7 +281,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     팝업 대화상자에서 이전 섹션에서 생성한 GCP 버킷 경로, HMAC 키, 시크릿을 입력합니다.
 
-    <Image img="/images/cloud/manage/backups/gcp_configure.png" alt="GCP HMAC 키 및 시크릿 구성" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_configure.webp" alt="GCP HMAC 키 및 시크릿 구성" size="md" />
   </Step>
 
   <Step>
@@ -305,7 +305,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     아래와 같이 Backups 페이지에 버킷에 저장된 백업이 별도의 테이블로 표시됩니다.
 
-    <Image img="/images/cloud/manage/backups/gcp_stored_backups.png" alt="버킷에 저장된 백업 보기" size="lg" />
+    <Image img="/images/cloud/manage/backups/gcp_stored_backups.webp" alt="버킷에 저장된 백업 보기" size="lg" />
   </Step>
 </Steps>
 
@@ -327,7 +327,7 @@ import { Image } from "/snippets/ko/components/Image.jsx";
 
     UI의 백업 목록 위에 있는 `access or restore a backup` 링크를 클릭하여 백업 복원에 사용할 SQL 명령을 확인하세요. 명령은 다음과 같은 형태이며, 드롭다운에서 원하는 백업을 선택하면 해당 백업에 맞는 복원 명령을 확인할 수 있습니다. 명령에 시크릿 액세스 키를 추가해야 합니다:
 
-    <Image img="/images/cloud/manage/backups/gcp_restore_command.png" alt="백업 복원에 사용할 SQL 명령 가져오기" size="md" />
+    <Image img="/images/cloud/manage/backups/gcp_restore_command.webp" alt="백업 복원에 사용할 SQL 명령 가져오기" size="md" />
 
     <Warning>
       **백업을 다른 위치로 이동하는 경우**
@@ -395,7 +395,7 @@ Azure에 백업하려면 아래 단계를 따르십시오:
 
     `설정` 페이지에서 `외부 백업 변경`을 클릭합니다.
 
-    <Image img="/images/cloud/manage/backups/change_external_backup.png" alt="외부 백업 변경" size="lg" />
+    <Image img="/images/cloud/manage/backups/change_external_backup.webp" alt="외부 백업 변경" size="lg" />
   </Step>
 
   <Step>
@@ -403,7 +403,7 @@ Azure에 백업하려면 아래 단계를 따르십시오:
 
     다음 화면에서 이전 섹션에서 생성한 Azure 스토리지 계정의 연결 문자열과 Container Name을 입력합니다.
 
-    <Image img="/images/cloud/manage/backups/azure_connection_details.png" alt="Azure 스토리지 계정의 연결 문자열 및 컨테이너 이름 입력" size="md" />
+    <Image img="/images/cloud/manage/backups/azure_connection_details.webp" alt="Azure 스토리지 계정의 연결 문자열 및 컨테이너 이름 입력" size="md" />
   </Step>
 
   <Step>
@@ -423,7 +423,7 @@ Azure에 백업하려면 아래 단계를 따르십시오:
 
     아래와 같이 `Backups` 페이지에 버킷의 백업이 별도 테이블로 표시되어야 합니다.
 
-    <Image img="/images/cloud/manage/backups/view_backups_azure.png" alt="버킷에 저장된 백업 보기" size="md" />
+    <Image img="/images/cloud/manage/backups/view_backups_azure.webp" alt="버킷에 저장된 백업 보기" size="md" />
   </Step>
 </Steps>
 
@@ -450,7 +450,7 @@ Azure에서 백업을 복원하려면 아래 단계를 따르십시오.
     확인할 수 있습니다. 명령에 Azure 스토리지 계정 연결 문자열을
     추가해야 합니다.
 
-    <Image img="/images/cloud/manage/backups/restore_backups_azure.png" alt="Azure에서 백업 복원" size="md" />
+    <Image img="/images/cloud/manage/backups/restore_backups_azure.webp" alt="Azure에서 백업 복원" size="md" />
 
     <Warning>
       **백업을 다른 위치로 이동하는 경우**

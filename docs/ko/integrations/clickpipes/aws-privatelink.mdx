@@ -222,19 +222,19 @@ VPC 엔드포인트 서비스는 [Private DNS로 구성](https://docs.aws.amazon
 
 1. ClickHouse Cloud 서비스의 SQL 콘솔에 접속합니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.png" alt="ClickPipes 서비스" size="md" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_service.webp" alt="ClickPipes 서비스" size="md" border />
 
 2. 왼쪽 메뉴에서 `Data Sources` 버튼을 선택한 후 &quot;Set up a ClickPipe&quot;를 클릭합니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.png" alt="가져오기 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_step0.webp" alt="가져오기 선택" size="lg" border />
 
 3. 데이터 소스로 Kafka 또는 Postgres를 선택합니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.png" alt="데이터 소스 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_select.webp" alt="데이터 소스 선택" size="lg" border />
 
 4. `Reverse private endpoint` 옵션을 선택합니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.png" alt="Reverse private endpoint 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step0.webp" alt="Reverse private endpoint 선택" size="lg" border />
 
 5. 기존 reverse private endpoint 중 하나를 선택하거나 새로 생성합니다.
 
@@ -245,11 +245,11 @@ VPC 엔드포인트 서비스는 [Private DNS로 구성](https://docs.aws.amazon
   동일 리전 액세스에는 VPC 리소스를 생성하는 방식을 권장합니다.
 </Info>
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.png" alt="Reverse private endpoint 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step1.webp" alt="Reverse private endpoint 선택" size="lg" border />
 
 6. 선택한 endpoint 유형에 필요한 매개변수를 입력합니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.png" alt="Reverse private endpoint 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step2.webp" alt="Reverse private endpoint 선택" size="lg" border />
 
 * VPC 리소스의 경우 구성 공유 ARN과 구성 ID를 입력합니다.
   * MSK multi-VPC의 경우 cluster ARN과 생성된 endpoint에 사용된 인증 방법을 입력합니다.
@@ -261,7 +261,7 @@ VPC 엔드포인트 서비스는 [Private DNS로 구성](https://docs.aws.amazon
    endpoint가 준비되면 페이지가 자동으로 갱신됩니다.
    VPC 엔드포인트 서비스의 경우 AWS 콘솔에서 connection 요청을 수락해야 할 수 있습니다.
 
-<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.png" alt="Reverse private endpoint 선택" size="lg" border />
+<Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_step3.webp" alt="Reverse private endpoint 선택" size="lg" border />
 
 8. endpoint가 준비되면 DNS 이름을 사용해 데이터 소스에 연결할 수 있습니다.
 
@@ -282,11 +282,11 @@ VPC 엔드포인트 서비스는 [Private DNS로 구성](https://docs.aws.amazon
 
 1. 사이드바에서 `Settings` 버튼을 찾아 클릭합니다.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.png" alt="ClickHouse Cloud 설정" size="lg" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings0.webp" alt="ClickHouse Cloud 설정" size="lg" border />
 
 2. `ClickPipe reverse private endpoints` 섹션에서 `Reverse private endpoints`를 클릭합니다.
 
-   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.png" alt="ClickHouse Cloud 설정" size="md" border />
+   <Image img="/images/integrations/data-ingestion/clickpipes/cp_rpe_settings1.webp" alt="ClickHouse Cloud 설정" size="md" border />
 
    Reverse Private Endpoint의 자세한 정보가 플라이아웃에 표시됩니다.
 

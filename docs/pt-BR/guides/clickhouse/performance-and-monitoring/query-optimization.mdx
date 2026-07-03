@@ -443,7 +443,7 @@ Comece identificando suas consultas lentas nos logs de consultas e, em seguida, 
 
 Depois de identificar possíveis otimizações, recomenda-se implementá-las uma a uma para acompanhar melhor como elas afetam o desempenho. Abaixo está um diagrama que descreve a abordagem geral.
 
-<Image img="/images/guides/best-practices/query_optimization_diagram_1.png" size="lg" alt="Fluxo de trabalho de otimização" />
+<Image img="/images/guides/best-practices/query_optimization_diagram_1.webp" size="lg" alt="Fluxo de trabalho de otimização" />
 
 *Por fim, tenha cuidado com casos atípicos; é bastante comum que uma consulta rode devagar, seja porque um usuário executou uma consulta ad hoc custosa, seja porque o sistema estava sob pressão por algum outro motivo. Você pode agrupar pelo campo normalized&#95;query&#95;hash para identificar consultas custosas que estão sendo executadas regularmente. Essas provavelmente são as que vale a pena investigar.*
 

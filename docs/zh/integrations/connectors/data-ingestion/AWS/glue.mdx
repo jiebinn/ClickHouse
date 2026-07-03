@@ -41,7 +41,7 @@ import ClickHouseSupportedBadge from "/snippets/zh/components/ClickHouseSupporte
     4. <h3 id="use-in-glue-job">在 Glue 作业中使用</h3>
        在你的 Glue 作业中，选择 `Job details` 选项卡，然后展开 `Advanced properties` 窗口。在 `Connections` 部分中，选择你刚刚创建的连接。该连接器会自动将所需 JAR 注入作业运行时。
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.png" size="md" alt="Glue Notebook 连接配置" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/notebook-connections-config.webp" size="md" alt="Glue Notebook 连接配置" force="true" />
 
     <Note>
       Glue 连接器中使用的 JAR 是为 `Spark 3.3`、`Scala 2` 和 `Python 3` 构建的。配置 Glue 作业时，请确保选择这些版本。
@@ -55,7 +55,7 @@ import ClickHouseSupportedBadge from "/snippets/zh/components/ClickHouseSupporte
     2. 确保 Glue 作业可以访问该 bucket。
     3. 在 `Job details` 选项卡下，向下滚动并展开 `Advanced properties` 下拉菜单，然后在 `Dependent JARs path` 中填写 JAR 路径：
 
-    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.png" size="md" alt="Glue Notebook JAR 路径选项" force="true" />
+    <Image img="/images/integrations/data-ingestion/aws-glue/dependent_jars_path_option.webp" size="md" alt="Glue Notebook JAR 路径选项" force="true" />
   </Tab>
 </Tabs>
 

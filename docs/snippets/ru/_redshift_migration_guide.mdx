@@ -8,7 +8,7 @@ title: Руководство по миграции из Redshift
 
 [Amazon Redshift](https://aws.amazon.com/redshift/) — популярное облачное решение для хранилища данных, входящее в состав Amazon Web Services. В этом руководстве рассматриваются различные подходы к миграции данных из экземпляра Redshift в ClickHouse. Мы разберём три варианта:
 
-<img src="/images/integrations/data-ingestion/redshift/redshift-to-clickhouse.png" alt="Варианты миграции из Redshift в ClickHouse" />
+<img src="/images/integrations/data-ingestion/redshift/redshift-to-clickhouse.webp" alt="Варианты миграции из Redshift в ClickHouse" />
 
 Со стороны ClickHouse это можно сделать одним из следующих способов:
 
@@ -28,7 +28,7 @@ title: Руководство по миграции из Redshift
 
 В сценарии push предполагается использование стороннего инструмента или сервиса (собственного кода либо [ETL/ELT](https://en.wikipedia.org/wiki/Extract,_transform,_load#ETL_vs._ELT)) для отправки данных в ваш экземпляр ClickHouse. Например, можно использовать [Airbyte](https://www.airbyte.com/) для переноса данных между вашим экземпляром Redshift (как источником) и ClickHouse как пунктом назначения ([см. наше руководство по интеграции с Airbyte](/ru/integrations/connectors/data-ingestion/etl-tools/airbyte-and-clickhouse))
 
-<img src="/images/integrations/data-ingestion/redshift/push.png" alt="Отправка из Redshift в ClickHouse" />
+<img src="/images/integrations/data-ingestion/redshift/push.webp" alt="Отправка из Redshift в ClickHouse" />
 
 <div id="pros-pros">
   ### Преимущества [#pros]
@@ -51,7 +51,7 @@ title: Руководство по миграции из Redshift
 
 В сценарии с получением данных используется ClickHouse JDBC Bridge, чтобы напрямую подключаться к кластеру Redshift из экземпляра ClickHouse и выполнять запросы `INSERT INTO ... SELECT`:
 
-<img src="/images/integrations/data-ingestion/redshift/pull.png" alt="ПОЛУЧЕНИЕ данных из Redshift в ClickHouse" />
+<img src="/images/integrations/data-ingestion/redshift/pull.webp" alt="ПОЛУЧЕНИЕ данных из Redshift в ClickHouse" />
 
 <div id="pros-pros-1">
   ### Преимущества [#pros-1]
@@ -196,7 +196,7 @@ title: Руководство по миграции из Redshift
 
 В этом сценарии мы экспортируем данные в S3 в промежуточном pivot-формате, а затем на втором этапе загружаем их из S3 в ClickHouse.
 
-<img src="/images/integrations/data-ingestion/redshift/pivot.png" alt="PIVOT из Redshift через S3" />
+<img src="/images/integrations/data-ingestion/redshift/pivot.webp" alt="PIVOT из Redshift через S3" />
 
 <div id="pros-pros-2">
   ### Преимущества [#pros-2]
@@ -223,11 +223,11 @@ title: Руководство по миграции из Redshift
 
     С помощью возможности [UNLOAD](https://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD.html) в Redshift экспортируйте данные в существующий закрытый S3 бакет:
 
-    <img src="/images/integrations/data-ingestion/redshift/s3-1.png" alt="UNLOAD из Redshift в S3" />
+    <img src="/images/integrations/data-ingestion/redshift/s3-1.webp" alt="UNLOAD из Redshift в S3" />
 
     В результате в S3 будут созданы файлы part, содержащие исходные данные.
 
-    <img src="/images/integrations/data-ingestion/redshift/s3-2.png" alt="Данные в S3" />
+    <img src="/images/integrations/data-ingestion/redshift/s3-2.webp" alt="Данные в S3" />
   </Step>
 
   <Step>

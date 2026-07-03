@@ -17,11 +17,11 @@ ClickHouse Cloud fournit une API basée sur OpenAPI qui vous permet de gérer pa
 
 1. Vous pouvez utiliser l’onglet **Clés API** dans le menu de gauche pour créer et gérer vos clés API.
 
-<Image img="/images/cloud/manage/openapi1.png" size="sm" alt="Onglet Clés API" border />
+<Image img="/images/cloud/manage/openapi1.webp" size="sm" alt="Onglet Clés API" border />
 
 2. La page **Clés API** affiche au départ un message vous invitant à créer votre première clé API, comme illustré ci-dessous. Une fois cette première clé créée, vous pourrez en créer de nouvelles à l’aide du bouton `New API Key`, qui apparaît dans le coin supérieur droit.
 
-<Image img="/images/cloud/manage/openapi2.png" size="md" alt="Page Clés API" border />
+<Image img="/images/cloud/manage/openapi2.webp" size="md" alt="Page Clés API" border />
 
 3. Pour créer une clé API, indiquez le nom de la clé, ses autorisations et sa date d’expiration, puis cliquez sur `Generate API Key`.
 
@@ -41,7 +41,7 @@ ClickHouse Cloud fournit une API basée sur OpenAPI qui vous permet de gérer pa
 
 4. L’écran suivant affichera votre ID de clé et le secret de la clé. Copiez ces valeurs et conservez-les dans un endroit sûr, comme un coffre-fort. Elles ne seront plus affichées après avoir quitté cet écran.
 
-<Image img="/images/cloud/manage/openapi4.png" size="md" alt="Détails de la clé API" border />
+<Image img="/images/cloud/manage/openapi4.webp" size="md" alt="Détails de la clé API" border />
 
 5. L’API ClickHouse Cloud utilise l’[authentification HTTP Basic](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) pour vérifier la validité de vos clés API. Voici un exemple montrant comment utiliser vos clés API pour envoyer des requêtes à l’API ClickHouse Cloud avec `curl` :
 
@@ -60,7 +60,7 @@ $ curl --user $KEY_ID:$KEY_SECRET https://api.clickhouse.cloud/v1/organizations
   La suppression d’une clé API est une action permanente. Tous les services qui utilisent cette clé perdront immédiatement l’accès à ClickHouse Cloud.
 </Note>
 
-<Image img="/images/cloud/manage/openapi5.png" size="md" alt="Page de gestion des clés API" border />
+<Image img="/images/cloud/manage/openapi5.webp" size="md" alt="Page de gestion des clés API" border />
 
 <div id="endpoints">
   ## Endpoints
