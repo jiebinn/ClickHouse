@@ -120,12 +120,13 @@ ThreadGroup::ThreadGroup(ContextPtr query_context_, Int32 os_threads_nice_value_
             }
             return false;
     };
-    shared_data.throw_if_query_canceled_predicate = [this] () {
-            if (auto context_locked = query_context.lock())
-            {
-                if (auto elem = context_locked->getProcessListElementSafe())
-                    elem->throwIfKilled();
-            }
+    shared_data.throw_if_query_canceled_predicate = [this] ()
+    {
+        if (auto context_locked = query_context.lock())
+        {
+            if (auto elem = context_locked->getProcessListElementSafe())
+                elem->throwIfKilled();
+        }
     };
 }
 
@@ -161,7 +162,8 @@ ThreadGroup::ThreadGroup(ContextPtr query_context_, ThreadGroupPtr parent)
         }
         return false;
     };
-    shared_data.throw_if_query_canceled_predicate = [this] () {
+    shared_data.throw_if_query_canceled_predicate = [this] ()
+    {
         if (auto context_locked = query_context.lock())
         {
             if (auto elem = context_locked->getProcessListElementSafe())
