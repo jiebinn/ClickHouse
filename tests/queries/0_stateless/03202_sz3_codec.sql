@@ -383,18 +383,27 @@ LIMIT 10;
 DROP TABLE tab;
 
 SELECT 'SZ3 is lossy and cannot be used where the column data type is unknown';
--- The marks and the primary key are not floating-point data, and the codec is built for them without a data
--- type, so a lossy codec there would silently corrupt them. The setting is accepted at CREATE but rejected
--- when the part is written.
+-- The marks, the primary key and the default compression codec are applied without a specific column, so the
+-- codec is built without a data type. A lossy codec there would silently corrupt non-floating-point data, so it
+-- is rejected when the table metadata is created or altered, before any invalid metadata is stored or replicated
+-- (instead of being accepted and then failing later on the first part write or background merge).
 DROP TABLE IF EXISTS tab_marks_codec;
-CREATE TABLE tab_marks_codec (x Float64 CODEC(SZ3)) ENGINE = MergeTree ORDER BY tuple() SETTINGS marks_compression_codec = 'SZ3';
-INSERT INTO tab_marks_codec VALUES (1.5); -- { serverError BAD_ARGUMENTS }
-DROP TABLE tab_marks_codec;
+CREATE TABLE tab_marks_codec (x Float64) ENGINE = MergeTree ORDER BY tuple()
+    SETTINGS marks_compression_codec = 'SZ3'; -- { serverError BAD_ARGUMENTS }
 
 DROP TABLE IF EXISTS tab_pk_codec;
-CREATE TABLE tab_pk_codec (x Float64 CODEC(SZ3)) ENGINE = MergeTree ORDER BY x SETTINGS primary_key_compression_codec = 'SZ3';
-INSERT INTO tab_pk_codec VALUES (1.5); -- { serverError BAD_ARGUMENTS }
-DROP TABLE tab_pk_codec;
+CREATE TABLE tab_pk_codec (x Float64) ENGINE = MergeTree ORDER BY x
+    SETTINGS primary_key_compression_codec = 'SZ3'; -- { serverError BAD_ARGUMENTS }
+
+DROP TABLE IF EXISTS tab_default_codec;
+CREATE TABLE tab_default_codec (x Float64) ENGINE = MergeTree ORDER BY tuple()
+    SETTINGS default_compression_codec = 'SZ3'; -- { serverError BAD_ARGUMENTS }
+
+-- The same rejection fires for ALTER ... MODIFY SETTING, not only at CREATE.
+DROP TABLE IF EXISTS tab_alter_codec;
+CREATE TABLE tab_alter_codec (x Float64) ENGINE = MergeTree ORDER BY tuple();
+ALTER TABLE tab_alter_codec MODIFY SETTING default_compression_codec = 'SZ3'; -- { serverError BAD_ARGUMENTS }
+DROP TABLE tab_alter_codec;
 
 -- A lossy TTL recompression codec is rejected when the table is created, not later in a background merge
 CREATE TABLE tab_ttl_codec (d Date, x Float64) ENGINE = MergeTree ORDER BY tuple()
