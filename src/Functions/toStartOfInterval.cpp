@@ -253,8 +253,9 @@ private:
             if (is_small_interval)
                 result_scale = assert_cast<const DataTypeDateTime64 &>(*result_type).getScaleMultiplier();
 
-            /// In case if we have a difference between time arguments and Interval, we need to calculate the difference between them
-            /// to get the right precision for the result. In case of large intervals, we should not have scale difference.
+            /// For small intervals the result scale is the interval unit scale (3/6/9), which can differ from the
+            /// argument scale, so combining the origin with the offset requires rescaling by their ratio.
+            /// For large intervals the result scale equals the argument scale and no rescaling is needed.
             Int64 scale_diff = is_small_interval ? std::max(result_scale / origin_scale, origin_scale / result_scale) : 1;
 
             static constexpr Int64 SECONDS_PER_DAY = 86'400;
@@ -272,9 +273,16 @@ private:
                     origin *= SECONDS_PER_DAY;
                 }
 
-                Int64 offset = ToStartOfInterval<unit>::execute(time_arg - origin, num_units, time_zone, result_scale, origin);
+                /// The time and origin arguments have the same scale (this is validated when the function is resolved),
+                /// so their difference is expressed in the argument scale: scale_multiplier for DateTime64 arguments
+                /// (small intervals require them) and result_scale (seconds or a whole number of result units) for
+                /// the other argument types. For small intervals ToStartOfInterval converts the difference to the
+                /// interval unit scale and returns the floored offset in that scale; for large intervals it returns
+                /// a whole number of interval units.
+                Int64 offset = ToStartOfInterval<unit>::execute(
+                    time_arg - origin, num_units, time_zone, is_small_interval ? scale_multiplier : result_scale, origin);
 
-                /// In case if arguments are DateTime64 with large interval, we should apply scale on it.
+                /// For large intervals the offset is a whole number of seconds or days, convert it to the result scale.
                 offset *= (!is_small_interval) ? result_scale : 1;
 
                 if (is_result_date) /// Convert back to date after calculations.
@@ -283,9 +291,11 @@ private:
                     origin /= SECONDS_PER_DAY;
                 }
 
-                result_data[i] = (result_scale < origin_scale) ? static_cast<ResultDataType::FieldType>((origin + offset) / scale_diff)
-                                                               : static_cast<ResultDataType::FieldType>((origin + offset) * scale_diff);
-        }
+                /// The offset is in the result scale, the origin is in the argument scale; rescale to combine them.
+                result_data[i] = (result_scale < origin_scale)
+                    ? static_cast<ResultDataType::FieldType>((origin + offset * scale_diff) / scale_diff)
+                    : static_cast<ResultDataType::FieldType>(origin * scale_diff + offset);
+            }
         }
         else // Overload: Default
         {
