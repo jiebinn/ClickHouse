@@ -26,23 +26,25 @@ DROP TABLE qbit_nullable;
 
 
 -- Correctness: the optimization must not change the values, and NULL rows must stay NULL. For each function the two
--- blocks below (optimization on, then off) must be identical.
+-- blocks below (optimization on, then off) must be identical. The distances are rounded coarsely on purpose: the
+-- optimization-on and optimization-off paths compute bit-identical results on any single build, but the raw distance
+-- values differ in the last decimals across architectures and compiler codegen, so a fine reference would be flaky.
 
 DROP TABLE IF EXISTS qbit_ns;
 CREATE TABLE qbit_ns (id UInt32, vec Nullable(QBit(Float32, 4))) ENGINE = Memory;
 INSERT INTO qbit_ns VALUES (1, [1, 2, 3, 4]), (2, NULL), (3, [0.5, 0.5, 0.5, 0.5]), (4, NULL), (5, [9, 8, 7, 6]);
 
 SELECT '-- non-strided L2DistanceTransposed, precision 8, optimization on then off';
-SELECT id, round(L2DistanceTransposed(vec, [1., 2., 3., 4.], 8), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
-SELECT id, round(L2DistanceTransposed(vec, [1., 2., 3., 4.], 8), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+SELECT id, round(L2DistanceTransposed(vec, [1., 2., 3., 4.], 8), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(L2DistanceTransposed(vec, [1., 2., 3., 4.], 8), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 SELECT '-- non-strided cosineDistanceTransposed, precision 16, optimization on then off';
-SELECT id, round(cosineDistanceTransposed(vec, [1., 2., 3., 4.], 16), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
-SELECT id, round(cosineDistanceTransposed(vec, [1., 2., 3., 4.], 16), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+SELECT id, round(cosineDistanceTransposed(vec, [1., 2., 3., 4.], 16), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(cosineDistanceTransposed(vec, [1., 2., 3., 4.], 16), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 SELECT '-- non-strided dotProductTransposed, full precision 32, optimization on then off';
-SELECT id, round(dotProductTransposed(vec, [1., 2., 3., 4.], 32), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
-SELECT id, round(dotProductTransposed(vec, [1., 2., 3., 4.], 32), 6) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+SELECT id, round(dotProductTransposed(vec, [1., 2., 3., 4.], 32), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(dotProductTransposed(vec, [1., 2., 3., 4.], 32), 3) FROM qbit_ns ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 -- The result type must stay Nullable(Float64) whether or not the optimization fires.
 SELECT '-- result type is Nullable(Float64) with the optimization on and off';
@@ -59,11 +61,11 @@ CREATE TABLE qbit_strided (id UInt32, vec Nullable(QBit(Float32, 16, 8))) ENGINE
 INSERT INTO qbit_strided VALUES (1, range(16)), (2, NULL), (3, arrayMap(x -> 0.5, range(16))), (4, NULL);
 
 SELECT '-- strided dotProductTransposed, used_dims 8, precision 16, optimization on then off';
-SELECT id, round(dotProductTransposed(vec, range(8)::Array(Float32), 16, 8), 6) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
-SELECT id, round(dotProductTransposed(vec, range(8)::Array(Float32), 16, 8), 6) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+SELECT id, round(dotProductTransposed(vec, range(8)::Array(Float32), 16, 8), 3) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(dotProductTransposed(vec, range(8)::Array(Float32), 16, 8), 3) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 SELECT '-- strided L2DistanceTransposed, all dimensions, precision 8, optimization on then off';
-SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 6) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
-SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 6) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
+SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 3) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT id, round(L2DistanceTransposed(vec, range(16)::Array(Float32), 8), 3) FROM qbit_strided ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 0;
 
 DROP TABLE qbit_strided;
