@@ -408,12 +408,33 @@ endif ()
 option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections with zlib (-gz)" ${COMPRESS_DEBUG_SECTIONS_DEFAULT})
 
 if (COMPRESS_DEBUG_SECTIONS AND OS_LINUX AND NOT DISABLE_ALL_DEBUG_SYMBOLS)
-    # Compress debug sections in object files (shrinks the build directory) ...
-    set (DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gz=zlib")
-    # ... and keep them compressed in the linked binaries.
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
-    set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
-    set (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+    # `-gz=zlib` requires the compiler and linker (LLVM) to be built with zlib support, which is not
+    # guaranteed for every toolchain - some clang builds emit `-Wdebug-compression-unavailable`,
+    # which becomes a hard error under `-Werror`. Probe for it (compile with `-g` so debug sections
+    # are actually emitted, and `-Werror` so the missing-zlib diagnostic is fatal to the probe), and
+    # only enable compression when it works; otherwise fall back to uncompressed debug info.
+    include (CheckCXXSourceCompiles)
+    set (_save_required_flags "${CMAKE_REQUIRED_FLAGS}")
+    set (_save_try_compile_type "${CMAKE_TRY_COMPILE_TARGET_TYPE}")
+    set (CMAKE_REQUIRED_FLAGS "-g -gz=zlib -Werror")
+    # Compile-only probe (do not link) so an unrelated link-time issue cannot mask zlib support;
+    # the linker's zlib comes from the same LLVM build as the compiler's, so testing the compiler
+    # is enough.
+    set (CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+    check_cxx_source_compiles ("int main() { return 0; }" COMPILER_SUPPORTS_GZ_ZLIB)
+    set (CMAKE_REQUIRED_FLAGS "${_save_required_flags}")
+    set (CMAKE_TRY_COMPILE_TARGET_TYPE "${_save_try_compile_type}")
+
+    if (COMPILER_SUPPORTS_GZ_ZLIB)
+        # Compress debug sections in object files (shrinks the build directory) ...
+        set (DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gz=zlib")
+        # ... and keep them compressed in the linked binaries.
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+        set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+        set (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+    else ()
+        message (STATUS "COMPRESS_DEBUG_SECTIONS is ON but the toolchain has no zlib support for -gz; debug sections will not be compressed")
+    endif ()
 endif ()
 
 # Disable omit frame pointer compiler optimization using -fno-omit-frame-pointer
