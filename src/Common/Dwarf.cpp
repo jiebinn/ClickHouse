@@ -527,7 +527,7 @@ std::string_view Dwarf::decompressSection(std::string_view compressed) const
     if (compressed.size() < sizeof(ElfCompressionHeader))
         return {};
 
-    ElfCompressionHeader header;
+    ElfCompressionHeader header{};
     memcpy(&header, compressed.data(), sizeof(header));
 
     const char * payload = compressed.data() + sizeof(header);
