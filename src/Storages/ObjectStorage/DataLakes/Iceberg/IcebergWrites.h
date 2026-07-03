@@ -49,10 +49,6 @@ String removeEscapedSlashes(const String & json_str);
 /// Poco stringification + `removeEscapedSlashes` sequence.
 String stringifyJSON(const Poco::Dynamic::Var & json, unsigned indent = 0);
 
-/// Compiles an Avro schema from its JSON text. Thin wrapper over the Avro library API,
-/// kept here so the call lives in a single place.
-avro::ValidSchema compileAvroSchema(const String & schema_json);
-
 void generateManifestFile(
     Poco::JSON::Object::Ptr metadata,
     const std::vector<String> & partition_columns,

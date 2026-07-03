@@ -228,11 +228,6 @@ String stringifyJSON(const Poco::Dynamic::Var & json, unsigned indent)
     return removeEscapedSlashes(oss.str());
 }
 
-avro::ValidSchema compileAvroSchema(const String & schema_json)
-{
-    return avro::compileJsonSchemaFromString(schema_json);
-}
-
 static void extendSchemaForPartitions(
     String & schema,
     const std::vector<String> & partition_columns,
