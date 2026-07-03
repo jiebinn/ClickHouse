@@ -1493,7 +1493,7 @@
         </div>
         <form id="controls">
             <div id="inputs">
-                <input name="url" spellcheck="false" class="monospace shadow" id="url" type="url" value="" placeholder="url" /><span id="url_status"><span id="server_info"></span>●</span><input name="user" spellcheck="false" class="monospace shadow" id="user" type="text" value="" placeholder="user" /><input name="password" class="monospace shadow" id="password" type="password" placeholder="password" />
+                <input name="url" form="controls" spellcheck="false" class="monospace shadow" id="url" type="url" value="" placeholder="url" /><span id="url_status"><span id="server_info"></span>●</span><input name="user" form="controls" spellcheck="false" class="monospace shadow" id="user" type="text" value="" placeholder="user" /><input name="password" form="controls" class="monospace shadow" id="password" type="password" placeholder="password" />
             </div>
             <div id="query_div"><div id="query-backdrop"></div><div id="completion-mirror"></div><textarea autofocus spellcheck="false" autocorrect="false" autocomplete="false" data-gramm="false" class="monospace shadow" id="query"></textarea><div id="completion-overlay"></div></div>
             <div id="query-params"></div>
@@ -5088,7 +5088,10 @@ const tabs_elem = document.getElementById('tabs');
 /// The connection parameters (url/user/password) live in the `#inputs` element. When the tab
 /// bar is shown they clutter the top of every tab, so we relocate that same element into a
 /// drop-down behind a 🔑 button in the top-right corner. Relocating the existing element (rather
-/// than duplicating the inputs) keeps every reference and event listener bound to it valid.
+/// than duplicating the inputs) keeps every reference and event listener bound to it valid. The
+/// three inputs carry `form="controls"`, so once moved out of the form's subtree they still count
+/// as its fields: pressing `Enter` in url/user/password keeps submitting `#controls` (running the
+/// query), matching the inline single-tab layout.
 const inputs_elem = document.getElementById('inputs');
 const controls_elem = document.getElementById('controls');
 const connection_key_elem = document.getElementById('connection-key');
