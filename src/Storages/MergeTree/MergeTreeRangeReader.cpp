@@ -1661,8 +1661,17 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     const bool apply_rescoring_row_filter = main_reader && read_hints.use_vector_search_result_filter;
     bool is_vector_search = read_hints.vector_search_results.has_value()
         && (read_sample_block.has("_distance") || apply_rescoring_row_filter);
-    if (is_vector_search && (part_offsets_filter_for_vector_search.size() == result.num_rows))
-        result.optimize(part_offsets_filter_for_vector_search, can_read_incomplete_granules, false);
+    if (is_vector_search && (part_offsets_filter_for_vector_search.size() == result.total_rows_per_granule))
+    {
+        auto current_filter = part_offsets_filter_for_vector_search;
+        if (result.final_filter.present() && result.filterWasApplied() && result.num_rows != result.total_rows_per_granule)
+        {
+            auto filtered_column = part_offsets_filter_for_vector_search.getColumn()->filter(result.final_filter.getData(), result.num_rows);
+            current_filter = FilterWithCachedCount(filtered_column);
+        }
+
+        result.optimize(current_filter, can_read_incomplete_granules, false);
+    }
 
     if (!prewhere_info || prewhere_info->type == PrewhereExprStep::None)
         return;
