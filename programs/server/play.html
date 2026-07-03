@@ -5152,6 +5152,17 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+/// The connection inputs keep `form="controls"`, so native constraint validation (e.g. the
+/// `type="url"` check on `#url`) still runs on submit while they sit in the closed drop-down.
+/// A hidden invalid control blocks the submit with no visible bubble, leaving the Run button
+/// dead. Open the drop-down when a connection field reports invalid, so the browser shows its
+/// validation bubble on a now-visible control. `invalid` does not bubble, so listen in the
+/// capture phase. In the single-tab layout the 🔑 button is hidden and the inputs are already
+/// visible inline, so nothing is opened.
+inputs_elem.addEventListener('invalid', () => {
+    if (!connection_key_elem.hidden && connection_dropdown_elem.hidden) openConnectionDropdown();
+}, true);
+
 /// Generate the next default title: "Query A" .. "Query Z", "Query AA", ...
 /// Skips titles already in use so closing/reopening doesn't produce duplicates.
 function nextDefaultTitle() {
