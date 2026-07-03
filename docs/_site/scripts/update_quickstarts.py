@@ -10,7 +10,6 @@ Usage:
     python scripts/update_quickstarts.py
 """
 
-import os
 import re
 import json
 from pathlib import Path
