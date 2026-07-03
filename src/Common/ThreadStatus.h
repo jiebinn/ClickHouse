@@ -54,6 +54,9 @@ using InternalProfileEventsQueuePtr = std::shared_ptr<InternalProfileEventsQueue
 using InternalProfileEventsQueueWeakPtr = std::weak_ptr<InternalProfileEventsQueue>;
 
 using QueryIsCanceledPredicate = std::function<bool()>;
+/// Throws the real cancellation cause (e.g. `TIMEOUT_EXCEEDED`, or an exception stored by
+/// `QueryStatus::cancelQuery`) if the query has been cancelled and its process-list element is available.
+using ThrowIfQueryCanceledPredicate = std::function<void()>;
 
 /** Thread group is a collection of threads dedicated to single task
   * (query or other process like background merge).
@@ -105,6 +108,7 @@ public:
         std::shared_ptr<std::atomic_size_t> pipeline_processor_index = std::make_shared<std::atomic_size_t>(0);
 
         QueryIsCanceledPredicate query_is_canceled_predicate = {};
+        ThrowIfQueryCanceledPredicate throw_if_query_canceled_predicate = {};
     };
 
     SharedData getSharedData()
@@ -284,6 +288,11 @@ public:
     const String & getQueryForLog() const;
 
     bool isQueryCanceled() const;
+
+    /// If the query has been cancelled and its process-list element is still available, throws the real
+    /// cancellation cause (e.g. `TIMEOUT_EXCEEDED`, or an exception stored by `QueryStatus::cancelQuery`).
+    /// No-op if the thread is not attached to a query group.
+    void throwIfQueryCanceled() const;
 
     /// Proper cal for fatal_error_callback
     void onFatalError();

@@ -17,6 +17,7 @@ thread_local ThreadStatus constinit * current_thread = nullptr;
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 void CurrentThread::updatePerformanceCounters()
@@ -112,6 +113,22 @@ ContextPtr CurrentThread::tryGetQueryContext()
         return {};
 
     return current_thread->tryGetQueryContext();
+}
+
+void CurrentThread::checkIfNotCancelled()
+{
+    if (unlikely(!current_thread))
+        return;
+
+    /// Prefer the process-list element so the real cause is preserved: a timeout is reported as
+    /// TIMEOUT_EXCEEDED and an exception stored by cancelQuery (e.g. a coordination failure on another
+    /// host) is rethrown, instead of a generic QUERY_WAS_CANCELLED.
+    current_thread->throwIfQueryCanceled();
+
+    /// Both checks consult the same process-list element, so this fires only if the element became
+    /// visible (and killed) between the two calls; in that case report a generic cancellation.
+    if (current_thread->isQueryCanceled())
+        throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Query was cancelled");
 }
 
 std::string_view CurrentThread::getQueryId()

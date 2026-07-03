@@ -107,6 +107,11 @@ public:
 
     static std::string_view getQueryId();
 
+    /// Throws if the current query has been cancelled, preserving the real cause where available
+    /// (`TIMEOUT_EXCEEDED`, or an exception stored by `QueryStatus::cancelQuery`) and otherwise reporting a
+    /// generic `QUERY_WAS_CANCELLED`. No-op if the thread has no cancelled query.
+    static void checkIfNotCancelled();
+
     // For IO Scheduling
     static void attachReadResource(ResourceLink link);
     static void detachReadResource();
