@@ -104,6 +104,9 @@ public:
     TextIndexPostingsCachePtr postingsCache() const { return postings_cache; }
     TokensCardinalitiesCachePtr cardinalitiesCache() const { return cardinalities_cache; }
 
+    /// Returns true if the global header cache is used, false if a local per-query cache is used.
+    bool useGlobalHeaderCache() const { return use_global_header_cache; }
+
     TokenizerPtr getTokenizer() const { return tokenizer; }
     MergeTreeIndexTextPreprocessorPtr getPreprocessor() const { return preprocessor; }
     MergeTreeIndexTextPostprocessorPtr getPostprocessor() const { return postprocessor; }
@@ -198,6 +201,7 @@ private:
     TextIndexTokensCachePtr tokens_cache;
     /// Cache for headers of the text index
     TextIndexHeaderCachePtr header_cache;
+    bool use_global_header_cache = false;
     /// Cache for posting lists of tokens (and phrase-search results, keyed with the Phrase discriminator).
     TextIndexPostingsCachePtr postings_cache;
     /// Cache for tokens cardinalities

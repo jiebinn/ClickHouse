@@ -17,6 +17,7 @@
 #include <absl/container/flat_hash_set.h>
 #include <base/types.h>
 
+#include <variant>
 #include <vector>
 
 #include <roaring/roaring.hh>
@@ -263,10 +264,12 @@ struct DictionarySparseIndex : public DictionaryBlockBase
     UInt64 getOffsetInFile(size_t idx) const;
     size_t memoryUsageBytes() const;
 
+    /// Shrinks the tokens column and bit-packs the offsets to reduce memory usage.
+    void optimize();
+
     /// Offsets in the dictionary file to the beginning of each block.
-    /// Stored bit-packed to reduce the memory usage of the text index header cache.
-    /// It doesn't affect the on-disk format, offsets are serialized as plain UInt64 values.
-    BitPackedUInt64Array offsets_in_file;
+    /// Stored as a raw column after creation and bit-packed after optimize.
+    std::variant<ColumnPtr, BitPackedUInt64Array> offsets_in_file;
 };
 
 using DictionarySparseIndexPtr = std::shared_ptr<DictionarySparseIndex>;
