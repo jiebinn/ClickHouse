@@ -19,7 +19,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 سنبدأ بتوضيح كيفية معالجة استعلام على جدول [uk&#95;price&#95;paid&#95;simple](/ar/concepts/core-concepts/parts) من دون استخدام PREWHERE:
 
-<Image img="/images/guides/best-practices/prewhere_01.gif" size="md" alt="معالجة الاستعلام بدون تحسين PREWHERE" />
+<Image img="/images/guides/best-practices/prewhere_01.webp" size="md" alt="معالجة الاستعلام بدون تحسين PREWHERE" />
 
 <br />
 
@@ -45,7 +45,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 الخطوات الثلاث الأولى من المعالجة هي نفسها كما في السابق:
 
-<Image img="/images/guides/best-practices/prewhere_02.gif" size="md" alt="معالجة الاستعلام باستخدام تحسين PREWHERE" />
+<Image img="/images/guides/best-practices/prewhere_02.webp" size="md" alt="معالجة الاستعلام باستخدام تحسين PREWHERE" />
 
 <br />
 
@@ -66,7 +66,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 في مثالنا، تتطابق جميع الحبيبات المحددة، لذا ② تُحدَّد بعد ذلك الحبيبات المناظرة موضعيًا لعمود التصفية التالي — `date` — للمعالجة:
 
-<Image img="/images/guides/best-practices/prewhere_03.gif" size="md" alt="الخطوة 1: التصفية حسب المدينة" />
+<Image img="/images/guides/best-practices/prewhere_03.webp" size="md" alt="الخطوة 1: التصفية حسب المدينة" />
 
 <br />
 
@@ -77,7 +77,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 في هذه الحالة، تحتوي حبيبتان من أصل ثلاث على صفوف متطابقة، لذا ② لا تُحدَّد لمزيد من المعالجة إلا الحبيبات المناظرة موضعيًا لهما من عمود التصفية التالي — `price` —:
 
-<Image img="/images/guides/best-practices/prewhere_04.gif" size="md" alt="الخطوة 2: التصفية حسب التاريخ" />
+<Image img="/images/guides/best-practices/prewhere_04.webp" size="md" alt="الخطوة 2: التصفية حسب التاريخ" />
 
 <br />
 
@@ -88,7 +88,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 ولا تحتوي على صفوف متطابقة سوى واحدة من الحبيبتين، لذا ② لا يلزم تحميل سوى الحبيبة المناظرة موضعيًا لها من عمود `SELECT` — `street` — لمزيد من المعالجة:
 
-<Image img="/images/guides/best-practices/prewhere_05.gif" size="md" alt="الخطوة 2: التصفية حسب السعر" />
+<Image img="/images/guides/best-practices/prewhere_05.webp" size="md" alt="الخطوة 2: التصفية حسب السعر" />
 
 <br />
 

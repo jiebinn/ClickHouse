@@ -21,7 +21,7 @@ ClickHouse [разработан для скорости](/ru/get-started/about/
 
 Когда ClickHouse ① выполняет агрегационный запрос с фильтром по первичному ключу таблицы, он ② загружает первичный индекс в память, чтобы ③ определить, какие гранулы нужно обработать, а какие можно безопасно пропустить:
 
-<Image img="/images/guides/best-practices/query-parallelism_01.gif" size="md" alt="Анализ индекса" />
+<Image img="/images/guides/best-practices/query-parallelism_01.webp" size="md" alt="Анализ индекса" />
 
 <div id="distributing-work-across-processing-lanes">
   ### Распределение работы между линиями обработки
@@ -29,7 +29,7 @@ ClickHouse [разработан для скорости](/ru/get-started/about/
 
 Затем выбранные данные [динамически](#load-balancing-across-processing-lanes) распределяются между `n` параллельными [линиями обработки](/ru/concepts/core-concepts/academic-overview#4-2-multi-core-parallelization), которые передают и обрабатывают данные [блок](/ru/resources/develop-contribute/introduction/architecture#block) за блоком, формируя итоговый результат:
 
-<Image img="/images/guides/best-practices/query-parallelism_02.gif" size="md" alt="4 параллельные линии обработки" />
+<Image img="/images/guides/best-practices/query-parallelism_02.webp" size="md" alt="4 параллельные линии обработки" />
 
 <br />
 
@@ -39,7 +39,7 @@ ClickHouse [разработан для скорости](/ru/get-started/about/
 
 На машине с `8` ядрами пропускная способность выполнения запроса примерно удвоилась бы (но использование памяти также соответственно увеличилось бы), поскольку больше линий обработки обрабатывают данные параллельно:
 
-<Image img="/images/guides/best-practices/query-parallelism_03.gif" size="md" alt="8 параллельных линий обработки" />
+<Image img="/images/guides/best-practices/query-parallelism_03.webp" size="md" alt="8 параллельных линий обработки" />
 
 <br />
 
@@ -53,7 +53,7 @@ ClickHouse [разработан для скорости](/ru/get-started/about/
 
 Когда данные таблицы распределены по нескольким серверам в виде [сегментов](/ru/guides/oss/deployment-and-scaling/shards), каждый сервер параллельно обрабатывает свой сегмент. На каждом сервере локальные данные обрабатываются с использованием параллельных линий обработки, как описано выше:
 
-<Image img="/images/guides/best-practices/query-parallelism_04.gif" size="md" alt="Распределённые линии" />
+<Image img="/images/guides/best-practices/query-parallelism_04.webp" size="md" alt="Распределённые линии" />
 
 <br />
 

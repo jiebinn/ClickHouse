@@ -21,7 +21,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 عندما يُشغِّل ClickHouse ① استعلامًا تجميعيًا مع عامل تصفية على المفتاح الأساسي للجدول، فإنه ② يحمّل الفهرس الأساسي إلى الذاكرة من أجل ③ تحديد الحبيبات التي يجب معالجتها وتلك التي يمكن تخطيها بأمان:
 
-<Image img="/images/guides/best-practices/query-parallelism_01.gif" size="md" alt="تحليل الفهرس" />
+<Image img="/images/guides/best-practices/query-parallelism_01.webp" size="md" alt="تحليل الفهرس" />
 
 <div id="distributing-work-across-processing-lanes">
   ### توزيع العمل عبر مسارات المعالجة
@@ -29,7 +29,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 ثم تُوزَّع البيانات المحددة [ديناميكيًا](#load-balancing-across-processing-lanes) على `n` من [مسارات المعالجة](/ar/concepts/core-concepts/academic-overview#4-2-multi-core-parallelization) المتوازية، حيث تُمرَّر البيانات وتُعالَج فيها [كتلة](/ar/resources/develop-contribute/introduction/architecture#block) بعد أخرى حتى الوصول إلى النتيجة النهائية:
 
-<Image img="/images/guides/best-practices/query-parallelism_02.gif" size="md" alt="4 مسارات معالجة متوازية" />
+<Image img="/images/guides/best-practices/query-parallelism_02.webp" size="md" alt="4 مسارات معالجة متوازية" />
 
 <br />
 
@@ -39,7 +39,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 على جهاز يحتوي على `8` أنوية، ستتضاعف تقريبًا إنتاجية معالجة الاستعلام (لكن استخدام الذاكرة سيزداد أيضًا تبعًا لذلك)، لأن عددًا أكبر من المسارات سيعالج البيانات بالتوازي:
 
-<Image img="/images/guides/best-practices/query-parallelism_03.gif" size="md" alt="8 مسارات معالجة متوازية" />
+<Image img="/images/guides/best-practices/query-parallelism_03.webp" size="md" alt="8 مسارات معالجة متوازية" />
 
 <br />
 
@@ -53,7 +53,7 @@ import { Image } from "/snippets/ar/components/Image.jsx";
 
 عندما تكون بيانات الجدول موزعة عبر عدة خوادم على شكل [shards](/ar/guides/oss/deployment-and-scaling/shards)، يعالج كل خادم الجزء الخاص به بالتوازي. وداخل كل خادم، تُعالَج البيانات المحلية باستخدام مسارات معالجة متوازية، تمامًا كما هو موضح أعلاه:
 
-<Image img="/images/guides/best-practices/query-parallelism_04.gif" size="md" alt="مسارات موزعة" />
+<Image img="/images/guides/best-practices/query-parallelism_04.webp" size="md" alt="مسارات موزعة" />
 
 <br />
 

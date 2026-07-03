@@ -59,14 +59,14 @@ Como puedes ver en la sección de estadísticas del diagrama anterior, la consul
 
 En una base de datos orientada a filas, aunque la consulta anterior solo procesa unas pocas de las columnas existentes, el sistema sigue necesitando cargar en memoria desde disco los datos de otras columnas existentes. Esto se debe a que los datos se almacenan en disco en fragmentos llamados [bloques](https://en.wikipedia.org/wiki/Block_\(data_storage\)) (normalmente de tamaño fijo, p. ej., 4 KB u 8 KB). Los bloques son las unidades de datos más pequeñas que se leen del disco a la memoria. Cuando una aplicación o base de datos solicita datos, el subsistema de E/S de disco del sistema operativo lee del disco los bloques necesarios. Aunque solo se necesite una parte de un bloque, se lee el bloque completo en memoria (esto se debe al diseño del disco y del sistema de archivos):
 
-<Image img="/images/row-oriented.gif" alt="Estructura de una base de datos orientada a filas" size="lg" />
+<Image img="/images/row-oriented.webp" alt="Estructura de una base de datos orientada a filas" size="lg" />
 
 **DBMS orientado a columna**
 
 Dado que los valores de cada columna se almacenan secuencialmente en disco, uno tras otro, no se cargan datos innecesarios cuando se ejecuta la consulta anterior.
 Como el almacenamiento y la transferencia por bloques del disco a la memoria se ajustan al patrón de acceso a los datos de las consultas analíticas, solo se leen del disco las columnas necesarias para una consulta, lo que evita operaciones de E/S innecesarias sobre datos que no se utilizan. Esto es [mucho más rápido](https://benchmark.clickhouse.com/) en comparación con el almacenamiento basado en filas, donde se leen filas completas (incluidas las columnas irrelevantes):
 
-<Image img="/images/column-oriented.gif" alt="Estructura de base de datos orientada a columna" size="lg" />
+<Image img="/images/column-oriented.webp" alt="Estructura de base de datos orientada a columna" size="lg" />
 
 <div id="data-replication-and-integrity">
   ## Replicación e integridad de los datos

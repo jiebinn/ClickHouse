@@ -59,14 +59,14 @@ LIMIT 8;
 
 행 지향 데이터베이스에서는 위 쿼리가 기존 컬럼 중 일부만 처리하더라도, 시스템은 여전히 다른 컬럼의 데이터도 디스크에서 메모리로 로드해야 합니다. 이는 데이터가 디스크에 [블록](https://en.wikipedia.org/wiki/Block_\(data_storage\))이라고 하는 청크 단위로 저장되기 때문입니다(보통 4 KB 또는 8 KB 같은 고정 크기). 블록은 디스크에서 메모리로 읽어 오는 데이터의 가장 작은 단위입니다. 애플리케이션이나 데이터베이스가 데이터를 요청하면 운영 체제의 디스크 I/O 하위 시스템이 디스크에서 필요한 블록을 읽습니다. 블록의 일부만 필요하더라도 전체 블록이 메모리로 읽혀집니다(이는 디스크 및 파일 시스템 설계에 따른 것입니다):
 
-<Image img="/images/row-oriented.gif" alt="행 지향 데이터베이스 구조" size="lg" />
+<Image img="/images/row-oriented.webp" alt="행 지향 데이터베이스 구조" size="lg" />
 
 **컬럼 지향 DBMS**
 
 각 컬럼의 값이 디스크에 순차적으로 저장되므로, 위 쿼리를 실행할 때 불필요한 데이터는 로드되지 않습니다.
 디스크에서 메모리로의 block 단위 저장 및 전송이 분석 쿼리의 데이터 접근 패턴과 일치하므로, 쿼리에 필요한 컬럼만 디스크에서 읽어 사용되지 않는 데이터에 대한 불필요한 I/O를 피할 수 있습니다. 이는 전체 행(관련 없는 컬럼 포함)을 읽는 행 기반 저장 방식과 비교하면 [훨씬 더 빠릅니다](https://benchmark.clickhouse.com/):
 
-<Image img="/images/column-oriented.gif" alt="컬럼 지향 데이터베이스 구조" size="lg" />
+<Image img="/images/column-oriented.webp" alt="컬럼 지향 데이터베이스 구조" size="lg" />
 
 <div id="data-replication-and-integrity">
   ## 데이터 복제 및 무결성

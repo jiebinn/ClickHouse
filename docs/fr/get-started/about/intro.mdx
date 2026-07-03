@@ -59,14 +59,14 @@ Comme vous pouvez le voir dans la section des statistiques du schéma ci-dessus,
 
 Dans une base de données orientée lignes, même si la requête ci-dessus ne traite que quelques-unes des colonnes existantes, le système doit tout de même charger du disque vers la mémoire les données d’autres colonnes. Cela s’explique par le fait que les données sont stockées sur le disque en fragments appelés [blocs](https://en.wikipedia.org/wiki/Block_\(data_storage\)) (généralement de taille fixe, par exemple 4 Ko ou 8 Ko). Les blocs sont les plus petites unités de données lues du disque vers la mémoire. Lorsqu’une application ou une base de données demande des données, le sous-système d’E/S disque du système d’exploitation lit les blocs nécessaires sur le disque. Même si seule une partie d’un bloc est nécessaire, le bloc entier est chargé en mémoire (en raison de la conception du disque et du système de fichiers) :
 
-<Image img="/images/row-oriented.gif" alt="Structure de base de données orientée lignes" size="lg" />
+<Image img="/images/row-oriented.webp" alt="Structure de base de données orientée lignes" size="lg" />
 
 **SGBD orienté colonnes**
 
 Comme les valeurs de chaque colonne sont stockées séquentiellement, les unes à la suite des autres sur le disque, aucune donnée inutile n&#39;est chargée lorsque la requête ci-dessus est exécutée.
 Comme le stockage et le transfert par blocs du disque vers la mémoire sont alignés sur le mode d&#39;accès aux données des requêtes analytiques, seules les colonnes nécessaires à une requête sont lues sur le disque, ce qui évite des E/S inutiles sur des données non utilisées. C&#39;est [bien plus rapide](https://benchmark.clickhouse.com/) que le stockage par ligne, où des lignes entières (y compris des colonnes non pertinentes) sont lues :
 
-<Image img="/images/column-oriented.gif" alt="Structure d'une base de données orientée colonnes" size="lg" />
+<Image img="/images/column-oriented.webp" alt="Structure d'une base de données orientée colonnes" size="lg" />
 
 <div id="data-replication-and-integrity">
   ## Réplication et intégrité des données

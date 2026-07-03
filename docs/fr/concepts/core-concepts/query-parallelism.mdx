@@ -21,7 +21,7 @@ Nous utilisons une requête d’agrégation sur le jeu de données [uk&#95;price
 
 Lorsque ClickHouse ① exécute une requête d’agrégation avec un filtre sur la clé primaire de la table, il ② charge l’index primaire en mémoire afin d’③ identifier les granules à traiter et celles qui peuvent être ignorées sans risque :
 
-<Image img="/images/guides/best-practices/query-parallelism_01.gif" size="md" alt="Analyse de l’index" />
+<Image img="/images/guides/best-practices/query-parallelism_01.webp" size="md" alt="Analyse de l’index" />
 
 <div id="distributing-work-across-processing-lanes">
   ### Répartition du travail entre les voies de traitement
@@ -29,7 +29,7 @@ Lorsque ClickHouse ① exécute une requête d’agrégation avec un filtre sur 
 
 Les données sélectionnées sont ensuite réparties [dynamiquement](#load-balancing-across-processing-lanes) entre `n` [voies de traitement](/fr/concepts/core-concepts/academic-overview#4-2-multi-core-parallelization) parallèles, qui acheminent et traitent les données [bloc](/fr/resources/develop-contribute/introduction/architecture#block) par bloc jusqu’au résultat final :
 
-<Image img="/images/guides/best-practices/query-parallelism_02.gif" size="md" alt="4 voies de traitement parallèles" />
+<Image img="/images/guides/best-practices/query-parallelism_02.webp" size="md" alt="4 voies de traitement parallèles" />
 
 <br />
 
@@ -39,7 +39,7 @@ Le nombre de `n` voies de traitement parallèles est contrôlé par le paramètr
 
 Sur une machine avec `8` cœurs, le débit du traitement des requêtes doublerait approximativement (mais l’utilisation mémoire augmenterait également en conséquence), car davantage de voies traitent les données en parallèle :
 
-<Image img="/images/guides/best-practices/query-parallelism_03.gif" size="md" alt="8 voies de traitement parallèles" />
+<Image img="/images/guides/best-practices/query-parallelism_03.webp" size="md" alt="8 voies de traitement parallèles" />
 
 <br />
 
@@ -53,7 +53,7 @@ Une répartition efficace des voies est essentielle pour maximiser l’utilisati
 
 Lorsque les données d&#39;une table sont réparties sur plusieurs serveurs en [shards](/fr/guides/oss/deployment-and-scaling/shards), chaque serveur traite son shard en parallèle. Sur chaque serveur, les données locales sont traitées via des voies de traitement parallèles, comme décrit ci-dessus :
 
-<Image img="/images/guides/best-practices/query-parallelism_04.gif" size="md" alt="Lanes distribuées" />
+<Image img="/images/guides/best-practices/query-parallelism_04.webp" size="md" alt="Lanes distribuées" />
 
 <br />
 
