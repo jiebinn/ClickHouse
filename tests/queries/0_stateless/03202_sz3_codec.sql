@@ -116,6 +116,7 @@ SELECT * FROM tab_wide ORDER BY ALL;
 SELECT * FROM tab_compact ORDER BY ALL;
 
 DROP TABLE tab_wide;
+DROP TABLE tab_compact;
 
 SELECT 'Test with default settings';
 

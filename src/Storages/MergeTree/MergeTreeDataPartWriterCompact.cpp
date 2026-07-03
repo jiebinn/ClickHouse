@@ -342,9 +342,16 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
 
                 /// Some vector codecs (e.g., SZ3) used for compressing arrays like Array<Float>
                 /// require specifying the array dimensions before compression starts.
-                /// For 1D arrays, it's simply the length.
-                auto compression_codec = result_stream->compressed_buf.getCodec();
-                setVectorDimensionsIfNeeded(compression_codec, block.getColumnOrSubcolumnByName(name_and_type->name).column.get());
+                /// For 1D arrays, it's simply the length. The dimension is a property of the whole column
+                /// and `setAndCheckVectorDimension` accumulates it monotonically, so it only needs to be
+                /// computed once per block: rescanning the full column on every granule would make SZ3
+                /// writes O(rows * granules) in the insert/merge hot path. Do it while writing the first
+                /// granule, before its data is compressed.
+                if (&granule == &granules.front())
+                {
+                    auto compression_codec = result_stream->compressed_buf.getCodec();
+                    setVectorDimensionsIfNeeded(compression_codec, block.getColumnOrSubcolumnByName(name_and_type->name).column.get());
+                }
 
                 /// Write one compressed block per column in granule for more optimal reading.
                 if (prev_stream && prev_stream != result_stream)
