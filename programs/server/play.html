@@ -3891,6 +3891,9 @@ let current_selection_num = 0;
 ///      after a middle-click new-tab open -> the pasted text is kept: the paste-shortcut
 ///      `keydown` disarms the guard before its `paste` fires, so only the mouse-driven
 ///      PRIMARY paste (which carries no keystroke) is ever swallowed.
+///   8. Two middle clicks in quick succession (open table A, then table B within the guard's
+///      fallback window) -> B's PRIMARY paste is still swallowed: re-arming cancels A's pending
+///      fallback timer (`middleclick_paste_timeout`), so A's stale timeout cannot clear B's guard.
 function onTableActivate(elem, handler) {
     elem.addEventListener('click', handler);
     elem.addEventListener('auxclick', e => {
@@ -5039,16 +5042,29 @@ let query_area = document.getElementById('query');
 /// timing. So even if the user middle-clicks and immediately presses a paste shortcut on a platform
 /// where no PRIMARY paste ever arrives, their paste is preserved; the short post-focus fallback in
 /// `activateTab` only bounds how long a never-consumed guard can linger.
+///
+/// The guard is a single shared bit, so we keep the handle of its one fallback timer and cancel
+/// it whenever the guard is re-armed or consumed. Otherwise two overlapping middle-click opens
+/// (open A, then open B within the fallback window) would share the bit but leave two pending
+/// timeouts: A's stale timeout could clear the bit that B re-armed, before B's PRIMARY paste
+/// arrives, letting that paste land in the editor. Cancelling the previous timer on re-arm means
+/// an older open's timeout can never clear a newer open's guard.
 let suppress_middleclick_paste = false;
+let middleclick_paste_timeout = null;
+function disarmMiddleclickPaste() {
+    suppress_middleclick_paste = false;
+    clearTimeout(middleclick_paste_timeout);
+    middleclick_paste_timeout = null;
+}
 query_area.addEventListener('keydown', e => {
     const keyboard_paste = ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V'))
         || (e.shiftKey && e.key === 'Insert');
-    if (keyboard_paste) suppress_middleclick_paste = false;
+    if (keyboard_paste) disarmMiddleclickPaste();
 });
 query_area.addEventListener('paste', e => {
     if (suppress_middleclick_paste) {
         e.preventDefault();
-        suppress_middleclick_paste = false;
+        disarmMiddleclickPaste();
     }
 });
 
@@ -5154,10 +5170,14 @@ async function activateTab(id, guard_paste = false) {
     /// can never let it expire before focus. It is cleared by the swallowed paste, by a real
     /// paste-shortcut keydown (which must never be eaten - see `suppress_middleclick_paste`), or by
     /// the short fallback below in case no paste fires at all (non-Linux, empty selection), so the
-    /// flag can never linger.
-    if (guard_paste) suppress_middleclick_paste = true;
+    /// flag can never linger. Re-arming here cancels any previous open's pending fallback timer, so
+    /// an overlapping middle-click open cannot have its guard cleared by an earlier open's timeout.
+    if (guard_paste) {
+        clearTimeout(middleclick_paste_timeout);
+        suppress_middleclick_paste = true;
+    }
     query_area.focus();
-    if (guard_paste) setTimeout(() => { suppress_middleclick_paste = false; }, 250);
+    if (guard_paste) middleclick_paste_timeout = setTimeout(disarmMiddleclickPaste, 250);
 }
 
 /// Switch tabs in response to a user click: capture the current tab, activate the
