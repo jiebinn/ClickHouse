@@ -89,7 +89,10 @@ FilterWithCachedCount::FilterWithCachedCount(const ColumnPtr & column_)
             /// `filter_indices` aliases either the sparse column's offsets (non-nullable path)
             /// or the freshly-allocated `valid_offsets` column (nullable path). Keep whichever
             /// owns the storage alive.
-            sparse_indices_holder = sparse_desc.valid_offsets ? std::move(sparse_desc.valid_offsets) : column_;
+            if (sparse_desc.valid_offsets)
+                sparse_indices_holder = std::move(sparse_desc.valid_offsets);
+            else
+                sparse_indices_holder = column_;
         }
     }
 
@@ -825,13 +828,13 @@ size_t MergeTreeRangeReader::ReadResult::countZeroTailsFromSparse(
     const auto & idx = sparse_indices.getData();
     size_t total_zero_rows_in_tails = 0;
     size_t granule_start = 0;
-    auto it = idx.begin();
+    const auto * it = idx.begin();
 
     for (auto rows_to_read : rows_per_granule)
     {
         const size_t granule_end = granule_start + rows_to_read;
-        auto it_end = std::lower_bound(it, idx.end(), granule_end);
-        size_t zero_tail;
+        const auto * it_end = std::lower_bound(it, idx.end(), granule_end);
+        size_t zero_tail = 0;
         if (it == it_end)
             zero_tail = rows_to_read;
         else
