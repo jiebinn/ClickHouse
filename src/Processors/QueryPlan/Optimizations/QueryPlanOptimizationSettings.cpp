@@ -214,11 +214,14 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(
 
     make_distributed_plan = from[Setting::make_distributed_plan];
 
-    /// make_distributed_plan and parallel replicas are two independent distributed execution
-    /// mechanisms that cannot be combined.
-    if (make_distributed_plan && from[Setting::allow_experimental_parallel_reading_from_replicas] > 0)
+    /// make_distributed_plan is incompatible with parallel replicas, including the automatic
+    /// heuristic: its plan switching and statistics collection interfere with the distributed plan.
+    if (make_distributed_plan
+        && (from[Setting::allow_experimental_parallel_reading_from_replicas] > 0
+            || from[Setting::automatic_parallel_replicas_mode] != 0))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
-            "make_distributed_plan does not support parallel replicas, disable the `enable_parallel_replicas` setting");
+            "make_distributed_plan does not support parallel replicas, "
+            "disable the `enable_parallel_replicas` and `automatic_parallel_replicas_mode` settings");
 
     /// The implicit count/minmax projection counts a whole part from metadata; a distributed read
     /// buckets the part, so the projection would be counted once per bucket and multiply the result.
