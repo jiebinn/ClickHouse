@@ -160,6 +160,7 @@ struct MergeTreeSettings;
 struct DatabaseReplicatedSettings;
 struct DistributedSettings;
 struct InitialAllRangesAnnouncement;
+struct InitialAllRangesAnnouncementResponse;
 struct ParallelReadRequest;
 struct ParallelReadResponse;
 class S3SettingsByEndpoint;
@@ -260,7 +261,7 @@ struct ClusterFunctionReadTaskResponse;
 using ClusterFunctionReadTaskResponsePtr = std::shared_ptr<ClusterFunctionReadTaskResponse>;
 using ClusterFunctionReadTaskCallback = std::function<ClusterFunctionReadTaskResponsePtr()>;
 
-using MergeTreeAllRangesCallback = std::function<void(InitialAllRangesAnnouncement)>;
+using MergeTreeAllRangesCallback = std::function<std::optional<InitialAllRangesAnnouncementResponse>(InitialAllRangesAnnouncement)>;
 using MergeTreeReadTaskCallback = std::function<std::optional<ParallelReadResponse>(ParallelReadRequest)>;
 
 using BlockMarshallingCallback = std::function<Block(const Block & block)>;
