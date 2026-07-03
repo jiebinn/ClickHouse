@@ -341,11 +341,17 @@ async function getCIReportsFromPR(prUrl) {
 
   console.log(`Fetching CI reports for PR #${prNumber}...\n`);
 
-  // Fetch PR comments to find CI bot comment
+  // Fetch PR comments to find CI bot comment.
+  // Drop GH_CONFIG_DIR before spawning gh: some agent/runner checkouts set it to a poisoned
+  // config dir (no/expired auth) that makes `gh api` fail, while the default config is fine.
+  // Other repo tooling (patch-release-check) does the same via `env -u GH_CONFIG_DIR gh`.
+  const ghEnv = { ...process.env };
+  delete ghEnv.GH_CONFIG_DIR;
   try {
     const commentsJson = execSync(`gh api repos/ClickHouse/ClickHouse/issues/${prNumber}/comments --paginate --jq '.[] | select(.user.login == "clickhouse-gh[bot]") | {body, created_at}'`, {
       encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: ghEnv
     });
 
     const comments = commentsJson.trim().split('\n').filter(l => l.trim()).map(l => JSON.parse(l));

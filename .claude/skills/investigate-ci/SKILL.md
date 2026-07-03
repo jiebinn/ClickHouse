@@ -173,18 +173,21 @@ last ~8 hours**, and routes each by whether it also carries the **`infrastructur
 **Fast path — read the labels `fetch_ci_report.js` prints.** The tool surfaces each failure's
 non-CIDB labels on a `🏷️ labels:` line. Two are decisive:
 
-- An **`issue`** label means CI matched a tracking issue **at run time** — the printed link **is**
-  that issue (e.g. `Server died` → `issue (…/issues/107487)`, `Hung check …` → `…/107941`). That is
-  a definitive `tracked #N`; no search needed to establish tracking (still read the issue for the
-  fix).
+- An **`issue`** label gives you the matched issue number **for free** — the printed link is the
+  issue CI matched **at run time** (e.g. `Server died` → `issue (…/issues/107487)`, `Hung check …`
+  → `…/107941`). It saves the *search*, but it is **not** by itself `tracked #N`: the label reflects
+  the catalog when the report was produced, not the issue's state **now**. Always `gh issue view`
+  the linked issue and classify from its **current** `state`/`closedAt` — an issue closed after the
+  run and aged past the ~8 h window is `stale #N` (reopen candidate), not `tracked`. The label
+  shortcuts the lookup; it does not replace the tracked-vs-stale decision below.
 - **Failure flags** (e.g. `retry_ok`) appear here too — these are exactly the labels an
   infrastructure issue matches on via `Failure flags:` (below), so this line is how you verify that
   constraint.
 
-But **absence** of an `issue` label is **not** proof of "untracked": CI stamps it from the catalog
+And **absence** of an `issue` label is **not** proof of "untracked": CI stamps it from the catalog
 *as it was at that run* (open + closed-within-8h then), so a tracking issue filed or reopened
-**after** the run won't show. So: an `issue` label → `tracked` immediately; no label → still run the
-GitHub search below before concluding `needs issue`/`untracked`.
+**after** the run won't show. So: an `issue` label → look up that issue and classify by current
+state; no label → still run the GitHub search below before concluding `needs issue`/`untracked`.
 
 **For an `INFRA/BUILD` or timeout/harness-level failure, also run the infrastructure path.** A
 test-name search alone will miss these, so a pre-existing, already-tracked infra failure would be
@@ -222,10 +225,11 @@ makes no sense. It is a "searched, nothing matched, and not worth filing" verdic
 
 Determine, per test:
 
-- **Tracked** — the failure carries an `issue` label in the report (its link **is** the tracking
-  issue), or an open / closed-within-~8 h (`closedAt`) `testing` issue matches by the rule above. No
-  new issue needed; CI will keep auto-matching it. Applies to generic-bucket names too when a
-  `testing` issue exists (e.g. `Server died` → #107487).
+- **Tracked** — a `testing` issue matches (by the rule above, or reached via the report's `issue`
+  label) and is **currently** open or closed within ~8 h (`gh issue view` → `state`/`closedAt`). No
+  new issue needed; CI will keep auto-matching it. Applies to generic-bucket names too when such an
+  issue exists (e.g. `Server died` → #107487). If the linked/ matched issue is closed longer ago,
+  it is `stale #N`, not `tracked`.
 - **Needs an issue** — the failure is a pre-existing **FLAKY** or **INFRA/BUILD** problem (per
   step 3), names a **specific** test/crash (a `NNNNN_*`/`test_*` case, or an identifiable crash/race
   with a stable `STID` mapping to one code site), and has **no** matching `testing` issue. Flag it
