@@ -301,7 +301,7 @@ struct TestKeeperMultiRequest final : MultiRequest<RequestPtr>, TestKeeperReques
 
 std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Container & container, int64_t zxid) const
 {
-    CreateResponse response;
+    Create2Response response;
     response.zxid = zxid;
     Undo undo;
 
@@ -349,6 +349,7 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
             ++it->second.seq_num;
 
             response.path_created = path_created;
+            response.stat = created_node.stat;
             container.emplace(path_created, std::move(created_node));
 
             undo = [&container, path_created, parent_path = it->first]
@@ -367,7 +368,7 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
         }
     }
 
-    return { std::make_shared<CreateResponse>(response), undo };
+    return { std::make_shared<Create2Response>(response), undo };
 }
 
 std::pair<ResponsePtr, Undo> TestKeeperRemoveRequest::process(TestKeeper::Container & container, int64_t zxid) const
@@ -789,7 +790,7 @@ std::pair<ResponsePtr, Undo> TestKeeperMultiRequest::processMultiRead(TestKeeper
     return { std::make_shared<MultiResponse>(response), {} };
 }
 
-ResponsePtr TestKeeperCreateRequest::createResponse() const { return std::make_shared<CreateResponse>(); }
+ResponsePtr TestKeeperCreateRequest::createResponse() const { return std::make_shared<Create2Response>(); }
 ResponsePtr TestKeeperRemoveRequest::createResponse() const { return std::make_shared<RemoveResponse>(); }
 ResponsePtr TestKeeperRemoveRecursiveRequest::createResponse() const { return std::make_shared<RemoveRecursiveResponse>(); }
 ResponsePtr TestKeeperExistsRequest::createResponse() const { return std::make_shared<ExistsResponse>(); }

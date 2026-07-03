@@ -455,6 +455,11 @@ struct CreateResponse : virtual Response
     size_t bytesSize() const override { return path_created.size(); }
 };
 
+struct Create2Response : CreateResponse
+{
+    Stat stat;
+};
+
 struct RemoveRequest : virtual Request
 {
     String path;
