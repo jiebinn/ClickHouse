@@ -781,8 +781,9 @@
             display: flex;
             align-items: baseline;
             width: 100%;
-            /* Indent the columns under the table name to convey the hierarchy. */
-            padding: 0 0.25em 0 1.5em;
+            /* Align columns with the table rows: the type icon sits at the same left edge as
+               the table icon, so the two lists share a left margin. */
+            padding: 0 0.25em 0 0;
             text-align: left;
             cursor: pointer;
             background: transparent;
@@ -833,7 +834,8 @@
             width: 1.4em;
             height: 1em;
             vertical-align: -0.15em;
-            margin-right: 0.3em;
+            /* Same icon-to-name gap as the table rows (`.table-icon`). */
+            margin-right: 0.25em;
             flex-shrink: 0;
             opacity: 0.5;
         }
@@ -848,7 +850,7 @@
 
         .columns-loading
         {
-            padding: 0 0.25em 0 1.5em;
+            padding: 0 0.25em 0 0;
             color: var(--misc-text-color);
             animation: hourglass-animation 2s linear infinite;
         }
@@ -4111,24 +4113,25 @@ function renderColumns(columns_elem, data, database, table_name_str) {
 
         button.append(name_elem, type_elem);
 
-        /// Hover balloon: compressed and uncompressed size, and the compression ratio. Only
-        /// shown when at least one size is known and non-zero (e.g. `Memory` tables or columns
-        /// that have never been written report zero sizes, so there is nothing worth showing).
+        /// Hover balloon. Always shows the full (untruncated) data type, and adds the compressed
+        /// and uncompressed size and the compression ratio when they are known. Per-column sizes
+        /// are unavailable for some tables (e.g. small tables stored in compact parts, such as
+        /// `default.actors`, report zero), so the size lines are simply omitted there rather
+        /// than showing a misleading `0 B`.
+        let addendum = document.createElement('span');
+        addendum.className = 'column-addendum';
+        let lines = [col.type];
         if (compressed || uncompressed) {
-            let addendum = document.createElement('span');
-            addendum.className = 'column-addendum';
-            let lines = [
-                `Compressed: ${formatReadableBytes(compressed)}`,
-                `Uncompressed: ${formatReadableBytes(uncompressed)}`,
-            ];
+            lines.push(`Compressed: ${formatReadableBytes(compressed)}`);
+            lines.push(`Uncompressed: ${formatReadableBytes(uncompressed)}`);
             if (compressed) lines.push(`Ratio: ${Number(uncompressed / compressed).toFixed(2)}×`);
-            addendum.textContent = lines.join('\n');
-            button.appendChild(addendum);
-
-            name_elem.addEventListener('mouseenter', () => positionColumnBalloon(column));
-            /// Show the balloon when the row is focused via keyboard navigation, too.
-            button.addEventListener('focus', () => positionColumnBalloon(column));
         }
+        addendum.textContent = lines.join('\n');
+        button.appendChild(addendum);
+
+        name_elem.addEventListener('mouseenter', () => positionColumnBalloon(column));
+        /// Show the balloon when the row is focused via keyboard navigation, too.
+        button.addEventListener('focus', () => positionColumnBalloon(column));
 
         column.appendChild(button);
         column.addEventListener('click', e => setQueryOrRun(e, `SELECT "${col.name}" FROM "${database}"."${table_name_str}" LIMIT 100`));
