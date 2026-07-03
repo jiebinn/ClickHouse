@@ -687,19 +687,7 @@ bool WriteBufferFromS3::completeMultipartUpload()
         ProfileEvents::increment(ProfileEvents::WriteBufferFromS3RequestsErrors, 1);
 
         const auto & error = outcome.GetError();
-        /// MinIO transiently reports a just-uploaded object/part as missing on completion even
-        /// though every part was uploaded: NO_SUCH_KEY, or InvalidPart / InvalidPartOrder. These
-        /// are all eventual-consistency quirks of the same class and are safe to retry (the request
-        /// always lists parts in ascending order, so a genuine InvalidPartOrder cannot originate
-        /// here). InvalidPart / InvalidPartOrder are not in the typed S3Errors enum, so the SDK
-        /// leaves GetErrorType() == UNKNOWN and the raw code only in GetExceptionName() -- match by
-        /// name. NO_SUCH_UPLOAD is a genuine error handled by DB::S3::Client, not retried here.
-        const bool retryable
-            = error.GetErrorType() == Aws::S3::S3Errors::NO_SUCH_KEY
-            || error.GetExceptionName() == "InvalidPart"
-            || error.GetExceptionName() == "InvalidPartOrder";
-
-        if (retryable)
+        if (isTransientCompleteMultipartUploadError(error))
         {
             last_error_type = error.GetErrorType();
             last_error_details = error.GetExceptionName().empty() ? error.GetMessage() : error.GetExceptionName();

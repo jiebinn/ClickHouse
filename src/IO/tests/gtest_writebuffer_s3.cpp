@@ -27,7 +27,9 @@
 #include <IO/ReadBufferFromEncryptedFile.h>
 #include <IO/AsyncReadCounters.h>
 #include <IO/ReadBufferFromS3.h>
+#include <IO/ReadBufferFromString.h>
 #include <IO/S3/Client.h>
+#include <IO/S3/copyS3File.h>
 
 #include <Disks/IO/ThreadPoolRemoteFSReader.h>
 #include <Disks/IO/ReadBufferFromRemoteFSGather.h>
@@ -193,6 +195,20 @@ struct EventCounts
 
 struct Client;
 
+/// Read a request body the way the AWS SDK does: block reads of `content_length` bytes via
+/// istream::read (which routes to streambuf::xsgetn). `data << body->rdbuf()` instead reads
+/// char-by-char through sbumpc/uflow, which needs a streambuf get area -- StdStreamBufFromReadBuffer
+/// (used by the copyS3File body path) implements only xsgetn/underflow and leaves the get area empty,
+/// so the rdbuf() form segfaults on it. Reading by content length works for every body stream.
+inline std::string readRequestBody(const std::shared_ptr<Aws::IOStream> & body, size_t content_length)
+{
+    std::string data;
+    data.resize(content_length);
+    body->read(data.data(), static_cast<std::streamsize>(content_length));
+    data.resize(static_cast<size_t>(body->gcount()));
+    return data;
+}
+
 struct InjectionModel
 {
     virtual ~InjectionModel() = default;
@@ -276,10 +292,9 @@ struct Client : DB::S3::Client
         }
 
         auto & bStore = store->GetBucketStore(request.GetBucket());
-        std::stringstream data;
-        data << request.GetBody()->rdbuf();
-        bStore.PutObject(request.GetKey(), data.str());
-        counters.writtenSize += data.str().length();
+        const std::string data = readRequestBody(request.GetBody(), request.GetContentLength());
+        bStore.PutObject(request.GetKey(), data);
+        counters.writtenSize += data.length();
 
         Aws::S3::Model::PutObjectOutcome outcome;
         Aws::S3::Model::PutObjectResult result(outcome.GetResultWithOwnership());
@@ -365,12 +380,11 @@ struct Client : DB::S3::Client
             }
         }
 
-        std::stringstream data;
-        data << request.GetBody()->rdbuf();
-        counters.writtenSize += data.str().length();
+        const std::string data = readRequestBody(request.GetBody(), request.GetContentLength());
+        counters.writtenSize += data.length();
 
         auto & bStore = store->GetBucketStore(request.GetBucket());
-        auto etag = bStore.UploadPart(request.GetUploadId(), data.str());
+        auto etag = bStore.UploadPart(request.GetUploadId(), data);
 
         Aws::S3::Model::UploadPartResult result;
         result.SetETag(etag);
@@ -888,6 +902,51 @@ TEST_P(SyncAsync, CompleteMPURetriesInvalidPart) {
 
     auto & bStore = client->store->GetBucketStore(bucket);
     EXPECT_EQ(bStore.objects["complete_mpu_invalid_part_retry"].size(), 1u);
+}
+
+/// The same transient MinIO `InvalidPart` on CompleteMultipartUpload must also be retried by the
+/// copyDataToS3File / copyS3File helper path (UploadHelper::completeMultipartUpload), which backs
+/// MinIO-backed backups and DiskObjectStorage server-side copies. Injects `InvalidPart` on the first
+/// completion attempt, then succeeds; the copy must finalize and store the object. Without the shared
+/// retry predicate in UploadHelper::completeMultipartUpload the first failure is thrown straight
+/// through and this test fails.
+TEST_F(WBS3Test, CopyDataToS3FileRetriesInvalidPart) {
+    setInjectionModel(std::make_shared<MockS3::CompleteMPUInvalidPartOnceIngection>(/* fail_times= */ 1));
+
+    getSettings()[Setting::s3_max_single_part_upload_size] = 0; // force multipart
+    getSettings()[Setting::s3_min_upload_part_size] = 1; // small parts are ok
+    getSettings()[Setting::s3_check_objects_after_upload] = false;
+
+    S3::S3RequestSettings request_settings;
+    request_settings.updateFromSettings(settings, /* if_changed */ true, /* validate_settings */ false);
+
+    client->resetCounters();
+
+    const String payload = "copy_invalid_part_payload";
+    auto create_read_buffer = [&]() -> std::unique_ptr<SeekableReadBuffer>
+    {
+        return std::make_unique<ReadBufferFromOwnString>(payload);
+    };
+
+    /// Empty schedule => the multipart upload (and completion) runs synchronously on this thread.
+    copyDataToS3File(
+        create_read_buffer,
+        /* offset= */ 0,
+        /* size= */ payload.size(),
+        client,
+        bucket,
+        "copy_data_invalid_part_retry",
+        request_settings,
+        /* blob_storage_log= */ nullptr,
+        /* schedule= */ {},
+        /* object_metadata= */ std::nullopt);
+
+    /// The completion was attempted twice: once failing with InvalidPart, once succeeding.
+    EXPECT_EQ(client->counters.multiUploadComplete, 2u);
+    EXPECT_EQ(client->counters.multiUploadAbort, 0u);
+
+    auto & bStore = client->store->GetBucketStore(bucket);
+    EXPECT_EQ(bStore.objects["copy_data_invalid_part_retry"].size(), payload.size());
 }
 
 TEST_P(SyncAsync, ExceptionOnUploadPart) {
