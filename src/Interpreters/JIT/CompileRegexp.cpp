@@ -110,6 +110,29 @@ public:
     int num_captures = 1;
 };
 
+/// True if `op` can never advance the cursor, so it is transparent when locating the first
+/// cursor-advancing operation for the leading-run skip (see `RegexpEmitter::emit`): a zero-width
+/// capture marker, or an optional whose body is itself entirely zero-width (e.g. `()?`, `(?:)?`,
+/// `((?:)?)?`). A `CharQuant` is never treated as zero-width, even with `min == 0`, since it can
+/// still consume input; anchors are conservatively treated as opaque here (the shortcut is simply
+/// not applied through them, which stays correct).
+bool isZeroWidthOp(const Op & op)
+{
+    switch (op.kind)
+    {
+        case OpKind::CaptureStart:
+        case OpKind::CaptureEnd:
+            return true;
+        case OpKind::Optional:
+            for (const Op & inner : op.body)
+                if (!isZeroWidthOp(inner))
+                    return false;
+            return true;
+        default:
+            return false;
+    }
+}
+
 /// Emits LLVM IR for the per-string matcher described by a `RegexpProgram`.
 ///
 /// The matcher is a depth-first, greedy, backtracking search over the program's operations,
@@ -173,18 +196,20 @@ public:
         {
             /// Unanchored match: try every start position from `search_from` to `end` (inclusive), leftmost wins.
             ///
-            /// If the program begins with an unbounded greedy quantifier over a byte set, a failed attempt
-            /// at `start` also fails at every position strictly inside the consumed run: at an interior start
-            /// the quantifier consumes the same run end, and the set of give-back positions it tries is a
-            /// subset of those already tried (and rejected) at `start`. So the search can resume at that
-            /// run's end instead of `start + 1`. Without this, patterns like `[0-9]+a` on non-matching input
-            /// rescan the run at every offset and are quadratic. This shortcut is sound only for
-            /// `max == UNBOUNDED`: a finite `max` can still match by aligning its bounded window later in the
-            /// run, so the bounded case relies on the `cursor + max` scan cap in `emitCharQuant` instead.
+            /// If the program begins with an unbounded greedy quantifier over a byte set (possibly behind
+            /// leading zero-width operations - capture markers or empty optionals like `()?` / `(?:)?` -
+            /// which do not move the cursor), a failed attempt at `start` also fails at every position
+            /// strictly inside the consumed run: at an interior start the quantifier consumes the same run
+            /// end, and the set of give-back positions it tries is a subset of those already tried (and
+            /// rejected) at `start`. So the search can resume at that run's end instead of `start + 1`.
+            /// Without this, patterns like `[0-9]+a` or `()?[0-9]+a` on non-matching input rescan the run at
+            /// every offset and are quadratic. This shortcut is sound only for `max == UNBOUNDED`: a finite
+            /// `max` can still match by aligning its bounded window later in the run, so the bounded case
+            /// relies on the `cursor + max` scan cap in `emitCharQuant` instead.
             for (const Op & op : top_ops)
             {
-                if (op.kind == OpKind::CaptureStart || op.kind == OpKind::CaptureEnd)
-                    continue; /// zero-width, does not move the cursor
+                if (isZeroWidthOp(op))
+                    continue; /// does not move the cursor, so it does not affect the run the quantifier consumes
                 if (op.kind == OpKind::CharQuant && op.max == UNBOUNDED)
                     leading_quant_op = &op;
                 break; /// the first cursor-advancing operation decides
