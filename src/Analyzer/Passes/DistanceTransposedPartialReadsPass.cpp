@@ -6,6 +6,7 @@
 #include <Core/Settings.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeQBit.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -94,8 +95,12 @@ public:
         if (function_node->getResultType()->onlyNull())
             return;
 
-        /// Apply the optimization
-        const auto * qbit = checkAndGetDataType<DataTypeQBit>(qbit_node->getColumnType().get());
+        /// Apply the optimization. The QBit column may be Nullable: we read its bit-plane subcolumns as Nullable(FixedString)
+        /// (they carry the same per-row null map), so the null map propagates to the result through the distance function's
+        /// default Nullable handling, exactly as it would for the unoptimised full-column read.
+        const auto column_type = qbit_node->getColumnType();
+        const bool is_nullable = column_type->isNullable();
+        const auto * qbit = checkAndGetDataType<DataTypeQBit>(removeNullable(column_type).get());
 
         if (!qbit)
             return;
@@ -124,8 +129,12 @@ public:
 
         auto add_plane = [&](size_t tuple_idx)
         {
-            /// Tuple element indices are 1-based in the subcolumn syntax.
-            NameAndTypePair column{qbit_node->getColumnName() + "." + std::to_string(tuple_idx + 1), qbit->getNestedTupleElementType()};
+            /// Tuple element indices are 1-based in the subcolumn syntax. When the QBit column is Nullable, the bit-plane
+            /// subcolumn is Nullable(FixedString) too, which lets the per-row null map reach the distance function.
+            auto plane_type = qbit->getNestedTupleElementType();
+            if (is_nullable)
+                plane_type = makeNullable(plane_type);
+            NameAndTypePair column{qbit_node->getColumnName() + "." + std::to_string(tuple_idx + 1), plane_type};
             new_args.push_back(std::make_shared<ColumnNode>(column, qbit_node->getColumnSource()));
         };
 
@@ -162,8 +171,10 @@ public:
         /// Nullable because of the precision, used_dims, or reference-vector arguments. The rewritten internal form drops the precision and
         /// used_dims arguments and casts the reference vector, any of which can otherwise lose the nullability, so force the nullability onto
         /// the trailing size constant whenever the original result was Nullable to keep the rewritten result type identical.
+        /// When the QBit column itself is Nullable, the nullability already flows through the Nullable bit-plane subcolumns, so the size
+        /// constant does not need to carry it.
         auto original_result_type = function_node->getResultType();
-        if (original_result_type->isNullable() || original_result_type->isLowCardinalityNullable())
+        if (!is_nullable && (original_result_type->isNullable() || original_result_type->isLowCardinalityNullable()))
             last_size_constant->convertToNullable();
 
         /// Cast reference vector to match QBit type. This is the only information about the type of the QBit after this pass is applied
