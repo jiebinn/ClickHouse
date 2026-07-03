@@ -1637,6 +1637,9 @@ class QueryResultElement extends HTMLElement
     static _vizInstance = null;
     static _loadUplotPromise = null;
 
+    /// The glyph used to render SQL NULL values (superscript "NULL").
+    static _NULL_TEXT = 'ᴺᵁᴸᴸ';
+
     constructor()
     {
         super();
@@ -2199,7 +2202,7 @@ class QueryResultElement extends HTMLElement
         let text;
         if (is_null)
         {
-            text = '\u1D3A\u1D41\u1D38\u1D38';
+            text = QueryResultElement._NULL_TEXT;
         }
         else if (typeof(value) === 'object')
         {
@@ -2590,7 +2593,10 @@ class QueryResultElement extends HTMLElement
             {
                 const cell = row.cells[col_idx];
                 if (!cell) { continue; }
-                const hue = this._hashHue((cell.querySelector('.cell-content') || cell).innerText);
+                const text = (cell.querySelector('.cell-content') || cell).innerText;
+                /// Empty strings and NULLs carry no category, so leave them uncolored.
+                if (text === '' || text === QueryResultElement._NULL_TEXT) { continue; }
+                const hue = this._hashHue(text);
                 cell.style.background = `oklch(var(--viz-cell-lightness) var(--viz-cell-chroma) ${hue})`;
             }
             return;
