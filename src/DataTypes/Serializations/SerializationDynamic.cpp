@@ -8,7 +8,6 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypesBinaryEncoding.h>
 #include <DataTypes/DataTypesCache.h>
-#include <Common/CurrentThread.h>
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Columns/ColumnDynamic.h>
@@ -566,19 +565,13 @@ void SerializationDynamic::serializeBinaryBulkWithMultipleStreamsAndCountTotalSi
             const auto & offsets = variant_column->getOffsets();
             const auto shared_variant_discr = variant_column->localDiscriminatorByGlobal(column_dynamic.getSharedVariantDiscriminator());
             size_t end = limit == 0 || offset + limit > local_discriminators.size() ? local_discriminators.size() : offset + limit;
-            /// Shared-variant payloads can come from client Native input (their type bytes are not decoded when
-            /// read), so enforce the type-complexity guard here. Resolve the limit once from the query context
-            /// (a client query) before the loop; leave it unlimited for context-less internal use.
-            size_t max_type_complexity = 0;
-            if (auto query_context = CurrentThread::tryGetQueryContext())
-                max_type_complexity = getBinaryTypeDecodingComplexityLimit(query_context);
             for (size_t i = offset; i != end; ++i)
             {
                 if (local_discriminators[i] == shared_variant_discr)
                 {
                     auto value = shared_variant.getDataAt(offsets[i]);
                     ReadBufferFromMemory buf(value);
-                    auto type = decodeDataType(buf, max_type_complexity);
+                    auto type = decodeDataType(buf, 0);
                     auto type_name = type->getName();
                     if (auto it = dynamic_state->statistics.shared_variants_statistics.find(type_name); it != dynamic_state->statistics.shared_variants_statistics.end())
                         ++it->second;
@@ -737,12 +730,7 @@ void SerializationDynamic::serializeForHashCalculation(const IColumn & column, s
     {
         auto value = dynamic_column.getSharedVariant().getDataAt(variant_column.offsetAt(row_num));
         ReadBufferFromMemory value_buf(value);
-        /// Shared-variant payloads can originate from client Native input; enforce the guard via the query
-        /// context when present (unlimited for context-less internal use).
-        size_t max_type_complexity = 0;
-        if (auto query_context = CurrentThread::tryGetQueryContext())
-            max_type_complexity = getBinaryTypeDecodingComplexityLimit(query_context);
-        auto type = decodeDataType(value_buf, max_type_complexity);
+        auto type = decodeDataType(value_buf, 0);
         auto type_name = type->getName();
         auto serialization = getDataTypesCache().getSerialization(type_name);
         auto tmp_column = type->createColumn();
@@ -913,12 +901,7 @@ static void serializeTextImpl(
     {
         auto value = dynamic_column.getSharedVariant().getDataAt(variant_column.offsetAt(row_num));
         ReadBufferFromMemory buf(value);
-        /// Shared-variant payloads can originate from client Native input; enforce the guard via the query
-        /// context when present (unlimited for context-less internal use).
-        size_t max_type_complexity = 0;
-        if (auto query_context = CurrentThread::tryGetQueryContext())
-            max_type_complexity = getBinaryTypeDecodingComplexityLimit(query_context);
-        auto variant_type = decodeDataType(buf, max_type_complexity);
+        auto variant_type = decodeDataType(buf, 0);
         auto tmp_variant_column = variant_type->createColumn();
         auto variant_serialization = variant_type->getDefaultSerialization();
         variant_serialization->deserializeBinary(*tmp_variant_column, buf, FormatSettings{});

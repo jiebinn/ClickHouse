@@ -30,7 +30,6 @@
 #include <Parsers/NullsAction.h>
 #include <Interpreters/Context.h>
 #include <Core/Settings.h>
-#include <Common/CurrentThread.h>
 #include <IO/WriteBuffer.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -849,13 +848,6 @@ DataTypePtr decodeDataType(ReadBuffer & buf, size_t max_complexity)
 size_t getBinaryTypeDecodingComplexityLimit(const ContextPtr & context)
 {
     return context->getSettingsRef()[Setting::input_format_binary_max_type_complexity];
-}
-
-size_t getCurrentQueryBinaryTypeComplexityLimit()
-{
-    if (auto query_context = CurrentThread::tryGetQueryContext())
-        return getBinaryTypeDecodingComplexityLimit(query_context);
-    return 0;
 }
 
 }

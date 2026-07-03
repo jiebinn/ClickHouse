@@ -1,5 +1,4 @@
 #include <Interpreters/ClusterFunctionReadTask.h>
-#include <DataTypes/DataTypesBinaryEncoding.h>
 #include <Interpreters/SetSerialization.h>
 #include <Interpreters/Context.h>
 #include <AggregateFunctions/AggregateFunctionGroupBitmapData.h>
@@ -172,7 +171,8 @@ void ClusterFunctionReadTaskResponse::deserialize(ReadBuffer & in)
     if (protocol_version >= DBMS_CLUSTER_PROCESSING_PROTOCOL_VERSION_WITH_DATA_LAKE_METADATA)
     {
         DeserializedSetsRegistry registry;
-        auto transform = std::make_shared<ActionsDAG>(ActionsDAG::deserialize(in, registry, Context::getGlobalContextInstance(), getCurrentQueryBinaryTypeComplexityLimit()));
+        /// Trusted intra-cluster metadata: decode types without the input complexity limit.
+        auto transform = std::make_shared<ActionsDAG>(ActionsDAG::deserialize(in, registry, Context::getGlobalContextInstance(), 0));
 
         if (!path.empty() && !transform->getInputs().empty())
         {

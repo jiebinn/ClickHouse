@@ -27,11 +27,9 @@ $CLICKHOUSE_CLIENT --query "INSERT INTO t_binary_type_complexity_mt SELECT ${wid
 $CLICKHOUSE_CLIENT --query "SELECT count() FROM t_binary_type_complexity_mt WHERE length(d::String) > 0 SETTINGS input_format_binary_max_type_complexity=1"
 $CLICKHOUSE_CLIENT --query "DROP TABLE t_binary_type_complexity_mt"
 
-# An aggregate-function state holding Dynamic (e.g. groupArray(Dynamic)) can be supplied by a client and decodes
-# the value type via the arena path, so the guard applies there: a type over the limit is rejected, and the same
-# state decodes when the limit is raised (0 = unlimited).
+# Decoding a stored aggregate-function state holding Dynamic (e.g. groupArray(Dynamic)) goes through
+# ColumnDynamic, which is not limited by the setting (it can run in background operations that must not throw).
 $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS t_agg_type_complexity"
 $CLICKHOUSE_CLIENT --query "CREATE TABLE t_agg_type_complexity ENGINE=Memory AS SELECT groupArrayState(${wide_tuple}::Dynamic) AS s"
-$CLICKHOUSE_CLIENT --query "SELECT length(finalizeAggregation(s)) FROM t_agg_type_complexity SETTINGS input_format_binary_max_type_complexity=1" 2>&1 | grep -o -m1 'Binary type decoding complexity limit exceeded'
-$CLICKHOUSE_CLIENT --query "SELECT length(finalizeAggregation(s)) FROM t_agg_type_complexity SETTINGS input_format_binary_max_type_complexity=0"
+$CLICKHOUSE_CLIENT --query "SELECT length(finalizeAggregation(s)) FROM t_agg_type_complexity SETTINGS input_format_binary_max_type_complexity=1"
 $CLICKHOUSE_CLIENT --query "DROP TABLE t_agg_type_complexity"

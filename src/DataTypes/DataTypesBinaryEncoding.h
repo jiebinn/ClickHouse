@@ -204,9 +204,4 @@ DataTypePtr decodeDataType(ReadBuffer & buf, size_t max_complexity);
 /// Reads the setting once (not per type node), so it does not reintroduce per-value context contention.
 size_t getBinaryTypeDecodingComplexityLimit(const ContextPtr & context);
 
-/// Same, resolved from the current thread's query context (0/unlimited if there is none). For decode sites that
-/// may process client-supplied Dynamic shared-variant/arena data but carry no FormatSettings. Matches the
-/// pre-existing behavior of enforcing the query setting on these paths.
-size_t getCurrentQueryBinaryTypeComplexityLimit();
-
 }
