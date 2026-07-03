@@ -4167,11 +4167,13 @@ async function toggleColumns(table, table_icon, database, table_name_str, server
         columns_elem.remove();
         delete table.dataset['columnsOpen'];
         table_icon.classList.remove('expanded');
+        table_icon.setAttribute('aria-expanded', 'false');
         return;
     }
 
     table.dataset['columnsOpen'] = 1;
     table_icon.classList.add('expanded');
+    table_icon.setAttribute('aria-expanded', 'true');
     columns_elem = document.createElement('div');
     columns_elem.className = 'table-columns';
     let loading = document.createElement('div');
@@ -4283,6 +4285,10 @@ async function loadTables(server_address, user, password, database, container, s
         table_name.className = 'table-name';
         let table_icon = getTableIcon(elem.engine);
         table_icon.setAttribute('title', 'Show columns');
+        /// The icon is a disclosure control (opens the column list). Expose its state so it
+        /// reads as one to assistive technology; it is toggled from both mouse and keyboard.
+        table_icon.setAttribute('role', 'button');
+        table_icon.setAttribute('aria-expanded', 'false');
         table_name.append(table_icon, elem.table);
         table_link.appendChild(table_name);
 
@@ -4481,6 +4487,8 @@ document.getElementById('databases-hide').addEventListener('click', e => {
 ///   - Right enters the focused table's balloon (its size/rows/engine links);
 ///     inside the balloon Up/Down move between links, Left returns to the row,
 ///     and Enter/Space activate the focused link.
+///   - Left on a table row toggles its column list (the disclosure the table icon
+///     opens on click), so the columns are reachable from the keyboard.
 document.getElementById('databases').addEventListener('keydown', e => {
     const active = document.activeElement;
 
@@ -4499,6 +4507,22 @@ document.getElementById('databases').addEventListener('keydown', e => {
     if (e.key === 'ArrowRight') {
         const link = active.querySelector && active.querySelector('.table-addendum-elem');
         if (link) { e.preventDefault(); link.focus({ preventScroll: true }); }
+        return;
+    }
+
+    /// Left arrow on a table row toggles its list of columns, so keyboard users can expand it
+    /// (`Enter` already runs the default `SELECT *`, so it can't double as the toggle). It routes
+    /// through the icon's own click handler to reuse its wiring; the guard restricts this to the
+    /// table's own row button (not a database row or a nested column button).
+    if (e.key === 'ArrowLeft') {
+        const table = active.closest && active.closest('.table');
+        if (table && active === table.querySelector(':scope > button')) {
+            const table_icon = table.querySelector(':scope > button .table-icon');
+            if (table_icon) {
+                e.preventDefault();
+                table_icon.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            }
+        }
         return;
     }
 
