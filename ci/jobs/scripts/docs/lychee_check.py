@@ -6,7 +6,17 @@ broken-links``.
 Run from the docs root (the directory holding ``docs.json`` and ``lychee.toml``)
 with one of three modes:
 
-  --mode links      Internal links and heading anchors, offline. Blocking.
+  --mode links      Internal links and heading anchors for the default-locale
+                    (English) site, offline. Blocking.
+  --mode locale-links
+                    Link/file resolution for the translated locale trees, offline.
+                    Blocking. Fragments are NOT checked here: auto-generated
+                    translations legitimately lag the English source on heading
+                    anchors, but a link that resolves to a missing page/file is a
+                    real defect. docs.json ships these trees via `languages` and
+                    `$ref`s to ./<locale>/docs.json, so they need their own
+                    link-check; kept a separate mode so CI can run it only when
+                    the locale folders change.
   --mode redirects  Every destination in ``_site/redirects.json`` resolves to a
                     real page (and anchor, if any), offline. Blocking.
   --mode external   External http(s) URLs, online. Non-blocking: reports broken
@@ -125,6 +135,39 @@ def dump_inputs(docs_root):
 # Locale prefixes whose redirect sources are irrelevant to the English site.
 LOCALE_PREFIXES = {"ar", "es", "fr", "ja", "jp", "ko", "pt-BR", "ru", "zh"}
 
+# Top-level translated-site directories (the ones docs.json ships via `languages`
+# and `$ref`s to ./<locale>/docs.json). Checked for link/file resolution.
+LOCALE_DIRS = ["ar", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh"]
+
+# A locale exclude_path entry in lychee.toml, e.g. `  "/zh/",`.
+LOCALE_EXCLUDE_LINE = re.compile(
+    r'^\s*"/(?:' + "|".join(re.escape(d) for d in LOCALE_DIRS) + r')/",?\s*$'
+)
+
+
+def write_locale_config(docs_root, dest):
+    # A lychee config for the translated trees: identical to lychee.toml but with
+    # the per-locale exclude_path entries removed (so the locale trees ARE
+    # checked) and fragment checking disabled (translations legitimately lag the
+    # English heading anchors, so only link/file resolution is validated). All
+    # other exclusions -- external URLs, legacy dirs, pg_clickhouse, etc. -- are
+    # kept, so the locale pass drops exactly the same non-link noise as English.
+    name = "lychee-locales.toml"
+    with open(os.path.join(docs_root, "lychee.toml")) as fin:
+        lines = []
+        for line in fin:
+            if LOCALE_EXCLUDE_LINE.match(line):
+                continue
+            # Drop include_fragments entirely: fragments default off, and this
+            # lychee build types the key as a string enum (not a bool), so we
+            # cannot simply set it false. The locale pass checks resolution only.
+            if line.lstrip().startswith("include_fragments"):
+                continue
+            lines.append(line)
+    with open(os.path.join(dest, name), "w") as fout:
+        fout.writelines(lines)
+    return name
+
 
 def materialize_redirects(docs_root, dest):
     # Mintlify serves every `source` in redirects.json via a redirect, so a link
@@ -203,13 +246,15 @@ def build_tree(docs_root, dest):
                 with open(dst, "w", encoding="utf-8") as f:
                     f.write(text)
             elif name.endswith((".md", ".mdx")):
-                # Not checked as an input (locale/legacy content), but it can be a
-                # link/redirect *target* -- so expose its heading anchors with a
-                # light transform (no snippet/comment handling) so fragment links
-                # to it (e.g. locale redirect destinations) resolve.
+                # Locale/legacy content. It is a link/redirect *target* for the
+                # English pass (so expose heading anchors via transform_anchors),
+                # and -- for locale trees -- also a checked *input* in the locale
+                # pass, so strip MDX comments too, otherwise a commented-out link
+                # would be checked as real. No snippet/element-id handling: the
+                # locale pass does not check fragments.
                 with open(os.path.join(root, name), "r",
                           encoding="utf-8", errors="replace") as f:
-                    out = transform_anchors(f.read())
+                    out = strip_mdx_comments(transform_anchors(f.read()))
                 with open(dst, "w", encoding="utf-8") as f:
                     f.write(out)
             else:
@@ -277,6 +322,26 @@ def check_links(docs_root):
     )
 
 
+def check_locale_links(docs_root):
+    # Link/file resolution for the translated trees (the ones docs.json ships via
+    # `languages` and `$ref`s to ./<locale>/docs.json). Blocking, but fragments
+    # are NOT checked: auto-generated translations legitimately lag the English
+    # source on heading anchors, whereas a link that resolves to a missing
+    # page/file is a real defect (e.g. the `/<locale>https://...` breakage that
+    # the English-only pass could never see). Kept a separate mode so CI can run
+    # it only when the locale trees change.
+    dest = tempfile.mkdtemp(prefix="lychee-locales-")
+    build_tree(docs_root, dest)
+    inputs = [d for d in LOCALE_DIRS if os.path.isdir(os.path.join(dest, d))]
+    if not inputs:
+        print("No locale directories present; nothing to check.", flush=True)
+        return 0
+    cfg = write_locale_config(docs_root, dest)
+    return run_lychee(
+        ["lychee", "--config", cfg, "--mode", "color", "--offline", *inputs], dest
+    )
+
+
 def check_redirects(docs_root):
     dest = tempfile.mkdtemp(prefix="lychee-redirects-")
     build_tree(docs_root, dest)
@@ -323,6 +388,7 @@ def check_external(docs_root):
 
 MODES = {
     "links": check_links,
+    "locale-links": check_locale_links,
     "redirects": check_redirects,
     "external": check_external,
 }

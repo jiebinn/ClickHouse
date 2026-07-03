@@ -794,7 +794,7 @@ WHERE id > (SELECT max(id) FROM imdb_dbt.actor_summary) OR updated_at > (SELECT 
 
 これまでの ClickHouse では、更新と削除のサポートは、非同期の [Mutations](/ja/reference/statements/alter/index) による限定的なものにとどまっていました。これは非常に IO 負荷が高くなる可能性があるため、通常は避けるべきです。
 
-ClickHouse 22.8 では [論理削除](/ja/snippets/delete)、ClickHouse 25.7 では [論理更新](/ja/reference/statements/update) が導入されました。これらの機能により、単一の更新クエリによる変更は、非同期で実体化される場合でも、ユーザーからは即座に反映されたように見えます。
+ClickHouse 22.8 では [論理削除](/snippets/delete)、ClickHouse 25.7 では [論理更新](/ja/reference/statements/update) が導入されました。これらの機能により、単一の更新クエリによる変更は、非同期で実体化される場合でも、ユーザーからは即座に反映されたように見えます。
 
 このモードは、たとえば `incremental_strategy` パラメータでモデルに設定できます。
 

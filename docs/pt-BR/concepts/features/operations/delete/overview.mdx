@@ -30,7 +30,7 @@ DELETE FROM posts WHERE toYear(CreationDate) = 2018
 
 Excluir grandes volumes de dados com a instrução `DELETE` leve também pode afetar negativamente o desempenho de consultas `SELECT`. O comando também não é compatível com tabelas com projeções.
 
-Observe que uma mutação é usada na operação para [marcar as linhas excluídas](/pt-BR/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (adicionando uma coluna `_row_exists`), o que gera alguma E/S.
+Observe que uma mutação é usada na operação para [marcar as linhas excluídas](/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (adicionando uma coluna `_row_exists`), o que gera alguma E/S.
 
 Em geral, as exclusões leves devem ser preferidas em vez de mutações se a existência dos dados excluídos em disco puder ser tolerada (por exemplo, em casos em que não há requisitos de conformidade). Essa abordagem ainda deve ser evitada se todos os dados precisarem ser excluídos.
 

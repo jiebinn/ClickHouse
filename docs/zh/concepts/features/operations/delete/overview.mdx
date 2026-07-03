@@ -30,7 +30,7 @@ DELETE FROM posts WHERE toYear(CreationDate) = 2018
 
 使用轻量级 `DELETE` 语句删除大量数据，也可能对 `SELECT` 查询性能产生负面影响。该命令也不兼容带有投影的表。
 
-请注意，此操作会使用变更来[标记已删除的行](/zh/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (添加一个 `_row_exists` 列) ，因此会产生一定的 I/O 开销。
+请注意，此操作会使用变更来[标记已删除的行](/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (添加一个 `_row_exists` 列) ，因此会产生一定的 I/O 开销。
 
 一般来说，如果可以容忍已删除的数据仍保留在磁盘上 (例如在非合规场景中) ，应优先选择轻量级删除而不是变更。但如果需要删除所有数据，仍应避免使用这种方法。
 

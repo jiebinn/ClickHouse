@@ -794,7 +794,7 @@ Pour cette exécution, seules les nouvelles lignes sont ajoutées directement à
 
 Historiquement, ClickHouse n&#39;offrait qu&#39;une prise en charge limitée des mises à jour et des suppressions, sous la forme de [mutations](/fr/reference/statements/alter/index). Celles-ci peuvent être extrêmement gourmandes en IO et doivent généralement être évitées.
 
-ClickHouse 22.8 a introduit les [suppressions légères](/fr/snippets/delete), et ClickHouse 25.7 les [mises à jour légères](/fr/reference/statements/update). Avec l&#39;introduction de ces fonctionnalités, les modifications effectuées par une seule requête de mise à jour, même lorsqu&#39;elles sont matérialisées de façon asynchrone, prennent effet instantanément du point de vue de l&#39;utilisateur.
+ClickHouse 22.8 a introduit les [suppressions légères](/snippets/delete), et ClickHouse 25.7 les [mises à jour légères](/fr/reference/statements/update). Avec l&#39;introduction de ces fonctionnalités, les modifications effectuées par une seule requête de mise à jour, même lorsqu&#39;elles sont matérialisées de façon asynchrone, prennent effet instantanément du point de vue de l&#39;utilisateur.
 
 Ce mode peut être configuré pour un modèle via le paramètre `incremental_strategy`, c.-à-d.
 

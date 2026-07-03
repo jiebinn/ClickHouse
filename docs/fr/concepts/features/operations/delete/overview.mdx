@@ -30,7 +30,7 @@ DELETE FROM posts WHERE toYear(CreationDate) = 2018
 
 La suppression de grands volumes de données avec l’instruction `DELETE` légère peut également nuire aux performances des requêtes `SELECT`. Cette commande n’est pas non plus compatible avec les tables comportant des projections.
 
-Notez qu’une mutation est utilisée dans cette opération pour [marquer les lignes supprimées](/fr/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (en ajoutant une colonne `_row_exists`), ce qui entraîne donc des E/S.
+Notez qu’une mutation est utilisée dans cette opération pour [marquer les lignes supprimées](/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (en ajoutant une colonne `_row_exists`), ce qui entraîne donc des E/S.
 
 En général, les suppressions légères sont à privilégier par rapport aux mutations si la présence des données supprimées sur le disque peut être tolérée (par exemple, en l’absence d’exigences de conformité). Cette approche reste toutefois à éviter si toutes les données doivent être supprimées.
 

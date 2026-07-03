@@ -794,7 +794,7 @@ En esta ejecución, solo se añaden directamente las filas nuevas a la tabla `im
 
 Históricamente, ClickHouse solo ha ofrecido un soporte limitado para las actualizaciones y eliminaciones, en forma de [mutaciones](/es/reference/statements/alter/index). Estas pueden consumir muchísimas operaciones de E/S y, por lo general, conviene evitarlas.
 
-ClickHouse 22.8 introdujo las [eliminaciones ligeras](/es/snippets/delete) y ClickHouse 25.7 introdujo las [actualizaciones ligeras](/es/reference/statements/update). Con la introducción de estas funciones, los cambios realizados mediante consultas de actualización individuales, incluso cuando se materializan de forma asíncrona, se reflejan al instante desde la perspectiva del usuario.
+ClickHouse 22.8 introdujo las [eliminaciones ligeras](/snippets/delete) y ClickHouse 25.7 introdujo las [actualizaciones ligeras](/es/reference/statements/update). Con la introducción de estas funciones, los cambios realizados mediante consultas de actualización individuales, incluso cuando se materializan de forma asíncrona, se reflejan al instante desde la perspectiva del usuario.
 
 Este modo puede configurarse para un modelo mediante el parámetro `incremental_strategy`, es decir.
 

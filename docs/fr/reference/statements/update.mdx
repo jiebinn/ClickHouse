@@ -63,7 +63,7 @@ Pour utiliser les mises à jour légères, la matérialisation des colonnes `_bl
   ## `DELETE` légers
 </div>
 
-Une requête [de `DELETE` léger](/fr/snippets/delete) peut être exécutée sous la forme d’un `UPDATE` léger plutôt que d’une mutation `ALTER UPDATE`. Le fonctionnement de `DELETE` léger est contrôlé par le paramètre [`lightweight_delete_mode`](/fr/reference/settings/session-settings#lightweight_delete_mode).
+Une requête [de `DELETE` léger](/snippets/delete) peut être exécutée sous la forme d’un `UPDATE` léger plutôt que d’une mutation `ALTER UPDATE`. Le fonctionnement de `DELETE` léger est contrôlé par le paramètre [`lightweight_delete_mode`](/fr/reference/settings/session-settings#lightweight_delete_mode).
 
 <div id="performance-considerations">
   ## Considérations relatives aux performances
@@ -145,5 +145,5 @@ Le mode jointure est plus lent et nécessite plus de mémoire que le mode fusion
 </div>
 
 * [`ALTER UPDATE`](/fr/reference/statements/alter/update) - Opérations `UPDATE` lourdes
-* [Lightweight `DELETE`](/fr/snippets/delete) - Opérations `DELETE` légères
+* [Lightweight `DELETE`](/snippets/delete) - Opérations `DELETE` légères
 * [`APPLY PATCHES`](/fr/reference/statements/alter/apply-patches) - Forcer la matérialisation physique des patches sur les parties de données (opération de mutation)
