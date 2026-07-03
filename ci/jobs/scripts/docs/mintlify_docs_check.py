@@ -45,9 +45,17 @@ import tempfile
 # A command may invoke a Python check script committed at ci/jobs/scripts/docs,
 # referenced relative to the docs root, e.g.:
 #     ("Frontmatter lint", "python3 ../ci/jobs/scripts/docs/frontmatter_lint.py ."),
+MINT = "NODE_OPTIONS=--max-old-space-size=8192 mint"
+# lychee replaces `mint broken-links`; the three modes are defined in
+# lychee_check.py, which runs each against a throwaway, anchor-rewritten copy of
+# the docs (see that script). The external-links check is a non-blocking
+# warning because it depends on third-party sites being reachable.
+LYCHEE = "python3 ../ci/jobs/scripts/docs/lychee_check.py"
 DEFAULT_CHECKS = [
-    ("Validate docs.json", "mint validate"),
-    ("Check for broken links", "mint broken-links"),
+    ("Validate docs.json", f"{MINT} validate"),
+    ("Check internal links and anchors", f"{LYCHEE} --mode links ."),
+    ("Check redirects", f"{LYCHEE} --mode redirects ."),
+    ("Check external links (warnings)", f"{LYCHEE} --mode external ."),
 ]
 
 
