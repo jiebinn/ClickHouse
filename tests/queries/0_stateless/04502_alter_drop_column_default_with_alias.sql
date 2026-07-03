@@ -30,7 +30,7 @@ CREATE TABLE t_04502_nested
 (
     id UInt64,
     url String,
-    md5 String MATERIALIZED lowerUTF8(hex(MD5(url))),
+    md5 String MATERIALIZED lower(hex(MD5(url))),
     s3_url String DEFAULT concat('prefix/', substring(arrayStringConcat(arrayMap(i -> substring(lower(hex(MD5(url))) AS hx, i, 1), range(1, 4))) AS h, 1, 2), '/', h)
 )
 ENGINE = MergeTree ORDER BY id;
