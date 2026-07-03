@@ -54,7 +54,7 @@ BitPackedUInt64Array::BitPackedUInt64Array(std::span<const UInt64> values)
     {
         const BlockInfo & block = blocks[idx / VALUES_PER_BLOCK];
         size_t bit_offset = block.bit_offset_in_packed_array + (idx % VALUES_PER_BLOCK) * block.bits_per_value;
-        writeBits(packed.data(), bit_offset, values[idx] - block.min_value);
+        writeBitsPacked64(packed.data(), bit_offset, values[idx] - block.min_value);
     }
 }
 
@@ -65,7 +65,7 @@ UInt64 BitPackedUInt64Array::get(size_t idx) const
 
     const BlockInfo & block = blocks[idx / VALUES_PER_BLOCK];
     size_t bit_offset = block.bit_offset_in_packed_array + (idx % VALUES_PER_BLOCK) * block.bits_per_value;
-    return block.min_value + readBits(packed.data(), bit_offset, block.bits_per_value);
+    return block.min_value + readBitsPacked64(packed.data(), bit_offset, block.bits_per_value);
 }
 
 size_t BitPackedUInt64Array::allocatedBytes() const

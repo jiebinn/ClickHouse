@@ -69,8 +69,8 @@ MarksInCompressedFile::MarksInCompressedFile(const PlainArray & marks)
     {
         const auto & mark = marks[idx];
         auto [block, offset] = lookUpMark(idx);
-        writeBits(packed.data(), offset, mark.offset_in_compressed_file - block->min_x);
-        writeBits(
+        writeBitsPacked64(packed.data(), offset, mark.offset_in_compressed_file - block->min_x);
+        writeBitsPacked64(
             packed.data(),
             offset + block->bits_for_x,
             (mark.offset_in_decompressed_block - block->min_y) >> block->trailing_zero_bits_in_y);
@@ -86,8 +86,8 @@ MarkInCompressedFile MarksInCompressedFile::get(size_t idx) const
             idx, num_marks);
 
     auto [block, offset] = lookUpMark(idx);
-    size_t x = block->min_x + readBits(packed.data(), offset, block->bits_for_x);
-    size_t y = block->min_y + (readBits(packed.data(), offset + block->bits_for_x, block->bits_for_y) << block->trailing_zero_bits_in_y);
+    size_t x = block->min_x + readBitsPacked64(packed.data(), offset, block->bits_for_x);
+    size_t y = block->min_y + (readBitsPacked64(packed.data(), offset + block->bits_for_x, block->bits_for_y) << block->trailing_zero_bits_in_y);
     return MarkInCompressedFile{.offset_in_compressed_file = x, .offset_in_decompressed_block = y};
 }
 

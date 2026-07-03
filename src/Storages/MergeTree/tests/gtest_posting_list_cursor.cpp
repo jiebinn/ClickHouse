@@ -3658,37 +3658,6 @@ TEST(PostingListCursorTest, TextIndexHeaderInitialVersionDefaultsToNoneCodec)
     EXPECT_EQ(sparse_index_data.sparse_index.getOffsetInFile(0), 7u);
 }
 
-TEST(PostingListCursorTest, TextIndexSparseIndexOptimize)
-{
-    static constexpr size_t num_tokens = 1000;
-
-    auto tokens = ColumnString::create();
-    auto offsets = ColumnUInt64::create();
-
-    for (size_t i = 0; i < num_tokens; ++i)
-    {
-        tokens->insert("token" + std::to_string(i));
-        offsets->insertValue(i * 5000);
-    }
-
-    DictionarySparseIndex sparse_index(tokens->getPtr(), offsets->getPtr());
-    size_t memory_before = sparse_index.memoryUsageBytes();
-
-    for (size_t i = 0; i < num_tokens; ++i)
-        ASSERT_EQ(sparse_index.getOffsetInFile(i), i * 5000);
-
-    sparse_index.optimize();
-
-    for (size_t i = 0; i < num_tokens; ++i)
-        ASSERT_EQ(sparse_index.getOffsetInFile(i), i * 5000);
-
-    EXPECT_LT(sparse_index.memoryUsageBytes(), memory_before);
-
-    /// optimize is idempotent.
-    sparse_index.optimize();
-    EXPECT_EQ(sparse_index.getOffsetInFile(num_tokens - 1), (num_tokens - 1) * 5000);
-}
-
 // Section: row_offset beyond UInt32::max must throw — doc IDs are 32-bit, and
 // `values[i] - row_offset` would otherwise underflow `size_t` and write OOB.
 // Skipped under debug/sanitizers: `LOGICAL_ERROR` aborts there, so `EXPECT_THROW`

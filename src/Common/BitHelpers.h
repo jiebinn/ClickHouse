@@ -124,7 +124,7 @@ constexpr bool isPowerOf2(T number)
   * The array must be overallocated by one element.
   * The bit range must be pre-filled with zeros.
   */
-inline void writeBits(uint64_t * dest, size_t bit_offset, uint64_t value)
+inline void writeBitsPacked64(uint64_t * dest, size_t bit_offset, uint64_t value)
 {
     size_t mod = bit_offset % 64;
     dest[bit_offset / 64] |= value << mod;
@@ -135,7 +135,7 @@ inline void writeBits(uint64_t * dest, size_t bit_offset, uint64_t value)
 /** Reads a range of bits from a bit-packed array.
   * The array must be overallocated by one element.
   */
-inline uint64_t readBits(const uint64_t * src, size_t bit_offset, size_t num_bits)
+inline uint64_t readBitsPacked64(const uint64_t * src, size_t bit_offset, size_t num_bits)
 {
     size_t mod = bit_offset % 64;
     uint64_t value = src[bit_offset / 64] >> mod;
