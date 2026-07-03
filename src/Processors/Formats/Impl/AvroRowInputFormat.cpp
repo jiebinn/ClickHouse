@@ -412,6 +412,67 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(const avro
                     return true;
                 };
             }
+            /// Non-string-key maps are encoded in Avro as an array of two-field key/value
+            /// records (Avro native maps only allow string keys). This is what Iceberg /
+            /// Spark write for MAP<K, V> with a non-string K. A ClickHouse Map is physically
+            /// Array(Tuple(key, value)), so decode the array of records straight into it.
+            if (target.isMap())
+            {
+                const auto & items_node = root_node->leafAt(0);
+                if (items_node->type() == avro::AVRO_RECORD && items_node->leaves() == 2)
+                {
+                    const auto & map_type = assert_cast<const DataTypeMap &>(*target_type);
+                    const auto & keys_type = map_type.getKeyType();
+                    const auto & values_type = map_type.getValueType();
+
+                    /// Match the record fields to key/value by name ("key"/"value"), falling
+                    /// back to positional order (field 0 = key, field 1 = value).
+                    int key_field_index = 0;
+                    for (int i = 0; i != 2; ++i)
+                    {
+                        if (items_node->nameAt(i) == "key")
+                            key_field_index = i;
+                        else if (items_node->nameAt(i) == "value")
+                            key_field_index = 1 - i;
+                    }
+
+                    /// Avro record fields are encoded positionally, so build a deserializer for
+                    /// each field in declared order together with the column it targets.
+                    std::vector<std::pair<DeserializeFn, bool>> field_deserializers;
+                    field_deserializers.reserve(2);
+                    for (int i = 0; i != 2; ++i)
+                    {
+                        bool is_key = i == key_field_index;
+                        field_deserializers.emplace_back(
+                            createDeserializeFn(items_node->leafAt(i), is_key ? keys_type : values_type), is_key);
+                    }
+
+                    return [field_deserializers](IColumn & column, avro::Decoder & decoder)
+                    {
+                        ColumnMap & column_map = assert_cast<ColumnMap &>(column);
+                        ColumnArray & column_array = column_map.getNestedColumn();
+                        ColumnArray::Offsets & offsets = column_array.getOffsets();
+                        ColumnTuple & nested_columns = column_map.getNestedData();
+                        IColumn & keys_column = nested_columns.getColumn(0);
+                        IColumn & values_column = nested_columns.getColumn(1);
+                        auto read_map = [&]()
+                        {
+                            size_t total = 0;
+                            for (size_t n = decoder.arrayStart(); n != 0; n = decoder.arrayNext())
+                            {
+                                total += n;
+                                for (size_t i = 0; i < n; ++i)
+                                    for (const auto & [field_deserialize, is_key] : field_deserializers)
+                                        field_deserialize(is_key ? keys_column : values_column, decoder);
+                            }
+                            offsets.push_back(offsets.back() + total);
+                        };
+
+                        SerializationMap::readMapSafe(column, read_map);
+                        return true;
+                    };
+                }
+            }
             break;
         case avro::AVRO_UNION:
         {

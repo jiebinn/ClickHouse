@@ -1,0 +1,40 @@
+== inferred schema (array of records, no Map inference) ==
+m_int	Array(Tuple(\n    key Int32,\n    value Int32))					
+m_swapped	Array(Tuple(\n    value Int64,\n    key String))					
+m_nullable_val	Array(Tuple(\n    key Int32,\n    value Nullable(Int64)))					
+
+== read as Array(Tuple(...)) (already worked) ==
+[(1,42)]
+[(2,7),(3,8)]
+[]
+
+== read as Map(Int32, Int32) (the fix) ==
+{1:42}
+{2:7,3:8}
+{}
+
+== map lookup by key works ==
+0
+8
+0
+
+== value type coercion Map(Int32, Int64) ==
+{1:42}
+{2:7,3:8}
+{}
+
+== fields routed by name: value declared before key, no logicalType, Map(String, Int64) ==
+{'a':100}
+{'b':200,'c':300}
+{}
+
+== nullable value Map(Int32, Nullable(Int64)) ==
+{1:10}
+{2:NULL,3:30}
+{}
+
+== all three maps together ==
+{1:42}	{'a':100}	{1:10}
+{2:7,3:8}	{'b':200,'c':300}	{2:NULL,3:30}
+{}	{}	{}
+
