@@ -31,6 +31,20 @@ schema = avro.schema.parse(json.dumps({
             "items": {"type": "record", "name": "k_v_nul", "fields": [
                 {"name": "key", "type": "int"},
                 {"name": "value", "type": ["null", "long"]}]}}},
+        # Only ONE canonical name ("value") present: routing must stay positional
+        # (field 0 = key, field 1 = value), NOT flip because "value" is field 0.
+        {"name": "m_one_name_value", "type": {
+            "type": "array",
+            "items": {"type": "record", "name": "value_extra", "fields": [
+                {"name": "value", "type": "int"},
+                {"name": "extra", "type": "int"}]}}},
+        # Only ONE canonical name ("key") present, as field 1: routing must stay
+        # positional (field 0 = key, field 1 = value), NOT flip to make field 1 the key.
+        {"name": "m_one_name_key", "type": {
+            "type": "array",
+            "items": {"type": "record", "name": "extra_key", "fields": [
+                {"name": "extra", "type": "int"},
+                {"name": "key", "type": "int"}]}}},
     ]}))
 
 with DataFileWriter(open("map_as_array_of_records.avro", "wb"), DatumWriter(), schema) as w:
@@ -38,11 +52,18 @@ with DataFileWriter(open("map_as_array_of_records.avro", "wb"), DatumWriter(), s
         "m_int": [{"key": 1, "value": 42}],
         "m_swapped": [{"value": 100, "key": "a"}],
         "m_nullable_val": [{"key": 1, "value": 10}],
+        "m_one_name_value": [{"value": 10, "extra": 20}],
+        "m_one_name_key": [{"extra": 30, "key": 40}],
     })
     w.append({
         "m_int": [{"key": 2, "value": 7}, {"key": 3, "value": 8}],
         "m_swapped": [{"value": 200, "key": "b"}, {"value": 300, "key": "c"}],
         "m_nullable_val": [{"key": 2, "value": None}, {"key": 3, "value": 30}],
+        "m_one_name_value": [{"value": 11, "extra": 21}, {"value": 12, "extra": 22}],
+        "m_one_name_key": [{"extra": 31, "key": 41}, {"extra": 32, "key": 42}],
     })
-    w.append({"m_int": [], "m_swapped": [], "m_nullable_val": []})
+    w.append({
+        "m_int": [], "m_swapped": [], "m_nullable_val": [],
+        "m_one_name_value": [], "m_one_name_key": [],
+    })
 print("wrote map_as_array_of_records.avro")

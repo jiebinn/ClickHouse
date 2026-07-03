@@ -43,8 +43,16 @@ echo "== nullable value Map(Int32, Nullable(Int64)) =="
 $CLICKHOUSE_CLIENT -q "select m_nullable_val from file('$file_name', 'Avro', 'm_nullable_val Map(Int32, Nullable(Int64))')"
 echo
 
+echo "== only one canonical name (value, field 0): stays positional, key from field 0 =="
+$CLICKHOUSE_CLIENT -q "select m_one_name_value from file('$file_name', 'Avro', 'm_one_name_value Map(Int32, Int32)')"
+echo
+
+echo "== only one canonical name (key, field 1): stays positional, key from field 0 =="
+$CLICKHOUSE_CLIENT -q "select m_one_name_key from file('$file_name', 'Avro', 'm_one_name_key Map(Int32, Int32)')"
+echo
+
 echo "== all three maps together =="
-$CLICKHOUSE_CLIENT -q "select * from file('$file_name', 'Avro', 'm_int Map(Int32, Int32), m_swapped Map(String, Int64), m_nullable_val Map(Int32, Nullable(Int64))')"
+$CLICKHOUSE_CLIENT -q "select m_int, m_swapped, m_nullable_val from file('$file_name', 'Avro', 'm_int Map(Int32, Int32), m_swapped Map(String, Int64), m_nullable_val Map(Int32, Nullable(Int64))')"
 echo
 
 rm -f "$CLICKHOUSE_USER_FILES/$file_name"

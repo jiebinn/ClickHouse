@@ -2,6 +2,8 @@
 m_int	Array(Tuple(\n    key Int32,\n    value Int32))					
 m_swapped	Array(Tuple(\n    value Int64,\n    key String))					
 m_nullable_val	Array(Tuple(\n    key Int32,\n    value Nullable(Int64)))					
+m_one_name_value	Array(Tuple(\n    value Int32,\n    extra Int32))					
+m_one_name_key	Array(Tuple(\n    extra Int32,\n    key Int32))					
 
 == read as Array(Tuple(...)) (already worked) ==
 [(1,42)]
@@ -31,6 +33,16 @@ m_nullable_val	Array(Tuple(\n    key Int32,\n    value Nullable(Int64)))
 == nullable value Map(Int32, Nullable(Int64)) ==
 {1:10}
 {2:NULL,3:30}
+{}
+
+== only one canonical name (value, field 0): stays positional, key from field 0 ==
+{10:20}
+{11:21,12:22}
+{}
+
+== only one canonical name (key, field 1): stays positional, key from field 0 ==
+{30:40}
+{31:41,32:42}
 {}
 
 == all three maps together ==

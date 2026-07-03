@@ -425,16 +425,15 @@ AvroDeserializer::DeserializeFn AvroDeserializer::createDeserializeFn(const avro
                     const auto & keys_type = map_type.getKeyType();
                     const auto & values_type = map_type.getValueType();
 
-                    /// Match the record fields to key/value by name ("key"/"value"), falling
-                    /// back to positional order (field 0 = key, field 1 = value).
+                    /// Use name-based routing only when BOTH canonical field names are
+                    /// present, so that an ordinary 2-field record with just one field
+                    /// named "key" or "value" is not silently reinterpreted. Otherwise
+                    /// fall back to positional order (field 0 = key, field 1 = value).
                     int key_field_index = 0;
-                    for (int i = 0; i != 2; ++i)
-                    {
-                        if (items_node->nameAt(i) == "key")
-                            key_field_index = i;
-                        else if (items_node->nameAt(i) == "value")
-                            key_field_index = 1 - i;
-                    }
+                    bool has_key_name = items_node->nameAt(0) == "key" || items_node->nameAt(1) == "key";
+                    bool has_value_name = items_node->nameAt(0) == "value" || items_node->nameAt(1) == "value";
+                    if (has_key_name && has_value_name)
+                        key_field_index = items_node->nameAt(0) == "key" ? 0 : 1;
 
                     /// Avro record fields are encoded positionally, so build a deserializer for
                     /// each field in declared order together with the column it targets.
