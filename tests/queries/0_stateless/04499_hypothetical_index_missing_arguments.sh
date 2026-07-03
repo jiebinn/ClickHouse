@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tags: no-replicated-database
+# Tags: no-fasttest, no-replicated-database
+# no-fasttest: vector_similarity needs usearch, absent in the ENABLE_LIBRARIES=0 fast build
 # no-replicated-database: hypothetical indexes are session-scoped and not replicated
 
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
