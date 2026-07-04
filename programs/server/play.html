@@ -3569,12 +3569,16 @@ let opened_databases = new Set();
 /// default database (`&database=`) for queries run from the editor, so unqualified table
 /// names resolve against it. It is cleared when the connection settings change (see
 /// `resetConnectionScopedState`), since it refers to a database on the previous connection.
-/// It is a connection-scoped setting (like the server address and user), so it is seeded from
-/// the URL and serialized back into every history URL by `buildHistoryParams`: a shared or
-/// reloaded link — including an auto-run `run=1` link — then resolves unqualified names against
-/// the same database, instead of silently falling back to the server default. It is likewise
-/// restored from the navigated URL by `window.onpopstate`, so a Back/Forward step also moves it
-/// (and the panel highlight) to the database that produced the entry being restored.
+/// The selection is committed synchronously on the panel click by `commitSelectedDatabase` (not
+/// after the table list finishes loading), so a `Run` issued before the load returns already
+/// targets it. It is a connection-scoped setting (like the server address and user), so it is
+/// seeded from the URL and serialized back into every history URL by `buildHistoryParams`: a
+/// shared or reloaded link — including an auto-run `run=1` link — then resolves unqualified names
+/// against the same database, instead of silently falling back to the server default. On a
+/// Back/Forward step, `window.onpopstate` restores it from the navigated URL — but only when that
+/// entry belongs to the current connection (server/user), since the connection itself is global
+/// and is not restored by history navigation; a cross-connection entry's database is left alone
+/// rather than imported into the live connection.
 let selected_database = current_url.searchParams.get('database');
 
 /// The server's current database (`currentDatabase()`), recorded while building the database
@@ -3780,6 +3784,21 @@ function applySelectedDatabaseHighlight() {
     }
 }
 
+/// Commit a database selection made in the panel: record it as the default database for editor
+/// queries (`selected_database`), move the panel highlight to it, and fold it into the current
+/// browser-history entry so a reload or shared link carries the new `database=` (and drops `run=1`
+/// once the selection no longer matches the database that produced the shown result — see
+/// `tabReflectsRun`). Called synchronously on the trusted panel click — before the table list is
+/// even requested — so a `Run` issued before the load returns already targets the just-clicked
+/// database, and so switching databases restamps the entry the same way a query or parameter edit
+/// does (`refreshCurrentHistoryEntry`) instead of leaving a stale `database=`/`run=1` in the URL.
+function commitSelectedDatabase(database) {
+    selected_database = database;
+    applySelectedDatabaseHighlight();
+    captureActiveTab();
+    refreshCurrentHistoryEntry(getActiveTab());
+}
+
 function makeSVG(viewBox, ...paths)
 {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -3903,19 +3922,17 @@ function getTableIcon(engine)
 /// guard must be scoped to each container: a load is only superseded by a newer
 /// load of the same database, not by a concurrent load of a different one.
 let load_tables_request_nums = new WeakMap();
-/// The current-database highlight is a singleton, so the per-container token above is not
-/// enough to protect it: it tracks the latest manual database selection. If the user opens
-/// `a` and then `b` before `a` finishes loading, the highlight must end up on `b` regardless
-/// of which load's query returns first - otherwise a slower earlier open would steal it back.
-let current_selection_num = 0;
 async function loadTables(server_address, user, password, database, container, set_current = true, is_current = null) {
     const request_num = (load_tables_request_nums.get(container) || 0) + 1;
     load_tables_request_nums.set(container, request_num);
 
-    /// Capture the latest-selection token synchronously, before awaiting, so that the most
-    /// recent click wins regardless of which load's query returns first. Restoring the
-    /// expanded state passes set_current = false and must not move the highlight.
-    const selection_num = set_current ? ++current_selection_num : 0;
+    /// Commit the database selection synchronously, on the trusted click — before the table list
+    /// query is even issued — so a `Run` fired before the load returns already targets the
+    /// just-clicked database. The async load below only repaints the list; the latest click always
+    /// wins because click handlers run to completion (nothing interleaves before the first await),
+    /// so no per-selection token is needed to arbitrate concurrent loads. A restore load
+    /// (set_current = false) is background panel maintenance and must not move the selection.
+    if (set_current) commitSelectedDatabase(database);
 
     /// Capture the connection generation before awaiting: an explicit (non-quiet) open/refresh
     /// whose connection is replaced while its `system.tables` query is in flight must not report
@@ -3939,15 +3956,6 @@ async function loadTables(server_address, user, password, database, container, s
     /// the table list of a row that is no longer open.
     if (is_current && !is_current()) return false;
 
-    /// A user click marks the database as current; only move the highlight if this is still
-    /// the user's latest selection, and never move it away from currentDatabase() on restore.
-    if (set_current && selection_num == current_selection_num) {
-        let current_elem = container.parentElement.querySelector('.current');
-        if (current_elem) current_elem.classList.remove('current');
-        container.firstChild.classList.add('current');
-        /// Use the selected database as the default database for editor queries.
-        selected_database = database;
-    }
     let tables_elem = container.querySelector('.tables');
     while (tables_elem.firstChild) tables_elem.removeChild(tables_elem.firstChild);
 
@@ -5601,13 +5609,23 @@ window.onpopstate = function(event) {
     /// newer entry that `writeHistoryEntry` last recorded, not at this one).
     tab.lastSavedQuery = event.state.query;
     if (event.state.params) tab.params = event.state.params;
-    /// Restore the connection-scoped selected database from the navigated URL (symmetric with the
-    /// initial page-load seed): a `run=1` entry serializes `database=`, so Back/Forward must move
-    /// the selection — and the panel highlight — to the database that produced this entry, instead
-    /// of leaving the next run pointed at the previous (now off-screen) selection. Absent means the
-    /// server default. `location` already reflects the navigated entry here (and after the restamp).
-    selected_database = new URL(location.href).searchParams.get('database');
-    applySelectedDatabaseHighlight();
+    /// Restore the connection-scoped selected database from the navigated URL — but ONLY when the
+    /// entry belongs to the current connection. Connection settings (server address and user) are
+    /// global and are deliberately NOT restored by Back/Forward, so importing an entry's database
+    /// into a different live connection would point the next run at a database that may not exist
+    /// there (e.g. replaying a server-B entry's `database=` against server A). When the entry's
+    /// connection matches the live one, move the selection — and the panel highlight — to the
+    /// database that produced this entry (symmetric with the initial page-load seed); otherwise
+    /// leave the live selection untouched, exactly as the live server/user are left untouched.
+    /// Absent `url=`/`user=`/`database=` mean the default server/empty user/server default database;
+    /// `location` already reflects the navigated entry here (and after the restamp above).
+    const nav_url = new URL(location.href);
+    const entry_server = nav_url.searchParams.get('url') || location.origin;
+    const entry_user = nav_url.searchParams.get('user') || '';
+    if (entry_server === url_elem.value && entry_user === user_elem.value) {
+        selected_database = nav_url.searchParams.get('database');
+        applySelectedDatabaseHighlight();
+    }
     /// Adopt the entry's result snapshot (its own producing query/params), or clear it. This
     /// avoids leaving a stale snapshot attached to a different query. Modern entries nest the
     /// snapshot under `result`; legacy flat entries (predating per-tab state) store the produced
