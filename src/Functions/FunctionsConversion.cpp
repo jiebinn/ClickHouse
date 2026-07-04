@@ -1648,7 +1648,7 @@ FunctionCast::WrapperType FunctionCast::createQBitToQBitWrapper(const DataTypeQB
         /// transpose into the target layout. `nullable_source` is threaded through so both halves skip NULL rows
         /// (avoiding a wasted untranspose/transpose) and the outer machinery re-wraps the result as Nullable.
         ColumnPtr native_array = reconstruct(arguments, nullable_source, dimension, stride);
-        ColumnsWithTypeAndName array_arguments{{std::move(native_array), native_array_type, arguments.front().name}};
+        ColumnsWithTypeAndName array_arguments{{native_array, native_array_type, arguments.front().name}};
         return array_to_qbit(array_arguments, result_type, nullable_source, input_rows_count);
     };
 }
