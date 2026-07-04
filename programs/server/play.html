@@ -3666,10 +3666,13 @@ async function loadDatabases(server_address, user, password) {
         let row_load_generation = 0;
 
         /// Reload the tables of this database, showing the hourglass (and hiding the refresh
-        /// button) while loading. `set_current` moves the current-database highlight to this row
-        /// (a manual open or refresh); restoring the previously expanded state passes false so
-        /// the highlight stays on the actual current database.
-        const refreshTables = (set_current = true) => {
+        /// button) while loading. `set_current` commits this database as the editor's selected
+        /// database (a manual open of a collapsed row); a refresh or a restore of the previously
+        /// expanded state passes false, so merely reloading a row's table list never silently
+        /// retargets editor queries to it. `quiet` (defaulting to a background restore, i.e.
+        /// `!set_current`) suppresses surfacing the load's error in the main result pane; an
+        /// explicit refresh overrides it to keep surfacing errors as before.
+        const refreshTables = (set_current = true, quiet = !set_current) => {
             const generation = ++row_load_generation;
             /// A load stays relevant only while its generation is still the latest for this row
             /// and the row is still attached to the document. Closing the whole database panel
@@ -3682,7 +3685,7 @@ async function loadDatabases(server_address, user, password) {
             hourglass.className = 'loading-hourglass';
             hourglass.textContent = '\u29D7';
             database_link.after(hourglass);
-            return loadTables(server_address, user, password, elem.database, database, set_current, is_current).then(ok => {
+            return loadTables(server_address, user, password, elem.database, database, set_current, is_current, quiet).then(ok => {
                 hourglass.remove();
                 /// Only restore the button while this load is still the current one for the row;
                 /// otherwise the row was collapsed (the button is detached) or a newer refresh owns it.
@@ -3693,7 +3696,11 @@ async function loadDatabases(server_address, user, password) {
 
         refresh_button.addEventListener('click', e => {
             e.stopPropagation();
-            if (database.dataset['opened']) refreshTables();
+            /// A refresh reloads this row's table list only. It must not commit the selection
+            /// (`set_current = false`), so refreshing an already-open database never silently
+            /// retargets the editor's default database to it; but it still surfaces its errors
+            /// (`quiet = false`), since it is an explicit user action, not a background restore.
+            if (database.dataset['opened']) refreshTables(false, false);
         });
 
         /// Open a collapsed database, or restore a previously expanded one on panel reopen.
@@ -3778,7 +3785,15 @@ function applySelectedDatabaseHighlight() {
     const buttons = databases_elem.querySelectorAll('button[data-database]');
     const has_selected = selected_database
         && Array.from(buttons).some(b => b.dataset.database === selected_database);
-    const target = has_selected ? selected_database : server_current_database;
+    /// When a database is explicitly selected, highlight it only while it is actually present in
+    /// the list, and otherwise highlight nothing: falling back to the server's current database
+    /// would make the panel claim one database while `postSingle`/`postMulti` still run against
+    /// the (still-set) selection — a stale panel relative to a navigated `database=`, or a
+    /// selection that has since disappeared from `system.databases`, would then lie about the next
+    /// run. The `null` target matches no row, so nothing is highlighted until an authoritative
+    /// reload brings the row back or the selection is cleared (on a connection change). Only fall
+    /// back to the server default when nothing is selected at all.
+    const target = selected_database ? (has_selected ? selected_database : null) : server_current_database;
     for (const button of buttons) {
         button.classList.toggle('current', button.dataset.database === target);
     }
@@ -3922,7 +3937,7 @@ function getTableIcon(engine)
 /// guard must be scoped to each container: a load is only superseded by a newer
 /// load of the same database, not by a concurrent load of a different one.
 let load_tables_request_nums = new WeakMap();
-async function loadTables(server_address, user, password, database, container, set_current = true, is_current = null) {
+async function loadTables(server_address, user, password, database, container, set_current = true, is_current = null, quiet = !set_current) {
     const request_num = (load_tables_request_nums.get(container) || 0) + 1;
     load_tables_request_nums.set(container, request_num);
 
@@ -3939,15 +3954,16 @@ async function loadTables(server_address, user, password, database, container, s
     /// its result into the main result pane (see `auxiliaryQuery`).
     const generation = connectionGeneration;
 
-    /// A restore load (set_current = false) is a background panel-maintenance query triggered by
-    /// merely reopening the panel, so it runs quietly: it must not overwrite the main result pane
-    /// with its own success or error. An explicit open/refresh (set_current = true) keeps
-    /// surfacing its error as before.
+    /// A restore load is a background panel-maintenance query triggered by merely reopening the
+    /// panel, so it runs quietly (`quiet = true`): it must not overwrite the main result pane with
+    /// its own success or error. An explicit open or refresh keeps surfacing its error as before
+    /// (`quiet = false`). `quiet` is decoupled from `set_current` so a refresh can reload the list
+    /// without committing the selection yet still report failures.
     let json = await auxiliaryQuery(server_address, user, password,
         `SELECT table, engine, total_rows, total_bytes FROM system.tables WHERE database = {database:String}
             ORDER BY table LIKE '.inner%', table`,
         '&param_database=' + encodeURIComponent(database),
-        !set_current, generation);
+        quiet, generation);
     if (!json) return false;
 
     if (request_num != load_tables_request_nums.get(container)) return false;
@@ -4469,6 +4485,11 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     /// snapshot, and a later download all use the database the query actually ran against,
     /// even if the panel selection changes while the query is in flight.
     const query_database = selected_database;
+    /// Snapshot the connection this run uses too, so a later download reproduces the result
+    /// against the same server/user even if the connection is later switched (see the
+    /// `last_url_for_download`/`last_user_for_download` docs).
+    const query_url = url_elem.value;
+    const query_user = user_elem.value;
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4504,6 +4525,8 @@ async function postSingle(posted_request_num, query, history_query_text, params_
                 elapsed_ns: 1e6 * (performance.now() - last_query_start),
                 params: paramValuesSnapshot,
                 database: query_database,
+                url: query_url,
+                user: query_user,
             });
         }
         return;
@@ -4519,6 +4542,8 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     last_query_for_download = query;
     last_params_for_download = paramValuesSnapshot;
     last_database_for_download = query_database;
+    last_url_for_download = query_url;
+    last_user_for_download = query_user;
 
     if (result.is_raw || result.is_image) {
         resultEl.elapsedNs = 1e6 * (performance.now() - last_query_start);
@@ -4547,6 +4572,8 @@ async function postSingle(posted_request_num, query, history_query_text, params_
         elapsed_ns: elapsed_ns,
         params: paramValuesSnapshot,
         database: query_database,
+        url: query_url,
+        user: query_user,
     });
 }
 
@@ -4562,6 +4589,10 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
     const paramValuesSnapshot = resolveRunParams(params_restore_pending);
     /// Snapshot the selected database for this run (see `postImpl`); all statements run against it.
     const query_database = selected_database;
+    /// Snapshot the connection too, so the saved result carries the server/user that produced it
+    /// (kept symmetric with `postSingle`; see `last_url_for_download`/`last_user_for_download`).
+    const query_url = url_elem.value;
+    const query_user = user_elem.value;
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4716,6 +4747,8 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
         elapsed_ns: elapsed_ns,
         params: paramValuesSnapshot,
         database: query_database,
+        url: query_url,
+        user: query_user,
     }, parsed[0].query);
 }
 
@@ -4887,6 +4920,11 @@ async function restoreFromHistory(state, token) {
     /// Follows the PRODUCING database (snapshotted in the result), so a download after navigating
     /// to this entry reproduces the displayed result even if the panel selection has since changed.
     last_database_for_download = result.database || '';
+    /// Follows the PRODUCING connection likewise, so a download reproduces the result against the
+    /// server/user that produced it rather than the current live connection. Legacy entries saved
+    /// before the connection was snapshotted carry no `url`/`user`; fall back to the live values.
+    last_url_for_download = result.url ?? url_elem.value;
+    last_user_for_download = result.user ?? user_elem.value;
     query_area.value = state.query;
     query_area.dispatchEvent(new Event('input'));
     /// Graph detection keys off the producing query, so a snapshot still renders as a graph
@@ -5528,6 +5566,11 @@ function saveHistory(stateData, titleForDoc) {
         /// this entry (or reloading its `run=1` URL) reproduces the run and download against the
         /// same database rather than the current panel selection or the server default.
         database: stateData.database,
+        /// The server address and user that produced this result, so a download after navigating
+        /// back to this entry reproduces it against the same connection even when the live
+        /// connection has since changed. The password is deliberately never stored in history.
+        url: stateData.url,
+        user: stateData.user,
         format: stateData.format,
         ok: stateData.ok,
         data: stateData.data,
@@ -7950,6 +7993,17 @@ let last_params_for_download = {};
 /// The default database that produced the downloadable result (snapshotted at run time and on
 /// restore), so Download stays tied to the displayed result even if the panel selection changes.
 let last_database_for_download = '';
+/// The server address and user that produced the downloadable result, snapshotted alongside the
+/// query/params/database (at run time and on history restore) so Download reproduces the shown
+/// result against the connection that produced it, not the current live connection: after running
+/// on one server and then switching the connection — or navigating Back to an entry produced on
+/// another server while the live connection stays elsewhere — Download would otherwise re-run the
+/// query on the live server and could export different data than the result on screen. The
+/// password is intentionally not snapshotted (it must never be stored in browser history); the
+/// live password is used, so a mismatched connection surfaces as a visible authentication error
+/// rather than silently exporting data from the wrong server.
+let last_url_for_download = '';
+let last_user_for_download = '';
 
 // Toggle download dropdown
 document.getElementById('download-div').addEventListener('click', function(e) {
@@ -8072,10 +8126,15 @@ document.getElementById('download-button').addEventListener('click', async funct
 
     const extension = formatExtensions[format] || format.toLowerCase();
 
-    // Get current values
-    const user = user_elem.value;
+    // Reproduce the shown result against the connection that produced it, not the current live
+    // connection: after switching servers (or navigating Back to an entry produced elsewhere),
+    // the live connection may differ from the one behind the visible result. The password is not
+    // snapshotted (never stored in history), so the live password is used — a mismatched
+    // connection then surfaces as a visible authentication error rather than silently exporting
+    // data from the wrong server.
+    const user = last_user_for_download;
     const password = password_elem.value;
-    const server_address = url_elem.value;
+    const server_address = last_url_for_download || url_elem.value;
     const query = last_query_for_download;
 
     if (!query) {
