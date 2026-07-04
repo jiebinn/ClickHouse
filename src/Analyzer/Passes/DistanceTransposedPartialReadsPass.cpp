@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeQBit.h>
+#include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Storages/IStorage.h>
@@ -57,6 +58,19 @@ public:
         auto * precision_node = function_arguments_nodes[2]->as<ConstantNode>();
         if (!qbit_node || qbit_node->getColumnName() == "__grouping_set" || !precision_node
             || precision_node->getValue().getType() != Field::Types::UInt64)
+            return;
+
+        /// A Variant or Dynamic reference vector carries per-row type and null semantics: the distance function is
+        /// evaluated separately for each stored type and NULL rows must propagate as NULL. The optimization casts the
+        /// reference vector to a plain Array(element_type), which cannot preserve those semantics, so it must not be
+        /// applied to such a reference vector - leave the call for the unoptimized distance function to handle.
+        /// A Variant is the more dangerous case: casting it to Array throws (`CAST AS Array can only be performed
+        /// between same-dimensional Array, Map or String types`) while the rewrite is being built below, so without
+        /// this guard the whole query would fail instead of running. (A Dynamic reference vector would instead be
+        /// caught by the result-type guard at the end of the pass, because its result type differs from the rewritten
+        /// Nullable(Float64); rejecting both here is simpler and keeps the two special types together.)
+        const auto ref_vec_type = ref_vec_node->getResultType();
+        if (isVariant(ref_vec_type) || isDynamic(ref_vec_type))
             return;
 
         /// Optional fourth argument: the number of dimensions to read (Matryoshka-style partial-dimension search).
@@ -201,9 +215,10 @@ public:
 
         /// The rewritten form always yields a Float64 / Nullable(Float64) result: it casts the reference vector to a
         /// plain Array and drops the precision and used_dims arguments. If the original call has some other result type
-        /// - for example because an argument such as the reference vector carries a special type like Dynamic or Variant
-        /// that propagates through the function - applying the optimization would silently change the result type. In
-        /// that case revert to the original arguments and leave the query unoptimized instead.
+        /// - for example a Nullable(Array) reference vector whose nullability is dropped by the cast - applying the
+        /// optimization would silently change the result type. In that case revert to the original arguments and leave
+        /// the query unoptimized instead. (Variant and Dynamic reference vectors, the other type-changing cases, are
+        /// excluded up front before the rewrite.)
         if (!function_node->getResultType()->equals(*original_result_type))
         {
             function_node->getArguments().getNodes() = std::move(original_arguments);

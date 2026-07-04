@@ -122,3 +122,39 @@ SELECT
   = toString((SELECT groupArray((id, d)) FROM (SELECT id, dotProductTransposed(vec, CAST([1., 2., 3., 4.], 'Dynamic'), 4)::Nullable(Float64) AS d FROM qbit_dynamic_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
 
 DROP TABLE qbit_dynamic_ref;
+
+
+-- A Variant reference vector is the same kind of trap as Dynamic: the distance function evaluates it per stored type
+-- and NULL rows must propagate as NULL, which the optimization's plain Array cast cannot reproduce. Variant is worse
+-- than Dynamic though: casting a Variant to Array is rejected (`CAST AS Array can only be performed between
+-- same-dimensional Array, Map or String types`), so the pass would throw while building the rewrite and the whole
+-- query would fail, instead of running through the ordinary Variant handling of the distance function. The pass must
+-- therefore reject a Variant reference vector up front. This is a Nullable(QBit) test, but the trap is not specific to
+-- Nullable - a plain QBit column hits the same cast rejection.
+
+DROP TABLE IF EXISTS qbit_variant_ref;
+CREATE TABLE qbit_variant_ref (id UInt32, vec Nullable(QBit(Float32, 4)), ref Variant(Array(Float32), UInt8)) ENGINE = Memory;
+INSERT INTO qbit_variant_ref VALUES
+    (1, [1, 2, 3, 4],         CAST([1, 2, 3, 4]::Array(Float32), 'Variant(Array(Float32), UInt8)')),
+    (2, NULL,                 CAST(NULL,                          'Variant(Array(Float32), UInt8)')),
+    (3, [0.5, 0.5, 0.5, 0.5], CAST([4, 3, 2, 1]::Array(Float32), 'Variant(Array(Float32), UInt8)')),
+    (4, NULL,                 CAST([1, 1, 1, 1]::Array(Float32), 'Variant(Array(Float32), UInt8)'));
+
+SELECT '-- Variant reference vector: the optimization must bail, reading the whole vec column, not the vec.N planes (expect 0)';
+SELECT arrayUniq(extractAll(arrayStringConcat((SELECT groupArray(explain) FROM (EXPLAIN actions = 1 SELECT id, L2DistanceTransposed(vec, ref, 4) FROM qbit_variant_ref SETTINGS optimize_qbit_distance_function_reads = 1)), ' '), 'vec\\.[0-9]+'));
+
+SELECT '-- Variant reference vector: result type stays Nullable(Float64) with the optimization on and off';
+SELECT DISTINCT toTypeName(L2DistanceTransposed(vec, ref, 4)) FROM qbit_variant_ref SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT DISTINCT toTypeName(L2DistanceTransposed(vec, ref, 4)) FROM qbit_variant_ref SETTINGS optimize_qbit_distance_function_reads = 0;
+
+SELECT '-- Variant reference vector (valid arrays + NULL rows): optimization on == off, values and NULL mask (expect 1)';
+SELECT
+    toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, ref, 4) AS d FROM qbit_variant_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 1))
+  = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, ref, 4) AS d FROM qbit_variant_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
+
+SELECT '-- Constant NULL Variant reference vector: unoptimized path is NULL for every row; on == off (expect 1)';
+SELECT
+    toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, CAST(NULL, 'Variant(Array(Float32), UInt8)'), 4) AS d FROM qbit_variant_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 1))
+  = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, CAST(NULL, 'Variant(Array(Float32), UInt8)'), 4) AS d FROM qbit_variant_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
+
+DROP TABLE qbit_variant_ref;
