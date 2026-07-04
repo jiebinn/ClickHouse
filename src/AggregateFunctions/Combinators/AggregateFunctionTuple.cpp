@@ -210,7 +210,7 @@ void AggregateFunctionTuple::addBatchImpl(
     ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
     const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
 
-    std::vector<const IColumn *> element_columns(nested_functions.size());
+    ColumnRawPtrs element_columns(nested_functions.size());
     for (size_t i = 0; i < nested_functions.size(); ++i)
         element_columns[i] = &tuple_column.getColumn(i);
 
