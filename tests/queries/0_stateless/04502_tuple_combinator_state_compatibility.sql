@@ -39,6 +39,19 @@ FROM
     SELECT quantileExactTupleState(0.9)((NULL, toFloat64(number))) FROM numbers(51, 50)
 );
 
+SELECT 'placeholder after a real element';
+-- The canonical name of the normalized state comes from the first tuple element, so unification
+-- must also work when the only-null element is not the first one.
+SELECT DISTINCT toTypeName(s)
+FROM
+(
+    SELECT quantileExactTupleState(0.5)((toFloat64(number), NULL)) AS s FROM numbers(10)
+    UNION ALL
+    SELECT quantileExactTupleState(0.9)((toFloat64(number), NULL)) FROM numbers(10)
+);
+SELECT quantileExactTupleMerge(0.9)(s)
+FROM (SELECT quantileExactTupleState(0.5)((toFloat64(number), NULL)) AS s FROM numbers(1, 101));
+
 SELECT 'plain only-null placeholder ignores parameters';
 -- The placeholder compatibility lives at the aggregate function level, so plain functions (and any
 -- other combinator) behave like -Tuple. An only-null aggregation collapses to a plain NULL at query
