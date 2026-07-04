@@ -5482,6 +5482,12 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
         result: tab.result || null,
         tabId: tab.id,
         tabName: tab.title,
+        /// Stamp the connection this entry was written under. `connectionGeneration` is bumped by
+        /// `resetConnectionScopedState` on every `url`/`user`/`password` edit — the exact signal that
+        /// invalidates `selected_database` — so `window.onpopstate` can restore this entry's
+        /// `database=` selection using the SAME connection identity that invalidates it: only while
+        /// the live connection is still the one that produced the entry (see the restore gate there).
+        connectionGeneration: connectionGeneration,
     };
     const title = "ClickHouse Query: " + (titleForDoc || tab.query);
     const history_params = buildHistoryParams(tab.params, tab.title, fromRun, tab.result && tab.result.color_modes);
@@ -5653,20 +5659,23 @@ window.onpopstate = function(event) {
     tab.lastSavedQuery = event.state.query;
     if (event.state.params) tab.params = event.state.params;
     /// Restore the connection-scoped selected database from the navigated URL — but ONLY when the
-    /// entry belongs to the current connection. Connection settings (server address and user) are
-    /// global and are deliberately NOT restored by Back/Forward, so importing an entry's database
-    /// into a different live connection would point the next run at a database that may not exist
-    /// there (e.g. replaying a server-B entry's `database=` against server A). When the entry's
-    /// connection matches the live one, move the selection — and the panel highlight — to the
-    /// database that produced this entry (symmetric with the initial page-load seed); otherwise
-    /// leave the live selection untouched, exactly as the live server/user are left untouched.
-    /// Absent `url=`/`user=`/`database=` mean the default server/empty user/server default database;
-    /// `location` already reflects the navigated entry here (and after the restamp above).
-    const nav_url = new URL(location.href);
-    const entry_server = nav_url.searchParams.get('url') || location.origin;
-    const entry_user = nav_url.searchParams.get('user') || '';
-    if (entry_server === url_elem.value && entry_user === user_elem.value) {
-        selected_database = nav_url.searchParams.get('database');
+    /// entry still belongs to the CURRENT connection. Connection settings (server address, user AND
+    /// password) are global and are deliberately NOT restored by Back/Forward, so importing an
+    /// entry's database into a different live connection would point the next run at a database that
+    /// may not exist there (e.g. replaying a server-B entry's `database=` against server A). Gate on
+    /// the very signal that invalidates the selection: `resetConnectionScopedState` bumps
+    /// `connectionGeneration` on every `url`/`user`/`password` edit (and clears `selected_database`),
+    /// and `writeHistoryEntry` stamps every entry with the generation it was written under. Comparing
+    /// those uses exactly the same connection identity as the invalidation path — so it neither fails
+    /// on a cosmetically different-but-equal server string (`http://h:8123` vs `http://h:8123/`,
+    /// which never bumped the generation) nor restores after a password-only change that already
+    /// invalidated the selection (both problems of the earlier raw url/user string compare). An entry
+    /// with no stamp (written before this code, or in a previous page instance whose in-memory
+    /// generation counter is gone) fails the check and is left untouched — the safe direction, since
+    /// we cannot confirm it belongs to the live connection. `location` already reflects the navigated
+    /// entry here (and after the restamp above); an absent `database=` means the server default.
+    if (event.state.connectionGeneration === connectionGeneration) {
+        selected_database = new URL(location.href).searchParams.get('database');
         applySelectedDatabaseHighlight();
     }
     /// Adopt the entry's result snapshot (its own producing query/params), or clear it. This
@@ -6936,6 +6945,7 @@ function resetConnectionScopedState() {
     completionWords = [];
     closeCompletions();
     opened_databases.clear();
+    const had_selection = selected_database !== null;
     selected_database = null;
     server_current_database = null;
     /// A panel that is already open keeps showing the previous connection's databases, and every
@@ -6944,6 +6954,19 @@ function resetConnectionScopedState() {
     /// panel so it is rebuilt against the new connection on the next open; this also detaches the
     /// rows, dropping any in-flight table load through its `isConnected` check.
     if (databases_toggle.dataset['opened']) closeDatabases();
+    /// Clearing `selected_database` above only touched memory: the current history entry and URL may
+    /// still carry the old `database=` (and its `run=1` marker), so a reload or a copied link would
+    /// immediately resurrect the selection we just invalidated (and possibly auto-run it against the
+    /// new connection). Restamp the current entry from the active tab exactly as
+    /// `commitSelectedDatabase` does — `buildHistoryParams` now emits no `database=`, and
+    /// `tabReflectsRun` drops `run=1` because the cleared selection no longer matches the database
+    /// that produced the shown result — so both are gone the moment the connection changes. Only when
+    /// a selection was actually cleared, so typing in a connection field on a page with none selected
+    /// never churns history.
+    if (had_selection) {
+        captureActiveTab();
+        refreshCurrentHistoryEntry(getActiveTab());
+    }
 }
 
 [url_elem, user_elem, password_elem].forEach(el => el.addEventListener('input', resetConnectionScopedState));
