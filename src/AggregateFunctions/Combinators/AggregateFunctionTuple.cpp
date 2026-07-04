@@ -22,7 +22,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> AggregateFunctionTuple::initNested(
+AggregateFunctionTuple::NestedFunctionsAndResultType AggregateFunctionTuple::initNested(
     const AggregateFunctionPtr & representative_nested_func,
     const DataTypes & arguments,
     const Array & params)
@@ -96,9 +96,9 @@ AggregateFunctionTuple::AggregateFunctionTuple(
     const String & func_name,
     const DataTypes & arguments,
     const Array & params,
-    std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> && nested_and_type)
-    : IAggregateFunctionHelper<AggregateFunctionTuple>(arguments, params, nested_and_type.second)
-    , nested_functions(std::move(nested_and_type.first))
+    NestedFunctionsAndResultType && nested_and_type)
+    : IAggregateFunctionHelper<AggregateFunctionTuple>(arguments, params, nested_and_type.result_type)
+    , nested_functions(std::move(nested_and_type.functions))
     , nested_func_name(func_name)
 {
     num_elements = nested_functions.size();

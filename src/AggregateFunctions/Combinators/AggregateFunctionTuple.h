@@ -39,9 +39,15 @@ private:
     size_t num_elements;
     String nested_func_name;
 
+    struct NestedFunctionsAndResultType
+    {
+        VectorWithMemoryTracking<AggregateFunctionPtr> functions;
+        DataTypePtr result_type;
+    };
+
     /// Build one nested aggregate function per tuple element and derive the result type.
     /// Returns both so the constructor can reuse the functions without recreating them.
-    static std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> initNested(
+    static NestedFunctionsAndResultType initNested(
         const AggregateFunctionPtr & representative_nested_func,
         const DataTypes & arguments,
         const Array & params);
@@ -111,7 +117,7 @@ private:
         const String & func_name,
         const DataTypes & arguments,
         const Array & params,
-        std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> && nested_and_type);
+        NestedFunctionsAndResultType && nested_and_type);
 
     template <bool merge>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
