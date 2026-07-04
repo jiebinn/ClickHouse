@@ -82,3 +82,23 @@ SELECT CAST(materialize(CAST(NULL AS Nullable(QBit(Float32, 4)))) AS QBit(Float6
 SELECT 'accurateCastOrNull between QBit types';
 SELECT accurateCastOrNull([1, 2, 3, 4]::QBit(Float32, 4), 'QBit(Float64, 4)')::Array(Float64);
 SELECT accurateCastOrNull([1, 2, 3, 4]::QBit(Float64, 4), 'QBit(Float32, 4)')::Array(Float32);
+
+SELECT 'accurate* narrowing Float32 -> BFloat16 must reject inexact rows (not take the byte-repack fast path)';
+-- 0.1 .. 0.4 are not exactly representable in BFloat16. The byte-repack fast path would silently truncate the mantissa,
+-- but accurateCastOrNull must null the whole row (and accurateCast must throw) instead, matching the Array narrowing.
+SELECT accurateCastOrNull([0.1, 0.2, 0.3, 0.4]::QBit(Float32, 4), 'QBit(BFloat16, 4)') IS NULL;
+SELECT accurateCast([0.1, 0.2, 0.3, 0.4]::QBit(Float32, 4), 'QBit(BFloat16, 4)'); -- { serverError CANNOT_CONVERT_TYPE }
+-- Exactly-representable values (integers) still convert, and agree with building the target QBit directly.
+SELECT accurateCastOrNull([1, 2, 3, 4]::QBit(Float32, 4), 'QBit(BFloat16, 4)')::Array(BFloat16) = [1, 2, 3, 4]::Array(BFloat16);
+SELECT accurateCast([1, 2, 3, 4]::QBit(Float32, 4), 'QBit(BFloat16, 4)')::Array(BFloat16) = [1, 2, 3, 4]::Array(BFloat16);
+-- A stride change stacked on top of the narrowing rejects inexact rows the same way and preserves exact ones.
+SELECT accurateCastOrNull(arrayMap(x -> x / 10, range(16))::Array(Float32)::QBit(Float32, 16, 8), 'QBit(BFloat16, 16)') IS NULL;
+SELECT accurateCastOrNull(range(16)::Array(Float32)::QBit(Float32, 16, 8), 'QBit(BFloat16, 16)')::Array(BFloat16) = range(16)::Array(BFloat16);
+
+SELECT 'accurate* widening BFloat16 -> Float32 is always exact (byte-repack fast path stays valid)';
+SELECT accurateCastOrNull([0.1, 0.2, 0.3, 0.4]::QBit(BFloat16, 4), 'QBit(Float32, 4)') IS NULL;
+SELECT accurateCastOrNull([0.1, 0.2, 0.3, 0.4]::QBit(BFloat16, 4), 'QBit(Float32, 4)')::Array(Float32) = [0.1, 0.2, 0.3, 0.4]::Array(BFloat16)::Array(Float32);
+
+SELECT 'accurate* stride-only change is lossless (byte-permutation fast path stays valid)';
+SELECT accurateCastOrNull(range(16)::Array(Float32)::QBit(Float32, 16, 8), 'QBit(Float32, 16)') IS NULL;
+SELECT accurateCastOrNull(range(16)::Array(Float32)::QBit(Float32, 16, 8), 'QBit(Float32, 16)')::Array(Float32) = range(16)::Array(Float32);

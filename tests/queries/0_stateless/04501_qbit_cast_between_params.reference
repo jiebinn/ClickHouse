@@ -54,3 +54,15 @@ Casting a NULL to a non-Nullable QBit fails
 accurateCastOrNull between QBit types
 [1,2,3,4]
 [1,2,3,4]
+accurate* narrowing Float32 -> BFloat16 must reject inexact rows (not take the byte-repack fast path)
+1
+1
+1
+1
+1
+accurate* widening BFloat16 -> Float32 is always exact (byte-repack fast path stays valid)
+0
+1
+accurate* stride-only change is lossless (byte-permutation fast path stays valid)
+0
+1

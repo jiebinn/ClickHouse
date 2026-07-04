@@ -1591,7 +1591,15 @@ FunctionCast::WrapperType FunctionCast::createQBitToQBitWrapper(const DataTypeQB
     const bool same_element_type = from_qbit_type.getElementType()->equals(*to_qbit_type.getElementType());
     const bool float32_bfloat16_pair = (from_tid == TypeIndex::Float32 && to_tid == TypeIndex::BFloat16)
         || (from_tid == TypeIndex::BFloat16 && to_tid == TypeIndex::Float32);
-    if (same_element_type || float32_bfloat16_pair)
+
+    /// Under accurate / accurateOrNull, a narrowing Float32 -> BFloat16 element cast must reject (throw / NULL) any value
+    /// that does not survive the round trip — for example 0.1f — matching accurate::convertNumeric. The byte-repack
+    /// drops the low mantissa bits unconditionally and can neither throw nor null a row, so this one direction must fall
+    /// through to the reconstruct-and-convert path in those modes. The fast path's other cases stay exact regardless of
+    /// mode: a stride-only regrouping never changes a value, and widening BFloat16 -> Float32 is always representable.
+    const bool accurate = cast_type == CastType::accurate || cast_type == CastType::accurateOrNull;
+    const bool narrowing_float32_to_bfloat16 = from_tid == TypeIndex::Float32 && to_tid == TypeIndex::BFloat16;
+    if (same_element_type || (float32_bfloat16_pair && !(accurate && narrowing_float32_to_bfloat16)))
     {
         return [from_element_size = from_qbit_type.getElementSize(),
                 to_element_size = to_qbit_type.getElementSize(),
