@@ -35,6 +35,17 @@ SELECT 'Simultaneous element-type and stride change';
 SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(Float64, 16)::Array(Float64) = range(16)::Array(Float64);
 SELECT range(32)::Array(Float64)::QBit(Float64, 32, 16)::QBit(Float32, 32, 8)::Array(Float32) = range(32)::Array(Float32);
 
+SELECT 'Simultaneous element-type and stride change on the Float32/BFloat16 byte-repack fast path';
+-- Unlike the Float32/Float64 block above (which reconstructs and re-transposes), a Float32 <-> BFloat16 change takes the
+-- byte-permutation fast path in repackQBit because the two types share their top 16 bit planes; combining it with a stride
+-- change exercises that branch's restriding. The result must be byte-for-byte identical to building the target QBit
+-- directly. The integers 0..15 are exact in BFloat16, so no low mantissa bit is set: truncating to BFloat16 equals
+-- rounding, and Float32's low 16 planes (dropped when narrowing, zero-filled when widening) are all zero either way.
+SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(BFloat16, 16) = range(16)::Array(Float32)::QBit(BFloat16, 16);
+SELECT range(16)::Array(Float32)::QBit(Float32, 16)::QBit(BFloat16, 16, 8) = range(16)::Array(Float32)::QBit(BFloat16, 16, 8);
+SELECT range(16)::Array(Float32)::QBit(BFloat16, 16, 8)::QBit(Float32, 16) = range(16)::Array(Float32)::QBit(Float32, 16);
+SELECT range(16)::Array(Float32)::QBit(BFloat16, 16)::QBit(Float32, 16, 8) = range(16)::Array(Float32)::QBit(Float32, 16, 8);
+
 SELECT 'Materialized (non-constant) source column';
 SELECT materialize([1, 2, 3, 4]::QBit(Float32, 4))::QBit(Float64, 4)::Array(Float64);
 SELECT materialize(range(16)::Array(Float32)::QBit(Float32, 16, 8))::QBit(Float32, 16)::Array(Float32) = range(16)::Array(Float32);

@@ -23,6 +23,11 @@ Narrowing loses precision exactly like the corresponding Array narrowing
 Simultaneous element-type and stride change
 1
 1
+Simultaneous element-type and stride change on the Float32/BFloat16 byte-repack fast path
+1
+1
+1
+1
 Materialized (non-constant) source column
 [1,2,3,4]
 1
