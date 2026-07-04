@@ -198,6 +198,64 @@ void AggregateFunctionTuple::addManyDefaults(AggregateDataPtr __restrict place, 
         addRowFromMaterialized(place, tuple_column, 0, arena);
 }
 
+template <bool has_null_map, typename GetPlace>
+void AggregateFunctionTuple::addBatchImpl(
+    size_t row_begin,
+    size_t row_end,
+    const IColumn ** columns,
+    const UInt8 * null_map,
+    ssize_t if_argument_pos,
+    Arena * arena,
+    GetPlace && get_place) const
+{
+    /// `MergeTree` may store individual `Tuple` elements as `ColumnSparse` while the outer `ColumnTuple`
+    /// is dense. Nested aggregate functions cast their column to its concrete type, so the tuple is
+    /// materialized once per batch; delegating to the `IAggregateFunctionHelper` batch loops would
+    /// instead route every row through the `add` override and rerun `recursiveRemoveSparse` per row.
+    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
+    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
+
+    std::vector<const IColumn *> element_columns(nested_functions.size());
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+        element_columns[i] = &tuple_column.getColumn(i);
+
+    auto add_row = [&](AggregateDataPtr place, size_t row)
+    {
+        for (size_t i = 0; i < nested_functions.size(); ++i)
+            nested_functions[i]->add(place + state_offsets[i], &element_columns[i], row, arena);
+    };
+
+    if (if_argument_pos >= 0)
+    {
+        const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+        for (size_t i = row_begin; i < row_end; ++i)
+        {
+            if (!flags[i])
+                continue;
+            if constexpr (has_null_map)
+            {
+                if (null_map[i])
+                    continue;
+            }
+            if (AggregateDataPtr place = get_place(i))
+                add_row(place, i);
+        }
+    }
+    else
+    {
+        for (size_t i = row_begin; i < row_end; ++i)
+        {
+            if constexpr (has_null_map)
+            {
+                if (null_map[i])
+                    continue;
+            }
+            if (AggregateDataPtr place = get_place(i))
+                add_row(place, i);
+        }
+    }
+}
+
 void AggregateFunctionTuple::addBatch( /// NOLINT
     size_t row_begin,
     size_t row_end,
@@ -207,31 +265,8 @@ void AggregateFunctionTuple::addBatch( /// NOLINT
     Arena * arena,
     ssize_t if_argument_pos) const
 {
-    /// `MergeTree` may store individual `Tuple` elements as `ColumnSparse` while the outer `ColumnTuple` is dense.
-    /// Nested aggregate functions cast their column to its concrete type, so we materialize once per batch.
-    /// Note: we call `addRowFromMaterialized` directly in the row loop instead of delegating to
-    /// `IAggregateFunctionHelper::addBatch`, because that would route back through our `add` override
-    /// and rerun `recursiveRemoveSparse` on every row.
-    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
-
-    if (if_argument_pos >= 0)
-    {
-        const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (flags[i] && places[i])
-                addRowFromMaterialized(places[i] + place_offset, tuple_column, i, arena);
-        }
-    }
-    else
-    {
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (places[i])
-                addRowFromMaterialized(places[i] + place_offset, tuple_column, i, arena);
-        }
-    }
+    addBatchImpl<false>(row_begin, row_end, columns, nullptr, if_argument_pos, arena,
+        [&](size_t i) { return places[i] ? places[i] + place_offset : nullptr; });
 }
 
 void AggregateFunctionTuple::addBatchSinglePlace( /// NOLINT
@@ -242,23 +277,8 @@ void AggregateFunctionTuple::addBatchSinglePlace( /// NOLINT
     Arena * arena,
     ssize_t if_argument_pos) const
 {
-    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
-
-    if (if_argument_pos >= 0)
-    {
-        const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (flags[i])
-                addRowFromMaterialized(place, tuple_column, i, arena);
-        }
-    }
-    else
-    {
-        for (size_t i = row_begin; i < row_end; ++i)
-            addRowFromMaterialized(place, tuple_column, i, arena);
-    }
+    addBatchImpl<false>(row_begin, row_end, columns, nullptr, if_argument_pos, arena,
+        [&](size_t) { return place; });
 }
 
 void AggregateFunctionTuple::addBatchSinglePlaceNotNull( /// NOLINT
@@ -270,29 +290,10 @@ void AggregateFunctionTuple::addBatchSinglePlaceNotNull( /// NOLINT
     Arena * arena,
     ssize_t if_argument_pos) const
 {
-    /// Reached from `AggregateFunctionNullUnary::addBatchSinglePlace` for `Nullable(Tuple(...))` inputs.
-    /// Materialize the outer tuple once per batch instead of letting the base implementation route
-    /// each surviving row back through `add`, which would rerun `recursiveRemoveSparse` per row.
-    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
-
-    if (if_argument_pos >= 0)
-    {
-        const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (!null_map[i] && flags[i])
-                addRowFromMaterialized(place, tuple_column, i, arena);
-        }
-    }
-    else
-    {
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            if (!null_map[i])
-                addRowFromMaterialized(place, tuple_column, i, arena);
-        }
-    }
+    /// Reached from `AggregateFunctionNullUnary` for `Nullable(Tuple(...))` inputs: rows whose tuple
+    /// is NULL are skipped via the null map.
+    addBatchImpl<true>(row_begin, row_end, columns, null_map, if_argument_pos, arena,
+        [&](size_t) { return place; });
 }
 
 void AggregateFunctionTuple::mergeImpl(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const

@@ -131,8 +131,8 @@ private:
         }
     }
 
-    /// Per-row add that assumes the caller has already materialized the outer tuple (no sparse children).
-    /// Lets the hot batch paths run `recursiveRemoveSparse` exactly once per batch instead of per row.
+    /// Per-row add for the `add` fallback; assumes the caller has already materialized the outer
+    /// tuple (no sparse children).
     void addRowFromMaterialized(AggregateDataPtr __restrict place, const ColumnTuple & tuple_column, size_t row_num, Arena * arena) const
     {
         for (size_t i = 0; i < nested_functions.size(); ++i)
@@ -141,6 +141,19 @@ private:
             nested_functions[i]->add(place + state_offsets[i], &nested_col, row_num, arena);
         }
     }
+
+    /// Shared implementation of the batch add overrides. Materializes the outer tuple once per batch
+    /// and hoists the per-element columns, so no per-row unwrapping work remains in the row loop.
+    /// `get_place` returns the aggregation state for a row, or nullptr when the row has none.
+    template <bool has_null_map, typename GetPlace>
+    void addBatchImpl(
+        size_t row_begin,
+        size_t row_end,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        ssize_t if_argument_pos,
+        Arena * arena,
+        GetPlace && get_place) const;
 };
 
 }
