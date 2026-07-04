@@ -317,6 +317,20 @@ public:
 
                 result = std::move(col_res);
             }
+            else if (WhichDataType(from_type).isArray() && WhichDataType(result_type).isString())
+            {
+                /// Source is an Array of fixed size elements, destination is String.
+                /// callOnTwoTypeIndexes above does not dispatch on the Array type index, so this case
+                /// (the inverse of String/FixedString -> Array) is handled here. ColumnArray::getDataAt
+                /// exposes each row's elements as one contiguous byte range, which executeToString copies.
+                const IColumn & src = *arguments[0].column;
+                MutableColumnPtr dst = result_type->createColumn();
+
+                ColumnString * dst_concrete = assert_cast<ColumnString *>(dst.get());
+                executeToString(src, *dst_concrete, input_rows_count);
+
+                result = std::move(dst);
+            }
             else
             {
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
@@ -1148,6 +1162,17 @@ SELECT reinterpret(x'3108b4403108d4403108b4403108d440', 'Array(Float32)') AS str
 ┌─string_to_array_of_Float32─┐
 │ [5.626,6.626,5.626,6.626]  │
 └────────────────────────────┘
+        )"
+    },
+    {
+        "Array to String example",
+        R"(
+SELECT hex(reinterpret([toUInt16(0x0102), toUInt16(0x0304)]::Array(UInt16), 'String')) AS array_of_UInt16_to_string
+        )",
+        R"(
+┌─array_of_UInt16_to_string─┐
+│ 02010403                  │
+└───────────────────────────┘
         )"
     }
     };
