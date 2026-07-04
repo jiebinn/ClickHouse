@@ -7,17 +7,21 @@ navigation lives in `href:`/`to:` string literals -- not markdown links. lychee
 neither sees `snippets/<locale>/...` nor parses JSX/JS, so `--mode locale-links`
 cannot catch when a localized component routes users to the wrong place.
 
-For every localized file (under `<locale>/` and `snippets/<locale>/`), extract
-internal `href`/`to` paths and check:
+For every localized file (under `<locale>/` and `snippets/<locale>/`), check:
 
-  * a path already under `/<locale>/` must resolve to a real page/redirect;
-  * an unprefixed path (e.g. `/get-started/...`) whose localized counterpart
-    `/<locale>/...` EXISTS is a regression -- the localized surface should link
-    to the localized page, not send readers to English. (If no localized
-    counterpart exists, the English path is an acceptable fallback.)
+  * static `href`/`to` paths: one already under `/<locale>/` must resolve; an
+    unprefixed path whose localized counterpart `/<locale>/...` EXISTS is a
+    regression (routes readers to English instead of the localized page; if no
+    localized counterpart exists, English is an acceptable fallback);
+  * template-literal href bases, e.g. `` `/get-started/quickstarts/${id}` `` --
+    the fallback the "featured" cards render -- flagged when localized pages
+    exist under the base (GT copies the English base verbatim into every locale);
+  * `image`/`img`/`src` asset refs to /images or /assets must exist on disk
+    (catches stale JS data left over from an old English structure).
 
-`--fix` rewrites those regressions to the localized path. Without it, the script
-only reports and exits non-zero when violations remain.
+`--fix` rewrites the href/template regressions to the localized path. Asset
+issues are report-only (a broken image needs a content decision). Without --fix
+the script only reports and exits non-zero when violations remain.
 """
 import argparse
 import json
@@ -39,6 +43,10 @@ HREF = re.compile(r"""\b(?:href|to)\s*[:=]\s*\{?\s*(['"`])(/[^'"`\s]+)\1""")
 # QuickStartsGrid/KBExplorer. lychee and the static HREF pattern both miss these,
 # yet they are exactly what the "featured" cards render. Capture the static base.
 TEMPLATE = re.compile(r"`(/[A-Za-z0-9][A-Za-z0-9/_.#-]*)\$\{")
+# `image:`/`img=`/`src=` asset refs to /images or /assets. These live in JS data
+# (e.g. a stale `featuredQuickstarts` image left over from an old English
+# structure) that lychee never checks; the referenced file must exist on disk.
+ASSET = re.compile(r"""\b(?:image|img|src)\s*[:=]\s*\{?\s*(['"`])(/(?:images|assets)/[^'"`\s]+)\1""")
 
 
 def build_targets(docs_root):
@@ -138,6 +146,13 @@ def main(argv=None):
                     ns = TEMPLATE.sub(check_template, HREF.sub(check, s))
                     if args.fix and ns != s:
                         open(fp, "w", encoding="utf-8").write(ns)
+
+                    # Asset refs are not rewritten (a broken image needs a content
+                    # decision, not a mechanical fix) -- report only.
+                    for am in ASSET.finditer(s):
+                        ap = am.group(2).split("#")[0].split("?")[0]
+                        if not os.path.exists(os.path.join(docs_root, ap.lstrip("/"))):
+                            violations.append((rel, am.group(2), "broken-asset", None))
 
     kinds = {}
     for _, _, k, _ in violations:
