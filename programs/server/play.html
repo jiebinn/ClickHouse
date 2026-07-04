@@ -3567,8 +3567,10 @@ let opened_databases = new Set();
 
 /// The database the user selected in the database panel. When set, it is passed as the
 /// default database (`&database=`) for queries run from the editor, so unqualified table
-/// names resolve against it. It is cleared when the connection settings change (see
-/// `resetConnectionScopedState`), since it refers to a database on the previous connection.
+/// names resolve against it. It is cleared when the connection identity changes (see
+/// `resetConnectionScopedState`), since it refers to a database on the previous connection; a
+/// connection-field edit that does not change the semantic identity — a cosmetic URL normalization
+/// or a password-only change — keeps it.
 /// The selection is committed synchronously on the panel click by `commitSelectedDatabase` (not
 /// after the table list finishes loading), so a `Run` issued before the load returns already
 /// targets it. It is a connection-scoped setting (like the server address and user), so it is
@@ -3580,6 +3582,27 @@ let opened_databases = new Set();
 /// and is not restored by history navigation; a cross-connection entry's database is left alone
 /// rather than imported into the live connection.
 let selected_database = current_url.searchParams.get('database');
+
+/// The (server, user) connection the current `selected_database` belongs to.
+/// `resetConnectionScopedState` compares the live connection against this — via the same
+/// `sameServerAddress` / `effectiveConnectionUser` identity the `window.onpopstate` restore gate
+/// uses — so an edit to a connection field that does not change the semantic identity keeps the
+/// selection instead of silently dropping it (and retargeting the next unqualified `Run` to the
+/// server default). It is refreshed wherever `selected_database` is set: here from the URL at load,
+/// on a panel click (`commitSelectedDatabase`), and on a Back/Forward restore (`window.onpopstate`).
+/// Null when nothing is selected.
+let selected_database_connection = null;
+
+/// Record (or clear, when nothing is selected) the connection `selected_database` belongs to. The
+/// connection fields are read live: `url_elem`/`user_elem` are already seeded from the URL by the
+/// startup block above, so the initial call below captures the connection the URL's `database=`
+/// was chosen for.
+function stampSelectedDatabaseConnection() {
+    selected_database_connection = selected_database === null
+        ? null
+        : {server: url_elem.value, user: user_elem.value};
+}
+stampSelectedDatabaseConnection();
 
 /// The server's current database (`currentDatabase()`), recorded while building the database
 /// panel. The highlight falls back to it when nothing is selected (e.g. after a history
@@ -3809,6 +3832,7 @@ function applySelectedDatabaseHighlight() {
 /// does (`refreshCurrentHistoryEntry`) instead of leaving a stale `database=`/`run=1` in the URL.
 function commitSelectedDatabase(database) {
     selected_database = database;
+    stampSelectedDatabaseConnection();
     applySelectedDatabaseHighlight();
     captureActiveTab();
     refreshCurrentHistoryEntry(getActiveTab());
@@ -5737,6 +5761,10 @@ window.onpopstate = function(event) {
         && effectiveConnectionUser(event.state.connectionServer, event.state.connectionUser)
             === effectiveConnectionUser(url_elem.value, user_elem.value)) {
         selected_database = new URL(location.href).searchParams.get('database');
+        /// The gate above confirmed the entry belongs to the live connection, so record it as the
+        /// connection this restored selection belongs to (keeps `resetConnectionScopedState`'s later
+        /// identity comparison meaningful after a history navigation).
+        stampSelectedDatabaseConnection();
         applySelectedDatabaseHighlight();
     }
     /// Adopt the entry's result snapshot (its own producing query/params), or clear it. This
@@ -7006,8 +7034,25 @@ function resetConnectionScopedState() {
     completionWords = [];
     closeCompletions();
     opened_databases.clear();
-    const had_selection = selected_database !== null;
-    selected_database = null;
+    /// The selected database is a namespace on the SEMANTIC connection identity
+    /// (`sameServerAddress` + `effectiveConnectionUser`) — the same identity the `window.onpopstate`
+    /// restore gate uses. This handler fires on every `input` in a connection field, including edits
+    /// that do NOT change that identity: a cosmetic URL normalization (a trailing slash or a default
+    /// port — the query string stays significant) or a password-only change (the password is
+    /// authentication, not part of the resource identity). Dropping the selection then would retarget
+    /// the next unqualified `Run` to the server default while history navigation still treats the
+    /// entry as valid — the two would disagree. So clear it only when the identity actually changed
+    /// relative to where it was chosen (`selected_database_connection`); keep it otherwise. An unset
+    /// stamp (no selection) fails the check the safe way, matching the previous unconditional clear.
+    const identity_changed = selected_database_connection === null
+        || !sameServerAddress(selected_database_connection.server, url_elem.value)
+        || effectiveConnectionUser(selected_database_connection.server, selected_database_connection.user)
+            !== effectiveConnectionUser(url_elem.value, user_elem.value);
+    const cleared_selection = selected_database !== null && identity_changed;
+    if (cleared_selection) {
+        selected_database = null;
+        selected_database_connection = null;
+    }
     server_current_database = null;
     /// A panel that is already open keeps showing the previous connection's databases, and every
     /// row handler closes over the url/user/password captured when the list was loaded, so
@@ -7022,9 +7067,10 @@ function resetConnectionScopedState() {
     /// `commitSelectedDatabase` does — `buildHistoryParams` now emits no `database=`, and
     /// `tabReflectsRun` drops `run=1` because the cleared selection no longer matches the database
     /// that produced the shown result — so both are gone the moment the connection changes. Only when
-    /// a selection was actually cleared, so typing in a connection field on a page with none selected
-    /// never churns history.
-    if (had_selection) {
+    /// a selection was actually cleared (not when it was kept because the identity was unchanged, nor
+    /// when none was selected), so an edit that keeps the selection leaves its `database=`/`run=1`
+    /// intact and typing in a connection field on a page with none selected never churns history.
+    if (cleared_selection) {
         captureActiveTab();
         refreshCurrentHistoryEntry(getActiveTab());
     }
