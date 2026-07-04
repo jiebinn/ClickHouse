@@ -1,17 +1,21 @@
 import argparse
 
 from ci.jobs.scripts.docs.check_readonly_copies import check_readonly_copies
-from ci.jobs.scripts.docs.mintlify_docs_check import DEFAULT_CHECKS, LOCALE_LINKS_CHECK
+from ci.jobs.scripts.docs.mintlify_docs_check import DEFAULT_CHECKS, LOCALE_CHECKS
 from ci.praktika.info import Info
 from ci.praktika.result import Result
 from ci.praktika.utils import Utils
 
-# The translated trees that docs.json ships (via `languages` + `$ref`s). The
-# locale link-check runs only when a PR touches one of these folders -- or the
-# link-checker itself -- so ordinary English-only edits don't pay for it.
+# The translated trees that docs.json ships (via `languages` + `$ref`s): both the
+# top-level locale pages and the localized snippet components they render. The
+# locale checks run only when a PR touches one of these folders -- or the
+# checkers themselves -- so ordinary English-only edits don't pay for them.
 LOCALE_DIRS = ["ar", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh"]
-LOCALE_CHECK_TRIGGERS = tuple(f"docs/{d}/" for d in LOCALE_DIRS) + (
+LOCALE_CHECK_TRIGGERS = tuple(f"docs/{d}/" for d in LOCALE_DIRS) + tuple(
+    f"docs/snippets/{d}/" for d in LOCALE_DIRS
+) + (
     "ci/jobs/scripts/docs/lychee_check.py",
+    "ci/jobs/scripts/docs/locale_components_check.py",
     "docs/lychee.toml",
 )
 
@@ -68,16 +72,17 @@ if __name__ == "__main__":
         if selected(name)
     ]
 
-    # Locale link-check: blocking, but only when the PR touches a locale tree
-    # (or the checker). This is how a GT translation PR that reintroduces broken
-    # locale links gets caught before merge.
-    locale_name, locale_command = LOCALE_LINKS_CHECK
-    if selected(locale_name) and _locale_check_should_run():
-        results.append(
-            Result.from_commands_run(
-                name=locale_name, command=locale_command, workdir=docs_dir
-            )
-        )
+    # Locale checks: blocking, but only when the PR touches a locale tree,
+    # a localized snippet, or a checker. This is how a GT translation PR that
+    # reintroduces broken/unlocalized locale links gets caught before merge.
+    if _locale_check_should_run():
+        for locale_name, locale_command in LOCALE_CHECKS:
+            if selected(locale_name):
+                results.append(
+                    Result.from_commands_run(
+                        name=locale_name, command=locale_command, workdir=docs_dir
+                    )
+                )
 
     # The read-only guard runs from the repo root (not the docs root), so keep
     # it out of the docs_dir loop above.

@@ -58,12 +58,22 @@ DEFAULT_CHECKS = [
     ("Check external links (warnings)", f"{LYCHEE} --mode external ."),
 ]
 
-# Link/file resolution for the translated locale trees. Kept out of
-# DEFAULT_CHECKS because the Praktika job runs it only when a PR touches the
-# locale folders (they are large and change independently, via the GT
-# translation bot); the standalone driver below runs it unconditionally for full
-# local coverage. Both import this so the command is defined once.
+# Locale-only checks, kept out of DEFAULT_CHECKS: the Praktika job runs them only
+# when a PR touches the locale folders (top-level or snippets/<locale>/) -- they
+# are large and change independently via the GT translation bot -- while the
+# standalone driver below runs them unconditionally for full local coverage.
+#   - locale-links: markdown link/file resolution for the translated trees
+#     (lychee), fragments skipped.
+#   - locale components: navigation `href`/`to` paths inside localized JSX
+#     components and MDX `export const` data, which lychee cannot see (JS
+#     literals, not markdown) -- catches cards that route locale readers to
+#     English pages when a localized page exists.
 LOCALE_LINKS_CHECK = ("Check locale links", f"{LYCHEE} --mode locale-links .")
+LOCALE_COMPONENTS_CHECK = (
+    "Check locale component links",
+    "python3 ../ci/jobs/scripts/docs/locale_components_check.py .",
+)
+LOCALE_CHECKS = [LOCALE_LINKS_CHECK, LOCALE_COMPONENTS_CHECK]
 
 
 def run(cmd, **kw):
@@ -163,10 +173,10 @@ def main(argv=None):
             raise ValueError(f"Invalid --replace '{spec}'. Expected SRC:DEST.")
         replace(parts[0], resolve_replace_dest(docs_root, parts[1]))
 
-    # The driver has no PR diff, so it runs the locale check unconditionally
-    # (full coverage); the Praktika job gates it on locale-folder changes.
+    # The driver has no PR diff, so it runs the locale checks unconditionally
+    # (full coverage); the Praktika job gates them on locale-folder changes.
     results = [(name, run_check(docs_root, name, command))
-               for name, command in [*DEFAULT_CHECKS, LOCALE_LINKS_CHECK]]
+               for name, command in [*DEFAULT_CHECKS, *LOCALE_CHECKS]]
 
     print("\n=== Summary ===", flush=True)
     for name, ok in results:

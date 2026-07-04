@@ -337,7 +337,11 @@ def check_locale_links(docs_root):
     # it only when the locale trees change.
     dest = tempfile.mkdtemp(prefix="lychee-locales-")
     build_tree(docs_root, dest)
+    # Both the top-level locale trees and the localized snippet trees
+    # (snippets/<locale>/), which the locale pages import and render.
     inputs = [d for d in LOCALE_DIRS if os.path.isdir(os.path.join(dest, d))]
+    inputs += [os.path.join("snippets", d) for d in LOCALE_DIRS
+               if os.path.isdir(os.path.join(dest, "snippets", d))]
     if not inputs:
         print("No locale directories present; nothing to check.", flush=True)
         return 0
