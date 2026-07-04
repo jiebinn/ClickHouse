@@ -42,7 +42,7 @@ UInt64 extractDigits(UInt64 num, Int64 offset, Int64 length, bool has_length)
     if (offset > total_digits) // Index is greater than the right boundary
         return 0ULL;
 
-    Int64 count; // Number of digits to take from offset inclusive
+    Int64 count = 0; // Number of digits to take from offset inclusive
     if (!has_length)
     {
         offset = std::max<Int64>(offset, 1);
@@ -169,7 +169,7 @@ public:
                             continue;
                         }
                         T num = data[i];
-                        UInt64 magnitude;
+                        UInt64 magnitude = 0;
                         if constexpr (std::is_signed_v<T>)
                             magnitude = num < 0 ? -static_cast<UInt64>(num) : static_cast<UInt64>(num);
                         else
@@ -237,7 +237,7 @@ An optional argument `length` uses the following logic:
            {"Negative offset counts from the right", "SELECT digits(1234567890, -3)", "890"},
            {"Negative length excludes digits from the right", "SELECT digits(1234567890, 3, -2)", "345678"},
            {"Offset past the end returns 0", "SELECT digits(1234567890, 11)", "0"}};
-    FunctionDocumentation::IntroducedIn introduced_in = {26, 6};
+    FunctionDocumentation::IntroducedIn introduced_in = {26, 7};
     FunctionDocumentation::Category category = FunctionDocumentation::Category::Other;
     FunctionDocumentation documentation = {description, syntax, arguments, {}, returned_value, examples, introduced_in, category};
 
