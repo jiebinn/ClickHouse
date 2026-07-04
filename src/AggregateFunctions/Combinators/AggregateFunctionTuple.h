@@ -118,13 +118,13 @@ private:
         const Array & params,
         NestedFunctionsAndResultType && nested_and_type);
 
-    template <bool merge>
+    template <bool for_merge>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {
         auto & tuple_to = assert_cast<ColumnTuple &>(to);
         for (size_t i = 0; i < nested_functions.size(); ++i)
         {
-            if constexpr (merge)
+            if constexpr (for_merge)
                 nested_functions[i]->insertMergeResultInto(place + state_offsets[i], tuple_to.getColumn(i), arena);
             else
                 nested_functions[i]->insertResultInto(place + state_offsets[i], tuple_to.getColumn(i), arena);
