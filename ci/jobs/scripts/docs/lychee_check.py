@@ -275,13 +275,11 @@ def build_tree(docs_root, dest):
 
 
 def write_redirects(docs_root, dest):
-    # _site/redirects.json is produced by the Mintlify build. Emit each
-    # destination as a markdown link so lychee resolves it against the docs tree.
+    # Emit each destination in _site/redirects.json (a source file checked into
+    # the repo) as a markdown link so lychee resolves it against the docs tree.
     redirects_json = os.path.join(docs_root, "_site", "redirects.json")
     if not os.path.isfile(redirects_json):
-        raise FileNotFoundError(
-            f"Expected redirects at {redirects_json}; build the docs first."
-        )
+        raise FileNotFoundError(f"Expected redirects at {redirects_json}")
     with open(redirects_json) as f:
         redirects = json.load(f)
     out = os.path.join(dest, "_lychee_redirects.md")

@@ -15,7 +15,8 @@ exclude_path = [
   "^\\./_description_templates/",
   "^\\./_includes/",
   "^\\./_migration/",
-  # Mintlify build output
+  # Site source assets (redirects.json, favicon, logos, customization JS) that
+  # are referenced by docs.json, not doc pages to link-check.
   "^\\./_site/",
   # Generated translations of the English site. These live both at the top
   # level (./zh/) and under snippets/ (./snippets/zh/), so match the locale
