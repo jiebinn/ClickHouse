@@ -98,3 +98,24 @@ INSERT INTO qbit_f32 VALUES ([0.1, 0.2]);
 SELECT cosineDistanceTransposedQuantized(vec, [0.1, 0.2]::Array(Float32), 8) FROM qbit_f32; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 SELECT cosineDistanceTransposedQuantized(vec, [0.1, 0.2]::Array(Float32), 8) FROM qbit_f32 SETTINGS optimize_qbit_distance_function_reads = 0; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 DROP TABLE qbit_f32;
+
+
+SELECT 'A Dynamic or Variant reference vector is left unoptimized and still evaluates (regression, no logical error)';
+-- A Variant/Dynamic reference vector makes the overload resolver evaluate the function per alternative, so its result is a
+-- Variant/Dynamic and it cannot be cast to Array. DistanceTransposedPartialReadsPass must leave such a call untouched instead of
+-- throwing a logical error; the value must equal the plain Array(Float32) distance (0.02 for this row), with the pass on or off.
+DROP TABLE IF EXISTS qbit_dyn;
+CREATE TABLE qbit_dyn (vec QBit(Int8, 8)) ENGINE = Memory;
+INSERT INTO qbit_dyn SELECT arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16))::QBit(Int8, 8);
+
+WITH [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32) AS ref
+SELECT
+    round(L2DistanceTransposedQuantized(vec, ref::Dynamic, 8)::Float64, 2) AS dyn,
+    round(L2DistanceTransposedQuantized(vec, ref::Variant(Array(Float32)), 8)::Float64, 2) AS var
+FROM qbit_dyn SETTINGS optimize_qbit_distance_function_reads = 1;
+WITH [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32) AS ref
+SELECT
+    round(L2DistanceTransposedQuantized(vec, ref::Dynamic, 8)::Float64, 2) AS dyn,
+    round(L2DistanceTransposedQuantized(vec, ref::Variant(Array(Float32)), 8)::Float64, 2) AS var
+FROM qbit_dyn SETTINGS optimize_qbit_distance_function_reads = 0;
+DROP TABLE qbit_dyn;

@@ -23,3 +23,6 @@ Strided QBit (Matryoshka) with used_dims
 1	1
 2	1
 Type checks
+A Dynamic or Variant reference vector is left unoptimized and still evaluates (regression, no logical error)
+0.02	0.02
+0.02	0.02

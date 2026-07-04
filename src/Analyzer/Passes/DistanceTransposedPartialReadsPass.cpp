@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeQBit.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Storages/IStorage.h>
@@ -77,6 +78,15 @@ public:
             if (!used_dims_node || used_dims_node->getValue().getType() != Field::Types::UInt64)
                 return;
         }
+
+        /// The rewrite casts the reference vector to a plain Array and drops the precision/used_dims arguments, which fixes the
+        /// result type at Float64 (or Nullable(Float64), preserved below). A Variant or Dynamic reference vector, however, makes the
+        /// overload resolver evaluate the function per alternative so the original result is itself Variant/Dynamic, and such a value
+        /// cannot even be `_CAST` to an Array. Rewriting would therefore either throw during this pass or silently change the result
+        /// type, so leave such calls untouched and let the ordinary (unoptimized) path evaluate them.
+        auto ref_vec_type = ref_vec_node->getResultType();
+        if (isVariant(ref_vec_type) || isDynamic(ref_vec_type))
+            return;
 
         auto column_source = qbit_node->getColumnSource();
         auto * table_node = column_source->as<TableNode>();
