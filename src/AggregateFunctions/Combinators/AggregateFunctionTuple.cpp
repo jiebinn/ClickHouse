@@ -29,19 +29,10 @@ std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> Aggregate
 {
     const String & base_name = representative_nested_func->getName();
 
-    if (arguments.size() != 1)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-            "Aggregate function {}Tuple requires exactly one Tuple argument", base_name);
-
-    const auto * tuple_type = typeid_cast<const DataTypeTuple *>(arguments[0].get());
-    if (!tuple_type)
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "Argument of aggregate function {}Tuple must be Tuple", base_name);
-
-    const auto & elem_types = tuple_type->getElements();
-    if (elem_types.empty())
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "Tuple must not be empty for aggregate function {}Tuple", base_name);
+    /// Every construction path goes through the combinator's `transformArguments`, which has
+    /// already validated that there is exactly one non-empty `Tuple` argument.
+    const auto & tuple_type = assert_cast<const DataTypeTuple &>(*arguments[0]);
+    const auto & elem_types = tuple_type.getElements();
 
     auto & factory = AggregateFunctionFactory::instance();
     VectorWithMemoryTracking<AggregateFunctionPtr> functions;
@@ -84,8 +75,8 @@ std::pair<VectorWithMemoryTracking<AggregateFunctionPtr>, DataTypePtr> Aggregate
     }
 
     DataTypePtr result_type;
-    if (tuple_type->hasExplicitNames())
-        result_type = std::make_shared<DataTypeTuple>(result_types, tuple_type->getElementNames());
+    if (tuple_type.hasExplicitNames())
+        result_type = std::make_shared<DataTypeTuple>(result_types, tuple_type.getElementNames());
     else
         result_type = std::make_shared<DataTypeTuple>(result_types);
 
