@@ -54,38 +54,46 @@ namespace Setting
     extern const SettingsBool reject_expensive_hyperscan_regexps;
 }
 
-TextSearchQuery::TextSearchQuery(String function_name_, TextSearchMode search_mode_, TextIndexDirectReadMode direct_read_mode_, VectorWithMemoryTracking<String> tokens_, std::vector<OptimizedRegularExpression> patterns_)
+TextSearchQuery::TextSearchQuery(
+    String function_name_,
+    TextSearchMode search_mode_,
+    TextIndexDirectReadMode direct_read_mode_,
+    VectorWithMemoryTracking<String> tokens_,
+    std::vector<OptimizedRegularExpression> patterns_,
+    VectorWithMemoryTracking<String> phrase_tokens_)
     : function_name(std::move(function_name_))
     , search_mode(search_mode_)
     , direct_read_mode(direct_read_mode_)
     , tokens(std::move(tokens_))
     , patterns(std::move(patterns_))
+    , phrase_tokens(std::move(phrase_tokens_))
 {
     std::sort(tokens.begin(), tokens.end());
+    hash = calculateHash();
 }
 
-SipHash TextSearchQuery::getHash() const
+UInt128 TextSearchQuery::calculateHash() const
 {
-    SipHash hash;
-    hash.update(function_name);
-    hash.update(search_mode);
-    hash.update(direct_read_mode);
+    SipHash hash_state;
+    hash_state.update(function_name);
+    hash_state.update(search_mode);
+    hash_state.update(direct_read_mode);
 
-    hash.update(tokens.size());
+    hash_state.update(tokens.size());
     for (const auto & token : tokens)
     {
-        hash.update(token.size());
-        hash.update(token);
+        hash_state.update(token.size());
+        hash_state.update(token);
     }
 
     if (!patterns.empty())
     {
-        hash.update(patterns.size());
+        hash_state.update(patterns.size());
         for (const auto & pattern : patterns)
         {
             if (const auto & re2 = pattern.getRE2())
             {
-                hash.update(re2->pattern());
+                hash_state.update(re2->pattern());
             }
             else
             {
@@ -93,24 +101,24 @@ SipHash TextSearchQuery::getHash() const
                 bool is_trivial = false;
                 bool required_substring_is_prefix = false;
                 pattern.getAnalyzeResult(required_substring, is_trivial, required_substring_is_prefix);
-                hash.update(required_substring);
-                hash.update(is_trivial);
-                hash.update(required_substring_is_prefix);
+                hash_state.update(required_substring);
+                hash_state.update(is_trivial);
+                hash_state.update(required_substring_is_prefix);
             }
         }
     }
 
     if (!phrase_tokens.empty())
     {
-        hash.update(phrase_tokens.size());
+        hash_state.update(phrase_tokens.size());
         for (const auto & token : phrase_tokens)
         {
-            hash.update(token.size());
-            hash.update(token);
+            hash_state.update(token.size());
+            hash_state.update(token);
         }
     }
 
-    return hash;
+    return hash_state.get128();
 }
 
 MergeTreeIndexConditionText::MergeTreeIndexConditionText(
@@ -176,7 +184,7 @@ MergeTreeIndexConditionText::MergeTreeIndexConditionText(
         for (const auto & search_query : element.text_search_queries)
         {
             all_search_tokens_set.insert(search_query->tokens.begin(), search_query->tokens.end());
-            all_search_queries[search_query->getHash().get128()] = search_query;
+            all_search_queries[search_query->getHash()] = search_query;
         }
 
         if (requiresReadingAllTokens(element))
@@ -316,7 +324,7 @@ std::optional<String> MergeTreeIndexConditionText::replaceToVirtualColumn(const 
         return std::nullopt;
 
     auto query_hash = query.getHash();
-    auto it = all_search_queries.find(query_hash.get128());
+    auto it = all_search_queries.find(query_hash);
 
     if (it == all_search_queries.end())
         return std::nullopt;
@@ -1084,8 +1092,13 @@ bool MergeTreeIndexConditionText::traverseFunctionNode(
                 std::sort(unique_tokens.begin(), unique_tokens.end());
             }
 
-            auto query = std::make_shared<TextSearchQuery>(function_name, TextSearchMode::Phrase, direct_read_mode, std::move(unique_tokens));
-            query->phrase_tokens = std::move(phrase_tokens);
+            auto query = std::make_shared<TextSearchQuery>(
+                function_name,
+                TextSearchMode::Phrase,
+                direct_read_mode,
+                std::move(unique_tokens),
+                std::vector<OptimizedRegularExpression>{},
+                std::move(phrase_tokens));
             out.function = RPNElement::FUNCTION_HAS_PHRASE;
             out.text_search_queries.emplace_back(std::move(query));
             return true;

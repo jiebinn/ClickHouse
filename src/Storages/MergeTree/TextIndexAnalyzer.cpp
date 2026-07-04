@@ -177,7 +177,7 @@ TextIndexAnalyzer::TextIndexAnalyzer(const MergeTreeIndexConditionText & conditi
 
 const TextIndexAnalyzer::QueryBuilder & TextIndexAnalyzer::getQueryBuilder(const TextSearchQuery & query) const
 {
-    auto hash = query.getHash().get128();
+    auto hash = query.getHash();
     auto it = query_builders.find(hash);
 
     if (it == query_builders.end())
@@ -418,7 +418,7 @@ void TextIndexAnalyzer::analyzeCardinalitiesAndBypassHints(double selectivity_th
             query_builder.markBypassed();
             ProfileEvents::increment(ProfileEvents::TextIndexDiscardHint);
 
-            auto hash = query.getHash().get128();
+            auto hash = query.getHash();
             for (const auto & query_token : query.tokens)
                 queries_by_token[query_token].erase(hash);
 

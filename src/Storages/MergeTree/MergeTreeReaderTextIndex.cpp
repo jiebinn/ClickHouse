@@ -448,7 +448,7 @@ size_t MergeTreeReaderTextIndex::readRows(
     }
 
     size_t read_rows = 0;
-    createEmptyColumns(res_columns);
+    createEmptyColumns(res_columns, max_rows_to_read);
     size_t total_marks = data_part_info_for_read->getIndexGranularity().getMarksCountWithoutFinal();
 
     if (!is_initialized && max_rows_to_read > 0)
@@ -549,12 +549,16 @@ size_t MergeTreeReaderTextIndex::readRows(
     return read_rows;
 }
 
-void MergeTreeReaderTextIndex::createEmptyColumns(Columns & columns) const
+void MergeTreeReaderTextIndex::createEmptyColumns(Columns & columns, size_t max_rows_to_read) const
 {
     for (size_t i = 0; i < columns.size(); ++i)
     {
         if (columns[i] == nullptr)
-            columns[i] = columns_to_read[i].type->createColumn(*serializations[i]);
+        {
+            auto column = columns_to_read[i].type->createColumn(*serializations[i]);
+            column->reserve(max_rows_to_read);
+            columns[i] = std::move(column);
+        }
     }
 }
 
@@ -800,12 +804,12 @@ void MergeTreeReaderTextIndex::fillColumnLazy(IColumn & column, const String & c
         {
             cursors.push_back(it->second);
         }
-        else if (query_builder.postings->cardinality() > 0)
+        else if (!query_builder.postings->isEmpty())
         {
             /// If there are no cursors for large postings, fill the column directly from the postings.
             if (cursors.empty())
             {
-                if (range_posting.cardinality() == 0)
+                if (range_posting.isEmpty())
                 {
                     requireRowOffsetRepresentable(row_offset);
                     auto range_end = static_cast<UInt32>(std::min<size_t>(row_offset + num_rows - 1, std::numeric_limits<UInt32>::max()));
@@ -859,7 +863,7 @@ void MergeTreeReaderTextIndex::applyPostingsPhrase(
     if (!positions_stream || search_query->phrase_tokens.empty())
         return;
 
-    auto cache_key = search_query->getHash().get128();
+    auto cache_key = search_query->getHash();
     auto doc_ids_it = phrase_search_doc_ids.find(cache_key);
 
     if (doc_ids_it == phrase_search_doc_ids.end())

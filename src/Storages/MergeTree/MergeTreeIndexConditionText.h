@@ -43,7 +43,13 @@ enum class TextIndexDirectReadMode : uint8_t
 /// Represents a single text-search function
 struct TextSearchQuery
 {
-    TextSearchQuery(String function_name_, TextSearchMode search_mode_, TextIndexDirectReadMode direct_read_mode_, VectorWithMemoryTracking<String> tokens_, std::vector<OptimizedRegularExpression> patterns_ = {});
+    TextSearchQuery(
+        String function_name_,
+        TextSearchMode search_mode_,
+        TextIndexDirectReadMode direct_read_mode_,
+        VectorWithMemoryTracking<String> tokens_,
+        std::vector<OptimizedRegularExpression> patterns_ = {},
+        VectorWithMemoryTracking<String> phrase_tokens_ = {});
 
     String function_name;
     TextSearchMode search_mode;
@@ -53,7 +59,14 @@ struct TextSearchQuery
     /// not sorted, not deduplicated
     VectorWithMemoryTracking<String> phrase_tokens;
 
-    SipHash getHash() const;
+    UInt128 getHash() const { return hash; }
+
+private:
+    UInt128 calculateHash() const;
+
+    /// Precomputed in the constructor because getHash is called on hot paths.
+    /// Fields must not be mutated after construction, otherwise the hash becomes stale.
+    UInt128 hash;
 };
 
 using TextSearchQueryPtr = std::shared_ptr<TextSearchQuery>;
