@@ -5550,19 +5550,38 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
 
     /// The connection-scoped identity carried by this entry — the selected database, server address
     /// and user, serialized into the URL and stamped into the state — must describe the connection
-    /// the entry's query is reproducible against, not whatever the live globals happen to hold now.
-    /// For a run-produced entry (`fromRun`, i.e. carrying `run=1`) that is the connection the query
-    /// ACTUALLY ran against, captured in the result snapshot when the run completed: the run resolves
-    /// asynchronously, so the panel selection or the connection may have been switched while the
-    /// query was in flight. Reading the live values here would stamp and serialize a `run=1` URL that
-    /// reloads or shares against a different database or server than the displayed (and downloaded)
-    /// result. An editor-only entry (`fromRun` false) carries no reproducible run, so it uses the
-    /// live connection. A legacy snapshot predating the url/user snapshot falls back to the live
-    /// values (mirroring `restoreFromHistory`).
+    /// the entry is reproducible against. Three cases:
+    ///   - A run-produced entry (`fromRun`, i.e. carrying `run=1`) whose live connection STILL
+    ///     matches the connection the query ran against: use the producing snapshot verbatim so the
+    ///     `run=1` URL reloads/shares the exact producing query. The run resolves asynchronously, so
+    ///     the live values, though semantically equal here, may differ cosmetically.
+    ///   - A run-produced entry whose live connection or `selected_database` has since DIVERGED (the
+    ///     panel selection or the connection inputs were switched while the query was still in
+    ///     flight): describe the LIVE page instead, and drop `run=1` (below). Stamping the producing
+    ///     connection here would rewrite the current URL/history back to the old target, so reloading
+    ///     or sharing the finished link would silently discard the user's newer live edits and reopen
+    ///     the page on the wrong server/database. The producing connection is still kept in the result
+    ///     snapshot (`tab.result.{url,user,database}`) for rendering, download and Back/Forward
+    ///     restore, so nothing about the displayed result is lost.
+    ///   - An editor-only entry (`fromRun` false): no reproducible run, so use the live connection.
+    /// A legacy snapshot predating the url/user snapshot falls back to the live values (mirroring
+    /// `restoreFromHistory`).
     const run_snapshot = fromRun ? tab.result : null;
-    const entry_database = run_snapshot ? run_snapshot.database : selected_database;
-    const entry_server = run_snapshot ? (run_snapshot.url ?? url_elem.value) : url_elem.value;
-    const entry_user = run_snapshot ? (run_snapshot.user ?? user_elem.value) : user_elem.value;
+    /// Has the live target moved away from the connection/selection the query actually ran against?
+    /// Compared with the SAME semantic identity as the restore gate (`window.onpopstate`) and the
+    /// connection-change invalidation (`resetConnectionScopedState`): `sameServerAddress` +
+    /// `effectiveConnectionUser`, with the selected database a namespace on that pair. So a
+    /// cosmetic-only URL difference (a trailing slash, a default port) or a password-only change is
+    /// not a divergence, matching those gates.
+    const live_diverged = !!run_snapshot && (
+           (selected_database || null) !== (run_snapshot.database || null)
+        || !sameServerAddress(run_snapshot.url ?? url_elem.value, url_elem.value)
+        || effectiveConnectionUser(run_snapshot.url ?? url_elem.value, run_snapshot.user ?? user_elem.value)
+            !== effectiveConnectionUser(url_elem.value, user_elem.value));
+    const use_snapshot = !!run_snapshot && !live_diverged;
+    const entry_database = use_snapshot ? run_snapshot.database : selected_database;
+    const entry_server = use_snapshot ? (run_snapshot.url ?? url_elem.value) : url_elem.value;
+    const entry_user = use_snapshot ? (run_snapshot.user ?? user_elem.value) : user_elem.value;
 
     const state = {
         query: tab.query,
@@ -5571,7 +5590,7 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
         tabId: tab.id,
         tabName: tab.title,
         /// Stamp the connection identity (server address and user) this entry is reproducible against
-        /// (the producing connection for a run entry, the live one otherwise; see above) so
+        /// (the producing connection for a matching run entry, the live one otherwise; see above) so
         /// `window.onpopstate` can restore this entry's `database=` selection only while the live
         /// connection still matches (see the restore gate there). These values survive a page
         /// reload, unlike the earlier `connectionGeneration` counter, which reset to `0` on reload
@@ -5583,7 +5602,10 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
         connectionUser: entry_user,
     };
     const title = "ClickHouse Query: " + (titleForDoc || tab.query);
-    const history_params = buildHistoryParams(tab.params, tab.title, fromRun, tab.result && tab.result.color_modes, entry_user, entry_server, entry_database);
+    /// Drop `run=1` when the live connection diverged from the producing one: the displayed result
+    /// was produced against a different connection, so auto-running the live target on reload would
+    /// not reproduce it (and must not fire a write against the wrong server/database).
+    const history_params = buildHistoryParams(tab.params, tab.title, fromRun && !live_diverged, tab.result && tab.result.color_modes, entry_user, entry_server, entry_database);
     let history_url = window.location.pathname;
     if (history_params.length > 0) history_url += '?' + history_params.join('&');
     history_url += '#' + toBase64(tab.query);
