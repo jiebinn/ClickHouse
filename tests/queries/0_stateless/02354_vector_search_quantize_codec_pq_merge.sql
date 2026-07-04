@@ -39,6 +39,6 @@ SELECT 'codebooks_after', uniqExact(vec.pq_codebook) FROM quantize_pq_merge;
 WITH (SELECT vec FROM quantize_pq_merge WHERE id = 123) AS ref
 SELECT 'exact_after_merge',
     (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_pq_merge ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_pq_merge ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_pq_merge ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 DROP TABLE quantize_pq_merge;

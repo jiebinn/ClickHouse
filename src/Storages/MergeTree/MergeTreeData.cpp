@@ -4501,11 +4501,12 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
     removeImplicitStatistics(new_metadata.columns);
     commands.apply(new_metadata, local_context);
 
-    /// The `Quantize(...)` codec cannot be added to, removed from, or changed on a column via ALTER. Codec changes are
-    /// metadata-only (existing parts are not rewritten), so an in-place ALTER would leave the table inconsistent:
-    /// existing parts keep the plain serialization (no companion codes stream, and `pq` parts stay compact) while new
-    /// parts carry the codec. Set the codec at CREATE TABLE; to adopt it on existing data, create a new table with the
-    /// codec and `INSERT ... SELECT` into it (a full, consistent rewrite), then swap.
+    /// The `Quantize(...)` codec is immutable via ALTER: it cannot be added, removed, or changed, and the TYPE of a
+    /// Quantize-coded column cannot be changed either. Both reach `ColumnsDescription::modify` as metadata-only changes
+    /// (existing parts are not rewritten and the custom serialization is not reattached), so an in-place ALTER would
+    /// leave the table inconsistent: existing parts keep the plain serialization (no companion codes stream, and `pq`
+    /// parts stay compact) while the metadata claims `Quantize`. Set the codec at CREATE TABLE; to change the codec or
+    /// the type on existing data, create a new table with the codec and `INSERT ... SELECT` into it, then swap.
     {
         auto quantize_signature = [](const ASTPtr & codec) -> String
         {
@@ -4518,16 +4519,27 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
         {
             if (command.type != AlterCommand::ADD_COLUMN && command.type != AlterCommand::MODIFY_COLUMN)
                 continue;
-            const String old_sig = old_metadata.getColumns().has(command.column_name)
-                ? quantize_signature(old_metadata.getColumns().get(command.column_name).codec) : String{};
-            const String new_sig = new_metadata.getColumns().has(command.column_name)
-                ? quantize_signature(new_metadata.getColumns().get(command.column_name).codec) : String{};
-            if (old_sig != new_sig)
+            const bool old_has = old_metadata.getColumns().has(command.column_name);
+            const bool new_has = new_metadata.getColumns().has(command.column_name);
+            const String old_sig = old_has ? quantize_signature(old_metadata.getColumns().get(command.column_name).codec) : String{};
+            const String new_sig = new_has ? quantize_signature(new_metadata.getColumns().get(command.column_name).codec) : String{};
+
+            /// The codec was added, removed, or changed.
+            bool forbidden = old_sig != new_sig;
+            /// Or the type changed while a Quantize codec is present on both sides (e.g. MODIFY COLUMN vec Array(Float64)
+            /// keeping CODEC(Quantize(...)) - same codec signature, but the type change still bypasses reattaching the
+            /// serialization).
+            if (!forbidden && old_has && new_has && !old_sig.empty() && !new_sig.empty())
+                forbidden = old_metadata.getColumns().get(command.column_name).type->getName()
+                    != new_metadata.getColumns().get(command.column_name).type->getName();
+
+            if (forbidden)
                 throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN,
-                    "The Quantize(...) codec cannot be added, removed or changed on column {} via ALTER (it is a "
-                    "metadata-only change that would leave existing parts inconsistent with new ones). Set the codec at "
-                    "CREATE TABLE; to adopt it on existing data, create a new table with the codec and INSERT ... SELECT "
-                    "into it.", backQuoteIfNeed(command.column_name));
+                    "The Quantize(...) codec is immutable via ALTER: it cannot be added, removed or changed, and the type "
+                    "of a Quantize-coded column cannot be changed (column {}). A metadata-only ALTER would leave existing "
+                    "parts inconsistent with new ones. Set the codec at CREATE TABLE; to change the codec or the type on "
+                    "existing data, create a new table with the codec and INSERT ... SELECT into it.",
+                    backQuoteIfNeed(command.column_name));
         }
     }
 

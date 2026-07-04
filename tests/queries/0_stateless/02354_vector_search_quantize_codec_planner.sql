@@ -38,6 +38,18 @@ FROM
 (
     EXPLAIN PLAN
     SELECT id FROM quantize_auto
+    ORDER BY cosineDistance(vec, (SELECT vec FROM quantize_auto WHERE id = 123)) ASC
+    LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
+);
+
+-- rabitq is a cosine-only estimator (it drops the vector norm), so an L2Distance query must NOT use the codes shortlist
+-- (which would rank by angle and could drop the true L2-nearest rows); the rewrite bails and the query stays exact.
+SELECT 'l2_on_cosine_only_no_shortlist',
+    countIf(explain ILIKE '%quantized shortlist%') = 0
+FROM
+(
+    EXPLAIN PLAN
+    SELECT id FROM quantize_auto
     ORDER BY L2Distance(vec, (SELECT vec FROM quantize_auto WHERE id = 123)) ASC
     LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
 );
@@ -45,17 +57,23 @@ FROM
 -- With a shortlist covering all rows, the codes path reproduces the exact brute-force top-k.
 WITH (SELECT vec FROM quantize_auto WHERE id = 123) AS ref
 SELECT 'unfiltered_exact',
-    (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_auto ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_auto ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    (SELECT groupArray(id) FROM (SELECT id, cosineDistance(vec, ref) AS d FROM quantize_auto ORDER BY d, id LIMIT 10))
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_auto ORDER BY cosineDistance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- Same with a post-filter (the original motivation): the WHERE is prefiltered before the shortlist.
 WITH (SELECT vec FROM quantize_auto WHERE id = 123) AS ref
 SELECT 'filtered_exact',
-    (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_auto WHERE id % 7 = 0 ORDER BY d, id LIMIT 8))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_auto WHERE id % 7 = 0 ORDER BY L2Distance(vec, ref) ASC LIMIT 8 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    (SELECT groupArray(id) FROM (SELECT id, cosineDistance(vec, ref) AS d FROM quantize_auto WHERE id % 7 = 0 ORDER BY d, id LIMIT 8))
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_auto WHERE id % 7 = 0 ORDER BY cosineDistance(vec, ref) ASC LIMIT 8 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- The exact-match query vector is returned first (its rescore distance is 0).
 WITH (SELECT vec FROM quantize_auto WHERE id = 123) AS ref
-SELECT 'nearest_is_self', (SELECT id FROM quantize_auto ORDER BY L2Distance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 100) = 123;
+SELECT 'nearest_is_self', (SELECT id FROM quantize_auto ORDER BY cosineDistance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 100) = 123;
+
+-- The codes path validates vector_search_index_fetch_multiplier identically to the vector-similarity-index path:
+-- non-positive and oversized (> 1000) values are rejected instead of silently collapsing or inflating the shortlist.
+SELECT id FROM quantize_auto ORDER BY cosineDistance(vec, (SELECT vec FROM quantize_auto WHERE id = 1)) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = -1; -- { serverError INVALID_SETTING_VALUE }
+SELECT id FROM quantize_auto ORDER BY cosineDistance(vec, (SELECT vec FROM quantize_auto WHERE id = 1)) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 0; -- { serverError INVALID_SETTING_VALUE }
+SELECT id FROM quantize_auto ORDER BY cosineDistance(vec, (SELECT vec FROM quantize_auto WHERE id = 1)) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 2000; -- { serverError INVALID_SETTING_VALUE }
 
 DROP TABLE quantize_auto;

@@ -28,11 +28,11 @@ SELECT 'code_length', length(vec.quantized) FROM quantize_kron GROUP BY length(v
 -- With a shortlist covering all rows, the codes path reproduces the exact brute-force top-k.
 WITH (SELECT vec FROM quantize_kron WHERE id = 123) AS ref
 SELECT 'unfiltered_exact',
-    (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_kron ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_kron ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 2000));
+    (SELECT groupArray(id) FROM (SELECT id, cosineDistance(vec, ref) AS d FROM quantize_kron ORDER BY d, id LIMIT 10))
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_kron ORDER BY cosineDistance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- The exact-match query vector is returned first (its rescore distance is 0), confirming encode/query use the same rotation.
 WITH (SELECT vec FROM quantize_kron WHERE id = 123) AS ref
-SELECT 'nearest_is_self', (SELECT id FROM quantize_kron ORDER BY L2Distance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 100) = 123;
+SELECT 'nearest_is_self', (SELECT id FROM quantize_kron ORDER BY cosineDistance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 100) = 123;
 
 DROP TABLE quantize_kron;

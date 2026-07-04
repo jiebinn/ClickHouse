@@ -1438,6 +1438,8 @@ flowchart LR
 | `0x82` | LZ4    | Body is the **LZ4 block format** — *not* the LZ4 frame format. No magic number. |
 | `0x90` | ZSTD   | Body is a raw zstd single-frame stream (the standard zstd magic number is part of the body). |
 
+The Native block-compression path only ever *emits* these three. The method byte, however, indexes the full column-codec space, and the reader resolves it against the codec registry (see [Negotiation](#compression-negotiation): "any codec is accepted on input"). Other method bytes therefore belong to column codecs and appear in on-disk column frames rather than in the Native transport — for example `0x9d` is the experimental `Quantize` codec for dense vector columns, which (like `NONE`) is a passthrough whose body is the raw bytes. A Native decoder that only needs to interpret transport frames can treat any byte other than `0x02`/`0x82`/`0x90` as raw-or-unsupported; a receiver that also reads on-disk column data must resolve the byte through the codec registry.
+
 ### Checksum {#checksum}
 
 ClickHouse uses CityHash v1.0.2 (the historical variant), **not** modern Google CityHash; the two produce different outputs.

@@ -8,6 +8,8 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/Serializations/SerializationQuantizedVector.h>
+#include <Common/Exception.h>
+#include <Common/VectorQuantization.h>
 #include <Functions/IFunction.h>
 #include <Functions/productQuantization.h>
 #include <Functions/vectorQuantization.h>
@@ -33,6 +35,14 @@ namespace DB::Setting
 {
     extern const SettingsFloat vector_search_index_fetch_multiplier;
     extern const SettingsBool vector_search_use_quantized_codes;
+}
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int INVALID_SETTING_VALUE;
+}
 }
 
 namespace DB::QueryPlanOptimizations
@@ -247,12 +257,27 @@ bool optimizeVectorSearchWithQuantizedCodes(
     const bool is_pq = method == "pq";
     const String codebook_column = search_column + "." + SerializationQuantizedVector::pq_codebook_subcolumn_name;
 
+    /// `rabitq`/`turboquant` are cosine-only estimators (they drop the vector norm), so their shortlist ranks by angle.
+    /// Do not use it for an L2Distance query: a true L2-nearest row could be dropped before the exact rescore. Leave the
+    /// query exact instead. (`int8`, `mrl` and `pq` retain enough to rank L2.)
+    if (is_l2 && !is_pq && !VectorQuantization::supportsL2(method))
+        return false;
+
     /// Shortlist size k' = k * fetch_multiplier, clamped so that the inner LimitStep stays eligible for lazy
     /// materialization of the heavy vector column.
     auto context = read_step->getContext();
     const float fetch_multiplier = context->getSettingsRef()[Setting::vector_search_index_fetch_multiplier];
+    /// Reject the same invalid values as the vector-similarity-index path (see MergeTreeIndexVectorSimilarity.cpp), so
+    /// `vector_search_index_fetch_multiplier` means the same thing on both access paths instead of silently collapsing
+    /// (non-finite / non-positive) or inflating (huge / overflowing) the shortlist.
+    static constexpr double MAX_FETCH_MULTIPLIER = 1000.0;
+    if (!std::isfinite(fetch_multiplier) || fetch_multiplier <= 0.0f
+        || static_cast<double>(fetch_multiplier) > MAX_FETCH_MULTIPLIER
+        || !std::isfinite(static_cast<double>(fetch_multiplier) * static_cast<double>(n)))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE,
+            "Setting 'vector_search_index_fetch_multiplier' must be greater than 0.0 and less than {}", MAX_FETCH_MULTIPLIER);
     size_t k_prime = n;
-    if (std::isfinite(fetch_multiplier) && fetch_multiplier > 1.0f)
+    if (fetch_multiplier > 1.0f)
         k_prime = static_cast<size_t>(static_cast<double>(n) * static_cast<double>(fetch_multiplier));
     if (max_limit_for_lazy_materialization != 0)
         k_prime = std::min(k_prime, max_limit_for_lazy_materialization);

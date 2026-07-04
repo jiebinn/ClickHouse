@@ -31,7 +31,7 @@ WITH (SELECT vec FROM quantize_edge WHERE id = 123) AS ref
 SELECT 'selects_subcolumn', count(), countDistinct(length(q)) FROM
 (
     SELECT id, vec.quantized AS q FROM quantize_edge
-    ORDER BY L2Distance(vec, ref) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
+    ORDER BY cosineDistance(vec, ref) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
 );
 
 -- A column named like the internal sort key forces the rewrite to bail to the exact path (no shortlist), and the query
@@ -55,14 +55,14 @@ FROM
 (
     EXPLAIN PLAN
     SELECT id, `__quantize_approx_distance` FROM quantize_collide
-    ORDER BY L2Distance(vec, (SELECT vec FROM quantize_collide WHERE id = 123)) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
+    ORDER BY cosineDistance(vec, (SELECT vec FROM quantize_collide WHERE id = 123)) ASC LIMIT 5 SETTINGS vector_search_index_fetch_multiplier = 50
 );
 
 -- Even though it bails, the result is the exact brute-force top-k.
 WITH (SELECT vec FROM quantize_collide WHERE id = 123) AS ref
 SELECT 'collision_exact',
-    (SELECT groupArray(id) FROM (SELECT id FROM quantize_collide ORDER BY L2Distance(vec, ref) ASC, id LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 50))
-    = (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_collide ORDER BY d, id LIMIT 10));
+    (SELECT groupArray(id) FROM (SELECT id FROM quantize_collide ORDER BY cosineDistance(vec, ref) ASC, id LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 50))
+    = (SELECT groupArray(id) FROM (SELECT id, cosineDistance(vec, ref) AS d FROM quantize_collide ORDER BY d, id LIMIT 10));
 
 DROP TABLE quantize_collide;
 DROP TABLE quantize_edge;

@@ -57,13 +57,13 @@ FROM
 WITH (SELECT vec FROM quantize_int8 WHERE id = 123) AS ref
 SELECT 'unfiltered_exact',
     (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_int8 ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_int8 ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_int8 ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- Same with a post-filter: the WHERE is prefiltered before the shortlist.
 WITH (SELECT vec FROM quantize_int8 WHERE id = 123) AS ref
 SELECT 'filtered_exact',
     (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_int8 WHERE id % 7 = 0 ORDER BY d, id LIMIT 8))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_int8 WHERE id % 7 = 0 ORDER BY L2Distance(vec, ref) ASC LIMIT 8 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_int8 WHERE id % 7 = 0 ORDER BY L2Distance(vec, ref) ASC LIMIT 8 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- The exact-match query vector is returned first (its rescore distance is 0).
 WITH (SELECT vec FROM quantize_int8 WHERE id = 123) AS ref

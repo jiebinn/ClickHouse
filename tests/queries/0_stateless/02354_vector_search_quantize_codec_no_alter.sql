@@ -16,6 +16,12 @@ ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(Quantize('rabi
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(Quantize('turboquant', 64)); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(NONE); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 
+-- Changing the TYPE of a Quantize-coded column is also rejected - both when the codec is preserved implicitly (a bare
+-- MODIFY keeps the codec but would change the type) and when it is respecified explicitly. Otherwise the type-change
+-- reaches ColumnsDescription::modify and replaces the type without reattaching the custom serialization.
+ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float64); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
+ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float64) CODEC(Quantize('rabitq', 64)); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
+
 -- An ALTER that leaves the codec unchanged is allowed (a comment-only modify must not be mistaken for removing it).
 ALTER TABLE quantize_alter MODIFY COLUMN vec COMMENT 'kept';
 SELECT 'comment_kept', comment FROM system.columns WHERE database = currentDatabase() AND table = 'quantize_alter' AND name = 'vec';

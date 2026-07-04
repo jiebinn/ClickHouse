@@ -60,12 +60,12 @@ FROM
 WITH (SELECT vfull FROM quantize_mrl WHERE id = 123) AS ref
 SELECT 'bf16_unfiltered_exact',
     (SELECT groupArray(id) FROM (SELECT id, L2Distance(vfull, ref) AS d FROM quantize_mrl ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_mrl ORDER BY L2Distance(vfull, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_mrl ORDER BY L2Distance(vfull, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 WITH (SELECT vtrunc FROM quantize_mrl WHERE id = 123) AS ref
 SELECT 'int8_unfiltered_exact',
     (SELECT groupArray(id) FROM (SELECT id, L2Distance(vtrunc, ref) AS d FROM quantize_mrl ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_mrl ORDER BY L2Distance(vtrunc, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 4000));
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_mrl ORDER BY L2Distance(vtrunc, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- The full-vector bf16 shortlist is near-lossless, so the exact-match query vector is returned first.
 WITH (SELECT vfull FROM quantize_mrl WHERE id = 123) AS ref

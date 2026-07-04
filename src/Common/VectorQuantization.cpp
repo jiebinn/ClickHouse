@@ -508,6 +508,14 @@ bool isSupportedMethod(std::string_view method)
         || method == "mrl_int8" || method == "mrl_bf16";
 }
 
+bool supportsL2(std::string_view method)
+{
+    /// `rabitq` and `turboquant` are sign/rotation cosine estimators that do not retain the vector norm, so their
+    /// approximate distance can only rank by angle. `int8` (stores the norm) and `mrl_*` (dequantize the kept prefix)
+    /// can estimate an L2-compatible score.
+    return method == "int8" || method == "mrl_int8" || method == "mrl_bf16";
+}
+
 std::string validateParams(std::string_view method, size_t dimensions, size_t bits)
 {
     if (!isSupportedMethod(method))
@@ -541,29 +549,61 @@ size_t bytesPerVector(std::string_view method, size_t dimensions, size_t bits)
     return expectedFlatBytesPerVector(methodToCodec(method), dimensions, bits);
 }
 
-void encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
+struct Encoder
 {
-    const FlatQuantization codec = methodToCodec(method);
-    switch (codec)
+    FlatQuantization codec = FlatQuantization::RaBitQ;
+    size_t dimensions = 0;
+    size_t bits = 0;
+    std::vector<float> projection;   /// rabitq/int8: the (HD)^3 projection; turboquant: P1
+    std::vector<float> projection2;  /// turboquant: P2 (the QJL projection)
+    std::vector<float> work;         /// per-vector scratch for the rotated vector
+    std::vector<float> work2;        /// turboquant: second per-vector scratch
+};
+
+std::shared_ptr<Encoder> prepareEncoder(std::string_view method, size_t dimensions, size_t bits)
+{
+    auto e = std::make_shared<Encoder>();
+    e->codec = methodToCodec(method);
+    e->dimensions = dimensions;
+    e->bits = bits;
+    /// The projection is a deterministic function of (method, dimensions, seed) only, so it is generated once here and
+    /// reused for every vector rather than regenerated per row - the data-independent analogue of the pq Encoder. The
+    /// `mrl` methods are prefix truncation and need no projection.
+    switch (e->codec)
     {
         case FlatQuantization::RaBitQ:
-        {
-            const std::vector<float> projection = generateRandomProjection(dimensions);
-            const size_t padded = projection.size() / PROJECTION_ROUNDS;
-            std::vector<float> work(padded);
-            encodeRaBitQ(projection, vec, dimensions, work.data(), dst);
-            return;
-        }
+        case FlatQuantization::Int8:
+            e->projection = generateRandomProjection(dimensions);
+            e->work.resize(e->projection.size() / PROJECTION_ROUNDS);
+            break;
         case FlatQuantization::TurboQuant:
         {
-            const std::vector<float> p1 = generateRandomProjection(dimensions);
-            const std::vector<float> p2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
-            const size_t padded = p1.size() / PROJECTION_ROUNDS;
-            std::vector<float> work1(padded);
-            std::vector<float> work2(padded);
-            encodeTurboQuant(p1, p2, vec, dimensions, work1.data(), work2.data(), dst);
-            return;
+            e->projection = generateRandomProjection(dimensions);
+            e->projection2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
+            const size_t padded = e->projection.size() / PROJECTION_ROUNDS;
+            e->work.resize(padded);
+            e->work2.resize(padded);
+            break;
         }
+        case FlatQuantization::MrlInt8:
+        case FlatQuantization::MrlBf16:
+            break;
+    }
+    return e;
+}
+
+void encode(Encoder & e, const float * vec, char * dst)
+{
+    const size_t dimensions = e.dimensions;
+    const size_t bits = e.bits;
+    switch (e.codec)
+    {
+        case FlatQuantization::RaBitQ:
+            encodeRaBitQ(e.projection, vec, dimensions, e.work.data(), dst);
+            return;
+        case FlatQuantization::TurboQuant:
+            encodeTurboQuant(e.projection, e.projection2, vec, dimensions, e.work.data(), e.work2.data(), dst);
+            return;
         case FlatQuantization::MrlInt8:
         {
             /// Store the leading `bits` dimensions as int8 with a per-vector symmetric scale (max|x| over the prefix),
@@ -598,19 +638,15 @@ void encode(std::string_view method, const float * vec, size_t dimensions, size_
         }
         case FlatQuantization::Int8:
         {
-            const std::vector<float> projection = generateRandomProjection(dimensions);
-            const size_t padded = projection.size() / PROJECTION_ROUNDS;
-            std::vector<float> work(padded);
-
             double norm_sq = 0.0;
             for (size_t i = 0; i < dimensions; ++i)
                 norm_sq += static_cast<double>(vec[i]) * static_cast<double>(vec[i]);
             const float norm = static_cast<float>(std::sqrt(norm_sq));
 
-            applyRandomProjection(projection, vec, dimensions, work.data());
+            applyRandomProjection(e.projection, vec, dimensions, e.work.data());
             double rnorm_sq = 0.0;
             for (size_t i = 0; i < dimensions; ++i)
-                rnorm_sq += static_cast<double>(work[i]) * static_cast<double>(work[i]);
+                rnorm_sq += static_cast<double>(e.work[i]) * static_cast<double>(e.work[i]);
 
             /// Scale the rotated vector so each kept coordinate is ~N(0, 1): unit-normalize the rotated vector (each of
             /// its `dimensions` coordinates then has variance 1/dimensions) and multiply by sqrt(dimensions). Lloyd-Max
@@ -619,11 +655,18 @@ void encode(std::string_view method, const float * vec, size_t dimensions, size_
                 ? static_cast<float>(std::sqrt(static_cast<double>(dimensions) / rnorm_sq))
                 : 0.0f;
             for (size_t i = 0; i < dimensions; ++i)
-                dst[i] = static_cast<char>(LloydMax::quantize(work[i] * scale));
+                dst[i] = static_cast<char>(LloydMax::quantize(e.work[i] * scale));
             std::memcpy(dst + dimensions, &norm, sizeof(float));
             return;
         }
     }
+}
+
+void encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
+{
+    /// Convenience one-shot; encoding many vectors should `prepareEncoder` once and reuse it to amortize the projection.
+    auto e = prepareEncoder(method, dimensions, bits);
+    encode(*e, vec, dst);
 }
 
 /// The query side of the 'int8' Lloyd-Max estimator: the unit-normalized rotated query direction (kept in full

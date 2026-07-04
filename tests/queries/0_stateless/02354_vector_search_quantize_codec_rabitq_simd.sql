@@ -28,18 +28,18 @@ SELECT 'code_length', length(vec.quantized) FROM quantize_rabitq_simd GROUP BY l
 -- A shortlist covering all rows reproduces the exact brute-force top-k.
 WITH (SELECT vec FROM quantize_rabitq_simd WHERE id = 42) AS ref
 SELECT 'unfiltered_exact',
-    (SELECT groupArray(id) FROM (SELECT id, L2Distance(vec, ref) AS d FROM quantize_rabitq_simd ORDER BY d, id LIMIT 10))
-    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 5000));
+    (SELECT groupArray(id) FROM (SELECT id, cosineDistance(vec, ref) AS d FROM quantize_rabitq_simd ORDER BY d, id LIMIT 10))
+    = (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY cosineDistance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 1000));
 
 -- A moderate shortlist still recovers most true neighbours (a broken popcount scan would collapse recall).
 WITH (SELECT vec FROM quantize_rabitq_simd WHERE id = 42) AS ref,
-     (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY L2Distance(vec, ref), id LIMIT 10)) AS truth
+     (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY cosineDistance(vec, ref), id LIMIT 10)) AS truth
 SELECT 'recall_at_10_ge_8',
     length(arrayIntersect(truth,
-        (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY L2Distance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 20)))) >= 8;
+        (SELECT groupArray(id) FROM (SELECT id FROM quantize_rabitq_simd ORDER BY cosineDistance(vec, ref) ASC LIMIT 10 SETTINGS vector_search_index_fetch_multiplier = 20)))) >= 8;
 
 -- The exact-match query vector ranks first.
 WITH (SELECT vec FROM quantize_rabitq_simd WHERE id = 42) AS ref
-SELECT 'nearest_is_self', (SELECT id FROM quantize_rabitq_simd ORDER BY L2Distance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 50) = 42;
+SELECT 'nearest_is_self', (SELECT id FROM quantize_rabitq_simd ORDER BY cosineDistance(vec, ref) ASC LIMIT 1 SETTINGS vector_search_index_fetch_multiplier = 50) = 42;
 
 DROP TABLE quantize_rabitq_simd;
