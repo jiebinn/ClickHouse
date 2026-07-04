@@ -129,7 +129,7 @@ InterpreterInsertQuery::InterpreterInsertQuery(
 {
     checkStackSize();
     if (auto quota = getContext()->getQuota())
-        quota->checkExceeded(QuotaType::WRITTEN_BYTES);
+        quota->checkExceededForQuery(getContext()->getNormalizedQueryHash(), QuotaType::WRITTEN_BYTES);
 
     const Settings & settings = getContext()->getSettingsRef();
     max_threads = getMaxThreadsForAvailableMemory(
@@ -438,7 +438,7 @@ QueryPipeline InterpreterInsertQuery::addInsertToSelectPipeline(ASTInsertQuery &
 
     pipeline.addSimpleTransform([&](const SharedHeader & in_header) -> ProcessorPtr
     {
-        auto counting = std::make_shared<CountingTransform>(in_header, context->getQuota());
+        auto counting = std::make_shared<CountingTransform>(in_header, context->getQuota(), context->getNormalizedQueryHash());
         counting->setProcessListElement(context->getProcessListElement());
         counting->setProgressCallback(context->getProgressCallback());
 
@@ -834,7 +834,7 @@ QueryPipeline InterpreterInsertQuery::buildInsertPipeline(ASTInsertQuery & query
                 chain.getInputSharedHeader()));
     }
 
-    auto counting = std::make_shared<CountingTransform>(chain.getInputSharedHeader(), context->getQuota());
+    auto counting = std::make_shared<CountingTransform>(chain.getInputSharedHeader(), context->getQuota(), context->getNormalizedQueryHash());
     counting->setProcessListElement(context->getProcessListElement());
     counting->setProgressCallback(context->getProgressCallback());
     chain.addSource(std::move(counting));
