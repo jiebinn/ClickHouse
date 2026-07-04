@@ -15,15 +15,22 @@ INSERT INTO t_ttl_group_by_block_columns (v1, v2) VALUES (toDateTime('2001-09-18
 INSERT INTO t_ttl_group_by_block_columns (v1, v2) VALUES (toDateTime('2001-09-18 10:03:30'), 17349);
 INSERT INTO t_ttl_group_by_block_columns (v1, v2) VALUES (toDateTime('2001-09-18 10:03:30'), 17349);
 
--- The merge materializes the block columns.
+SELECT 'before';
+SELECT _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
+
 OPTIMIZE TABLE t_ttl_group_by_block_columns FINAL;
 
-SELECT 'before';
-SELECT _part, _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
+SELECT 'after merge';
+SELECT _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
 
 ALTER TABLE t_ttl_group_by_block_columns MODIFY TTL toStartOfDay(v1) + INTERVAL 1 DAY GROUP BY v1;
 
-SELECT 'after';
-SELECT _part, _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
+SELECT 'after ttl';
+SELECT _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
+
+ALTER TABLE t_ttl_group_by_block_columns REWRITE PARTS;
+
+SELECT 'after rewrite';
+SELECT _block_number, _block_offset, * FROM t_ttl_group_by_block_columns ORDER BY ALL;
 
 DROP TABLE t_ttl_group_by_block_columns;
