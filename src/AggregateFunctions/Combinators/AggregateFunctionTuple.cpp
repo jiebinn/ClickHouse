@@ -58,6 +58,10 @@ AggregateFunctionTuple::NestedFunctionsAndResultType AggregateFunctionTuple::ini
         }
     }
 
+    /// The combinator interface resolves a single nested function from a representative element
+    /// type, so the per-element functions are re-resolved here by the canonical nested name. The
+    /// original `NullsAction` is not available in this context; elements are resolved with
+    /// `NullsAction::EMPTY`.
     for (size_t i = 0; i < elem_types.size(); ++i)
     {
         if (all_only_null)
@@ -123,6 +127,9 @@ bool AggregateFunctionTuple::isVersioned() const
     return false;
 }
 
+/// All nested functions share the same base aggregate function, so they agree on one versioning
+/// scheme and a single version number serves the whole tuple state. Placeholder functions for
+/// only-null elements ignore the version entirely.
 size_t AggregateFunctionTuple::getDefaultVersion() const
 {
     size_t version = 0;
@@ -320,6 +327,8 @@ bool AggregateFunctionTuple::allocatesMemoryInArena() const
     return false;
 }
 
+/// The tuple result contains nested aggregation states if any element produces one, so the whole
+/// result requires state lifetime handling as soon as a single nested function is state-producing.
 bool AggregateFunctionTuple::isState() const
 {
     for (const auto & func : nested_functions)
@@ -328,6 +337,10 @@ bool AggregateFunctionTuple::isState() const
     return false;
 }
 
+/// Both `haveSameStateRepresentationImpl` and `getNormalizedStateType` define state compatibility as
+/// the element-wise composition of the same-named concept of the nested functions, plus equal arity.
+/// They must agree so that equality of normalized types implies `haveSameStateRepresentation`; every
+/// nested function guarantees that implication for itself, and the composition preserves it.
 bool AggregateFunctionTuple::haveSameStateRepresentationImpl(const IAggregateFunction & rhs) const
 {
     const auto * rhs_tuple = typeid_cast<const AggregateFunctionTuple *>(&rhs);
