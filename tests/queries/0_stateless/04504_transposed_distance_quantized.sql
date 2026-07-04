@@ -119,3 +119,13 @@ SELECT
     round(L2DistanceTransposedQuantized(vec, ref::Variant(Array(Float32)), 8)::Float64, 2) AS var
 FROM qbit_dyn SETTINGS optimize_qbit_distance_function_reads = 0;
 DROP TABLE qbit_dyn;
+
+
+SELECT 'A hand-written quantized internal call with a non-Float32 reference vector is rejected cleanly';
+-- The undocumented internal calling convention (FixedString bit planes, then the size, then the reference vector) is only ever
+-- generated with the full-precision Float32 query, and executeQuantizedDistanceCalculation reads the reference as ColumnVector<Float32>.
+-- A hand-written internal call with a non-Float32 reference must be rejected instead of reinterpreting its memory: parseInternalArguments
+-- declines it and the call falls through to the user-facing path, which reports that the first argument must be a QBit.
+SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(Int8)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(BFloat16)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(Float64)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }

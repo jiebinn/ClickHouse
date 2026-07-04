@@ -395,6 +395,14 @@ public:
         /// Float32 query, so the reference type no longer encodes the QBit element type; cap the precision at 8 directly.
         if constexpr (Quantized)
         {
+            /// The quantized internal form is only ever generated with the full-precision Float32 query as the reference vector
+            /// (DistanceTransposedPartialReadsPass casts it to Array(Float32)), and executeQuantizedDistanceCalculation reads it as
+            /// ColumnVector<Float32>. Reject any other element type so a hand-written internal call with e.g. an Array(Float64) or
+            /// Array(Int8) reference falls through to the user-facing path and gets a clean ILLEGAL_TYPE_OF_ARGUMENT instead of
+            /// reinterpreting the reference vector's memory as Float32.
+            if (!WhichDataType(ref_vec_type->getNestedType()).isFloat32())
+                return {};
+
             if (res.precision > 8)
                 return {};
         }
