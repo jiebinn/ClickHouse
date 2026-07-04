@@ -1107,11 +1107,12 @@ SELECT reinterpretAsUUID(reverse(unhex('000102030405060708090a0b0c0d0e0f')))
 
     FunctionDocumentation::Description description_reinterpretAsString = R"(
 Reinterprets the input value as a string (assuming little endian order).
-Null bytes at the end are ignored, for example, the function returns for UInt32 value 255 a string with a single character.
+For scalar values, null bytes at the end are ignored, for example, the function returns for UInt32 value 255 a string with a single character.
+For an `Array` of fixed-size elements, the element bytes are copied verbatim without trimming trailing zero bytes, so the result can be reinterpreted back to the original `Array` type.
     )";
     FunctionDocumentation::Syntax syntax_reinterpretAsString = "reinterpretAsString(x)";
     FunctionDocumentation::Arguments arguments_reinterpretAsString = {
-        {"x", "Value to reinterpret to string.", {"(U)Int*", "Float*", "Date", "DateTime"}}
+        {"x", "Value to reinterpret to string.", {"(U)Int*", "Float*", "Date", "DateTime", "Array"}}
     };
     FunctionDocumentation::ReturnedValue returned_value_reinterpretAsString = {"String containing bytes representing `x`.", {"String"}};
     FunctionDocumentation::Examples examples_reinterpretAsString = {
@@ -1126,6 +1127,17 @@ SELECT
 ┌─reinterpretAsString(toDateTime('1970-01-01 01:01:05'))─┬─reinterpretAsString(toDate('1970-03-07'))─┐
 │ A                                                      │ A                                         │
 └────────────────────────────────────────────────────────┴───────────────────────────────────────────┘
+        )"
+    },
+    {
+        "Array to String example",
+        R"(
+SELECT hex(reinterpretAsString([toUInt16(0x0102), toUInt16(0x0304)]::Array(UInt16))) AS array_of_UInt16_to_string
+        )",
+        R"(
+┌─array_of_UInt16_to_string─┐
+│ 02010403                  │
+└───────────────────────────┘
         )"
     }
     };
