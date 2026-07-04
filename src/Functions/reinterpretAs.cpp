@@ -413,11 +413,17 @@ private:
                 data.remove_prefix(1);
 #endif
             data_to.resize(offset + data.size());
+            /// `data` can have a null pointer with zero size (e.g. an empty `Array` source, whose
+            /// `getDataAt` returns an empty range), and passing a null pointer to `memcpy` is undefined
+            /// behavior even when the size is zero. Skip the copy in that case.
+            if (!data.empty())
+            {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-            memcpy(&data_to[offset], data.data(), data.size());
+                memcpy(&data_to[offset], data.data(), data.size());
 #else
-            reverseMemcpy(&data_to[offset], data.data(), data.size());
+                reverseMemcpy(&data_to[offset], data.data(), data.size());
 #endif
+            }
             offset += data.size();
             offsets_to[i] = offset;
         }
