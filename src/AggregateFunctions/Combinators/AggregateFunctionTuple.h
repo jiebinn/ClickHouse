@@ -72,7 +72,6 @@ public:
     bool hasTrivialDestructor() const override;
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override;
-    void addManyDefaults(AggregateDataPtr __restrict place, const IColumn ** columns, size_t length, Arena * arena) const override;
     void addBatch( /// NOLINT
         size_t row_begin,
         size_t row_end,
