@@ -301,16 +301,16 @@ struct TestKeeperMultiRequest final : MultiRequest<RequestPtr>, TestKeeperReques
 
 std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Container & container, int64_t zxid) const
 {
-    Create2Response response;
-    response.zxid = zxid;
+    CreateResponse base_response;
+    base_response.zxid = zxid;
     Undo undo;
 
     if (container.contains(path))
     {
         if (not_exists)
-            response.error = Error::ZOK;
+            base_response.error = Error::ZOK;
         else
-            response.error = Error::ZNODEEXISTS;
+            base_response.error = Error::ZNODEEXISTS;
     }
     else
     {
@@ -318,11 +318,11 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
 
         if (it == container.end())
         {
-            response.error = Error::ZNONODE;
+            base_response.error = Error::ZNONODE;
         }
         else if (it->second.is_ephemeral)
         {
-            response.error = Error::ZNOCHILDRENFOREPHEMERALS;
+            base_response.error = Error::ZNOCHILDRENFOREPHEMERALS;
         }
         else
         {
@@ -348,8 +348,7 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
             /// Increment sequential number even if node is not sequential
             ++it->second.seq_num;
 
-            response.path_created = path_created;
-            response.stat = created_node.stat;
+            base_response.path_created = path_created;
             container.emplace(path_created, std::move(created_node));
 
             undo = [&container, path_created, parent_path = it->first]
@@ -364,11 +363,23 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
             ++it->second.stat.cversion;
             ++it->second.stat.numChildren;
 
-            response.error = Error::ZOK;
+            base_response.error = Error::ZOK;
         }
     }
 
-    return { std::make_shared<Create2Response>(response), undo };
+    if (include_stats || include_ttl)
+    {
+        Create2Response response2;
+        static_cast<CreateResponse &>(response2) = base_response;
+        if (base_response.error == Error::ZOK)
+        {
+            const auto & node = container.at(base_response.path_created);
+            response2.stat = node.stat;
+        }
+        return { std::make_shared<Create2Response>(response2), undo };
+    }
+
+    return { std::make_shared<CreateResponse>(base_response), undo };
 }
 
 std::pair<ResponsePtr, Undo> TestKeeperRemoveRequest::process(TestKeeper::Container & container, int64_t zxid) const
@@ -790,7 +801,12 @@ std::pair<ResponsePtr, Undo> TestKeeperMultiRequest::processMultiRead(TestKeeper
     return { std::make_shared<MultiResponse>(response), {} };
 }
 
-ResponsePtr TestKeeperCreateRequest::createResponse() const { return std::make_shared<Create2Response>(); }
+ResponsePtr TestKeeperCreateRequest::createResponse() const
+{
+    if (include_stats || include_ttl)
+        return std::make_shared<Create2Response>();
+    return std::make_shared<CreateResponse>();
+}
 ResponsePtr TestKeeperRemoveRequest::createResponse() const { return std::make_shared<RemoveResponse>(); }
 ResponsePtr TestKeeperRemoveRecursiveRequest::createResponse() const { return std::make_shared<RemoveRecursiveResponse>(); }
 ResponsePtr TestKeeperExistsRequest::createResponse() const { return std::make_shared<ExistsResponse>(); }

@@ -117,26 +117,45 @@ TEST(TestKeeperTest, Create2ResponseHasStatInMulti)
 
     ASSERT_TRUE(keeper.isFeatureEnabled(KeeperFeatureFlag::CREATE_WITH_STATS));
 
-    auto req = std::make_shared<CreateRequest>();
-    req->path = "/node_with_stat";
-    req->data = "hello";
-    req->is_ephemeral = false;
-    req->is_sequential = false;
-    req->include_stats = true;
+    // Plain create (include_stats = false) must yield CreateResponse, not Create2Response,
+    // matching the real Keeper wire behaviour.
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = "/plain_node";
+        req->data = "data";
+        req->include_stats = false;
 
-    std::promise<MultiResponse> sink;
-    std::future<MultiResponse> future = sink.get_future();
-    keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
 
-    MultiResponse multi = future.get();
-    ASSERT_EQ(multi.error, Error::ZOK);
-    ASSERT_EQ(multi.responses.size(), 1u);
+        MultiResponse multi = future.get();
+        ASSERT_EQ(multi.error, Error::ZOK);
+        ASSERT_EQ(multi.responses.size(), 1u);
+        EXPECT_EQ(dynamic_cast<const Create2Response *>(multi.responses[0].get()), nullptr);
+    }
 
-    const auto * create2 = dynamic_cast<const Create2Response *>(multi.responses[0].get());
-    ASSERT_NE(create2, nullptr);
-    EXPECT_EQ(create2->path_created, "/node_with_stat");
-    EXPECT_EQ(create2->stat.dataLength, static_cast<int32_t>(std::string("hello").size()));
-    EXPECT_NE(create2->stat.czxid, 0);
+    // Create2 (include_stats = true) must yield Create2Response with stat populated.
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = "/node_with_stat";
+        req->data = "hello";
+        req->include_stats = true;
+
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+        MultiResponse multi = future.get();
+        ASSERT_EQ(multi.error, Error::ZOK);
+        ASSERT_EQ(multi.responses.size(), 1u);
+
+        const auto * create2 = dynamic_cast<const Create2Response *>(multi.responses[0].get());
+        ASSERT_NE(create2, nullptr);
+        EXPECT_EQ(create2->path_created, "/node_with_stat");
+        EXPECT_EQ(create2->stat.dataLength, static_cast<int32_t>(std::string("hello").size()));
+        EXPECT_NE(create2->stat.czxid, 0);
+    }
 }
 
 TEST(TestKeeperTest, FilteredListWithoutStatsAndData)
