@@ -5461,6 +5461,25 @@ function buildHistoryParams(params, tabName, fromRun, colorModes) {
     return out;
 }
 
+/// Compare two server addresses for connection identity, tolerating cosmetic differences that
+/// address the same endpoint (a trailing slash, an explicit default port). Used by the history
+/// restore gate (`window.onpopstate`) so re-typing e.g. `http://h:8123` as `http://h:8123/` does
+/// not stop restoring an entry produced on the same server. Falls back to an exact string compare
+/// when a value does not parse as a URL.
+function sameServerAddress(a, b) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    try {
+        const ua = new URL(a);
+        const ub = new URL(b);
+        return ua.protocol === ub.protocol
+            && ua.host === ub.host
+            && ua.pathname.replace(/\/+$/, '') === ub.pathname.replace(/\/+$/, '');
+    } catch (e) {
+        return false;
+    }
+}
+
 /// Write a browser-history entry + URL derived from the tab. The top-level query/params
 /// are the EDITOR state (also the URL hash and the de-dup key); `result` is the snapshot
 /// that produced the rendered result, carrying its OWN query/params so rendering/download
@@ -5482,12 +5501,16 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
         result: tab.result || null,
         tabId: tab.id,
         tabName: tab.title,
-        /// Stamp the connection this entry was written under. `connectionGeneration` is bumped by
-        /// `resetConnectionScopedState` on every `url`/`user`/`password` edit — the exact signal that
-        /// invalidates `selected_database` — so `window.onpopstate` can restore this entry's
-        /// `database=` selection using the SAME connection identity that invalidates it: only while
-        /// the live connection is still the one that produced the entry (see the restore gate there).
-        connectionGeneration: connectionGeneration,
+        /// Stamp the connection identity (server address and user) this entry was written under so
+        /// `window.onpopstate` can restore this entry's `database=` selection only while the live
+        /// connection still matches (see the restore gate there). These values survive a page
+        /// reload, unlike the earlier `connectionGeneration` counter, which reset to `0` on reload
+        /// and could then both restore a different connection's database and stop restoring the live
+        /// connection's. The password is deliberately never serialized (here or in the URL), so it
+        /// is not part of the identity: the selected database is a namespace on (server, user) and
+        /// survives re-authentication with a different password on the same server/user.
+        connectionServer: url_elem.value,
+        connectionUser: user_elem.value,
     };
     const title = "ClickHouse Query: " + (titleForDoc || tab.query);
     const history_params = buildHistoryParams(tab.params, tab.title, fromRun, tab.result && tab.result.color_modes);
@@ -5659,22 +5682,26 @@ window.onpopstate = function(event) {
     tab.lastSavedQuery = event.state.query;
     if (event.state.params) tab.params = event.state.params;
     /// Restore the connection-scoped selected database from the navigated URL — but ONLY when the
-    /// entry still belongs to the CURRENT connection. Connection settings (server address, user AND
+    /// entry still belongs to the CURRENT connection. Connection settings (server address, user and
     /// password) are global and are deliberately NOT restored by Back/Forward, so importing an
     /// entry's database into a different live connection would point the next run at a database that
-    /// may not exist there (e.g. replaying a server-B entry's `database=` against server A). Gate on
-    /// the very signal that invalidates the selection: `resetConnectionScopedState` bumps
-    /// `connectionGeneration` on every `url`/`user`/`password` edit (and clears `selected_database`),
-    /// and `writeHistoryEntry` stamps every entry with the generation it was written under. Comparing
-    /// those uses exactly the same connection identity as the invalidation path — so it neither fails
-    /// on a cosmetically different-but-equal server string (`http://h:8123` vs `http://h:8123/`,
-    /// which never bumped the generation) nor restores after a password-only change that already
-    /// invalidated the selection (both problems of the earlier raw url/user string compare). An entry
-    /// with no stamp (written before this code, or in a previous page instance whose in-memory
-    /// generation counter is gone) fails the check and is left untouched — the safe direction, since
-    /// we cannot confirm it belongs to the live connection. `location` already reflects the navigated
-    /// entry here (and after the restamp above); an absent `database=` means the server default.
-    if (event.state.connectionGeneration === connectionGeneration) {
+    /// may not exist there (e.g. replaying a server-B entry's `database=` against server A). Match on
+    /// the entry's stamped server address and user (`writeHistoryEntry`) — a durable identity that
+    /// survives a reload and never collides across connections, unlike the earlier process-local
+    /// `connectionGeneration` counter (it reset to `0` on reload, so afterwards it could both restore
+    /// a different connection's database into the live connection and stop restoring the live
+    /// connection's own entries). Server addresses are compared tolerating cosmetic differences (a
+    /// trailing slash, a default port) via `sameServerAddress`. The password is never part of the
+    /// identity — it is never serialized and is unknowable after a reload — so a same server/user
+    /// entry restores its database even across a password change: the selected database is a namespace
+    /// on (server, user), and wrong credentials fail loud on the next run rather than exposing another
+    /// server's data. An entry with no stamp (written before this code) fails the check and is left
+    /// untouched — the safe direction, since we cannot confirm it belongs to the live connection.
+    /// `location` already reflects the navigated entry here (and after the restamp above); an absent
+    /// `database=` means the server default.
+    if (event.state.connectionServer !== undefined
+        && sameServerAddress(event.state.connectionServer, url_elem.value)
+        && (event.state.connectionUser || '') === (user_elem.value || '')) {
         selected_database = new URL(location.href).searchParams.get('database');
         applySelectedDatabaseHighlight();
     }
