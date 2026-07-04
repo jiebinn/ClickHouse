@@ -101,11 +101,10 @@ AggregateFunctionTuple::AggregateFunctionTuple(
     , nested_functions(std::move(nested_and_type.functions))
     , nested_func_name(func_name)
 {
-    num_elements = nested_functions.size();
-    state_offsets.resize(num_elements);
+    state_offsets.resize(nested_functions.size());
 
     size_t offset = 0;
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
     {
         size_t align = nested_functions[i]->alignOfData();
         max_state_align = std::max(max_state_align, align);
@@ -145,7 +144,7 @@ void AggregateFunctionTuple::create(AggregateDataPtr __restrict place) const
     size_t i = 0;
     try
     {
-        for (; i < num_elements; ++i)
+        for (; i < nested_functions.size(); ++i)
             nested_functions[i]->create(place + state_offsets[i]);
     }
     catch (...)
@@ -158,13 +157,13 @@ void AggregateFunctionTuple::create(AggregateDataPtr __restrict place) const
 
 void AggregateFunctionTuple::destroy(AggregateDataPtr __restrict place) const noexcept
 {
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         nested_functions[i]->destroy(place + state_offsets[i]);
 }
 
 void AggregateFunctionTuple::destroyUpToState(AggregateDataPtr __restrict place) const noexcept
 {
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         nested_functions[i]->destroyUpToState(place + state_offsets[i]);
 }
 
@@ -298,19 +297,19 @@ void AggregateFunctionTuple::addBatchSinglePlaceNotNull( /// NOLINT
 
 void AggregateFunctionTuple::mergeImpl(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const
 {
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         nested_functions[i]->merge(place + state_offsets[i], rhs + state_offsets[i], arena);
 }
 
 void AggregateFunctionTuple::serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version) const
 {
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         nested_functions[i]->serialize(place + state_offsets[i], buf, version);
 }
 
 void AggregateFunctionTuple::deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> version, Arena * arena) const
 {
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         nested_functions[i]->deserialize(place + state_offsets[i], buf, version, arena);
 }
 
@@ -345,9 +344,9 @@ bool AggregateFunctionTuple::haveSameStateRepresentationImpl(const IAggregateFun
     const auto * rhs_tuple = typeid_cast<const AggregateFunctionTuple *>(&rhs);
     if (!rhs_tuple)
         return false;
-    if (num_elements != rhs_tuple->num_elements)
+    if (nested_functions.size() != rhs_tuple->nested_functions.size())
         return false;
-    for (size_t i = 0; i < num_elements; ++i)
+    for (size_t i = 0; i < nested_functions.size(); ++i)
         if (!nested_functions[i]->haveSameStateRepresentation(*rhs_tuple->nested_functions[i]))
             return false;
     return true;
@@ -368,9 +367,9 @@ DataTypePtr AggregateFunctionTuple::getNormalizedStateType() const
     /// that affects a state representation is already part of the corresponding nested normalized
     /// state type.
     DataTypes nested_normalized_state_types;
-    nested_normalized_state_types.reserve(num_elements);
+    nested_normalized_state_types.reserve(nested_functions.size());
     VectorWithMemoryTracking<AggregateFunctionPtr> normalized_nested_functions;
-    normalized_nested_functions.reserve(num_elements);
+    normalized_nested_functions.reserve(nested_functions.size());
     for (const auto & nested_function : nested_functions)
     {
         auto normalized_state_type = nested_function->getNormalizedStateType();

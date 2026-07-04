@@ -36,7 +36,6 @@ private:
     VectorWithMemoryTracking<size_t> state_offsets;
     size_t total_state_size = 0;
     size_t max_state_align = 1;
-    size_t num_elements;
     String nested_func_name;
 
     struct NestedFunctionsAndResultType
@@ -123,7 +122,7 @@ private:
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {
         auto & tuple_to = assert_cast<ColumnTuple &>(to);
-        for (size_t i = 0; i < num_elements; ++i)
+        for (size_t i = 0; i < nested_functions.size(); ++i)
         {
             if constexpr (merge)
                 nested_functions[i]->insertMergeResultInto(place + state_offsets[i], tuple_to.getColumn(i), arena);
@@ -136,7 +135,7 @@ private:
     /// Lets the hot batch paths run `recursiveRemoveSparse` exactly once per batch instead of per row.
     void addRowFromMaterialized(AggregateDataPtr __restrict place, const ColumnTuple & tuple_column, size_t row_num, Arena * arena) const
     {
-        for (size_t i = 0; i < num_elements; ++i)
+        for (size_t i = 0; i < nested_functions.size(); ++i)
         {
             const IColumn * nested_col = &tuple_column.getColumn(i);
             nested_functions[i]->add(place + state_offsets[i], &nested_col, row_num, arena);
