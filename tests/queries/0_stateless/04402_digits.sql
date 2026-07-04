@@ -33,8 +33,20 @@ SELECT digits(-123, 1), digits(toInt64(-9223372036854775808), 1);
 -- Narrow integer types
 SELECT digits(toUInt8(255), 2), digits(toInt8(-128), 1);
 
--- Non-constant columns exercise the per-row execution path
-SELECT n, digits(n, 2, 2) FROM (SELECT arrayJoin([12345, 67890, 1234567890]) AS n) ORDER BY n;
+-- Nullable offset: NULL rows return NULL instead of throwing
+SELECT digits(123, arrayJoin([NULL, 1]::Array(Nullable(Int8))));
+
+-- LowCardinality offset
+SELECT digits(123, toLowCardinality(number + 1)) FROM numbers(2);
+
+-- Nullable value inside a constant column (Const(Nullable)) returns NULL
+SELECT digits(123, CAST(NULL, 'Nullable(Int8)'));
+
+-- Large UInt64 offset beyond INT64_MAX is past the end and returns 0 (not reinterpreted as negative)
+SELECT digits(1234567890, toUInt64(9223372036854775808));
+
+-- Large UInt64 length beyond INT64_MAX keeps all digits (not reinterpreted as -1)
+SELECT digits(1234567891, 1, toUInt64(18446744073709551615));
 
 -- server errors
 SELECT digits(1234567890, 0); -- {serverError ZERO_ARRAY_OR_TUPLE_INDEX}
