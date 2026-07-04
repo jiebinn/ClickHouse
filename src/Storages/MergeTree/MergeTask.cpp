@@ -1013,14 +1013,12 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare() const
 
 bool MergeTask::enabledBlockNumberColumn(GlobalRuntimeContextPtr global_ctx)
 {
-    return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_number_column]
-        && global_ctx->metadata_snapshot->getGroupByTTLs().empty();
+    return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_number_column];
 }
 
 bool MergeTask::enabledBlockOffsetColumn(GlobalRuntimeContextPtr global_ctx)
 {
-    return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_offset_column]
-        && global_ctx->metadata_snapshot->getGroupByTTLs().empty();
+    return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_offset_column];
 }
 
 void MergeTask::addGatheringColumn(GlobalRuntimeContextPtr global_ctx, const String & name, const DataTypePtr & type)
