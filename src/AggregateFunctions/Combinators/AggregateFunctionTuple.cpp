@@ -365,28 +365,32 @@ bool AggregateFunctionTuple::haveSameStateRepresentationImpl(const IAggregateFun
 DataTypePtr AggregateFunctionTuple::getNormalizedStateType() const
 {
     /// Unlike `-Array` / `-If`, the `-Tuple` state is a concatenation of per-element nested states,
-    /// so we cannot delegate to a single nested function. Two tuple states that differ only in
-    /// finalization parameters (for example quantile levels) have the same state representation and
-    /// must normalize to the same type, so callers that need a common type can unify them
-    /// (`UNION ALL` of `quantilesTDigestTupleState(0.5)` and `quantilesTDigestTupleState(0.9)`).
-    /// The nested function name is identical across elements and already excludes parameters, so it
-    /// is enough to normalize the shared parameters using the nested function's own normalization
-    /// (e.g. `quantile*` collapses the level to `1`) and the argument types like the base
-    /// implementation, while keeping the tuple wrapper.
-    DataTypes normalized_argument_types;
-    normalized_argument_types.reserve(argument_types.size());
-    for (const auto & argument_type : argument_types)
-        normalized_argument_types.emplace_back(argument_type->getNormalizedType());
+    /// so we cannot delegate to a single nested function. Two tuple states are interchangeable
+    /// exactly when their nested states are interchangeable pairwise, and the normalized type
+    /// encodes that: its argument types are the nested normalized state types (compared recursively
+    /// by `DataTypeAggregateFunction::equals`), and its function is a `-Tuple` wrapper rebuilt
+    /// around the normalized nested functions, so that its name uses the canonical nested spelling.
+    /// This unifies spellings with identical states (`quantileExactTuple` and `quantilesExactTuple`
+    /// both normalize to a `quantilesExact`-based name), states that do not depend on the argument
+    /// types (`countTuple` normalizes to `count()` elements regardless of the tuple element types),
+    /// and placeholder elements for only-null types. The parameters are dropped: every parameter
+    /// that affects a state representation is already part of the corresponding nested normalized
+    /// state type.
+    DataTypes nested_normalized_state_types;
+    nested_normalized_state_types.reserve(num_elements);
+    VectorWithMemoryTracking<AggregateFunctionPtr> normalized_nested_functions;
+    normalized_nested_functions.reserve(num_elements);
+    for (const auto & nested_function : nested_functions)
+    {
+        auto normalized_state_type = nested_function->getNormalizedStateType();
+        normalized_nested_functions.push_back(assert_cast<const DataTypeAggregateFunction &>(*normalized_state_type).getFunction());
+        nested_normalized_state_types.push_back(std::move(normalized_state_type));
+    }
 
-    /// Keep the nested normalized state type alive in a local variable while we read its parameters:
-    /// `getNormalizedStateType` returns a freshly allocated `DataTypePtr` that holds the only
-    /// reference, so binding a reference directly to `*nested_functions.front()->getNormalizedStateType()`
-    /// would dangle once that temporary is destroyed at the end of the statement, turning the
-    /// `getParameters` call below into a use-after-free.
-    const DataTypePtr nested_normalized_state = nested_functions.front()->getNormalizedStateType();
-    const auto & nested_normalized_state_function = assert_cast<const DataTypeAggregateFunction &>(*nested_normalized_state);
-    return std::make_shared<DataTypeAggregateFunction>(
-        shared_from_this(), normalized_argument_types, nested_normalized_state_function.getParameters());
+    String normalized_nested_name = normalized_nested_functions.front()->getName();
+    AggregateFunctionPtr normalized_function(new AggregateFunctionTuple(
+        normalized_nested_name, argument_types, Array{}, {std::move(normalized_nested_functions), getResultType()}));
+    return std::make_shared<DataTypeAggregateFunction>(std::move(normalized_function), nested_normalized_state_types, Array{});
 }
 
 namespace
