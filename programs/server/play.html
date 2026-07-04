@@ -3569,7 +3569,11 @@ let opened_databases = new Set();
 /// default database (`&database=`) for queries run from the editor, so unqualified table
 /// names resolve against it. It is cleared when the connection settings change (see
 /// `resetConnectionScopedState`), since it refers to a database on the previous connection.
-let selected_database = null;
+/// It is a connection-scoped setting (like the server address and user), so it is seeded from
+/// the URL and serialized back into every history URL by `buildHistoryParams`: a shared or
+/// reloaded link — including an auto-run `run=1` link — then resolves unqualified names against
+/// the same database, instead of silently falling back to the server default.
+let selected_database = current_url.searchParams.get('database');
 
 let load_databases_request_num = 0;
 async function loadDatabases(server_address, user, password) {
@@ -3616,11 +3620,19 @@ async function loadDatabases(server_address, user, password) {
             || a.database.localeCompare(b.database, undefined, { numeric: true });
     });
 
+    /// The selected database survives closing and reopening the panel (it is only cleared on a
+    /// connection change) and can be seeded from the URL, but the reopen path never re-runs a
+    /// `set_current` load, so the highlight would otherwise snap back to `currentDatabase()` and
+    /// the panel would show a different database than the one unqualified names actually resolve
+    /// against. Highlight the selected database when it still exists; otherwise fall back to the
+    /// server's current database.
+    const has_selected = selected_database && json.data.some(e => e.database === selected_database);
+
     for (let elem of json.data) {
         let database = document.createElement('div');
         database.className = 'database';
         let database_link = document.createElement('button');
-        if (elem.current) database_link.className = 'current';
+        if (has_selected ? elem.database === selected_database : elem.current) database_link.className = 'current';
         database_link.append(elem.database);
         database.appendChild(database_link);
         let tables = document.createElement('div');
@@ -4246,7 +4258,7 @@ let controller = null;
 /// Returns { format, reply, response_ok, is_table, is_raw, is_chart, is_image, is_error }.
 /// The caller is responsible for top-level UI (download buttons, history, favicon).
 /// `abortController` is an AbortController that can be used to cancel this query.
-async function postImpl(posted_request_num, query, targetResultEl, abortController, paramValuesSnapshot)
+async function postImpl(posted_request_num, query, targetResultEl, abortController, paramValuesSnapshot, query_database)
 {
     const user = user_elem.value;
     const password = password_elem.value;
@@ -4263,7 +4275,7 @@ async function postImpl(posted_request_num, query, targetResultEl, abortControll
     url += '&use_query_cache=1&enable_reads_from_query_cache=0&enable_writes_to_query_cache=1&query_cache_ttl=600&query_cache_nondeterministic_function_handling=save&query_cache_system_table_handling=ignore';
 
     /// If the user selected a database in the panel, use it as the default database.
-    if (selected_database) url += '&database=' + encodeURIComponent(selected_database);
+    if (query_database) url += '&database=' + encodeURIComponent(query_database);
 
     for (const [name, value] of Object.entries(paramValuesSnapshot))
     {
@@ -4415,6 +4427,10 @@ async function postImpl(posted_request_num, query, targetResultEl, abortControll
 async function postSingle(posted_request_num, query, history_query_text, params_restore_pending)
 {
     const paramValuesSnapshot = resolveRunParams(params_restore_pending);
+    /// Snapshot the selected database for this run, so the request URL, the saved result
+    /// snapshot, and a later download all use the database the query actually ran against,
+    /// even if the panel selection changes while the query is in flight.
+    const query_database = selected_database;
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4424,7 +4440,7 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     progressEl.start();
 
     controller = new AbortController();
-    const result = await postImpl(posted_request_num, query, resultEl, controller, paramValuesSnapshot);
+    const result = await postImpl(posted_request_num, query, resultEl, controller, paramValuesSnapshot, query_database);
 
     if (result.cancelled) return;
 
@@ -4449,6 +4465,7 @@ async function postSingle(posted_request_num, query, history_query_text, params_
                 data: result.reply.length > 100000 ? null : result.reply,
                 elapsed_ns: 1e6 * (performance.now() - last_query_start),
                 params: paramValuesSnapshot,
+                database: query_database,
             });
         }
         return;
@@ -4463,6 +4480,7 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     document.getElementById('copy-div').style.display = result.is_raw ? 'block' : 'none';
     last_query_for_download = query;
     last_params_for_download = paramValuesSnapshot;
+    last_database_for_download = query_database;
 
     if (result.is_raw || result.is_image) {
         resultEl.elapsedNs = 1e6 * (performance.now() - last_query_start);
@@ -4490,6 +4508,7 @@ async function postSingle(posted_request_num, query, history_query_text, params_
         data: result.reply.length > 100000 ? null : result.reply,
         elapsed_ns: elapsed_ns,
         params: paramValuesSnapshot,
+        database: query_database,
     });
 }
 
@@ -4503,6 +4522,8 @@ let multiQueryControllers = [];
 async function postMulti(posted_request_num, parsed, params_restore_pending)
 {
     const paramValuesSnapshot = resolveRunParams(params_restore_pending);
+    /// Snapshot the selected database for this run (see `postImpl`); all statements run against it.
+    const query_database = selected_database;
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4592,7 +4613,7 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
         const promises = group.indices.map(i => {
             const ac = new AbortController();
             multiQueryControllers.push(ac);
-            return postImpl(posted_request_num, parsed[i].query, resultElements[i], ac, paramValuesSnapshot)
+            return postImpl(posted_request_num, parsed[i].query, resultElements[i], ac, paramValuesSnapshot, query_database)
                 .then(result => ({ index: i, result }));
         });
 
@@ -4656,6 +4677,7 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
         multi: multi,
         elapsed_ns: elapsed_ns,
         params: paramValuesSnapshot,
+        database: query_database,
     }, parsed[0].query);
 }
 
@@ -4824,6 +4846,9 @@ async function restoreFromHistory(state, token) {
     document.getElementById('copy-div').style.display = 'none';
     last_query_for_download = result.query || '';
     last_params_for_download = result.params || {};
+    /// Follows the PRODUCING database (snapshotted in the result), so a download after navigating
+    /// to this entry reproduces the displayed result even if the panel selection has since changed.
+    last_database_for_download = result.database || '';
     query_area.value = state.query;
     query_area.dispatchEvent(new Event('input'));
     /// Graph detection keys off the producing query, so a snapshot still renders as a graph
@@ -5341,6 +5366,10 @@ function buildHistoryParams(params, tabName, fromRun, colorModes) {
     /// `DROP`/`INSERT`), because startup treats a `run=1` URL as authoritative.
     if (run_immediately && fromRun) out.push('run=1');
     if (server_address != location.origin) out.push('url=' + encodeURIComponent(server_address));
+    /// The selected database is a connection-scoped setting (like `user`/`url`): carry it so a
+    /// shared or reloaded link resolves unqualified table names against the same database, and an
+    /// auto-run `run=1` link reproduces the run instead of hitting the server default database.
+    if (selected_database) out.push('database=' + encodeURIComponent(selected_database));
     for (const [name, value] of Object.entries(params || {})) {
         /// Serialize every parameter, including empty strings: an empty value is valid for a
         /// String parameter and must be distinguishable from "absent" on load (read back with
@@ -5451,6 +5480,10 @@ function saveHistory(stateData, titleForDoc) {
         /// from the editor text in tab.query); used for rendering/graph-detection/downloads.
         query: stateData.resultQuery ?? stateData.query,
         params: stateData.params,    /// the params that produced this result
+        /// The default database in effect when this result was produced, so navigating back to
+        /// this entry (or reloading its `run=1` URL) reproduces the run and download against the
+        /// same database rather than the current panel selection or the server default.
+        database: stateData.database,
         format: stateData.format,
         ok: stateData.ok,
         data: stateData.data,
@@ -5547,6 +5580,7 @@ window.onpopstate = function(event) {
             ran: true,
             query: flat.query,
             params: flat.params || {},
+            database: flat.database,
             format: flat.format,
             ok: flat.ok,
             data: flat.data ?? null,
@@ -7851,6 +7885,9 @@ document.getElementById('copy-div').addEventListener('click', function() {
 // Download functionality
 let last_query_for_download = '';
 let last_params_for_download = {};
+/// The default database that produced the downloadable result (snapshotted at run time and on
+/// restore), so Download stays tied to the displayed result even if the panel selection changes.
+let last_database_for_download = '';
 
 // Toggle download dropdown
 document.getElementById('download-div').addEventListener('click', function(e) {
@@ -7994,7 +8031,7 @@ document.getElementById('download-button').addEventListener('click', async funct
         '&http_response_headers=' + encodeURIComponent(`{'Content-Disposition':'attachment; filename="result.${encodeURIComponent(extension)}"'}`);
     if (user) url += '&user=' + encodeURIComponent(user);
     if (password) url += '&password=' + encodeURIComponent(password);
-    if (selected_database) url += '&database=' + encodeURIComponent(selected_database);
+    if (last_database_for_download) url += '&database=' + encodeURIComponent(last_database_for_download);
 
     for (const [name, value] of Object.entries(last_params_for_download))
     {
