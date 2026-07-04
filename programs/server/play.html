@@ -3572,8 +3572,15 @@ let opened_databases = new Set();
 /// It is a connection-scoped setting (like the server address and user), so it is seeded from
 /// the URL and serialized back into every history URL by `buildHistoryParams`: a shared or
 /// reloaded link — including an auto-run `run=1` link — then resolves unqualified names against
-/// the same database, instead of silently falling back to the server default.
+/// the same database, instead of silently falling back to the server default. It is likewise
+/// restored from the navigated URL by `window.onpopstate`, so a Back/Forward step also moves it
+/// (and the panel highlight) to the database that produced the entry being restored.
 let selected_database = current_url.searchParams.get('database');
+
+/// The server's current database (`currentDatabase()`), recorded while building the database
+/// panel. The highlight falls back to it when nothing is selected (e.g. after a history
+/// navigation to an entry that carried no `database=`), without re-querying `system.databases`.
+let server_current_database = null;
 
 let load_databases_request_num = 0;
 async function loadDatabases(server_address, user, password) {
@@ -3620,19 +3627,18 @@ async function loadDatabases(server_address, user, password) {
             || a.database.localeCompare(b.database, undefined, { numeric: true });
     });
 
-    /// The selected database survives closing and reopening the panel (it is only cleared on a
-    /// connection change) and can be seeded from the URL, but the reopen path never re-runs a
-    /// `set_current` load, so the highlight would otherwise snap back to `currentDatabase()` and
-    /// the panel would show a different database than the one unqualified names actually resolve
-    /// against. Highlight the selected database when it still exists; otherwise fall back to the
-    /// server's current database.
-    const has_selected = selected_database && json.data.some(e => e.database === selected_database);
+    /// Record the server's current database so the highlight can fall back to it (see
+    /// `applySelectedDatabaseHighlight`) without re-querying `system.databases`.
+    server_current_database = (json.data.find(e => e.current) || {}).database ?? null;
 
     for (let elem of json.data) {
         let database = document.createElement('div');
         database.className = 'database';
         let database_link = document.createElement('button');
-        if (has_selected ? elem.database === selected_database : elem.current) database_link.className = 'current';
+        /// The database name is stamped as a data attribute (not read back from the button text,
+        /// which also carries the table-count badge) so `applySelectedDatabaseHighlight` can move
+        /// the `.current` class between rows without rebuilding the list.
+        database_link.dataset.database = elem.database;
         database_link.append(elem.database);
         database.appendChild(database_link);
         let tables = document.createElement('div');
@@ -3747,6 +3753,30 @@ async function loadDatabases(server_address, user, password) {
         if (opened_databases.has(elem.database)) {
             openDatabase(false);
         }
+    }
+
+    /// The selected database survives closing and reopening the panel (it is only cleared on a
+    /// connection change) and can be seeded from the URL, but the reopen path never re-runs a
+    /// `set_current` load, so the highlight would otherwise snap back to `currentDatabase()` and
+    /// the panel would show a different database than the one unqualified names actually resolve
+    /// against. Highlight the selected database (or fall back to the server's current one).
+    applySelectedDatabaseHighlight();
+}
+
+/// Move the `.current` highlight of the database panel to `selected_database` (or, when nothing
+/// is selected or the selection no longer exists, to the server's current database), without
+/// reloading the list. Used both while building the list in `loadDatabases` and after a history
+/// navigation changes `selected_database`, so the open panel always shows the database that the
+/// next run and unqualified names actually resolve against. A no-op when the panel is empty.
+function applySelectedDatabaseHighlight() {
+    const databases_elem = document.getElementById('databases');
+    if (!databases_elem) return;
+    const buttons = databases_elem.querySelectorAll('button[data-database]');
+    const has_selected = selected_database
+        && Array.from(buttons).some(b => b.dataset.database === selected_database);
+    const target = has_selected ? selected_database : server_current_database;
+    for (const button of buttons) {
+        button.classList.toggle('current', button.dataset.database === target);
     }
 }
 
@@ -5435,10 +5465,16 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
 /// the tab is clean; a "Run selected" result stores only the selected statement, so it compares
 /// unequal to the full editor and conservatively drops the marker (its URL hash is the whole
 /// editor and could not reproduce that single-statement result anyway).
+/// The selected database is part of "what would re-run": a `run=1` URL also carries `database=`
+/// from the live selection, so if the panel selection has moved away from the database that
+/// produced the result, re-running would hit a different database. Drop the marker in that case
+/// (comparing normalized: an absent/empty selection means the server default), so a database-only
+/// selection change never leaves a shared/reloaded `run=1` link auto-running against the wrong one.
 function tabReflectsRun(tab) {
     return !!(tab && tab.result && tab.result.ran
         && tab.query === tab.result.query
-        && JSON.stringify(tab.params || {}) === JSON.stringify(tab.result.params || {}));
+        && JSON.stringify(tab.params || {}) === JSON.stringify(tab.result.params || {})
+        && (selected_database || null) === (tab.result.database || null));
 }
 
 /// Refresh the current browser-history entry in place from the given tab's captured editor
@@ -5565,6 +5601,13 @@ window.onpopstate = function(event) {
     /// newer entry that `writeHistoryEntry` last recorded, not at this one).
     tab.lastSavedQuery = event.state.query;
     if (event.state.params) tab.params = event.state.params;
+    /// Restore the connection-scoped selected database from the navigated URL (symmetric with the
+    /// initial page-load seed): a `run=1` entry serializes `database=`, so Back/Forward must move
+    /// the selection — and the panel highlight — to the database that produced this entry, instead
+    /// of leaving the next run pointed at the previous (now off-screen) selection. Absent means the
+    /// server default. `location` already reflects the navigated entry here (and after the restamp).
+    selected_database = new URL(location.href).searchParams.get('database');
+    applySelectedDatabaseHighlight();
     /// Adopt the entry's result snapshot (its own producing query/params), or clear it. This
     /// avoids leaving a stale snapshot attached to a different query. Modern entries nest the
     /// snapshot under `result`; legacy flat entries (predating per-tab state) store the produced
@@ -6833,6 +6876,7 @@ function resetConnectionScopedState() {
     closeCompletions();
     opened_databases.clear();
     selected_database = null;
+    server_current_database = null;
     /// A panel that is already open keeps showing the previous connection's databases, and every
     /// row handler closes over the url/user/password captured when the list was loaded, so
     /// clicking a row (or its refresh button) would keep querying the previous server. Close the
