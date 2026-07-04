@@ -322,12 +322,16 @@ public:
                 /// Source is an Array of fixed size elements, destination is String.
                 /// callOnTwoTypeIndexes above does not dispatch on the Array type index, so this case
                 /// (the inverse of String/FixedString -> Array) is handled here. ColumnArray::getDataAt
-                /// exposes each row's elements as one contiguous byte range, which executeToString copies.
+                /// exposes each row's elements as one contiguous byte range, which we copy verbatim.
+                /// Unlike the scalar executeToString, trailing zero bytes are NOT trimmed: the String ->
+                /// Array path requires the byte length to be an exact multiple of the element size and does
+                /// not pad, so trimming would break the round-trip (e.g. [toInt32(1)] would become a
+                /// 1-byte string that can no longer be reinterpreted as Array(Int32)).
                 const IColumn & src = *arguments[0].column;
                 MutableColumnPtr dst = result_type->createColumn();
 
                 ColumnString * dst_concrete = assert_cast<ColumnString *>(dst.get());
-                executeToString(src, *dst_concrete, input_rows_count);
+                executeContiguousToString(src, *dst_concrete, input_rows_count);
 
                 result = std::move(dst);
             }
@@ -412,6 +416,31 @@ private:
             while (!data.empty() && data.front() == 0)
                 data.remove_prefix(1);
 #endif
+            data_to.resize(offset + data.size());
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+            memcpy(&data_to[offset], data.data(), data.size());
+#else
+            reverseMemcpy(&data_to[offset], data.data(), data.size());
+#endif
+            offset += data.size();
+            offsets_to[i] = offset;
+        }
+    }
+
+    /// Copies each row's contiguous byte range verbatim into a String, without the trailing-zero
+    /// trimming that executeToString does. Used for the Array -> String reinterpret, which must be an
+    /// exact byte-for-byte inverse of String -> Array (see the call site for why trimming is wrong here).
+    static void NO_INLINE executeContiguousToString(const IColumn & src, ColumnString & dst, size_t input_rows_count)
+    {
+        ColumnString::Chars & data_to = dst.getChars();
+        ColumnString::Offsets & offsets_to = dst.getOffsets();
+        offsets_to.resize(input_rows_count);
+
+        ColumnString::Offset offset = 0;
+        for (size_t i = 0; i < input_rows_count; ++i)
+        {
+            std::string_view data = src.getDataAt(i);
+
             data_to.resize(offset + data.size());
             /// `data` can have a null pointer with zero size (e.g. an empty `Array` source, whose
             /// `getDataAt` returns an empty range), and passing a null pointer to `memcpy` is undefined

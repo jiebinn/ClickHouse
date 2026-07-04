@@ -13,6 +13,19 @@ SELECT hex(reinterpret([toInt32(1), toInt32(2), toInt32(3)]::Array(Int32), 'Stri
 SELECT hex(reinterpretAsString([toUInt16(0x0102), toUInt16(0x0304)]::Array(UInt16)));
 SELECT hex(reinterpret(['ab', 'cd']::Array(FixedString(2)), 'String'));
 
+SELECT 'Trailing zero bytes are copied verbatim, not trimmed';
+-- The scalar reinterpretAsString trims trailing zero bytes (the String -> scalar path pads them
+-- back), but the Array path must NOT trim: the String -> Array path requires an exact byte multiple
+-- of the element size and does not pad, so trimming would break the round-trip and lose elements.
+SELECT hex(reinterpret([toInt32(1)]::Array(Int32), 'String'));
+SELECT hex(reinterpret([toUInt8(1), toUInt8(0)]::Array(UInt8), 'String'));
+SELECT hex(reinterpret([toUInt16(0x0100), toUInt16(0)]::Array(UInt16), 'String'));
+
+SELECT 'Round-trips through String preserve every element, including trailing zeros';
+SELECT reinterpret(reinterpret([toInt32(1)]::Array(Int32), 'String'), 'Array(Int32)');
+SELECT reinterpret(reinterpret([toUInt8(1), toUInt8(0)]::Array(UInt8), 'String'), 'Array(UInt8)');
+SELECT reinterpret(reinterpret([toInt32(1), toInt32(0), toInt32(2)]::Array(Int32), 'String'), 'Array(Int32)');
+
 SELECT 'The exact scenario from the issue (round-trips through String)';
 WITH [toBFloat16(1.5), toBFloat16(-2.25), toBFloat16(3.0)]::Array(BFloat16) AS target
 SELECT reinterpret(reinterpret(target, 'String'), 'Array(BFloat16)');

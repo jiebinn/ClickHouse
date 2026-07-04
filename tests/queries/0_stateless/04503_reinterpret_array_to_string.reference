@@ -4,16 +4,24 @@ String
 Verify output bytes are correct
 0102FF
 02010403
-010000000200000003
+010000000200000003000000
 02010403
 61626364
+Trailing zero bytes are copied verbatim, not trimmed
+01000000
+0100
+00010000
+Round-trips through String preserve every element, including trailing zeros
+[1]
+[1,0]
+[1,0,2]
 The exact scenario from the issue (round-trips through String)
 [1.5,-2.25,3]
 Empty array reinterprets to an empty string
 0
 Array element type must be fixed length and contiguous
 LowCardinality nested element is stripped and works
-0100000002
+0100000002000000
 A few rows read from a table
 1	0102
 2	0A141E
