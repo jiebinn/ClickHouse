@@ -2259,6 +2259,11 @@ class QueryResultElement extends HTMLElement
 
         this._dataTable.classList.remove('fixed');
         this._dataDiv.classList.remove('fixed');
+        /// Drop the stale single-row marker: it is recomputed in `applyColumnColors` once the new
+        /// result finishes rendering. Clearing it here means that while rows are still streaming in,
+        /// the toggles follow the default hover behavior instead of staying hidden because the
+        /// previous result had at most a single row.
+        this._dataTable.classList.remove('hide-colorize-toggle');
 
         this._extremes = {};
         this._totals = null;
