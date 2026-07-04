@@ -5462,19 +5462,26 @@ function buildHistoryParams(params, tabName, fromRun, colorModes) {
 }
 
 /// Compare two server addresses for connection identity, tolerating cosmetic differences that
-/// address the same endpoint (a trailing slash, an explicit default port). Used by the history
-/// restore gate (`window.onpopstate`) so re-typing e.g. `http://h:8123` as `http://h:8123/` does
-/// not stop restoring an entry produced on the same server. Falls back to an exact string compare
-/// when a value does not parse as a URL.
+/// address the same endpoint (a trailing slash, an explicit default port) while still separating
+/// endpoints that differ in the request target. Used by the history restore gate
+/// (`window.onpopstate`) so re-typing e.g. `http://h:8123` as `http://h:8123/` does not stop
+/// restoring an entry produced on the same server. The query string IS significant: the request URL
+/// is built by concatenating `url_elem.value` and preserving any existing `?...` (see `postImpl`),
+/// so `http://h:8123/?cluster=a` and `http://h:8123/?cluster=b` are different endpoints (a different
+/// cluster/namespace/settings) and must not share a restored `database=`. Relative addresses (e.g.
+/// `/clickhouse`) are resolved against the current page so they parse and normalize their trailing
+/// slash; both operands come from the same `url_elem.value` field, so this is symmetric. Falls back
+/// to an exact string compare when a value does not parse as a URL.
 function sameServerAddress(a, b) {
     if (a === b) return true;
     if (a == null || b == null) return false;
     try {
-        const ua = new URL(a);
-        const ub = new URL(b);
+        const ua = new URL(a, location.href);
+        const ub = new URL(b, location.href);
         return ua.protocol === ub.protocol
             && ua.host === ub.host
-            && ua.pathname.replace(/\/+$/, '') === ub.pathname.replace(/\/+$/, '');
+            && ua.pathname.replace(/\/+$/, '') === ub.pathname.replace(/\/+$/, '')
+            && ua.search === ub.search;
     } catch (e) {
         return false;
     }
@@ -5690,13 +5697,15 @@ window.onpopstate = function(event) {
     /// survives a reload and never collides across connections, unlike the earlier process-local
     /// `connectionGeneration` counter (it reset to `0` on reload, so afterwards it could both restore
     /// a different connection's database into the live connection and stop restoring the live
-    /// connection's own entries). Server addresses are compared tolerating cosmetic differences (a
-    /// trailing slash, a default port) via `sameServerAddress`. The password is never part of the
-    /// identity — it is never serialized and is unknowable after a reload — so a same server/user
-    /// entry restores its database even across a password change: the selected database is a namespace
-    /// on (server, user), and wrong credentials fail loud on the next run rather than exposing another
-    /// server's data. An entry with no stamp (written before this code) fails the check and is left
-    /// untouched — the safe direction, since we cannot confirm it belongs to the live connection.
+    /// connection's own entries). Server addresses are compared via `sameServerAddress`, tolerating
+    /// cosmetic differences (a trailing slash, a default port) but keeping the query string
+    /// significant, since it is part of the request target (a different cluster/namespace/settings).
+    /// The password is never part of the identity — it is never serialized and is unknowable after a
+    /// reload — so a same server/user entry restores its database even across a password change: the
+    /// selected database is a namespace on (server, user), and wrong credentials fail loud on the next
+    /// run rather than exposing another server's data. An entry with no stamp (written before this
+    /// code) fails the check and is left untouched — the safe direction, since we cannot confirm it
+    /// belongs to the live connection.
     /// `location` already reflects the navigated entry here (and after the restamp above); an absent
     /// `database=` means the server default.
     if (event.state.connectionServer !== undefined
