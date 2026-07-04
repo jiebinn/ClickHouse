@@ -794,7 +794,7 @@ Nesta execução, apenas as novas linhas são adicionadas diretamente à tabela 
 
 Historicamente, o ClickHouse oferecia apenas suporte limitado a atualizações e exclusões, na forma de [mutações](/pt-BR/reference/statements/alter/index) assíncronas. Elas podem exigir uso de E/S extremamente intensivo e, em geral, devem ser evitadas.
 
-O ClickHouse 22.8 introduziu as [exclusões leves](/snippets/delete), e o ClickHouse 25.7 introduziu as [atualizações leves](/pt-BR/reference/statements/update). Com a introdução dessas funcionalidades, as alterações feitas por consultas de atualização individuais, mesmo quando materializadas de forma assíncrona, serão refletidas instantaneamente para o usuário.
+O ClickHouse 22.8 introduziu as [exclusões leves](/pt-BR/reference/statements/delete), e o ClickHouse 25.7 introduziu as [atualizações leves](/pt-BR/reference/statements/update). Com a introdução dessas funcionalidades, as alterações feitas por consultas de atualização individuais, mesmo quando materializadas de forma assíncrona, serão refletidas instantaneamente para o usuário.
 
 Esse modo pode ser configurado para um modelo por meio do parâmetro `incremental_strategy`, ou seja.
 

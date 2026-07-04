@@ -63,7 +63,7 @@ UPDATE wikistat SET hits = hits + 1, time = now() WHERE path = 'ClickHouse';
   ## عمليات `DELETE` الخفيفة
 </div>
 
-يمكن تنفيذ استعلام [lightweight `DELETE`](/snippets/delete) على شكل `UPDATE` خفيف الوزن بدلًا من mutation `ALTER UPDATE`. ويُتحكَّم في تنفيذ lightweight `DELETE` من خلال الإعداد [`lightweight_delete_mode`](/ar/reference/settings/session-settings#lightweight_delete_mode).
+يمكن تنفيذ استعلام [lightweight `DELETE`](/ar/reference/statements/delete) على شكل `UPDATE` خفيف الوزن بدلًا من mutation `ALTER UPDATE`. ويُتحكَّم في تنفيذ lightweight `DELETE` من خلال الإعداد [`lightweight_delete_mode`](/ar/reference/settings/session-settings#lightweight_delete_mode).
 
 <div id="performance-considerations">
   ## اعتبارات الأداء
@@ -145,5 +145,5 @@ GRANT ALTER UPDATE ON db.table TO username;
 </div>
 
 * [`ALTER UPDATE`](/ar/reference/statements/alter/update) - عمليات `UPDATE` الثقيلة
-* [Lightweight `DELETE`](/snippets/delete) - عمليات `DELETE` خفيفة الوزن
+* [Lightweight `DELETE`](/ar/reference/statements/delete) - عمليات `DELETE` خفيفة الوزن
 * [`APPLY PATCHES`](/ar/reference/statements/alter/apply-patches) - فرض التخزين المادي للتصحيحات في أجزاء البيانات (عملية mutation)

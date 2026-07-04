@@ -30,7 +30,7 @@ DELETE FROM posts WHERE toYear(CreationDate) = 2018
 
 Eliminar grandes volúmenes de datos con la sentencia de eliminación ligera `DELETE` también puede afectar negativamente al rendimiento de las consultas `SELECT`. Además, este comando no es compatible con tablas que tengan proyecciones.
 
-Tenga en cuenta que en esta operación se utiliza una mutación para [marcar las filas eliminadas](/snippets/delete#how-lightweight-deletes-work-internally-in-clickhouse) (añadiendo una columna `_row_exists`), lo que genera cierta E/S.
+Tenga en cuenta que en esta operación se utiliza una mutación para [marcar las filas eliminadas](/es/reference/statements/delete#how-lightweight-deletes-work-internally-in-clickhouse) (añadiendo una columna `_row_exists`), lo que genera cierta E/S.
 
 En general, deben preferirse las eliminaciones ligeras frente a las mutaciones si se puede tolerar que los datos eliminados sigan existiendo en disco (por ejemplo, en casos sin requisitos de cumplimiento). Aun así, debe evitarse este enfoque si es necesario eliminar todos los datos.
 

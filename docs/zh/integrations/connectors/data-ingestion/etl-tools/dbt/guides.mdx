@@ -794,7 +794,7 @@ WHERE id > (SELECT max(id) FROM imdb_dbt.actor_summary) OR updated_at > (SELECT 
 
 一直以来，ClickHouse 对更新和删除的支持都比较有限，主要通过异步的[变更](/zh/reference/statements/alter/index)实现。这类操作可能会产生极高的 IO 开销，因此通常应尽量避免。
 
-ClickHouse 22.8 引入了[轻量级删除](/snippets/delete)，ClickHouse 25.7 引入了[轻量级更新](/zh/reference/statements/update)。随着这些功能的推出，单条更新查询带来的修改即使以异步方式物化，从用户视角看也会立即生效。
+ClickHouse 22.8 引入了[轻量级删除](/zh/reference/statements/delete)，ClickHouse 25.7 引入了[轻量级更新](/zh/reference/statements/update)。随着这些功能的推出，单条更新查询带来的修改即使以异步方式物化，从用户视角看也会立即生效。
 
 可以通过 `incremental_strategy` 参数为模型配置此模式，即
 

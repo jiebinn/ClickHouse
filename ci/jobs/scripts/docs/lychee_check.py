@@ -319,12 +319,55 @@ def run_lychee(cmd, cwd):
     return proc.returncode
 
 
+# A markdown link or href/src to a /snippets/... path. Snippet files are
+# imported inline, not served as pages, so such a link has no route and no
+# redirect -- it 404s on the site. lychee resolves it against the on-disk file
+# and wrongly passes it, so reject it explicitly. Imports
+# (`import X from '/snippets/..'`) do not match: they have no `](`/`href=` prefix.
+SNIPPET_LINK = re.compile(r"""(?:\]\(|(?:href|src)\s*=\s*\{?['"])(/snippets/[^\s)'"#]+)""")
+
+
+def report_snippet_links(docs_root, rel_files):
+    # Report every link to a /snippets/... path as an error (returns the count).
+    errors = 0
+    for rel in sorted(rel_files):
+        if not rel.endswith((".md", ".mdx")):
+            continue
+        with open(os.path.join(docs_root, rel), encoding="utf-8", errors="replace") as f:
+            for i, line in enumerate(f, 1):
+                for m in SNIPPET_LINK.finditer(line):
+                    print(f"[ERROR] {rel} (at {i}) | links to {m.group(1)} -- "
+                          "snippets are imported inline, not routable pages",
+                          flush=True)
+                    errors += 1
+    if errors:
+        print(f"\n{errors} link(s) to non-routable /snippets/ paths.", flush=True)
+    return errors
+
+
+def locale_markdown_files(docs_root):
+    # All .md/.mdx under the top-level locale trees and localized snippet trees.
+    files = []
+    for d in LOCALE_DIRS:
+        for sub in (d, os.path.join("snippets", d)):
+            base = os.path.join(docs_root, sub)
+            for root, _dirs, names in os.walk(base):
+                for n in names:
+                    if n.endswith((".md", ".mdx")):
+                        files.append(os.path.relpath(os.path.join(root, n), docs_root))
+    return files
+
+
 def check_links(docs_root):
     dest = tempfile.mkdtemp(prefix="lychee-links-")
     build_tree(docs_root, dest)
-    return run_lychee(
+    rc = run_lychee(
         ["lychee", "--mode", "color", "--offline", "--include-fragments", "."], dest
     )
+    # lychee cannot tell a snippet file (imported, not a page) from a real page,
+    # so it blesses /snippets/... links; reject them here over the same inputs.
+    rc_snip = report_snippet_links(docs_root, dump_inputs(docs_root))
+    return rc or (1 if rc_snip else 0)
 
 
 def check_locale_links(docs_root):
@@ -346,9 +389,11 @@ def check_locale_links(docs_root):
         print("No locale directories present; nothing to check.", flush=True)
         return 0
     cfg = write_locale_config(docs_root, dest)
-    return run_lychee(
+    rc = run_lychee(
         ["lychee", "--config", cfg, "--mode", "color", "--offline", *inputs], dest
     )
+    rc_snip = report_snippet_links(docs_root, locale_markdown_files(docs_root))
+    return rc or (1 if rc_snip else 0)
 
 
 def check_redirects(docs_root):
