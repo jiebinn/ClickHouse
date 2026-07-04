@@ -11,12 +11,19 @@ from ci.praktika.utils import Utils
 # locale checks run only when a PR touches one of these folders -- or the
 # checkers themselves -- so ordinary English-only edits don't pay for them.
 LOCALE_DIRS = ["ar", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh"]
-LOCALE_CHECK_TRIGGERS = tuple(f"docs/{d}/" for d in LOCALE_DIRS) + tuple(
-    f"docs/snippets/{d}/" for d in LOCALE_DIRS
-) + (
+LOCALE_CHECK_TRIGGERS = tuple(f"docs/{d}/" for d in LOCALE_DIRS) + (
     "ci/jobs/scripts/docs/lychee_check.py",
     "ci/jobs/scripts/docs/locale_components_check.py",
     "docs/lychee.toml",
+    # Shared inputs the locale resolvers depend on, so a PR that touches them can
+    # break localized navigation and must re-run the locale checks even when no
+    # docs/<locale>/ page changed:
+    #  - all of snippets/ (locale pages import/link both localized snippets and
+    #    shared English snippets, e.g. /snippets/delete);
+    #  - redirect sources, which count as valid locale link targets (e.g.
+    #    /<locale>/integrations resolves only via a redirect).
+    "docs/snippets/",
+    "docs/_site/redirects.json",
 )
 
 
