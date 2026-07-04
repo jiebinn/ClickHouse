@@ -106,7 +106,7 @@ public:
 
 private:
     /// Delegating constructor: receives the pre-built nested functions and result type
-    /// produced by initNested(), so each nested function is created exactly once.
+    /// produced by `initNested`, so each nested function is created exactly once.
     AggregateFunctionTuple(
         const String & func_name,
         const DataTypes & arguments,
@@ -127,7 +127,7 @@ private:
     }
 
     /// Per-row add that assumes the caller has already materialized the outer tuple (no sparse children).
-    /// Lets the hot batch paths run recursiveRemoveSparse exactly once per batch instead of per row.
+    /// Lets the hot batch paths run `recursiveRemoveSparse` exactly once per batch instead of per row.
     void addRowFromMaterialized(AggregateDataPtr __restrict place, const ColumnTuple & tuple_column, size_t row_num, Arena * arena) const
     {
         for (size_t i = 0; i < num_elements; ++i)

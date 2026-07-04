@@ -188,7 +188,7 @@ bool AggregateFunctionTuple::hasTrivialDestructor() const
 void AggregateFunctionTuple::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
 {
     /// Per-row fallback path: materialize sparse children defensively so callers that bypass
-    /// our batch overrides (e.g. direct add() calls in tests or future code paths) stay correct.
+    /// our batch overrides (e.g. direct `add` calls in tests or future code paths) stay correct.
     /// The hot paths (addBatch/addBatchSinglePlace) materialize once up front and use
     /// addRowFromMaterialized to avoid paying this cost per row.
     ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
@@ -200,8 +200,8 @@ void AggregateFunctionTuple::addManyDefaults(AggregateDataPtr __restrict place, 
 {
     /// Reached from the sparse aggregation path for long runs of default values. Materialize the
     /// outer tuple once and add its default row directly, instead of delegating to
-    /// IAggregateFunctionHelper::addManyDefaults, which would route each of the `length` iterations
-    /// back through add() and rerun recursiveRemoveSparse (allocating a new ColumnTuple) per row.
+    /// `IAggregateFunctionHelper::addManyDefaults`, which would route each of the `length` iterations
+    /// back through `add` and rerun `recursiveRemoveSparse` (allocating a new `ColumnTuple`) per row.
     ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
     const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
     for (size_t i = 0; i < length; ++i)
@@ -217,11 +217,11 @@ void AggregateFunctionTuple::addBatch( /// NOLINT
     Arena * arena,
     ssize_t if_argument_pos) const
 {
-    /// MergeTree may store individual Tuple elements as ColumnSparse while the outer ColumnTuple is dense.
+    /// `MergeTree` may store individual `Tuple` elements as `ColumnSparse` while the outer `ColumnTuple` is dense.
     /// Nested aggregate functions cast their column to its concrete type, so we materialize once per batch.
-    /// Note: we call addRowFromMaterialized directly in the row loop instead of delegating to
-    /// IAggregateFunctionHelper::addBatch, because that would route back through our add() override
-    /// and rerun recursiveRemoveSparse on every row.
+    /// Note: we call `addRowFromMaterialized` directly in the row loop instead of delegating to
+    /// `IAggregateFunctionHelper::addBatch`, because that would route back through our `add` override
+    /// and rerun `recursiveRemoveSparse` on every row.
     ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
     const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
 
@@ -280,9 +280,9 @@ void AggregateFunctionTuple::addBatchSinglePlaceNotNull( /// NOLINT
     Arena * arena,
     ssize_t if_argument_pos) const
 {
-    /// Reached from AggregateFunctionNullUnary::addBatchSinglePlace for Nullable(Tuple(...)) inputs.
+    /// Reached from `AggregateFunctionNullUnary::addBatchSinglePlace` for `Nullable(Tuple(...))` inputs.
     /// Materialize the outer tuple once per batch instead of letting the base implementation route
-    /// each surviving row back through add(), which would rerun recursiveRemoveSparse per row.
+    /// each surviving row back through `add`, which would rerun `recursiveRemoveSparse` per row.
     ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
     const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
 
@@ -372,7 +372,7 @@ DataTypePtr AggregateFunctionTuple::getNormalizedStateType() const
     /// around the normalized nested functions, so that its name uses the canonical nested spelling.
     /// This unifies spellings with identical states (`quantileExactTuple` and `quantilesExactTuple`
     /// both normalize to a `quantilesExact`-based name), states that do not depend on the argument
-    /// types (`countTuple` normalizes to `count()` elements regardless of the tuple element types),
+    /// types (`countTuple` normalizes to `count` elements regardless of the tuple element types),
     /// and placeholder elements for only-null types. The parameters are dropped: every parameter
     /// that affects a state representation is already part of the corresponding nested normalized
     /// state type.
@@ -422,7 +422,7 @@ public:
 
         /// Return a representative element type as a placeholder so that the factory can resolve the nested function name.
         /// Prefer the first non-only-null element: if the first element happens to be `Nullable(Nothing)`, the recursive
-        /// `get()` would wrap with the `Null` combinator and collapse to `AggregateFunctionNothing*`, which would then
+        /// `get` would wrap with the `Null` combinator and collapse to `AggregateFunctionNothing*`, which would then
         /// be used as the base function name and force every per-element nested function to also collapse to Nothing.
         /// The actual per-element functions are still created inside AggregateFunctionTuple based on real elem_types.
         for (const auto & type : elem_types)
@@ -448,7 +448,7 @@ void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory & factory)
 {
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorTuple>(), Documentation{
-        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take a single Tuple argument and aggregate each tuple element independently, producing a tuple of per-element results.",
+        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take a single `Tuple` argument and aggregate each tuple element independently, producing a tuple of per-element results.",
         .syntax = "<aggregate_function>Tuple",
         .related = {"Array", "ForEach", "Map"}});
 }

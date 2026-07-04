@@ -121,9 +121,9 @@ Converts an aggregate function for tables into an aggregate function for arrays 
 
 ## -Tuple {#-tuple}
 
-The -Tuple suffix can be appended to any aggregate function with single argument. In this case, the aggregate function takes a single argument of Tuple type, and applies the aggregation independently to each element of the Tuple, returning a Tuple of results.
+The `-Tuple` suffix can be appended to any aggregate function with a single argument. In this case, the aggregate function takes a single argument of `Tuple` type, and applies the aggregation independently to each element of the `Tuple`, returning a `Tuple` of results.
 
-If the input Tuple has explicit element names, they are preserved in the result.
+If the input `Tuple` has explicit element names, they are preserved in the result.
 
 **Syntax**
 
@@ -133,11 +133,11 @@ If the input Tuple has explicit element names, they are preserved in the result.
 
 **Arguments**
 
-- `tuple_column` — A column of `Tuple` type. Each element of the Tuple must be a type supported by the underlying aggregate function.
+- `tuple_column` — A column of `Tuple` type. Each element of the `Tuple` must be a type supported by the underlying aggregate function.
 
 **Returned values**
 
-- A Tuple containing the result of applying the aggregate function to each element independently.
+- A `Tuple` containing the result of applying the aggregate function to each element independently.
 
 Type: `Tuple(aggFunction(element1), aggFunction(element2), ...)`.
 
@@ -164,7 +164,7 @@ Result:
 └─────────────┘
 ```
 
-Using with GROUP BY:
+Using with `GROUP BY`:
 
 ```sql
 SELECT
@@ -188,7 +188,7 @@ ORDER BY k;
 └───┴─────────────┘
 ```
 
--Tuple can be combined with other combinators such as -If. For example: `sumTupleIf(tuple_column, cond)`.
+`-Tuple` can be combined with other combinators such as `-If`. For example: `sumTupleIf(tuple_column, cond)`.
 
 ## -Distinct {#-distinct}
 
