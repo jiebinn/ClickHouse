@@ -129,7 +129,7 @@ SELECT sumTuple([1, 2, 3]); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 -- Error: empty tuple
 SELECT sumTuple(tuple()); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 
--- Sparse-serialized tuple elements must not crash with `Bad cast from ColumnSparse`.
+-- Sparse-serialized tuple elements must not throw a `Bad cast from ColumnSparse` exception.
 SELECT 'sparse tuple';
 DROP TABLE IF EXISTS test_tuple_sparse;
 CREATE TABLE test_tuple_sparse (x Tuple(Int64, Float64)) ENGINE = MergeTree ORDER BY tuple() SETTINGS ratio_of_defaults_for_sparse_serialization = 0.1;

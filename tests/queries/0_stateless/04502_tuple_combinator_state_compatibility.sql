@@ -1,9 +1,9 @@
--- The -Tuple state is a concatenation of per-element nested states, so two -Tuple states must be
--- interchangeable (common type resolution, -Merge acceptance) exactly when the nested states are
+-- The `-Tuple` state is a concatenation of per-element nested states, so two `-Tuple` states must be
+-- interchangeable (common type resolution, `-Merge` acceptance) exactly when the nested states are
 -- interchangeable pairwise.
 
 SELECT 'alias spellings unify';
--- quantileExact and quantilesExact share the same state representation, so their -Tuple states
+-- `quantileExact` and `quantilesExact` share the same state representation, so their `-Tuple` states
 -- resolve to a common type and states from both spellings merge together.
 SELECT quantilesExactTupleMerge(0.5)(s)
 FROM
@@ -14,7 +14,7 @@ FROM
 );
 
 SELECT 'argument-independent states unify';
--- The count state does not depend on the argument types, so countTuple states over same-arity
+-- The `count` state does not depend on the argument types, so `countTuple` states over same-arity
 -- tuples with different element types resolve to a common type.
 SELECT countTupleMerge(s)
 FROM
@@ -54,7 +54,7 @@ FROM (SELECT quantileExactTupleState(0.5)((toFloat64(number), NULL)) AS s FROM n
 
 SELECT 'plain only-null placeholder ignores parameters';
 -- The placeholder compatibility lives at the aggregate function level, so plain functions (and any
--- other combinator) behave like -Tuple. An only-null aggregation collapses to a plain NULL at query
+-- other combinator) behave like `-Tuple`. An only-null aggregation collapses to a plain `NULL` at query
 -- level, so build the placeholder state (a single zero byte) from its serialization.
 SELECT quantileExactMerge(0.9)(CAST(unhex('00'), 'AggregateFunction(quantileExact(0.5), Nullable(Nothing))'));
 
