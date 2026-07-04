@@ -1,0 +1,73 @@
+-- Tests CAST between two QBit types that differ in the element type and/or the stride (the number of stride groups),
+-- while keeping the dimension. Such a cast reconstructs the source vector at its native precision and re-transposes it
+-- into the target layout, so it must agree with building the target QBit directly from the reconstructed Array; an
+-- element-type-preserving (stride-only) cast must additionally be lossless (it is a pure byte permutation). Changing
+-- the dimension is rejected in 03364_qbit_negative.
+
+SELECT 'Element type change (dimension and stride preserved); QBit prints as its reconstructed vector';
+SELECT [1, 2, 3, 4]::QBit(Float32, 4)::QBit(Float64, 4);
+SELECT [1, 2, 3, 4]::QBit(Float64, 4)::QBit(Float32, 4);
+SELECT [1, 2, 3, 4]::QBit(Float32, 4)::QBit(BFloat16, 4);
+SELECT [1, 2, 3, 4]::QBit(BFloat16, 4)::QBit(Float32, 4);
+SELECT [10, -20, 30, -40]::QBit(Int8, 4)::QBit(Float64, 4);
+SELECT [10, -20, 30, -40]::QBit(Float64, 4)::QBit(Int8, 4);
+
+SELECT 'The bit-transposed storage is identical to building the target QBit directly from the vector';
+-- QBit is comparable for equality, so this compares the underlying transposed FixedStrings byte for byte.
+SELECT [1, 2, 3, 4]::QBit(Float32, 4)::QBit(Float64, 4) = [1, 2, 3, 4]::QBit(Float64, 4);
+SELECT [1, 2, 3, 4]::QBit(BFloat16, 4)::QBit(Float32, 4) = [1, 2, 3, 4]::QBit(Float32, 4);
+SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(Float32, 16) = range(16)::Array(Float32)::QBit(Float32, 16);
+SELECT range(16)::Array(Float32)::QBit(Float32, 16)::QBit(Float32, 16, 8) = range(16)::Array(Float32)::QBit(Float32, 16, 8);
+SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(Float64, 16) = range(16)::Array(Float32)::QBit(Float64, 16);
+
+SELECT 'Stride-only change is lossless (same element type); exercises the byte-permutation fast path';
+SELECT range(16)::Array(Float32)::QBit(Float32, 16)::QBit(Float32, 16, 8)::Array(Float32) = range(16)::Array(Float32);
+SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(Float32, 16)::Array(Float32) = range(16)::Array(Float32);
+SELECT range(32)::Array(Float64)::QBit(Float64, 32, 16)::QBit(Float64, 32, 8)::Array(Float64) = range(32)::Array(Float64);
+SELECT range(32)::Array(Int8)::QBit(Int8, 32, 8)::QBit(Int8, 32, 16)::Array(Int8) = range(32)::Array(Int8);
+SELECT range(64)::Array(BFloat16)::QBit(BFloat16, 64, 8)::QBit(BFloat16, 64, 32)::Array(BFloat16) = range(64)::Array(BFloat16);
+
+SELECT 'Narrowing loses precision exactly like the corresponding Array narrowing';
+SELECT [0.1, 0.2, 0.3, 0.4]::QBit(Float64, 4)::QBit(Float32, 4)::Array(Float32) = [0.1, 0.2, 0.3, 0.4]::Array(Float32);
+SELECT [0.1, 0.2, 0.3, 0.4]::QBit(Float64, 4)::QBit(BFloat16, 4)::Array(BFloat16) = [0.1, 0.2, 0.3, 0.4]::Array(BFloat16);
+
+SELECT 'Simultaneous element-type and stride change';
+SELECT range(16)::Array(Float32)::QBit(Float32, 16, 8)::QBit(Float64, 16)::Array(Float64) = range(16)::Array(Float64);
+SELECT range(32)::Array(Float64)::QBit(Float64, 32, 16)::QBit(Float32, 32, 8)::Array(Float32) = range(32)::Array(Float32);
+
+SELECT 'Materialized (non-constant) source column';
+SELECT materialize([1, 2, 3, 4]::QBit(Float32, 4))::QBit(Float64, 4)::Array(Float64);
+SELECT materialize(range(16)::Array(Float32)::QBit(Float32, 16, 8))::QBit(Float32, 16)::Array(Float32) = range(16)::Array(Float32);
+
+SELECT 'From a table with multiple rows including a default (all-zero) row';
+DROP TABLE IF EXISTS qbit_cast_params_test;
+CREATE TABLE qbit_cast_params_test (id UInt32, vec QBit(Float32, 16, 8)) ENGINE = Memory;
+INSERT INTO qbit_cast_params_test VALUES (1, range(16)), (2, arrayReverse(range(16)));
+INSERT INTO qbit_cast_params_test (id) VALUES (3);
+SELECT id, CAST(vec AS QBit(Float64, 16))::Array(Float64) FROM qbit_cast_params_test ORDER BY id;
+SELECT id, CAST(vec AS QBit(Float32, 16))::Array(Float32) FROM qbit_cast_params_test ORDER BY id;
+DROP TABLE qbit_cast_params_test;
+
+SELECT 'Nullable source: NULL stays NULL when the target is also Nullable';
+DROP TABLE IF EXISTS qbit_cast_params_nullable;
+CREATE TABLE qbit_cast_params_nullable (id UInt32, vec Nullable(QBit(Float32, 4))) ENGINE = Memory;
+INSERT INTO qbit_cast_params_nullable VALUES (1, [1, 2, 3, 4]), (2, NULL), (3, [5, 6, 7, 8]);
+SELECT id, CAST(vec AS Nullable(QBit(Float64, 4))) IS NULL FROM qbit_cast_params_nullable ORDER BY id;
+-- Values on the non-NULL rows are preserved (Nullable target, so a NULL row could never fail the cast).
+SELECT id, CAST(vec AS Nullable(QBit(Float64, 4)))::Array(Float64) FROM qbit_cast_params_nullable WHERE vec IS NOT NULL ORDER BY id;
+DROP TABLE qbit_cast_params_nullable;
+
+SELECT 'Nullable source with a stride-only change (byte-permutation fast path)';
+DROP TABLE IF EXISTS qbit_cast_params_nullable_stride;
+CREATE TABLE qbit_cast_params_nullable_stride (id UInt32, vec Nullable(QBit(Float32, 16, 8))) ENGINE = Memory;
+INSERT INTO qbit_cast_params_nullable_stride VALUES (1, range(16)), (2, NULL), (3, arrayReverse(range(16)));
+SELECT id, CAST(vec AS Nullable(QBit(Float32, 16))) IS NULL FROM qbit_cast_params_nullable_stride ORDER BY id;
+SELECT id, CAST(vec AS Nullable(QBit(Float32, 16)))::Array(Float32) FROM qbit_cast_params_nullable_stride WHERE vec IS NOT NULL ORDER BY id;
+DROP TABLE qbit_cast_params_nullable_stride;
+
+SELECT 'Casting a NULL to a non-Nullable QBit fails';
+SELECT CAST(materialize(CAST(NULL AS Nullable(QBit(Float32, 4)))) AS QBit(Float64, 4)); -- { serverError CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN }
+
+SELECT 'accurateCastOrNull between QBit types';
+SELECT accurateCastOrNull([1, 2, 3, 4]::QBit(Float32, 4), 'QBit(Float64, 4)')::Array(Float64);
+SELECT accurateCastOrNull([1, 2, 3, 4]::QBit(Float64, 4), 'QBit(Float32, 4)')::Array(Float32);
