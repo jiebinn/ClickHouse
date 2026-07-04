@@ -26,6 +26,7 @@ struct MergeTreeDataPartTTLInfo
     /// again for merge with multiple parts.
     std::optional<bool> ttl_finished;
     bool finished() const { return ttl_finished.value_or(false); }
+    bool initialized() const { return min != 0 || max != 0; }
 
     void update(time_t time);
     void update(const MergeTreeDataPartTTLInfo & other_info);

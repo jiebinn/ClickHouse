@@ -248,14 +248,13 @@ bool MergeTreeDataPartTTLInfos::hasAnyNonFinishedTTLs() const
     auto has_non_finished_ttl = [] (const TTLInfoMap & map) -> bool
     {
         for (const auto & [name, info] : map)
-        {
-            if (!info.finished())
+            if (info.initialized() && !info.finished())
                 return true;
-        }
+
         return false;
     };
 
-    if (!table_ttl.finished())
+    if (table_ttl.initialized() && !table_ttl.finished())
         return true;
 
     if (has_non_finished_ttl(columns_ttl))
