@@ -11,5 +11,5 @@ SELECT system.numbers GLOBAL NOT IN (1, 2, 3); -- { serverError ILLEGAL_TYPE_OF_
 
 -- Legitimate uses of IN keep working.
 SELECT 2 IN (1, 2, 3);
-SELECT 'system' IN (SELECT database FROM system.tables) LIMIT 1;
+SELECT 'system' IN (SELECT name FROM system.databases) LIMIT 1;
 SELECT count() FROM system.one WHERE dummy IN (SELECT number FROM numbers(3));
