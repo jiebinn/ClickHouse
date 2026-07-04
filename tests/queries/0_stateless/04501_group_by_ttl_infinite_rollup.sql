@@ -1,5 +1,4 @@
 -- Regression test for https://github.com/ClickHouse/ClickHouse/issues/105647
--- Parts rolled up by `GROUP BY` TTL must not be selected for a TTL merge again and again.
 
 DROP TABLE IF EXISTS test_ttl_group_by SYNC;
 
@@ -7,7 +6,9 @@ CREATE TABLE test_ttl_group_by (key UInt32, ts DateTime, value UInt32)
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY key
-TTL ts + INTERVAL 3 MONTH GROUP BY key SET value = sum(value);
+TTL ts + INTERVAL 3 MONTH GROUP BY key SET value = sum(value),
+    ts + INTERVAL 50 YEAR DELETE
+SETTINGS merge_with_ttl_timeout = 0;
 
 INSERT INTO test_ttl_group_by VALUES (1, '2020-01-01 00:00:00', 1), (1, '2021-01-01 00:00:00', 2), (1, '2020-01-01 00:00:00', 1), (1, '2021-01-01 00:00:00', 2);
 
