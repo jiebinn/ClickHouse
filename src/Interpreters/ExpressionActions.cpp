@@ -922,6 +922,16 @@ Columns ExpressionActions::executeOnColumns(
     bool dry_run,
     CheckCancelled check_cancelled) const
 {
+    /// The chunk must match the fixed input header positionally. The block-based path validated this
+    /// implicitly via `Block::cloneWithColumns`; keep the same guard here, because both `header.getByPosition`
+    /// and the cached `input_positions_for_header` index the inputs by position without bounds checks.
+    if (columns.size() != header.columns())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Cannot execute expression on columns positionally: the input header [{}] has {} columns, "
+            "but {} columns were given",
+            header.dumpStructure(), header.columns(), columns.size());
+
     /// Build the inputs positionally from the fixed header; no `Block` (and hence no name index) is created.
     ColumnsWithTypeAndName inputs;
     inputs.reserve(columns.size());
