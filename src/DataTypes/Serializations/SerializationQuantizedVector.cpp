@@ -65,6 +65,11 @@ void readVectorRow(const ColumnArray & col_arr, size_t row, std::vector<float> &
 /// already a representative sample once it has well more than `k` rows).
 constexpr size_t PQ_MAX_TRAINING_VECTORS = 100000;
 
+/// Also cap the training sample by a byte budget: the flat training buffer holds `n * dimensions` floats, so a large
+/// `dimensions` (up to ~2M is representable within the FixedString codebook limit) combined with the vector cap above
+/// would otherwise reserve tens of GiB. Bound `n` so the buffer never exceeds this budget.
+constexpr size_t PQ_MAX_TRAINING_BYTES = 256 * 1024 * 1024;
+
 /// Write state for the `pq` method: the codebook is trained from the first block and reused for the whole part, then
 /// written once at the suffix (mirrors LowCardinality's per-part dictionary lifecycle).
 struct SerializeStatePQ : public ISerialization::SerializeBinaryBulkState
@@ -302,7 +307,8 @@ std::vector<float> SerializationQuantizedVector::trainCodebook(const IColumn & c
     if (!col_arr)
         throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column with a Quantize codec must be an Array");
 
-    const size_t n = std::min(count, PQ_MAX_TRAINING_VECTORS);
+    const size_t budget_vectors = std::max<size_t>(1, PQ_MAX_TRAINING_BYTES / (params.dimensions * sizeof(float)));
+    const size_t n = std::min({count, PQ_MAX_TRAINING_VECTORS, budget_vectors});
     std::vector<float> flat(n * params.dimensions);
     std::vector<float> buf;
     for (size_t i = 0; i < n; ++i)

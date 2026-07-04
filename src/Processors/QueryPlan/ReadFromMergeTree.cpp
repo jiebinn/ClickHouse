@@ -3253,6 +3253,32 @@ void ReadFromMergeTree::addReadColumn(const String & column)
         return;
 
     all_column_names.emplace_back(column);
+
+    /// A PREWHERE / row-level-filter ActionsDAG only outputs the columns it was built with, and `transformHeader` below
+    /// runs the read header through it. A column added here after analysis (e.g. the `Quantize` companion subcolumns
+    /// pulled in by the quantized-vector-search rewrite) is neither an input nor an output of those DAGs, so it would be
+    /// dropped after PREWHERE and the rewrite would then fail to find it. Pass it through, mirroring
+    /// `restorePrewhereInputs` but also for a column that is not yet an input of the DAG.
+    const auto column_type = storage_snapshot->getSampleBlockForColumns({column}).getByName(column).type;
+    auto pass_through_filter = [&](ActionsDAG & dag)
+    {
+        if (dag.tryFindInOutputs(column))
+            return;
+        for (const auto * input : dag.getInputs())
+        {
+            if (input->result_name == column)
+            {
+                dag.getOutputs().push_back(input);
+                return;
+            }
+        }
+        dag.getOutputs().push_back(&dag.addInput(column, column_type));
+    };
+    if (query_info.row_level_filter)
+        pass_through_filter(query_info.row_level_filter->actions);
+    if (query_info.prewhere_info)
+        pass_through_filter(query_info.prewhere_info->prewhere_actions);
+
     output_header = std::make_shared<const Block>(MergeTreeSelectProcessor::transformHeader(
         storage_snapshot->getSampleBlockForColumns(all_column_names),
         query_info.row_level_filter,
