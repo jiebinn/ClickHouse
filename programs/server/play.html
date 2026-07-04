@@ -5487,6 +5487,25 @@ function sameServerAddress(a, b) {
     }
 }
 
+/// The effective user of a connection. The user can be given either in the explicit `user` field
+/// or embedded in the server URL's userinfo (`http://alice@host:8123/`), and the request sends the
+/// field value only when it is non-empty (see `postImpl`), otherwise the URL userinfo authenticates
+/// the request. The selected database is a namespace on (server, user), so the identity must fold in
+/// the userinfo user: `sameServerAddress` compares the endpoint (`host`, not the authority), so
+/// `http://alice@host:8123/` and `http://bob@host:8123/` look like the same server there and must be
+/// separated by their user. The field takes precedence over the userinfo, mirroring how the request
+/// is built. The userinfo may be percent-encoded, so decode it (falling back to the raw value on a
+/// malformed escape) before comparing.
+function effectiveConnectionUser(serverAddress, fieldUser) {
+    if (fieldUser) return fieldUser;
+    try {
+        const raw = new URL(serverAddress, location.href).username;
+        try { return decodeURIComponent(raw); } catch (e) { return raw; }
+    } catch (e) {
+        return '';
+    }
+}
+
 /// Write a browser-history entry + URL derived from the tab. The top-level query/params
 /// are the EDITOR state (also the URL hash and the de-dup key); `result` is the snapshot
 /// that produced the rendered result, carrying its OWN query/params so rendering/download
@@ -5697,7 +5716,12 @@ window.onpopstate = function(event) {
     /// survives a reload and never collides across connections, unlike the earlier process-local
     /// `connectionGeneration` counter (it reset to `0` on reload, so afterwards it could both restore
     /// a different connection's database into the live connection and stop restoring the live
-    /// connection's own entries). Server addresses are compared via `sameServerAddress`, tolerating
+    /// connection's own entries). The user is compared as an EFFECTIVE user
+    /// (`effectiveConnectionUser`) that folds in any userinfo embedded in the server URL, so
+    /// `http://alice@host:8123/` and `http://bob@host:8123/` with an empty user field are kept
+    /// distinct even though `sameServerAddress` sees the same endpoint; without this a Back/Forward
+    /// could restore one user's selection into another user's session on the same host. Server
+    /// addresses are compared via `sameServerAddress`, tolerating
     /// cosmetic differences (a trailing slash, a default port) but keeping the query string
     /// significant, since it is part of the request target (a different cluster/namespace/settings).
     /// The password is never part of the identity — it is never serialized and is unknowable after a
@@ -5710,7 +5734,8 @@ window.onpopstate = function(event) {
     /// `database=` means the server default.
     if (event.state.connectionServer !== undefined
         && sameServerAddress(event.state.connectionServer, url_elem.value)
-        && (event.state.connectionUser || '') === (user_elem.value || '')) {
+        && effectiveConnectionUser(event.state.connectionServer, event.state.connectionUser)
+            === effectiveConnectionUser(url_elem.value, user_elem.value)) {
         selected_database = new URL(location.href).searchParams.get('database');
         applySelectedDatabaseHighlight();
     }
