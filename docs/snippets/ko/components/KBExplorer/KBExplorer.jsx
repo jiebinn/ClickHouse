@@ -130,7 +130,7 @@ export const KBExplorer = ({ index, featured = [] }) => {
       return {
         id: f.id,
         image: f.image,
-        href: (article && article.href) || `/resources/support-center/knowledge-base/${f.id}`,
+        href: (article && article.href) || `/ko/resources/support-center/knowledge-base/${f.id}`,
         title: (article && article.title) || ""
       }
     })

@@ -34,6 +34,11 @@ SKIP_PREFIXES = ("/images/", "/assets/", "/_site/", "/.well-known/", "/docs/")
 SKIP_EXACT = {"/docs", "/"}
 # `href: "/x"`, `href="/x"`, `href={'/x'}`, `to: "/x"`, ...
 HREF = re.compile(r"""\b(?:href|to)\s*[:=]\s*\{?\s*(['"`])(/[^'"`\s]+)\1""")
+# A template literal whose static prefix is a doc path, e.g.
+# `` `/get-started/quickstarts/${f.id}` `` -- the href fallbacks in
+# QuickStartsGrid/KBExplorer. lychee and the static HREF pattern both miss these,
+# yet they are exactly what the "featured" cards render. Capture the static base.
+TEMPLATE = re.compile(r"`(/[A-Za-z0-9][A-Za-z0-9/_.#-]*)\$\{")
 
 
 def build_targets(docs_root):
@@ -107,7 +112,30 @@ def main(argv=None):
                             violations.append((rel, raw, "broken", None))
                         return m.group(0)
 
-                    ns = HREF.sub(check, s)
+                    def check_template(m):
+                        nonlocal fixed
+                        tbase = m.group(1).rstrip("/")
+                        if tbase in SKIP_EXACT or tbase.startswith(SKIP_PREFIXES):
+                            return m.group(0)
+                        bare = tbase.lstrip("/")
+                        if bare.split("/")[0] == loc:
+                            return m.group(0)  # base already localized
+                        # A template building doc URLs from a dynamic id: flag only
+                        # when localized pages actually exist under this base (so an
+                        # English-only section stays an acceptable fallback). The
+                        # per-id target can't be resolved statically; the base is
+                        # what routes locale readers to English.
+                        if not any(p.startswith(f"{loc}/{bare}/") for p in pages):
+                            return m.group(0)
+                        violations.append(
+                            (rel, m.group(1), "should-localize-template",
+                             "/" + loc + m.group(1)))
+                        if args.fix:
+                            fixed += 1
+                            return "`/" + loc + m.group(1) + "${"
+                        return m.group(0)
+
+                    ns = TEMPLATE.sub(check_template, HREF.sub(check, s))
                     if args.fix and ns != s:
                         open(fp, "w", encoding="utf-8").write(ns)
 
@@ -116,7 +144,8 @@ def main(argv=None):
         kinds[k] = kinds.get(k, 0) + 1
     if args.fix:
         print(f"fixed (localized): {fixed}")
-    remaining = [v for v in violations if not (args.fix and v[2] == "should-localize")]
+    FIXABLE = {"should-localize", "should-localize-template"}
+    remaining = [v for v in violations if not (args.fix and v[2] in FIXABLE)]
     print(f"violations: {len(remaining)}  by kind: {kinds}")
     for rel, raw, k, sug in remaining[:40]:
         print(f"  [{k}] {raw}  in {rel}" + (f"  -> {sug}" if sug else ""))

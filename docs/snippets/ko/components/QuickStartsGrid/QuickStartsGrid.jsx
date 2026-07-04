@@ -141,7 +141,7 @@ export const QuickStartsGrid = ({ quickStartsData = [], featured = [] }) => {
       return {
         id: f.id,
         image: f.image,
-        href: (qs && qs.href) || `/get-started/quickstarts/${f.id}`,
+        href: (qs && qs.href) || `/ko/get-started/quickstarts/${f.id}`,
         title: (qs && qs.title) || ""
       }
     })
