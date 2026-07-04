@@ -169,7 +169,7 @@ Dwarf::Dwarf(const std::shared_ptr<Elf> & elf)
     //  - debugRanges_ (DWARF 4) / debugRnglists_ (DWARF 5): non-contiguous
     //    address ranges of debugging information entries.
     //    Used for inline function address lookup.
-    if (info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
+    if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         elf_ = nullptr;
     }
@@ -191,7 +191,7 @@ Dwarf::Dwarf(const std::shared_ptr<MachO> & macho)
     , str_(getSection(".debug_str"))
     , str_offsets_(getSection(".debug_str_offsets"))
 {
-    if (info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
+    if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         macho_ = nullptr;
     }
@@ -520,12 +520,53 @@ struct __attribute__((__packed__)) ElfCompressionHeader
 constexpr uint32_t ELFCOMPRESS_ZLIB = 1;
 constexpr uint32_t ELFCOMPRESS_ZSTD = 2;
 
+// Inflate a zlib stream into `dst` (exactly `dst_size` bytes). `avail_in`/`avail_out` are 32-bit,
+// and the single-shot `uncompress` mishandles outputs larger than 2 GiB (e.g. `.debug_info` of the
+// whole server binary), so drive `inflate` in bounded chunks instead. Returns false on any error.
+bool inflateZlibStream(const char * src, size_t src_size, char * dst, size_t dst_size)
+{
+    z_stream stream{};
+    if (inflateInit(&stream) != Z_OK)
+        return false;
+
+    stream.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(src));
+    stream.next_out = reinterpret_cast<Bytef *>(dst);
+    size_t in_left = src_size;
+    size_t out_left = dst_size;
+    static constexpr size_t max_chunk = static_cast<size_t>(1) << 30; // 1 GiB, well within a 32-bit count
+
+    int ret = Z_OK;
+    do
+    {
+        if (stream.avail_in == 0 && in_left > 0)
+        {
+            stream.avail_in = static_cast<uInt>(in_left < max_chunk ? in_left : max_chunk);
+            in_left -= stream.avail_in;
+        }
+        if (stream.avail_out == 0 && out_left > 0)
+        {
+            stream.avail_out = static_cast<uInt>(out_left < max_chunk ? out_left : max_chunk);
+            out_left -= stream.avail_out;
+        }
+        ret = inflate(&stream, Z_NO_FLUSH);
+    } while (ret == Z_OK);
+
+    inflateEnd(&stream);
+    return ret == Z_STREAM_END && out_left == 0 && stream.avail_out == 0;
+}
+
 }
 
 std::string_view Dwarf::decompressSection(std::string_view compressed) const
 {
+    // On any failure, mark the whole Dwarf as failed so the constructor disables it (fail-closed):
+    // a section that is present but ends up empty would otherwise be dereferenced by later readers
+    // and throw while the symbolizer is handling another exception or a fatal signal.
     if (compressed.size() < sizeof(ElfCompressionHeader))
+    {
+        decompression_failed_ = true;
         return {};
+    }
 
     ElfCompressionHeader header{};
     memcpy(&header, compressed.data(), sizeof(header));
@@ -545,27 +586,22 @@ std::string_view Dwarf::decompressSection(std::string_view compressed) const
     {
         /// Ok to swallow: the symbolizer must not throw (it runs while handling other exceptions
         /// and fatal signals). Failing to allocate here just means no line info for this section.
+        decompression_failed_ = true;
         return {};
     }
 
+    bool ok = false;
     if (header.type == ELFCOMPRESS_ZLIB)
-    {
-        uLongf dest_len = static_cast<uLongf>(uncompressed_size);
-        int rc = uncompress(
-            reinterpret_cast<Bytef *>(out.data()), &dest_len,
-            reinterpret_cast<const Bytef *>(payload), static_cast<uLong>(payload_size));
-        if (rc != Z_OK || dest_len != uncompressed_size)
-            return {};
-    }
+        ok = inflateZlibStream(payload, payload_size, out.data(), uncompressed_size);
     else if (header.type == ELFCOMPRESS_ZSTD)
     {
         size_t rc = ZSTD_decompress(out.data(), uncompressed_size, payload, payload_size);
-        if (ZSTD_isError(rc) || rc != uncompressed_size)
-            return {};
+        ok = !ZSTD_isError(rc) && rc == uncompressed_size;
     }
-    else
+
+    if (!ok)
     {
-        // Unknown compression algorithm.
+        decompression_failed_ = true;
         return {};
     }
 

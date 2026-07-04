@@ -196,6 +196,11 @@ private:
     // gives stable element addresses, so the `std::string_view`s pointing into it stay valid.
     mutable std::list<std::string> decompressed_sections_;
 
+    // Set when a present section fails to decompress; the constructor then fail-closes by disabling
+    // the whole `Dwarf`, so no reader dereferences a referenced-but-empty section (which would throw
+    // during exception/signal handling). Declared before the section views (constructed first).
+    mutable bool decompression_failed_ = false;
+
     // DWARF section made up of chunks, each prefixed with a length header.
     // The length indicates whether the chunk is DWARF-32 or DWARF-64, which
     // guides interpretation of "section offset" records.
