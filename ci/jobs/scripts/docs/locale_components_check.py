@@ -95,7 +95,7 @@ def main(argv=None):
 
                     def check(m):
                         nonlocal fixed
-                        q, path = m.group(1), m.group(2)
+                        path = m.group(2)
                         raw = path
                         path = path.split("#")[0].split("?")[0]
                         if (path in SKIP_EXACT or path.startswith(SKIP_PREFIXES)):
