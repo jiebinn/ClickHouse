@@ -449,6 +449,14 @@ if (ENABLE_CFI AND ENABLE_TESTS)
         "Build without tests (ENABLE_TESTS=0) to use CFI.")
 endif ()
 
+# CFI flags are wired into the RelWithDebInfo profile only (CMAKE_*_FLAGS_RELWITHDEBINFO).
+# Other build types would configure successfully and print the CFI status message while
+# silently producing a non-CFI binary, so reject them explicitly.
+if (ENABLE_CFI AND NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO")
+    message (FATAL_ERROR "ENABLE_CFI is only supported with CMAKE_BUILD_TYPE=RelWithDebInfo. "
+        "Current configuration has CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}.")
+endif ()
+
 # We cannot afford to use LTO when compiling unit tests, and it's not enough
 # to only supply -fno-lto at the final linking stage. So we disable it
 # completely.
