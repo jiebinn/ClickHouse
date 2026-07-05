@@ -1949,7 +1949,7 @@ not during inserts.
     DECLARE(String, auto_statistics_types, "basic, uniq", R"(
 Comma-separated list of statistics types to calculate automatically on all suitable columns.
 Supported statistics types: basic, tdigest, countmin, uniq.
-The `minmax` statistics type is deprecated: it is a subset of `basic`, which should be used instead. 
+The `minmax` statistics type is deprecated: it is a subset of `basic`, which should be used instead.
 )", 0) \
     DECLARE(UInt64, packed_skip_index_max_bytes, 0, R"(
 Threshold (serialized on-disk bytes, i.e. after the substream's compression and hashing
