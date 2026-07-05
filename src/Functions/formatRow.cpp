@@ -199,7 +199,7 @@ SELECT formatRow('CustomSeparated', number, 'good')
 FROM numbers(3)
 SETTINGS format_custom_result_before_delimiter='<prefix>\n', format_custom_result_after_delimiter='<suffix>'
         )",
-        R"(
+        R"DOCS_MD(
 ┌─formatRow('CustomSeparated', number, 'good')─┐
 │ <prefix>                                    ↴│
 │↳0	good                                     ↴│
@@ -211,7 +211,7 @@ SETTINGS format_custom_result_before_delimiter='<prefix>\n', format_custom_resul
 │↳2	good                                     ↴│
 │↳<suffix>                                     │
 └──────────────────────────────────────────────┘
-        )"
+        )DOCS_MD"
     }
     };
     FunctionDocumentation::IntroducedIn formatRow_introduced_in = {20, 7};
