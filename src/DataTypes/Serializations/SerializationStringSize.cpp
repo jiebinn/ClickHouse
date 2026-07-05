@@ -220,12 +220,12 @@ void SerializationStringSize::deserializeBinaryBulkWithSizeStream(
         if (rows_offset)
         {
             /// `column` may alias `cached_column` (the substream can be read first with rows_offset == 0,
-            /// placing `column` itself into the cache, and then re-read in the same range with rows_offset > 0).
-            /// Clone when shared via `IColumn::mutate` (a no-op when uniquely owned) so the append below — and
-            /// the in-place rows_offset compaction that follows — do not mutate storage still referenced by
-            /// the cache.
-            column = IColumn::mutate(std::move(column));
-            column->assumeMutableRef().insertRangeFrom(*cached_column, cached_column->size() - num_read_rows, num_read_rows);
+            /// placing `column` itself into the cache, and then re-read in the same range with rows_offset > 0),
+            /// so clone it when shared — `IColumn::mutate` is a no-op when uniquely owned — before the append
+            /// and the in-place rows_offset compaction below.
+            MutableColumnPtr mutable_column = IColumn::mutate(std::move(column));
+            mutable_column->insertRangeFrom(*cached_column, cached_column->size() - num_read_rows, num_read_rows);
+            column = std::move(mutable_column);
         }
         else
             insertDataFromCachedColumn(settings, column, cached_column, num_read_rows, cache, true);
