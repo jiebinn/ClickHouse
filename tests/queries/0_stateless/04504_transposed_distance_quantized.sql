@@ -57,6 +57,20 @@ WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -
 SELECT id, round(L2DistanceTransposedQuantized(vec, ref_codes, 6), 2) AS d FROM qbit_q ORDER BY id
 SETTINGS optimize_qbit_distance_function_reads = 1;
 
+SELECT 'An Array(Nullable(Int8)) reference gives identical results with the partial-reads pass on or off (regression, no divergence)';
+-- An Array cannot be wrapped in Nullable (Nullable(Array(...)) is not a constructible type), so the only nullable Int8 array reference
+-- is Array(Nullable(Int8)). Its element type is Nullable(Int8), not the exact Int8 that the quantized functions dequantize, so both the
+-- optimizer pass and the ordinary (unoptimized) path treat it as a full-precision Float reference and compare its codes as literal
+-- Float32 values rather than dequantizing them. The point of this regression is only that the two settings must not diverge: the pass
+-- reads the same raw query-tree type the ordinary path sees after stripping wrappers, so neither ever reaches the Int8 branch. The two
+-- blocks below must be identical.
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16))::Array(Nullable(Int8)) AS ref
+SELECT id, round(L2DistanceTransposedQuantized(vec, ref, 8), 2) AS d FROM qbit_q ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 0;
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16))::Array(Nullable(Int8)) AS ref
+SELECT id, round(L2DistanceTransposedQuantized(vec, ref, 8), 2) AS d FROM qbit_q ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 1;
+
 SELECT 'At p < 8 the Array(Int8) reference is still reconstructed at full 8-bit precision (every *_matches must be 1, pass on or off)';
 -- `p` truncates only the stored QBit; the Array(Int8) reference is dequantized at row 8 of the LUT regardless of `p`. Its result must
 -- therefore be bit-identical to the identical query passed as its full-precision Float32 reconstruction toFloat32(dequantizeInt8ToBFloat16(...)),
