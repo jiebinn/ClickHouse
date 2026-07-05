@@ -10,7 +10,7 @@ SELECT digits(1234567890, 3, 2), digits(1234567890, 9, 1);
 SELECT digits(1234567890, 3, -2), digits(1234567890, 9, -1);
 
 -- Negative offset and positive length
-SELECT digits(1234567890, -3, 2), digits(1234567890, -9, 1);
+SELECT digits(1234567890, -3, 2), digits(1234567890, -9, 1), digits(1234567890, -9223372036854775808, 1);
 
 -- Negative offset and negative length
 SELECT digits(1234567890, -3, -2), digits(1234567890, -9, -1);
@@ -53,3 +53,8 @@ SELECT digits(1234567890, 0); -- {serverError ZERO_ARRAY_OR_TUPLE_INDEX}
 SELECT digits(toString(1234567890), 1); -- {serverError ILLEGAL_TYPE_OF_ARGUMENT}
 SELECT digits(1234567890); -- {serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH}
 SELECT digits(1234567890, 1, 2, 3); -- {serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH}
+
+-- NULL
+SELECT digits(123, NULL);
+SELECT digits(NULL, 1);
+SELECT digits(arrayJoin([NULL, 123]::Array(Nullable(Int8))), 1);

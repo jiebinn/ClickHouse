@@ -97,18 +97,23 @@ public:
         for (auto & arg : args_without_nullable)
             arg.type = removeNullable(arg.type);
 
+        auto validateArgType = [](const IDataType & type)
+        {
+            return isNativeInteger(type) || isNothing(type);
+        };
+
         FunctionArgumentDescriptors mandatory_args{
             {"number",
-             static_cast<FunctionArgumentDescriptor::TypeValidator>(&isNativeInteger),
+             static_cast<FunctionArgumentDescriptor::TypeValidator>(validateArgType),
              nullptr,
              "Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64"},
             {"offset",
-             static_cast<FunctionArgumentDescriptor::TypeValidator>(&isNativeInteger),
+             static_cast<FunctionArgumentDescriptor::TypeValidator>(validateArgType),
              nullptr,
              "Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64"}};
         FunctionArgumentDescriptors optional_args{
             {"length",
-             static_cast<FunctionArgumentDescriptor::TypeValidator>(&isNativeInteger),
+             static_cast<FunctionArgumentDescriptor::TypeValidator>(validateArgType),
              nullptr,
              "Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64"}};
         validateFunctionArguments(*this, args_without_nullable, mandatory_args, optional_args);
@@ -121,6 +126,9 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+        if (arguments[0].column->onlyNull())
+            return makeNullable(std::make_shared<DataTypeUInt64>())->createColumnConstWithDefaultValue(input_rows_count);
+
         auto combined_null_map = ColumnUInt8::create(input_rows_count, static_cast<UInt8>(0));
         auto & null_map_data = combined_null_map->getData();
         bool any_nullable = false;
