@@ -420,6 +420,10 @@ void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorTuple>(), Documentation{
         .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take a single `Tuple` argument and aggregate each tuple element independently, producing a tuple of per-element results.",
         .syntax = "<aggregate_function>Tuple",
+        .examples = {{"`sum` aggregate function",
+            "SELECT sumTuple(t) FROM (SELECT tuple(toInt64(1), toFloat64(2.5)) AS t UNION ALL SELECT tuple(toInt64(3), toFloat64(4.5)) UNION ALL SELECT tuple(toInt64(5), toFloat64(6.5)))",
+            "(9,13.5)"}},
+        .introduced_in = {26, 7},
         .related = {"Array", "ForEach", "Map"}});
 }
 
