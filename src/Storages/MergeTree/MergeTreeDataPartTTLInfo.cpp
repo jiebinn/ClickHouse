@@ -47,11 +47,11 @@ void MergeTreeDataPartTTLInfos::update(const MergeTreeDataPartTTLInfos & other_i
         updatePartMinMaxTTL(ttl_info);
     }
 
-    for (auto [name, ttl_info] : other_infos.group_by_ttl)
+    for (const auto & [name, ttl_info] : other_infos.group_by_ttl)
     {
-        ttl_info.ttl_finished = false;
-        group_by_ttl[name].update(ttl_info);
-        updatePartMinMaxTTL(ttl_info);
+        const MergeTreeDataPartTTLInfo not_finished_ttl_info{ .min = ttl_info.min, .max = ttl_info.max, .ttl_finished = false };
+        group_by_ttl[name].update(not_finished_ttl_info);
+        updatePartMinMaxTTL(not_finished_ttl_info);
     }
 
     for (const auto & [name, ttl_info] : other_infos.recompression_ttl)
