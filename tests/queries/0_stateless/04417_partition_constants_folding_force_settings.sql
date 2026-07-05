@@ -11,6 +11,7 @@
 
 SET enable_analyzer = 1;
 SET use_constant_folding_in_index_analysis = 1;
+SET use_statistics_for_part_pruning=0;
 
 DROP TABLE IF EXISTS folding_force_pk;
 

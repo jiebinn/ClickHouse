@@ -4,6 +4,7 @@ SET enable_analyzer=1;
 SET optimize_move_to_prewhere=1;
 SET query_plan_optimize_prewhere=1;
 SET use_constant_folding_in_index_analysis=1;
+SET use_statistics_for_part_pruning=0;
 SET explain_query_plan_default = 'legacy';
 
 DROP TABLE IF EXISTS partition_id_with_minmax_folding;
