@@ -186,12 +186,9 @@ FROM numbers(3)
         )",
         R"(
 ┌─formatRow('CSV', number, 'good')─┐
-│ 0,"good"
-                         │
-│ 1,"good"
-                         │
-│ 2,"good"
-                         │
+│ 0,"good"                        ↴│
+│ 1,"good"                        ↴│
+│ 2,"good"                        ↴│
 └──────────────────────────────────┘
         )"
     },
@@ -204,15 +201,15 @@ SETTINGS format_custom_result_before_delimiter='<prefix>\n', format_custom_resul
         )",
         R"(
 ┌─formatRow('CustomSeparated', number, 'good')─┐
-│ <prefix>
-0    good
-<suffix>                   │
-│ <prefix>
-1    good
-<suffix>                   │
-│ <prefix>
-2    good
-<suffix>                   │
+│ <prefix>                                    ↴│
+│↳0	good                                     ↴│
+│↳<suffix>                                     │
+│ <prefix>                                    ↴│
+│↳1	good                                     ↴│
+│↳<suffix>                                     │
+│ <prefix>                                    ↴│
+│↳2	good                                     ↴│
+│↳<suffix>                                     │
 └──────────────────────────────────────────────┘
         )"
     }
