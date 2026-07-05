@@ -1979,10 +1979,13 @@ class QueryResultElement extends HTMLElement
                 }
 
                 /* Per-column color coding compares values across rows; with no more than a single
-                   row there is nothing to compare, so hide the toggles entirely. The extra selector
-                   specificity overrides the hover and coarse-pointer rules above. */
-                .hide-colorize-toggle .colorize-toggle,
-                .hide-colorize-toggle th:hover .colorize-toggle
+                   row there is nothing to compare, so hide the toggles. A column already colorized
+                   with a non-default mode is exempted (its header carries the keep-colorize-toggle
+                   class), so that mode stays clearable. The exemption is per column: one colorized
+                   column must not reveal every other column's toggle. The extra selector specificity
+                   overrides the hover and coarse-pointer rules above. */
+                .hide-colorize-toggle th:not(.keep-colorize-toggle) .colorize-toggle,
+                .hide-colorize-toggle th:not(.keep-colorize-toggle):hover .colorize-toggle
                 {
                     display: none;
                 }
@@ -2827,34 +2830,42 @@ class QueryResultElement extends HTMLElement
         }
     }
 
-    /// Whether any column currently has a non-default (explicitly chosen) color coding mode.
-    /// Such a column is already colorized, so its toggle must stay reachable even on a single-row
-    /// result — the modes are shared by column name across tables, so a mode persisted from an
-    /// earlier multi-row query would otherwise have no visible control to switch it back off.
-    _hasNonDefaultColorMode()
+    /// Whether a column is currently painted with color: it has an effective mode that both differs
+    /// from the per-type default and actually colorizes (anything other than `none`). Such a column
+    /// is "already colorized", so it keeps its toggle even on a single-row result — the modes are
+    /// shared by column name across tables, so a mode persisted from an earlier multi-row query
+    /// would otherwise have no visible control to switch it back off. A column explicitly set to
+    /// `none` (e.g. a numeric column whose default is `bar`) paints nothing, so it does not qualify.
+    _columnIsColorized(name)
     {
-        if (!Array.isArray(this._header)) { return false; }
-        for (const column of this._header)
-        {
-            if (this._effectiveColorMode(column.name) !== this._defaultColorMode(column.name))
-            {
-                return true;
-            }
-        }
-        return false;
+        const mode = this._effectiveColorMode(name);
+        return mode !== 'none' && mode !== this._defaultColorMode(name);
     }
 
     /// Show or hide the per-column colorize toggles for this result. Per-column color coding
     /// compares values across rows; with no more than a single row there is nothing to compare, so
     /// the toggles are hidden. A totals row (from `WITH TOTALS`) is a second comparable value per
-    /// column, so coloring stays meaningful there. A column already colorized with a non-default
-    /// mode keeps its toggle, so that mode stays clearable. Recomputed on the final repaint and
-    /// whenever a mode is cycled (a shared mode can colorize a single-row table) — never per row.
+    /// column, so coloring stays meaningful there. The hiding is per column: a column already
+    /// colorized with a non-default mode is exempted (its header keeps `keep-colorize-toggle`), so
+    /// that mode stays clearable, while unrelated single-value columns still hide their toggle.
+    /// Recomputed on the final repaint and whenever a mode is cycled (a shared mode can colorize a
+    /// single-row table) — never per row.
     _updateColorizeToggleVisibility()
     {
         const tbody = this._dataTable.tBodies[0];
         this._dataTable.classList.toggle('hide-colorize-toggle',
-            !this._totals && (!tbody || tbody.rows.length <= 1) && !this._hasNonDefaultColorMode());
+            !this._totals && (!tbody || tbody.rows.length <= 1));
+
+        /// Mark the header of every already-colorized column, so its toggle survives the table-wide
+        /// hiding above. Iterating the header (rather than one class for the whole table) keeps the
+        /// exemption per column: one colorized column must not reveal every other column's toggle.
+        const thead = this._dataTable.tHead;
+        if (!thead || !Array.isArray(this._header)) { return; }
+        for (const column of this._header)
+        {
+            const th = thead.children[this._columnIndex(column.name)];
+            if (th) { th.classList.toggle('keep-colorize-toggle', this._columnIsColorized(column.name)); }
+        }
     }
 
     /// Re-apply color coding for every column (after rendering or restoring a result).
