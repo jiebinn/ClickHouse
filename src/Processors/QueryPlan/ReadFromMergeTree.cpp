@@ -2291,7 +2291,7 @@ void ReadFromMergeTree::buildIndexes(
         /// cannot answer queries. Skip them so a filtered query does not throw building the condition.
         if (index_helper->isInert())
             continue;
-      
+
         ConditionTemplate<MergeTreeIndexConditionPtr>::Factory factory;
         if (index_helper->isVectorSimilarityIndex())
         {
