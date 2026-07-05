@@ -1,5 +1,6 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <IO/Operators.h>
+#include <Processors/QueryPlan/Optimizations/RuntimeDataflowStatistics.h>
 #include <Processors/QueryPlan/QueryPlanFormat.h>
 #include <Processors/QueryPlan/WindowStep.h>
 #include <Processors/Transforms/ExpressionTransform.h>
@@ -84,6 +85,10 @@ void WindowStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQ
 
     assertBlocksHaveEqualStructure(pipeline.getHeader(), *output_header,
         "WindowStep transform for '" + window_description.window_name + "'");
+
+    if (dataflow_cache_updater)
+        pipeline.addSimpleTransform([&](const SharedHeader & header)
+                                    { return std::make_shared<RuntimeDataflowStatisticsCollector>(header, dataflow_cache_updater); });
 }
 
 void WindowStep::describeActions(FormatSettings & settings) const
