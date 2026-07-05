@@ -1,5 +1,6 @@
 #include <Databases/DataLake/ICatalog.h>
 #include <Common/Exception.h>
+#include <Common/StringUtils.h>
 #include <Common/logger_useful.h>
 #include <Poco/String.h>
 
@@ -7,6 +8,7 @@
 #include <filesystem>
 #include <iterator>
 #include <string_view>
+#include <tuple>
 
 #include <Common/FailPoint.h>
 #include <Poco/URI.h>
@@ -313,108 +315,6 @@ DB::SettingsChanges CatalogSettings::allChanged() const
     return changes;
 }
 
-namespace
-{
-
-/// True if some string starting with `prefix` can match the SQL LIKE `pattern`
-/// (case-sensitive, default backslash escape). Decides whether namespace `N`
-/// (tested as `N + "."`) may hold a table matching `name LIKE pattern`.
-///
-/// This helper only prunes namespaces, so it must never reject one that ClickHouse
-/// `LIKE` could match — a false negative would silently drop rows from
-/// `system.tables`. A false positive only costs an unnecessary table listing.
-/// Whenever it meets a construct it cannot model exactly (a multi-byte `_` match or
-/// an invalid trailing escape) it conservatively reports a possible match.
-bool likeCanMatchWithPrefix(std::string_view prefix, std::string_view pattern)
-{
-    size_t i = 0;            /// byte index into prefix
-    size_t j = 0;            /// byte index into pattern
-    size_t star_j = std::string_view::npos;  /// position of last '%' in pattern
-    size_t star_i = 0;       /// prefix index recorded when last '%' was seen
-
-    while (i < prefix.size())
-    {
-        if (j < pattern.size())
-        {
-            const char pc = pattern[j];
-            if (pc == '%')
-            {
-                star_j = j;
-                star_i = i;
-                ++j;
-                continue;
-            }
-            if (pc == '_')
-            {
-                /// ClickHouse `LIKE` matches `_` against one whole character. For an
-                /// ASCII byte that is exactly one byte; for a multi-byte UTF-8 lead
-                /// byte the width depends on the regexp encoding, which we cannot
-                /// model reliably here, so report a possible match instead of risking
-                /// a dropped namespace.
-                if (static_cast<unsigned char>(prefix[i]) >= 0x80)
-                    return true;
-                ++i;
-                ++j;
-                continue;
-            }
-            if (pc == '\\')
-            {
-                /// A trailing backslash is an invalid LIKE escape; the outer predicate
-                /// will surface the error, so just don't prune on it here.
-                if (j + 1 >= pattern.size())
-                    return true;
-
-                const char next = pattern[j + 1];
-                if (next == '%' || next == '_' || next == '\\')
-                {
-                    /// Escaped metacharacter: matches that single literal character.
-                    if (prefix[i] == next)
-                    {
-                        ++i;
-                        j += 2;
-                        continue;
-                    }
-                }
-                else
-                {
-                    /// Unknown escape: ClickHouse keeps the backslash as a literal `\`
-                    /// and matches `next` on its own in a later iteration.
-                    if (prefix[i] == '\\')
-                    {
-                        ++i;
-                        ++j;
-                        continue;
-                    }
-                }
-            }
-            else if (prefix[i] == pc)
-            {
-                /// Literal character (multi-byte UTF-8 literals match byte by byte).
-                ++i;
-                ++j;
-                continue;
-            }
-        }
-
-        /// Mismatch (or pattern exhausted while the prefix still has characters):
-        /// backtrack to the last '%' and let it swallow one more prefix char.
-        if (star_j != std::string_view::npos)
-        {
-            ++star_i;
-            i = star_i;
-            j = star_j + 1;
-            continue;
-        }
-        return false;
-    }
-
-    /// Whole prefix consumed: any remaining pattern can be matched by the
-    /// unknown continuation, so a match is possible.
-    return true;
-}
-
-}
-
 DB::Names ICatalog::getTables(const TableNameFilter & filter) const
 {
     switch (filter.kind)
@@ -433,12 +333,21 @@ DB::Names ICatalog::getTables(const TableNameFilter & filter) const
 
         case TableNameFilter::Kind::Like:
         {
-            /// List every namespace that could hold a matching table (test the
-            /// pattern against `N + "."` as a prefix), then list each directly.
+            /// Every table name matching `pattern` must start with the pattern's
+            /// fixed prefix — the literal part before the first LIKE wildcard
+            /// (`%`/`_`) — extracted here the same way `KeyCondition` prunes ranges.
+            /// A namespace `N` can hold such a table (full name `N + "." + <...>`)
+            /// only if `N + "."` and the fixed prefix are consistent, i.e. one is a
+            /// prefix of the other. This never rejects a namespace `LIKE` could match
+            /// (the fixed prefix is a *necessary* prefix of any match), so no
+            /// `system.tables` row is dropped; a looser match only costs an extra
+            /// table listing. An empty prefix (leading wildcard) keeps every namespace.
+            const String fixed_prefix = std::get<0>(extractFixedPrefixFromLikePattern(filter.value, /*requires_perfect_prefix*/ false));
             DB::Names result;
             for (const auto & namespace_name : getNamespaces())
             {
-                if (!likeCanMatchWithPrefix(namespace_name + ".", filter.value))
+                const std::string namespace_prefix = namespace_name + ".";
+                if (!startsWith(namespace_prefix, fixed_prefix) && !startsWith(fixed_prefix, namespace_prefix))
                     continue;
                 auto tables = listTablesInNamespaceDirect(namespace_name);
                 std::move(tables.begin(), tables.end(), std::back_inserter(result));
