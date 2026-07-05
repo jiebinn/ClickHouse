@@ -371,7 +371,7 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
     {
         Create2Response response2;
         static_cast<CreateResponse &>(response2) = base_response;
-        if (base_response.error == Error::ZOK)
+        if (!base_response.path_created.empty())
         {
             const auto & node = container.at(base_response.path_created);
             response2.stat = node.stat;
