@@ -42,9 +42,15 @@ OPTIMIZE TABLE t_imv_alter_both FINAL;
 
 ALTER TABLE t_imv_alter_both ADD COLUMN b Int32;
 ALTER TABLE t_imv_alter_both MODIFY COLUMN a UInt64 CODEC(ZSTD);
+ALTER TABLE t_imv_alter_both RENAME COLUMN b TO b2;
 SELECT name, expr FROM system.data_skipping_indices WHERE database = currentDatabase() AND table = 't_imv_alter_both' ORDER BY name;
--- The implicit index must still prune after the column ALTERs.
-SELECT count() > 0 FROM (EXPLAIN indexes = 1 SELECT * FROM t_imv_alter_both WHERE _block_number = 0) WHERE explain ILIKE '%auto_minmax_index__block_number%';
+-- The implicit indices must still PRUNE granules after the ALTERs, not merely stay attached.
+-- EXPLAIN indexes = 1 prints the index name even when it reads every granule (Granules: N/N),
+-- so a name match alone would pass a regression that stopped pruning. Assert on the Granules line.
+-- 20 rows in two blocks, index_granularity = 1: _block_number = 1 matches one block (10/20 granules read),
+-- _block_offset = 0 matches one row per block (2/20). A stopped-pruning regression reads 20/20 and fails these.
+SELECT count() > 0 FROM (EXPLAIN indexes = 1 SELECT * FROM t_imv_alter_both WHERE _block_number = 1) WHERE explain ILIKE '%Granules: 10/20%';
+SELECT count() > 0 FROM (EXPLAIN indexes = 1 SELECT * FROM t_imv_alter_both WHERE _block_offset = 0) WHERE explain ILIKE '%Granules: 2/20%';
 
 DROP TABLE IF EXISTS t_imv_alter;
 DROP TABLE IF EXISTS t_imv_alter_off;
