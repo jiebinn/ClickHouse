@@ -192,8 +192,10 @@ struct DotProductTransposed
 /// When `Quantized` is true the function operates on a `QBit(Int8)` whose codes were produced by the `quantizeBFloat16ToInt8`
 /// Lloyd-Max codec. Because that quantizer is non-linear, the distance cannot be computed on the `Int8` codes directly: each
 /// reconstructed code is dequantized to its Lloyd-Max reconstruction level (as `Float32`) on the fly and the distance is
-/// computed against the full-precision `Float32` reference (query) vector. The function is registered under the `...Quantized`
-/// name (e.g. `cosineDistanceTransposedQuantized`).
+/// computed against the reference (query) vector. The reference vector is polymorphic: a `Float` reference is the full-precision
+/// query used as-is (asymmetric distance), while an `Array(Int8)` reference is itself treated as `quantizeBFloat16ToInt8` codes and
+/// dequantized to its exact Lloyd-Max levels (equivalent to `dequantizeInt8ToBFloat16`), giving a symmetric quantized-vs-quantized
+/// distance. The function is registered under the `...Quantized` name (e.g. `cosineDistanceTransposedQuantized`).
 template <typename Kernel, bool Quantized = false>
 class FunctionArrayDistance : public IFunction
 {
@@ -391,16 +393,19 @@ public:
                 return {};
         }
 
-        /// For the quantized form the QBit is always Int8 (8 bit planes) and the reference vector is the full-precision
-        /// Float32 query, so the reference type no longer encodes the QBit element type; cap the precision at 8 directly.
+        /// For the quantized form the QBit is always Int8 (8 bit planes) and the reference vector is either the full-precision
+        /// Float32 query or a quantized Array(Int8) query, so the reference type no longer encodes the QBit element type; cap the
+        /// precision at 8 directly.
         if constexpr (Quantized)
         {
-            /// The quantized internal form is only ever generated with the full-precision Float32 query as the reference vector
-            /// (DistanceTransposedPartialReadsPass casts it to Array(Float32)), and executeQuantizedDistanceCalculation reads it as
-            /// ColumnVector<Float32>. Reject any other element type so a hand-written internal call with e.g. an Array(Float64) or
-            /// Array(Int8) reference falls through to the user-facing path and gets a clean ILLEGAL_TYPE_OF_ARGUMENT instead of
-            /// reinterpreting the reference vector's memory as Float32.
-            if (!WhichDataType(ref_vec_type->getNestedType()).isFloat32())
+            /// The quantized internal form is only ever generated with an Array(Float32) reference (DistanceTransposedPartialReadsPass
+            /// casts a Float query to Array(Float32)) or an Array(Int8) reference (a quantized query, passed through unchanged), and
+            /// executeQuantizedDistanceCalculation reads it as ColumnVector<Float32> or dequantizes it from ColumnVector<Int8>
+            /// accordingly. Reject any other element type so a hand-written internal call with e.g. an Array(Float64) or Array(BFloat16)
+            /// reference falls through to the user-facing path and gets a clean ILLEGAL_TYPE_OF_ARGUMENT instead of reinterpreting the
+            /// reference vector's memory as Float32.
+            const WhichDataType ref_which(ref_vec_type->getNestedType());
+            if (!ref_which.isFloat32() && !ref_which.isInt8())
                 return {};
 
             if (res.precision > 8)
@@ -602,12 +607,18 @@ private:
         }
 
         /// Cast reference vector to match QBit element type to ensure correct dispatch. For the quantized form the QBit codes are
-        /// dequantized to Float32 levels on the fly, so the reference (query) vector is cast to Array(Float32) instead of Array(Int8).
+        /// dequantized to Float32 levels on the fly, so a Float reference (query) is cast to Array(Float32); a quantized Array(Int8)
+        /// reference is passed through unchanged and dequantized on the fly exactly like the QBit codes.
         auto ref_vec_type = arguments[1].type;
         auto expected_ref_vec_type = [&]() -> std::shared_ptr<DataTypeArray>
         {
             if constexpr (Quantized)
+            {
+                if (const auto * ref_array = checkAndGetDataType<DataTypeArray>(ref_vec_type.get());
+                    ref_array && WhichDataType(ref_array->getNestedType()).isInt8())
+                    return std::make_shared<DataTypeArray>(std::make_shared<DataTypeInt8>());
                 return std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>());
+            }
             else
                 return std::make_shared<DataTypeArray>(qbit_type->getElementType());
         }();
@@ -760,11 +771,14 @@ private:
         return col_res;
     }
 
-    /// Quantized variant: the QBit holds Int8 Lloyd-Max codes and the reference vector is the full-precision Float32 query.
+    /// Quantized variant: the QBit holds Int8 Lloyd-Max codes and the reference vector is either the full-precision Float32 query or
+    /// a quantized Array(Int8) query.
     /// `planes` holds `num_groups * precision` FixedString bit-plane columns in group-major order (plane[g * precision + b]).
     /// Each stride group is untransposed into a contiguous slice of a `used_dims`-element buffer of raw code bytes, which is then
     /// dequantized to Float32 Lloyd-Max reconstruction levels (rounding a truncated code to its coarse cell's centre) before the
     /// Float32 distance kernel runs. The distance therefore equals the distance computed on `dequantizeInt8ToBFloat16` of the codes.
+    /// An Array(Int8) reference is a complete (not partially read) quantized query, so it is dequantized at full precision (row 8 of
+    /// the LUT, i.e. `dequantizeInt8ToBFloat16`) before the kernel runs; a Float32 reference is used verbatim.
     template <bool ref_is_const>
     ColumnPtr executeQuantizedDistanceCalculation(
         const ColumnArray & col_y,
@@ -781,8 +795,26 @@ private:
         const size_t padded_group = bytes_per_group * 8;
         const size_t padded_array_size = num_groups * padded_group;
 
-        /// The reference (query) vector is the full-precision Float32 query; it is cast to Array(Float32) before we get here.
-        const auto & ref_array_data = static_cast<const ColumnVector<Float32> &>(col_y.getData()).getData();
+        /// The reference (query) vector is either the full-precision Float32 query (an Array(Float32), used verbatim) or a quantized
+        /// Array(Int8) query, whose codes are dequantized at full precision (row 8 of the LUT, i.e. `dequantizeInt8ToBFloat16`) into a
+        /// Float32 buffer once, up front. `parseInternalArguments` guarantees the reference element type is exactly Float32 or Int8.
+        const IColumn & ref_data_column = col_y.getData();
+        PaddedPODArray<Float32> ref_dequantized;
+        const PaddedPODArray<Float32> * ref_data_ptr = nullptr;
+        if (const auto * ref_f32 = checkAndGetColumn<ColumnVector<Float32>>(&ref_data_column))
+        {
+            ref_data_ptr = &ref_f32->getData();
+        }
+        else
+        {
+            const auto & ref_codes = assert_cast<const ColumnVector<Int8> &>(ref_data_column).getData();
+            const std::array<Float32, 256> & dequant_ref = LloydMax::transposedDequantLUT()[8];
+            ref_dequantized.resize(ref_codes.size());
+            for (size_t i = 0; i < ref_codes.size(); ++i)
+                ref_dequantized[i] = dequant_ref[static_cast<uint8_t>(ref_codes[i])];
+            ref_data_ptr = &ref_dequantized;
+        }
+        const auto & ref_array_data = *ref_data_ptr;
         [[maybe_unused]] const auto & ref_offsets = col_y.getOffsets();
 
         auto col_res = ColumnVector<Float64>::create(input_rows_count);

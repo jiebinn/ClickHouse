@@ -1,6 +1,7 @@
 -- Quantized transposed distance functions: cosineDistanceTransposedQuantized / L2DistanceTransposedQuantized /
 -- dotProductTransposedQuantized. They operate on a QBit(Int8) of quantizeBFloat16ToInt8 Lloyd-Max codes, dequantizing
--- each code to its reconstruction level on the fly, and compute the distance against a full-precision Float32 reference.
+-- each code to its reconstruction level on the fly, and compute the distance against the reference vector. A Float reference
+-- is the full-precision query used as-is; an Array(Int8) reference is itself dequantized (a symmetric quantized comparison).
 
 SET enable_analyzer = 1;
 
@@ -31,6 +32,28 @@ SELECT
     abs(dotProductTransposedQuantized(vec, ref, 8) - dotProduct(deq, ref)) < 1e-4 AS dot_close
 FROM qbit_q
 ORDER BY id;
+
+SELECT 'An Array(Int8) reference is dequantized like the QBit (symmetric quantized-vs-quantized distance)';
+-- Passing the quantizeBFloat16ToInt8 codes of the query as an Array(Int8) reference dequantizes both sides at full precision, so
+-- the result matches the regular distance on toFloat32(dequantizeInt8ToBFloat16(...)) of both operands. `..._close` must be 1.
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), ref_codes) AS deq_ref,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), codes) AS deq
+SELECT
+    id,
+    abs(cosineDistanceTransposedQuantized(vec, ref_codes, 8) - cosineDistance(deq, deq_ref)) < 1e-4 AS cosine_close,
+    abs(L2DistanceTransposedQuantized(vec, ref_codes, 8) - L2Distance(deq, deq_ref)) < 1e-4 AS l2_close,
+    abs(dotProductTransposedQuantized(vec, ref_codes, 8) - dotProduct(deq, deq_ref)) < 1e-4 AS dot_close
+FROM qbit_q
+ORDER BY id;
+
+SELECT 'An Array(Int8) reference gives identical results with the partial-reads pass on or off (both blocks must be identical)';
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes
+SELECT id, round(L2DistanceTransposedQuantized(vec, ref_codes, 6), 2) AS d FROM qbit_q ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 0;
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes
+SELECT id, round(L2DistanceTransposedQuantized(vec, ref_codes, 6), 2) AS d FROM qbit_q ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 1;
 
 SELECT 'Concrete rounded distances at precision 8';
 -- Rounded to 2 decimals so SimSIMD NEON vs AVX low-bit differences do not make the reference architecture-dependent.
@@ -87,6 +110,14 @@ SELECT id, abs(L2DistanceTransposedQuantized(vec, ref, 8, 16) - L2Distance(deq, 
 FROM qbit_strided
 ORDER BY id;
 
+-- An Array(Int8) reference for the strided form (read the first 8 dimensions), dequantized like the QBit on both sides.
+WITH arrayMap(x -> quantizeBFloat16ToInt8(toBFloat16(x)), arrayMap(i -> (i - 4) / 10, range(8))) AS ref_codes,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), ref_codes) AS deq_ref,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), arraySlice(codes, 1, 8)) AS deq
+SELECT id, abs(L2DistanceTransposedQuantized(vec, ref_codes, 8, 8) - L2Distance(deq, deq_ref)) < 1e-4 AS l2_close
+FROM qbit_strided
+ORDER BY id;
+
 DROP TABLE qbit_strided;
 
 
@@ -121,11 +152,11 @@ FROM qbit_dyn SETTINGS optimize_qbit_distance_function_reads = 0;
 DROP TABLE qbit_dyn;
 
 
-SELECT 'A hand-written quantized internal call with a non-Float32 reference vector is rejected cleanly';
+SELECT 'A hand-written quantized internal call with a reference vector that is neither Float32 nor Int8 is rejected cleanly';
 -- The undocumented internal calling convention (FixedString bit planes, then the size, then the reference vector) is only ever
--- generated with the full-precision Float32 query, and executeQuantizedDistanceCalculation reads the reference as ColumnVector<Float32>.
--- A hand-written internal call with a non-Float32 reference must be rejected instead of reinterpreting its memory: parseInternalArguments
--- declines it and the call falls through to the user-facing path, which reports that the first argument must be a QBit.
-SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(Int8)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+-- generated with an Array(Float32) query (read as ColumnVector<Float32>) or a quantized Array(Int8) query (dequantized from
+-- ColumnVector<Int8>). A hand-written internal call with any other reference element type must be rejected instead of reinterpreting
+-- its memory: parseInternalArguments declines it and the call falls through to the user-facing path, which reports that the first
+-- argument must be a QBit.
 SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(BFloat16)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 SELECT L2DistanceTransposedQuantized('a'::FixedString(1), 8::UInt64, [1, 2, 3, 4, 5, 6, 7, 8]::Array(Float64)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }

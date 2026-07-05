@@ -188,10 +188,20 @@ public:
             last_size_constant->convertToNullable();
 
         /// Cast reference vector to match QBit type. For the non-quantized functions this is the only information about the type of the
-        /// QBit after this pass is applied. The quantized functions dequantize the Int8 codes to Float32 levels on the fly, so their
-        /// reference (query) vector is the full-precision Float32 query and must be cast to Array(Float32) instead.
-        auto expected_ref_vec_type = is_quantized ? std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())
-                                                   : std::make_shared<DataTypeArray>(qbit->getElementType());
+        /// QBit after this pass is applied. The quantized functions dequantize the Int8 codes to Float32 levels on the fly, so a Float
+        /// reference (the full-precision query) must be cast to Array(Float32); a quantized Array(Int8) reference is left unchanged and
+        /// dequantized on the fly exactly like the QBit codes.
+        DataTypePtr expected_ref_vec_type;
+        if (is_quantized)
+        {
+            const auto * ref_array = checkAndGetDataType<DataTypeArray>(ref_vec_type.get());
+            if (ref_array && WhichDataType(ref_array->getNestedType()).isInt8())
+                expected_ref_vec_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeInt8>());
+            else
+                expected_ref_vec_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>());
+        }
+        else
+            expected_ref_vec_type = std::make_shared<DataTypeArray>(qbit->getElementType());
 
         if (ref_vec_node->getResultType()->equals(*expected_ref_vec_type))
         {
