@@ -25,8 +25,9 @@ DataTypePtr AggregateFunctionTuple::deriveResultType(
     const VectorWithMemoryTracking<AggregateFunctionPtr> & nested_functions,
     const DataTypes & arguments)
 {
-    /// Every construction path goes through the combinator's `transformArgumentsForMultipleNestedFunctions`, which has
-    /// already validated that there is exactly one non-empty `Tuple` argument.
+    /// Every construction path goes through the combinator's `transformArgumentsForMultipleNestedFunctions`,
+    /// which has already validated that the arguments are non-empty `Tuple`s of equal size. The first
+    /// `Tuple` argument provides the element names of the result.
     const auto & tuple_type = assert_cast<const DataTypeTuple &>(*arguments[0]);
 
     DataTypes result_types;
@@ -128,21 +129,43 @@ bool AggregateFunctionTuple::hasTrivialDestructor() const
 void AggregateFunctionTuple::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
 {
     /// An element column may be sparse when the caller has not materialized the block (the
-    /// aggregation engine does it for the batch paths). Nested aggregate functions require dense
-    /// columns, so read a sparse element through its dense values column at the translated index:
-    /// default rows map to index 0, where the shared default value lives.
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
+    /// aggregation engine does it for the batch paths), while nested aggregate functions require
+    /// dense columns.
+    if (argument_types.size() == 1)
+    {
+        /// Single-tuple fast path: read a sparse element through its dense values column at the
+        /// translated index; default rows map to index 0, where the shared default value lives.
+        const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
 
+        for (size_t i = 0; i < nested_functions.size(); ++i)
+        {
+            const IColumn * nested_col = &tuple_column.getColumn(i);
+            size_t nested_row = row_num;
+            if (const auto * sparse = typeid_cast<const ColumnSparse *>(nested_col))
+            {
+                nested_col = &sparse->getValuesColumn();
+                nested_row = sparse->getValueIndex(row_num);
+            }
+            nested_functions[i]->add(place + state_offsets[i], &nested_col, nested_row, arena);
+        }
+        return;
+    }
+
+    /// Multiple zipped tuples: the nested function takes one row index for all of its argument
+    /// columns, and sparse columns would translate the same row to different values indices, so
+    /// sparse elements are materialized instead.
+    size_t num_tuples = argument_types.size();
+    Columns holders(num_tuples);
+    ColumnRawPtrs nested_columns(num_tuples);
     for (size_t i = 0; i < nested_functions.size(); ++i)
     {
-        const IColumn * nested_col = &tuple_column.getColumn(i);
-        size_t nested_row = row_num;
-        if (const auto * sparse = typeid_cast<const ColumnSparse *>(nested_col))
+        for (size_t k = 0; k < num_tuples; ++k)
         {
-            nested_col = &sparse->getValuesColumn();
-            nested_row = sparse->getValueIndex(row_num);
+            const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[k]);
+            holders[k] = tuple_column.getColumnPtr(i)->convertToFullColumnIfSparse();
+            nested_columns[k] = holders[k].get();
         }
-        nested_functions[i]->add(place + state_offsets[i], &nested_col, nested_row, arena);
+        nested_functions[i]->add(place + state_offsets[i], nested_columns.data(), row_num, arena);
     }
 }
 
@@ -157,46 +180,81 @@ void AggregateFunctionTuple::addBatchImpl(
     GetPlace && get_place) const
 {
     /// Batch callers may pass tuples whose element columns are sparse (e.g. window aggregation over
-    /// data read from `MergeTree`). Expanding a sparse element would cost a full-column copy per
-    /// call, and sliding window frames call this once per row, so read sparse elements through
-    /// their dense values column with per-row index translation: default rows map to index 0,
-    /// where the shared default value lives.
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
+    /// data read from `MergeTree`), while nested aggregate functions require dense columns.
+    size_t num_tuples = argument_types.size();
 
-    /// For a sparse element the nested function receives the dense values column, and the row index
-    /// is translated with a `ColumnSparse::Iterator` advanced monotonically: rows within one call
-    /// are processed in increasing order, so the translation is amortized constant time.
+    /// Single-tuple fast path: for a sparse element the nested function receives the dense values
+    /// column, and the row index is translated with a `ColumnSparse::Iterator` advanced
+    /// monotonically. Expanding a sparse element would cost a full-column copy per call, and
+    /// sliding window frames call this once per row; rows within one call are processed in
+    /// increasing order, so the translation is amortized constant time.
     struct ElementAccess
     {
         const IColumn * column = nullptr;
         std::optional<ColumnSparse::Iterator> sparse_iterator;
     };
+    VectorWithMemoryTracking<ElementAccess> elements;
 
-    VectorWithMemoryTracking<ElementAccess> elements(nested_functions.size());
-    for (size_t i = 0; i < nested_functions.size(); ++i)
+    /// Multiple zipped tuples: the nested function takes one row index for all of its argument
+    /// columns, and sparse columns would translate the same row to different values indices, so
+    /// sparse elements are materialized once per call instead. `zipped_columns` is a row-major
+    /// matrix of the element columns: `zipped_columns[i * num_tuples + k]` is element `i` of the
+    /// `k`-th Tuple argument.
+    Columns holders;
+    ColumnRawPtrs zipped_columns;
+
+    if (num_tuples == 1)
     {
-        const IColumn * element = &tuple_column.getColumn(i);
-        if (const auto * sparse = typeid_cast<const ColumnSparse *>(element))
+        const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
+        elements.resize(nested_functions.size());
+        for (size_t i = 0; i < nested_functions.size(); ++i)
         {
-            elements[i].column = &sparse->getValuesColumn();
-            elements[i].sparse_iterator.emplace(sparse->getIterator(row_begin));
+            const IColumn * element = &tuple_column.getColumn(i);
+            if (const auto * sparse = typeid_cast<const ColumnSparse *>(element))
+            {
+                elements[i].column = &sparse->getValuesColumn();
+                elements[i].sparse_iterator.emplace(sparse->getIterator(row_begin));
+            }
+            else
+                elements[i].column = element;
         }
-        else
-            elements[i].column = element;
+    }
+    else
+    {
+        holders.resize(nested_functions.size() * num_tuples);
+        zipped_columns.resize(nested_functions.size() * num_tuples);
+        for (size_t k = 0; k < num_tuples; ++k)
+        {
+            const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[k]);
+            for (size_t i = 0; i < nested_functions.size(); ++i)
+            {
+                auto & holder = holders[i * num_tuples + k];
+                holder = tuple_column.getColumnPtr(i)->convertToFullColumnIfSparse();
+                zipped_columns[i * num_tuples + k] = holder.get();
+            }
+        }
     }
 
     auto add_row = [&](AggregateDataPtr place, size_t row)
     {
-        for (size_t i = 0; i < nested_functions.size(); ++i)
+        if (num_tuples == 1)
         {
-            auto & element = elements[i];
-            size_t nested_row = row;
-            if (element.sparse_iterator)
+            for (size_t i = 0; i < nested_functions.size(); ++i)
             {
-                element.sparse_iterator->advanceToRow(row);
-                nested_row = element.sparse_iterator->getValueIndex();
+                auto & element = elements[i];
+                size_t nested_row = row;
+                if (element.sparse_iterator)
+                {
+                    element.sparse_iterator->advanceToRow(row);
+                    nested_row = element.sparse_iterator->getValueIndex();
+                }
+                nested_functions[i]->add(place + state_offsets[i], &element.column, nested_row, arena);
             }
-            nested_functions[i]->add(place + state_offsets[i], &element.column, nested_row, arena);
+        }
+        else
+        {
+            for (size_t i = 0; i < nested_functions.size(); ++i)
+                nested_functions[i]->add(place + state_offsets[i], &zipped_columns[i * num_tuples], row, arena);
         }
     };
 
@@ -379,25 +437,45 @@ public:
 
     VectorWithMemoryTracking<DataTypes> transformArgumentsForMultipleNestedFunctions(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
+        if (arguments.empty())
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Aggregate function with {} suffix requires exactly one Tuple argument", getName());
+                "Aggregate function with {} suffix requires at least one Tuple argument", getName());
 
-        const auto * tuple_type = typeid_cast<const DataTypeTuple *>(arguments[0].get());
-        if (!tuple_type)
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "Illegal type {} of argument for aggregate function with {} suffix. Must be Tuple.",
-                arguments[0]->getName(), getName());
+        VectorWithMemoryTracking<const DataTypeTuple *> tuple_types;
+        tuple_types.reserve(arguments.size());
+        for (const auto & argument : arguments)
+        {
+            const auto * tuple_type = typeid_cast<const DataTypeTuple *>(argument.get());
+            if (!tuple_type)
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "Illegal type {} of argument for aggregate function with {} suffix. Must be Tuple.",
+                    argument->getName(), getName());
+            tuple_types.push_back(tuple_type);
+        }
 
-        const auto & elem_types = tuple_type->getElements();
-        if (elem_types.empty())
+        size_t num_elements = tuple_types.front()->getElements().size();
+        if (num_elements == 0)
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Tuple must not be empty for aggregate function with {} suffix", getName());
 
+        for (const auto * tuple_type : tuple_types)
+            if (tuple_type->getElements().size() != num_elements)
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                    "All Tuple arguments of aggregate function with {} suffix must have the same number of elements, got {} and {}",
+                    getName(), num_elements, tuple_type->getElements().size());
+
+        /// One nested function per element position; each receives the corresponding element from
+        /// every Tuple argument, in argument order.
         VectorWithMemoryTracking<DataTypes> nested_arguments_list;
-        nested_arguments_list.reserve(elem_types.size());
-        for (const auto & elem_type : elem_types)
-            nested_arguments_list.push_back(DataTypes{elem_type});
+        nested_arguments_list.reserve(num_elements);
+        for (size_t i = 0; i < num_elements; ++i)
+        {
+            DataTypes nested_arguments;
+            nested_arguments.reserve(tuple_types.size());
+            for (const auto * tuple_type : tuple_types)
+                nested_arguments.push_back(tuple_type->getElements()[i]);
+            nested_arguments_list.push_back(std::move(nested_arguments));
+        }
         return nested_arguments_list;
     }
 
@@ -418,11 +496,14 @@ void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory & factory)
 {
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorTuple>(), Documentation{
-        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take a single `Tuple` argument and aggregate each tuple element independently, producing a tuple of per-element results.",
-        .syntax = "<aggregate_function>Tuple",
+        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take one `Tuple` argument per argument of the underlying function (all tuples of the same size) and aggregate each element position independently, producing a tuple of per-element results.",
+        .syntax = "<aggregate_function>Tuple(tuple1[, tuple2, ...])",
         .examples = {{"`sum` aggregate function",
             "SELECT sumTuple(t) FROM (SELECT tuple(toInt64(1), toFloat64(2.5)) AS t UNION ALL SELECT tuple(toInt64(3), toFloat64(4.5)) UNION ALL SELECT tuple(toInt64(5), toFloat64(6.5)))",
-            "(9,13.5)"}},
+            "(9,13.5)"},
+            {"`corr` aggregate function with two tuples",
+            "SELECT corrTuple(tuple(x, x), tuple(y, x)) FROM (SELECT toFloat64(number) AS x, toFloat64(100 - number) AS y FROM numbers(10))",
+            "(-1,1)"}},
         .introduced_in = {26, 7},
         .related = {"Array", "ForEach", "Map"}});
 }

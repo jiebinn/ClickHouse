@@ -24,6 +24,10 @@ struct Settings;
   * will return:
   *  (avg(1,3,6), avg(2.0,4.0,7.0), avg(3.0,5.0,8.0))
   *
+  * An aggregate function with several arguments takes one Tuple per argument, all of the same
+  * size, and element i aggregates the i-th element of every tuple:
+  *  corrTuple((x1, x2), (y1, y2)) returns (corr(x1, y1), corr(x2, y2)).
+  *
   * Since each tuple element may have a different type, the factory resolves
   * a separate nested aggregate function instance per element.
   */

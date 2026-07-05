@@ -60,3 +60,51 @@ TEST(AggregateFunctionTupleCombinator, AddOverSparseElements)
     EXPECT_EQ(assert_cast<const ColumnInt64 &>(result_tuple.getColumn(0)).getElement(0), 21);
     EXPECT_EQ(assert_cast<const ColumnFloat64 &>(result_tuple.getColumn(1)).getElement(0), 8.0);
 }
+
+/// With multiple zipped Tuple arguments the nested function receives one row index for all of its
+/// argument columns, so `add` materializes sparse elements instead of translating the row index.
+TEST(AggregateFunctionTupleCombinator, AddOverSparseElementsWithMultipleTuples)
+{
+    tryRegisterAggregateFunctions();
+
+    constexpr size_t rows = 8;
+
+    /// Values tuple with one element, sparse representation of [0, 0, 5, 0, 0, 0, 7, 9].
+    auto values = ColumnFloat64::create();
+    values->getData().push_back(0.0); /// The shared default value at position 0.
+    values->getData().push_back(5.0);
+    values->getData().push_back(7.0);
+    values->getData().push_back(9.0);
+    auto offsets = ColumnUInt64::create();
+    offsets->getData().push_back(2);
+    offsets->getData().push_back(6);
+    offsets->getData().push_back(7);
+    ColumnPtr values_tuple = ColumnTuple::create(Columns{ColumnSparse::create(std::move(values), std::move(offsets), rows)});
+
+    /// Weights tuple with one element, dense: [1.0] * 8.
+    auto weights = ColumnFloat64::create();
+    weights->getData().resize_fill(rows, 1.0);
+    ColumnPtr weights_tuple = ColumnTuple::create(Columns{std::move(weights)});
+
+    DataTypes arguments{
+        std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeFloat64>()}),
+        std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeFloat64>()})};
+    AggregateFunctionProperties properties;
+    AggregateFunctionPtr function
+        = AggregateFunctionFactory::instance().get("avgWeightedTuple", NullsAction::EMPTY, arguments, {}, properties);
+
+    AlignedBuffer place(function->sizeOfData(), function->alignOfData());
+    function->create(place.data());
+
+    const IColumn * columns[]{values_tuple.get(), weights_tuple.get()};
+    for (size_t row = 0; row < rows; ++row)
+        function->add(place.data(), columns, row, nullptr);
+
+    auto result = function->getResultType()->createColumn();
+    function->insertResultInto(place.data(), *result, nullptr);
+    function->destroy(place.data());
+
+    /// avgWeighted with unit weights: (5 + 7 + 9) / 8.
+    const auto & result_tuple = assert_cast<const ColumnTuple &>(*result);
+    EXPECT_EQ(assert_cast<const ColumnFloat64 &>(result_tuple.getColumn(0)).getElement(0), 21.0 / 8);
+}

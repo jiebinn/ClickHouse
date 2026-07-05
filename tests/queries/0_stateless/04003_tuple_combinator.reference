@@ -58,7 +58,8 @@ distinct combinators
 (3,3.75)
 AggregateFunction(sumDistinctTuple, Tuple(Int64, Float64))
 (9,15)
-multi argument error
+multiple tuples
+(-1)
 sparse tuple
 (1,2)
 (0.009900990099009901,0.019801980198019802)

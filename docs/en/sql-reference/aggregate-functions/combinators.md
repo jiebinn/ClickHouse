@@ -121,19 +121,19 @@ Converts an aggregate function for tables into an aggregate function for arrays 
 
 ## -Tuple {#-tuple}
 
-The `-Tuple` suffix can be appended to any aggregate function with a single argument. In this case, the aggregate function takes a single argument of `Tuple` type, and applies the aggregation independently to each element of the `Tuple`, returning a `Tuple` of results.
+The `-Tuple` suffix can be appended to any aggregate function. The combined function takes one argument of `Tuple` type per argument of the underlying aggregate function; all tuples must have the same number of elements. The aggregation is applied independently at each element position, receiving the corresponding element from every `Tuple`, and returns a `Tuple` of results.
 
-If the input `Tuple` has explicit element names, they are preserved in the result.
+If the first input `Tuple` has explicit element names, they are preserved in the result.
 
 **Syntax**
 
 ```sql
-<aggFunction>Tuple(tuple_column)
+<aggFunction>Tuple(tuple1[, tuple2, ...])
 ```
 
 **Arguments**
 
-- `tuple_column` — A column of `Tuple` type. Each element of the `Tuple` must be a type supported by the underlying aggregate function.
+- `tuple1[, tuple2, ...]` — Columns of `Tuple` type, one per argument of the underlying aggregate function, all with the same number of elements. Each element must be a type supported by the underlying aggregate function at that argument position.
 
 **Returned values**
 
@@ -186,6 +186,19 @@ ORDER BY k;
 │ 0 │ (2,3)       │
 │ 1 │ (3,4.5)     │
 └───┴─────────────┘
+```
+
+Using with a multi-argument aggregate function — each `Tuple` supplies one argument, so element `i` computes `corr` of the `i`-th elements of both tuples:
+
+```sql
+SELECT corrTuple(tuple(x, x), tuple(y, x))
+FROM (SELECT toFloat64(number) AS x, toFloat64(100 - number) AS y FROM numbers(10));
+```
+
+```text
+┌─corrTuple((x, x), (y, x))─┐
+│ (-1,1)                    │
+└───────────────────────────┘
 ```
 
 `-Tuple` can be combined with other combinators such as `-If`. For example: `sumTupleIf(tuple_column, cond)`.

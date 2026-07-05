@@ -87,15 +87,15 @@ SELECT quantilesExactTuple(0.25, 0.5, 0.75)(t) FROM (SELECT tuple(toFloat64(numb
 -- Multiple nested combinators. `-Tuple` composes with `-If`, but only in the `<base>TupleIf` order:
 -- there `-If` is the outermost combinator, so it consumes the trailing condition argument and passes
 -- the single tuple to `-Tuple`. The opposite spelling `<base>IfTuple` makes `-Tuple` the outermost
--- combinator, so it receives both the tuple and the condition and is rejected, because `-Tuple`
--- requires exactly one tuple argument (covered by the explicit error test below).
+-- combinator, so it receives both the tuple and the condition and is rejected, because every
+-- argument of `-Tuple` must be a `Tuple` (covered by the explicit error test below).
 SELECT 'multiple nested combinators';
 SELECT sumTupleIf(t, cond) FROM (SELECT tuple(toInt64(1), toFloat64(2.0)) AS t, 1 AS cond UNION ALL SELECT tuple(toInt64(1), toFloat64(2.0)), 1 UNION ALL SELECT tuple(toInt64(3), toFloat64(4.0)), 0 UNION ALL SELECT tuple(toInt64(5), toFloat64(6.0)), 1);
 SELECT avgTupleIf(t, cond) FROM (SELECT tuple(toInt64(10), toFloat64(20.0)) AS t, 1 AS cond UNION ALL SELECT tuple(toInt64(30), toFloat64(40.0)), 0 UNION ALL SELECT tuple(toInt64(50), toFloat64(60.0)), 1);
 SELECT minTupleIf(t, n % 2 = 0) FROM (SELECT tuple(toInt64(number), toFloat64(number) * 1.5) AS t, number AS n FROM numbers(1, 5));
 -- The `<base>IfTuple` order is unsupported: `-Tuple` becomes the outermost combinator and receives both
--- the tuple and the condition, but it requires exactly one tuple argument.
-SELECT sumIfTuple(tuple(toInt64(1), toFloat64(2.0)), 1); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
+-- the tuple and the condition, and the trailing condition is not a `Tuple`.
+SELECT sumIfTuple(tuple(toInt64(1), toFloat64(2.0)), 1); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 -- State + If + Merge chain
 SELECT sumTupleMerge(s) FROM (SELECT sumTupleStateIf(t, cond) AS s FROM (SELECT tuple(toInt64(1), toFloat64(2.0)) AS t, 1 AS cond UNION ALL SELECT tuple(toInt64(1), toFloat64(2.0)), 1 UNION ALL SELECT tuple(toInt64(3), toFloat64(4.0)), 0 UNION ALL SELECT tuple(toInt64(5), toFloat64(6.0)), 1));
 
@@ -116,9 +116,9 @@ SELECT avgDistinctTuple(t) FROM (SELECT tuple(toInt64(1), toFloat64(2.0)) AS t, 
 SELECT toTypeName(sumDistinctTupleState(t)) FROM (SELECT tuple(toInt64(1), toFloat64(2.0)) AS t UNION ALL SELECT tuple(toInt64(1), toFloat64(3.0)) UNION ALL SELECT tuple(toInt64(5), toFloat64(6.0)));
 SELECT sumDistinctTupleMerge(s) FROM (SELECT sumDistinctTupleState(t) AS s FROM (SELECT tuple(toInt64(1), toFloat64(2.0)) AS t, 1 AS cond UNION ALL SELECT tuple(toInt64(1), toFloat64(3.0)), 1 UNION ALL SELECT tuple(toInt64(3), toFloat64(4.0)), 0 UNION ALL SELECT tuple(toInt64(5), toFloat64(6.0)), 1));
 
--- Multi-argument base function: error because Tuple combinator requires exactly one Tuple argument
-SELECT 'multi argument error';
-SELECT corrTuple(t1, t2) FROM (SELECT tuple(toFloat64(1.0)) AS t1, tuple(toFloat64(2.0)) AS t2); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
+-- Multi-argument base function: one Tuple per argument of the base function, zipped per element.
+SELECT 'multiple tuples';
+SELECT corrTuple(t1, t2) FROM (SELECT tuple(toFloat64(number)) AS t1, tuple(toFloat64(100 - number)) AS t2 FROM numbers(10));
 
 -- Error: argument is not a Tuple
 SELECT sumTuple(1); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
