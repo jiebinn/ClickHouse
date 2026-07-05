@@ -106,6 +106,11 @@ public:
     bool haveSameStateRepresentationImpl(const IAggregateFunction & rhs) const override;
     DataTypePtr getNormalizedStateType() const override;
 
+    AggregateFunctionStateVariant getStateVariant() const override;
+    bool canMergeStateFromDifferentVariant(const IAggregateFunction & rhs) const override;
+    void mergeStateFromDifferentVariant(
+        AggregateDataPtr __restrict place, const IAggregateFunction & rhs, ConstAggregateDataPtr rhs_place, Arena * arena) const override;
+
 private:
     template <bool for_merge>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
