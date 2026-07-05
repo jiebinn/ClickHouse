@@ -13,7 +13,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
 
-# Rely on the test framework's max runtime limit; no custom query timeout.
+# Rely on the test framework's max runtime limit; no custom per-query time cap.
 CH_CLIENT="$CLICKHOUSE_CLIENT --allow_experimental_variant_type=1 --allow_suspicious_types_in_order_by=1 --use_variant_default_implementation_for_comparisons=0"
 
 $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS test_variant_distinct"
