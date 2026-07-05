@@ -5249,6 +5249,11 @@ document.addEventListener('mousedown', (e) => {
 }, true);
 document.addEventListener('click', (e) => {
     if (!connection_menu_elem.contains(e.target) && !connection_pointerdown_inside) closeConnectionDropdown();
+    /// Consume the latch: it describes only the pointer interaction that produced this `click`.
+    /// A keyboard activation (Space/Enter on a focused control) fires a `click` with no preceding
+    /// `mousedown`, so a stale `true` left over from opening the menu with the mouse must not carry
+    /// over and suppress that outside dismissal.
+    connection_pointerdown_inside = false;
 }, true);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !connection_dropdown_elem.hidden) {
