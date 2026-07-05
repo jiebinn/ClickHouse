@@ -44,18 +44,17 @@ void fillPartitionConstantsSubstitution(
     const auto matches = matchTrees(key_outputs, predicate_dag, /*check_monotonicity=*/false);
     const auto partition_constants = std::views::zip(key_outputs, partition.value) | std::ranges::to<std::unordered_map<const ActionsDAG::Node *, Field>>();
 
-    for (const auto & node : predicate_dag.getNodes())
+    for (const auto & [node, match] : matches)
     {
-        const auto it = matches.find(&node);
-        if (it == matches.end() || !it->second.node || it->second.monotonicity)
+        if (!match.node || match.monotonicity)
             continue;
 
-        const auto [_, match] = *it;
-        if (!partition_constants.contains(match.node))
+        const auto it = partition_constants.find(match.node);
+        if (it == partition_constants.end())
             continue;
 
-        auto column = node.result_type->createColumnConst(1, partition_constants.at(match.node));
-        substitutions.emplace(&node, ColumnWithTypeAndName{column->getPtr(), node.result_type, node.result_name});
+        auto column = node->result_type->createColumnConst(1, it->second);
+        substitutions.emplace(node, ColumnWithTypeAndName{column->getPtr(), node->result_type, node->result_name});
     }
 }
 
@@ -72,15 +71,13 @@ void fillVirtualConstantsSubstitution(
             return;
 
         const auto column_desc = metadata_snapshot->virtuals.get(name, VirtualsKind::All, VirtualsMaterializationPlace::All);
-        for (const auto & node : predicate_dag.getNodes())
+        for (const auto * node : predicate_dag.getInputs())
         {
-            if (node.type != ActionsDAG::ActionType::INPUT || node.result_name != name)
-                continue;
-            if (substitutions.contains(&node))
+            if (node->result_name != name || substitutions.contains(node))
                 continue;
 
             auto column = column_desc.type->createColumnConst(1, value);
-            substitutions.emplace(&node, ColumnWithTypeAndName{column->getPtr(), column_desc.type, node.result_name});
+            substitutions.emplace(node, ColumnWithTypeAndName{column->getPtr(), column_desc.type, node->result_name});
         }
     };
 
@@ -213,8 +210,7 @@ const Cond & ConditionTemplate<Cond>::generateForPartition(const MergeTreePartit
     catch (const Exception &)
     {
         /// Constant substitution is best-effort: only expected query-evaluation failures
-        /// (e.g. division by zero while folding a partition constant) are caught here, so we
-        /// fall back to the unsubstituted condition. Non-`Exception` errors are not swallowed.
+        /// (e.g. division by zero while folding a partition constant) are caught here.
         return generateUnsubstituted();
     }
 }
