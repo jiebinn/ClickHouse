@@ -152,20 +152,36 @@ void AggregateFunctionTuple::add(AggregateDataPtr __restrict place, const IColum
     }
 
     /// Multiple zipped tuples: the nested function takes one row index for all of its argument
-    /// columns, and sparse columns would translate the same row to different values indices, so
-    /// sparse elements are materialized instead.
+    /// columns, and sparse columns would translate the same row to different values indices. When
+    /// any of the i-th element columns is sparse, single-row cuts bring all of them to a common
+    /// row 0 (a sparse element is cut from its dense values column at the translated index); an
+    /// element with no sparse columns is passed through unchanged.
     size_t num_tuples = argument_types.size();
     Columns holders(num_tuples);
     ColumnRawPtrs nested_columns(num_tuples);
     for (size_t i = 0; i < nested_functions.size(); ++i)
     {
+        bool has_sparse = false;
         for (size_t k = 0; k < num_tuples; ++k)
         {
-            const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[k]);
-            holders[k] = tuple_column.getColumnPtr(i)->convertToFullColumnIfSparse();
-            nested_columns[k] = holders[k].get();
+            nested_columns[k] = &assert_cast<const ColumnTuple &>(*columns[k]).getColumn(i);
+            has_sparse |= typeid_cast<const ColumnSparse *>(nested_columns[k]) != nullptr;
         }
-        nested_functions[i]->add(place + state_offsets[i], nested_columns.data(), row_num, arena);
+
+        size_t nested_row = row_num;
+        if (has_sparse)
+        {
+            for (size_t k = 0; k < num_tuples; ++k)
+            {
+                if (const auto * sparse = typeid_cast<const ColumnSparse *>(nested_columns[k]))
+                    holders[k] = sparse->getValuesColumn().cut(sparse->getValueIndex(row_num), 1);
+                else
+                    holders[k] = nested_columns[k]->cut(row_num, 1);
+                nested_columns[k] = holders[k].get();
+            }
+            nested_row = 0;
+        }
+        nested_functions[i]->add(place + state_offsets[i], nested_columns.data(), nested_row, arena);
     }
 }
 
@@ -196,12 +212,15 @@ void AggregateFunctionTuple::addBatchImpl(
     VectorWithMemoryTracking<ElementAccess> elements;
 
     /// Multiple zipped tuples: the nested function takes one row index for all of its argument
-    /// columns, and sparse columns would translate the same row to different values indices, so
-    /// sparse elements are materialized once per call instead. `zipped_columns` is a row-major
-    /// matrix of the element columns: `zipped_columns[i * num_tuples + k]` is element `i` of the
-    /// `k`-th Tuple argument.
+    /// columns, and sparse columns would translate the same row to different values indices. When
+    /// any of the i-th element columns is sparse, all of them are cut to the batch range
+    /// [row_begin, row_end) and converted to full columns, and `row_bases[i]` rebases the row
+    /// indices to the cut; an element with no sparse columns is passed through unchanged with
+    /// `row_bases[i]` = 0. `zipped_columns` is a row-major matrix of the element columns:
+    /// `zipped_columns[i * num_tuples + k]` is element `i` of the `k`-th Tuple argument.
     Columns holders;
     ColumnRawPtrs zipped_columns;
+    VectorWithMemoryTracking<size_t> row_bases;
 
     if (num_tuples == 1)
     {
@@ -223,14 +242,26 @@ void AggregateFunctionTuple::addBatchImpl(
     {
         holders.resize(nested_functions.size() * num_tuples);
         zipped_columns.resize(nested_functions.size() * num_tuples);
-        for (size_t k = 0; k < num_tuples; ++k)
+        row_bases.resize(nested_functions.size());
+        for (size_t i = 0; i < nested_functions.size(); ++i)
         {
-            const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[k]);
-            for (size_t i = 0; i < nested_functions.size(); ++i)
+            bool has_sparse = false;
+            for (size_t k = 0; k < num_tuples; ++k)
             {
-                auto & holder = holders[i * num_tuples + k];
-                holder = tuple_column.getColumnPtr(i)->convertToFullColumnIfSparse();
-                zipped_columns[i * num_tuples + k] = holder.get();
+                zipped_columns[i * num_tuples + k] = &assert_cast<const ColumnTuple &>(*columns[k]).getColumn(i);
+                has_sparse |= typeid_cast<const ColumnSparse *>(zipped_columns[i * num_tuples + k]) != nullptr;
+            }
+
+            row_bases[i] = 0;
+            if (has_sparse)
+            {
+                for (size_t k = 0; k < num_tuples; ++k)
+                {
+                    auto & holder = holders[i * num_tuples + k];
+                    holder = zipped_columns[i * num_tuples + k]->cut(row_begin, row_end - row_begin)->convertToFullColumnIfSparse();
+                    zipped_columns[i * num_tuples + k] = holder.get();
+                }
+                row_bases[i] = row_begin;
             }
         }
     }
@@ -254,7 +285,7 @@ void AggregateFunctionTuple::addBatchImpl(
         else
         {
             for (size_t i = 0; i < nested_functions.size(); ++i)
-                nested_functions[i]->add(place + state_offsets[i], &zipped_columns[i * num_tuples], row, arena);
+                nested_functions[i]->add(place + state_offsets[i], &zipped_columns[i * num_tuples], row - row_bases[i], arena);
         }
     };
 

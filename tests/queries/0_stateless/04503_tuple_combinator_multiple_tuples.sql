@@ -27,6 +27,18 @@ SELECT corrTuple(x, x) FROM test_tuple_multiple_sparse;
 SELECT corrTuple(x, x) OVER (ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) FROM test_tuple_multiple_sparse ORDER BY x.a DESC LIMIT 1;
 DROP TABLE test_tuple_multiple_sparse;
 
+SELECT 'mixed sparse and dense elements with two tuples';
+DROP TABLE IF EXISTS test_tuple_multiple_mixed;
+CREATE TABLE test_tuple_multiple_mixed (t1 Tuple(v Float64, w Float64), t2 Tuple(v Float64, w Float64)) ENGINE = MergeTree ORDER BY tuple()
+    SETTINGS ratio_of_defaults_for_sparse_serialization = 0.5;
+INSERT INTO test_tuple_multiple_mixed SELECT
+    (if(cityHash64(number) % 10 = 0, toFloat64(number % 83), 0), toFloat64(1 + number % 3)),
+    (toFloat64(1 + number % 7), toFloat64(1 + number % 5))
+FROM numbers(1000);
+SELECT avgWeightedTuple(t1, t2) FROM test_tuple_multiple_mixed;
+SELECT round(sum(x.1), 6), round(sum(x.2), 6) FROM (SELECT avgWeightedTuple(t1, t2) OVER (ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS x FROM test_tuple_multiple_mixed);
+DROP TABLE test_tuple_multiple_mixed;
+
 SELECT 'errors';
 SELECT sumTuple(); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 SELECT corrTuple((toFloat64(1), toFloat64(2)), tuple(toFloat64(3))); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }

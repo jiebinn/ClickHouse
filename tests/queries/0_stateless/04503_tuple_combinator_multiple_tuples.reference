@@ -12,4 +12,7 @@ only-null element in one tuple
 sparse elements with two tuples
 (1,1)
 (1,1)
+mixed sparse and dense elements with two tuples
+(3.9622216662496874,1.9986666666666666)
+3961.362667	1998.20131
 errors
