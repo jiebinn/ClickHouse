@@ -144,8 +144,7 @@ DROP TABLE test_tuple_sparse;
 -- Outer `Nullable(Tuple(...))` argument: routes through the `Null` combinator
 -- (`AggregateFunctionNullUnary`), which calls `addBatchSinglePlaceNotNull` / `addBatchSinglePlace`
 -- on the nested `-Tuple` function with a null map. Whole-tuple NULLs are skipped; only non-null
--- rows contribute. This exercises the `addBatchSinglePlaceNotNull` override that materializes the
--- outer tuple once per batch instead of re-running `recursiveRemoveSparse` per surviving row.
+-- rows contribute. This exercises the `addBatchSinglePlaceNotNull` override of the `-Tuple` function.
 SELECT 'nullable tuple';
 SET allow_experimental_nullable_tuple_type = 1;
 -- Single place, no NULLs: numbers 0..3 -> first elements sum to 0+1+2+3 = 6, second to 6.0.

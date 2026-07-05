@@ -127,13 +127,23 @@ bool AggregateFunctionTuple::hasTrivialDestructor() const
 
 void AggregateFunctionTuple::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
 {
-    /// Per-row fallback path: materialize sparse children defensively so callers that bypass
-    /// our batch overrides (e.g. direct `add` calls in tests or future code paths) stay correct.
-    /// The hot paths (addBatch/addBatchSinglePlace) materialize once up front and use
-    /// addRowFromMaterialized to avoid paying this cost per row.
-    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
-    addRowFromMaterialized(place, tuple_column, row_num, arena);
+    /// An element column may be sparse when the caller has not materialized the block (the
+    /// aggregation engine does it for the batch paths). Nested aggregate functions require dense
+    /// columns, so read a sparse element through its dense values column at the translated index:
+    /// default rows map to index 0, where the shared default value lives.
+    const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
+
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+    {
+        const IColumn * nested_col = &tuple_column.getColumn(i);
+        size_t nested_row = row_num;
+        if (const auto * sparse = typeid_cast<const ColumnSparse *>(nested_col))
+        {
+            nested_col = &sparse->getValuesColumn();
+            nested_row = sparse->getValueIndex(row_num);
+        }
+        nested_functions[i]->add(place + state_offsets[i], &nested_col, nested_row, arena);
+    }
 }
 
 template <bool has_null_map, typename GetPlace>
@@ -146,21 +156,48 @@ void AggregateFunctionTuple::addBatchImpl(
     Arena * arena,
     GetPlace && get_place) const
 {
-    /// `MergeTree` may store individual `Tuple` elements as `ColumnSparse` while the outer `ColumnTuple`
-    /// is dense. Nested aggregate functions cast their column to its concrete type, so the tuple is
-    /// materialized once per batch; delegating to the `IAggregateFunctionHelper` batch loops would
-    /// instead route every row through the `add` override and rerun `recursiveRemoveSparse` per row.
-    ColumnPtr materialized = recursiveRemoveSparse(columns[0]->getPtr());
-    const auto & tuple_column = assert_cast<const ColumnTuple &>(*materialized);
+    /// Batch callers may pass tuples whose element columns are sparse (e.g. window aggregation over
+    /// data read from `MergeTree`). Expanding a sparse element would cost a full-column copy per
+    /// call, and sliding window frames call this once per row, so read sparse elements through
+    /// their dense values column with per-row index translation: default rows map to index 0,
+    /// where the shared default value lives.
+    const auto & tuple_column = assert_cast<const ColumnTuple &>(*columns[0]);
 
-    ColumnRawPtrs element_columns(nested_functions.size());
+    /// For a sparse element the nested function receives the dense values column, and the row index
+    /// is translated with a `ColumnSparse::Iterator` advanced monotonically: rows within one call
+    /// are processed in increasing order, so the translation is amortized constant time.
+    struct ElementAccess
+    {
+        const IColumn * column = nullptr;
+        std::optional<ColumnSparse::Iterator> sparse_iterator;
+    };
+
+    VectorWithMemoryTracking<ElementAccess> elements(nested_functions.size());
     for (size_t i = 0; i < nested_functions.size(); ++i)
-        element_columns[i] = &tuple_column.getColumn(i);
+    {
+        const IColumn * element = &tuple_column.getColumn(i);
+        if (const auto * sparse = typeid_cast<const ColumnSparse *>(element))
+        {
+            elements[i].column = &sparse->getValuesColumn();
+            elements[i].sparse_iterator.emplace(sparse->getIterator(row_begin));
+        }
+        else
+            elements[i].column = element;
+    }
 
     auto add_row = [&](AggregateDataPtr place, size_t row)
     {
         for (size_t i = 0; i < nested_functions.size(); ++i)
-            nested_functions[i]->add(place + state_offsets[i], &element_columns[i], row, arena);
+        {
+            auto & element = elements[i];
+            size_t nested_row = row;
+            if (element.sparse_iterator)
+            {
+                element.sparse_iterator->advanceToRow(row);
+                nested_row = element.sparse_iterator->getValueIndex();
+            }
+            nested_functions[i]->add(place + state_offsets[i], &element.column, nested_row, arena);
+        }
     };
 
     if (if_argument_pos >= 0)
