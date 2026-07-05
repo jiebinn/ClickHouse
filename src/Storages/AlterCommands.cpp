@@ -1414,31 +1414,17 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     if (metadata_copy.sampling_key.definition_ast != nullptr)
         metadata_copy.sampling_key.recalculateWithNewAST(metadata_copy.sampling_key.definition_ast, metadata_copy.columns, metadata_copy.virtuals, context);
 
-    /// Changes in columns may lead to changes in secondary indices.
-    /// Implicit min-max indices may cover persistent virtual columns (`_block_number`,
-    /// `_block_offset`), which are absent from `metadata_copy.columns`, so they have to
-    /// be resolved against the virtual columns too.
-    std::optional<ColumnsDescription> columns_with_virtuals;
+    /// Changes in columns may lead to changes in secondary indices
+    const ColumnsDescription columns_with_virtuals(
+        metadata_copy.getSampleBlockWithVirtuals(VirtualsKind::All, VirtualsMaterializationPlace::All).getNamesAndTypesList());
     for (auto & index : metadata_copy.secondary_indices)
     {
         try
         {
-            const ColumnsDescription * columns_for_index = &metadata_copy.columns;
-            if (index.isImplicitlyCreated())
-            {
-                if (!columns_with_virtuals)
-                {
-                    columns_with_virtuals = metadata_copy.columns;
-                    for (const auto & virtual_column :
-                         metadata_copy.virtuals.toColumnsDescription(VirtualsKind::All, VirtualsMaterializationPlace::All))
-                        if (!columns_with_virtuals->has(virtual_column.name))
-                            columns_with_virtuals->add(virtual_column);
-                }
-                columns_for_index = &*columns_with_virtuals;
-            }
-
             index = IndexDescription::getIndexFromAST(
-                index.definition_ast, *columns_for_index, index.isImplicitlyCreated(), index.escape_filenames, context);
+                index.definition_ast,
+                index.isImplicitlyCreated() ? columns_with_virtuals : metadata_copy.columns,
+                index.isImplicitlyCreated(), index.escape_filenames, context);
         }
         catch (const Exception & exception)
         {
