@@ -116,6 +116,24 @@ class LakeTableGenerator:
             )
         table.columns = new_columns
         table.check_constraints.clear()
+        # RESTORE can roll back CLUSTER BY / partitioning changes, so re-sync the clustering
+        # and partition state that OPTIMIZE generation relies on. DESCRIBE DETAIL exposes both
+        # for Delta; guard on the column being present so an older Delta that omits
+        # `clusteringColumns` leaves the create/alter-tracked value untouched rather than
+        # wrongly clearing it.
+        if table.lake_format == LakeFormat.DeltaLake:
+            detail = spark.sql(
+                f"DESCRIBE DETAIL {table.get_table_full_path()}"
+            ).collect()
+            if detail:
+                row = detail[0].asDict()
+                if "clusteringColumns" in row:
+                    table.clustered = len(row["clusteringColumns"] or []) > 0
+                if "partitionColumns" in row:
+                    flat_cols = table.flat_columns()
+                    table.partition_keys = [
+                        c for c in (row["partitionColumns"] or []) if c in flat_cols
+                    ]
 
     def generate_common_alter_statements(
         self,
@@ -361,6 +379,7 @@ class LakeTableGenerator:
                 chosen = cluster_cols[: random.randint(1, min(4, len(cluster_cols)))]
                 ddl += f" CLUSTER BY ({','.join(chosen)})"
                 clustered = True
+                res.clustered = True
 
         # Add Partition by, can't partition by all columns. Identity columns
         # cannot be Delta partition columns; other formats have none, so the
@@ -376,6 +395,12 @@ class LakeTableGenerator:
                     k=random.randint(1, min(3, len(partition_clauses))),
                 )
                 ddl += f" PARTITIONED BY ({','.join(random_subset)})"
+                # Remember plain partition columns for Delta OPTIMIZE ... WHERE (which only
+                # accepts partition predicates). Non-Delta formats emit transform expressions
+                # here (e.g. bucket(n, col)), which are not usable as a WHERE column, so keep
+                # only real column names.
+                flat_cols = res.flat_columns()
+                res.partition_keys = [c for c in random_subset if c in flat_cols]
 
         # ddl += self.set_table_location(next_location) no location needed yet
 
@@ -1033,10 +1058,13 @@ class IcebergTableGenerator(LakeTableGenerator):
         if len(timestamps) > 0 and next_option in (12, 13):
             return f"CALL `{table.catalog_name}`.system.rollback_to_timestamp(table => '{table.get_namespace_path()}', timestamp => TIMESTAMP '{random.choice(timestamps)}')"
         if next_option == 14:
-            # Fast-forward between main and the branches `insert_into_branch` writes to
-            refs = ["main", f"b_{random.randint(1, 3)}"]
-            random.shuffle(refs)
-            return f"CALL `{table.catalog_name}`.system.fast_forward(table => '{table.get_namespace_path()}', branch => '{refs[0]}', to => '{refs[1]}')"
+            # Fast-forward `main` up to one of the branches `insert_into_branch` writes to.
+            # `insert_into_branch` only ever advances `b_1..b_3` and leaves `main` untouched, so
+            # `b_n` is always the descendant. `fast_forward` requires `to` to be a descendant of
+            # `branch`, so the direction must stay branch => 'main', to => 'b_n'; reversing it
+            # (branch => 'b_n', to => 'main') is a guaranteed failure once the branch exists.
+            other = f"b_{random.randint(1, 3)}"
+            return f"CALL `{table.catalog_name}`.system.fast_forward(table => '{table.get_namespace_path()}', branch => 'main', to => '{other}')"
         # `publish_changes` was intentionally dropped: it only succeeds for a wap_id staged by an
         # earlier write with `spark.wap.id` set, which this generator never does, so every call
         # failed with an unknown WAP ID. Restore it once WAP writes can be staged under a tracked id.
@@ -1355,15 +1383,21 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
                 res += " DRY RUN"
             return res + ";"
         if next_option == 2:
-            # Optimize
+            # Optimize. Databricks/Delta treats liquid-clustered tables (CLUSTER BY)
+            # differently from the rest, so the direction must follow the tracked state:
+            #  - clustered: recluster via plain OPTIMIZE or OPTIMIZE ... FULL. ZORDER BY is
+            #    rejected (mutually exclusive with clustering) and a WHERE predicate is not
+            #    supported, so neither is emitted.
+            #  - non-clustered: FULL is only valid for clustered tables, so it is not emitted.
+            #    OPTIMIZE ... WHERE only accepts partition predicates, so a WHERE is added only
+            #    when the table has partition keys and references one of them; ZORDER BY is free.
             res = f"OPTIMIZE {table.get_table_full_path()}"
-            if random.randint(1, 4) == 1:
-                # FULL recompacts clustered tables; it stands alone
-                return res + " FULL;"
-            if random.randint(1, 3) == 1:
-                flat_cols = list(table.flat_columns().keys())
-                col = random.choice(flat_cols)
-                res += f" WHERE {col} IS NOT NULL"
+            if table.clustered:
+                if random.randint(1, 4) == 1:
+                    res += " FULL"
+                return res + ";"
+            if table.partition_keys and random.randint(1, 3) == 1:
+                res += f" WHERE {random.choice(table.partition_keys)} IS NOT NULL"
             if random.randint(1, 2) == 1:
                 res += f" ZORDER BY ({self.random_ordered_columns(table, False)})"
             return res + ";"
@@ -1402,19 +1436,32 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
             # Rewrite files with soft-deleted rows (purges deletion vectors)
             return f"REORG TABLE {table.get_table_full_path()} APPLY (PURGE);"
         if next_option == 9:
-            # Change liquid clustering keys after creation
+            # Change liquid clustering keys after creation. Executed inline (like RESTORE) so
+            # the tracked `clustered` flag is updated only after the ALTER succeeds; setting it
+            # before the statement runs would desync it whenever the ALTER fails (the caller
+            # ignores such errors), which would then mis-drive OPTIMIZE generation. The new
+            # value is known from the statement, so set it directly rather than via
+            # `_refresh_table_model` (that helper also clears check constraints, which a
+            # CLUSTER BY change must not do).
             if random.randint(1, 3) == 1:
-                return f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY NONE;"
-            cluster_cols = [
-                path
-                for path, dtype in table.flat_columns().items()
-                if not isinstance(dtype, (sp.ArrayType, sp.MapType, sp.StructType))
-                and not table.columns[path.split(".", 1)[0]].generated
-            ]
-            if cluster_cols:
+                stmt = f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY NONE"
+                new_clustered = False
+            else:
+                cluster_cols = [
+                    path
+                    for path, dtype in table.flat_columns().items()
+                    if not isinstance(dtype, (sp.ArrayType, sp.MapType, sp.StructType))
+                    and not table.columns[path.split(".", 1)[0]].generated
+                ]
+                if not cluster_cols:
+                    return ""
                 random.shuffle(cluster_cols)
                 chosen = cluster_cols[: random.randint(1, min(4, len(cluster_cols)))]
-                return f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY ({','.join(chosen)});"
+                stmt = f"ALTER TABLE {table.get_table_full_path()} CLUSTER BY ({','.join(chosen)})"
+                new_clustered = True
+            spark.sql(stmt)
+            table.clustered = new_clustered
+            return ""
         return ""
 
 
