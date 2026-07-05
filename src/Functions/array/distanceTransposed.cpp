@@ -197,8 +197,10 @@ struct DotProductTransposed
 /// non-quantized transposed functions cast the reference to the QBit element type (so a `BFloat16` query widens to `Float32`
 /// losslessly and a `Float64` query is narrowed to the `Float32` compute precision, since the stored side reconstructs only to
 /// `Float32`). An `Array(Int8)` reference is instead treated as `quantizeBFloat16ToInt8` codes and dequantized to its exact Lloyd-Max
-/// levels (equivalent to `dequantizeInt8ToBFloat16`), giving a symmetric quantized-vs-quantized distance. The function is registered
-/// under the `...Quantized` name (e.g. `cosineDistanceTransposedQuantized`).
+/// levels (equivalent to `dequantizeInt8ToBFloat16`). Note that `p` truncates only the stored `QBit` codes; the `Array(Int8)`
+/// reference is a complete query and is always reconstructed at full 8-bit precision (row 8 of the LUT), so the comparison is a
+/// symmetric quantized-vs-quantized distance only at `p = 8` -- for `p < 8` only the stored side is read at coarser precision. The
+/// function is registered under the `...Quantized` name (e.g. `cosineDistanceTransposedQuantized`).
 template <typename Kernel, bool Quantized = false>
 class FunctionArrayDistance : public IFunction
 {

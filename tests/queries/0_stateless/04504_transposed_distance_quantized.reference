@@ -13,6 +13,13 @@ An Array(Int8) reference gives identical results with the partial-reads pass on 
 1	0.09
 2	3.72
 3	1.36
+At p < 8 the Array(Int8) reference is still reconstructed at full 8-bit precision (every *_matches must be 1, pass on or off)
+1	1	1	1
+2	1	1	1
+3	1	1	1
+1	1	1	1
+2	1	1	1
+3	1	1	1
 A non-Float32 Float reference is accepted and computed at the Float32 reconstruction precision
 1	1	1	1
 2	1	1	1

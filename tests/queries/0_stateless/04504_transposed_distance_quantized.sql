@@ -2,7 +2,8 @@
 -- dotProductTransposedQuantized. They operate on a QBit(Int8) of quantizeBFloat16ToInt8 Lloyd-Max codes, dequantizing
 -- each code to its reconstruction level on the fly, and compute the distance against the reference vector. A Float reference is
 -- the query, compared directly and cast to Float32 (the reconstruction precision of the dequantized codes, so a Float64 query is
--- narrowed to Float32); an Array(Int8) reference is itself dequantized (a symmetric quantized comparison).
+-- narrowed to Float32); an Array(Int8) reference is itself dequantized, always at full 8-bit precision (`p` truncates only the
+-- stored QBit), so the comparison is symmetric quantized-vs-quantized only at p = 8.
 
 SET enable_analyzer = 1;
 
@@ -54,6 +55,32 @@ SELECT id, round(L2DistanceTransposedQuantized(vec, ref_codes, 6), 2) AS d FROM 
 SETTINGS optimize_qbit_distance_function_reads = 0;
 WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes
 SELECT id, round(L2DistanceTransposedQuantized(vec, ref_codes, 6), 2) AS d FROM qbit_q ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 1;
+
+SELECT 'At p < 8 the Array(Int8) reference is still reconstructed at full 8-bit precision (every *_matches must be 1, pass on or off)';
+-- `p` truncates only the stored QBit; the Array(Int8) reference is dequantized at row 8 of the LUT regardless of `p`. Its result must
+-- therefore be bit-identical to the identical query passed as its full-precision Float32 reconstruction toFloat32(dequantizeInt8ToBFloat16(...)),
+-- for any `p`. This locks the p < 8 contract: if the reference dequant ever started honouring `p` (using row `p`), the equalities below
+-- would break for p = 4. Checked with the partial-reads pass off and on.
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), ref_codes)::Array(Float32) AS ref_full
+SELECT
+    id,
+    cosineDistanceTransposedQuantized(vec, ref_codes, 4) = cosineDistanceTransposedQuantized(vec, ref_full, 4) AS cosine_matches,
+    L2DistanceTransposedQuantized(vec, ref_codes, 4) = L2DistanceTransposedQuantized(vec, ref_full, 4) AS l2_matches,
+    dotProductTransposedQuantized(vec, ref_codes, 4) = dotProductTransposedQuantized(vec, ref_full, 4) AS dot_matches
+FROM qbit_q
+ORDER BY id
+SETTINGS optimize_qbit_distance_function_reads = 0;
+WITH arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS ref_codes,
+     arrayMap(c -> toFloat32(dequantizeInt8ToBFloat16(c)), ref_codes)::Array(Float32) AS ref_full
+SELECT
+    id,
+    cosineDistanceTransposedQuantized(vec, ref_codes, 4) = cosineDistanceTransposedQuantized(vec, ref_full, 4) AS cosine_matches,
+    L2DistanceTransposedQuantized(vec, ref_codes, 4) = L2DistanceTransposedQuantized(vec, ref_full, 4) AS l2_matches,
+    dotProductTransposedQuantized(vec, ref_codes, 4) = dotProductTransposedQuantized(vec, ref_full, 4) AS dot_matches
+FROM qbit_q
+ORDER BY id
 SETTINGS optimize_qbit_distance_function_reads = 1;
 
 SELECT 'A non-Float32 Float reference is accepted and computed at the Float32 reconstruction precision';

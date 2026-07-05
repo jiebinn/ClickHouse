@@ -2578,19 +2578,22 @@ SELECT dotProductTransposed(vec, array(1, 2), 16) FROM qbit;
     /// quantizeBFloat16ToInt8 Lloyd-Max codec. Because the quantizer is non-linear, the codes are dequantized to their
     /// reconstruction levels on the fly and the distance is computed against the reference (query) vector, which may be a
     /// Float array (the query, cast to Float32 -- the reconstruction precision of the dequantized codes) or a quantized Array(Int8)
-    /// that is dequantized the same way.
+    /// that is dequantized at full 8-bit precision (`p` truncates only the stored QBit).
     const String quantized_reference_note
         = "A `Float` reference (query) vector is compared directly at `Float32` precision -- the reconstruction precision of the "
           "dequantized codes, so a `Float64` query is narrowed to `Float32` while a `BFloat16` query widens to it exactly "
           "(asymmetric distance computation); an `Array(Int8)` reference "
-          "is itself treated as `quantizeBFloat16ToInt8` codes and dequantized to its reconstruction levels (symmetric distance "
-          "computation). It must live in the same space as the values were in before quantization (i.e. after the same random "
-          "rotation and scaling), which is the caller's responsibility. Cosine distance is scale-invariant; dot product and L2 "
-          "distance are not.";
+          "is itself treated as `quantizeBFloat16ToInt8` codes and dequantized to its reconstruction levels. Note that `p` truncates "
+          "only the stored `QBit` codes; the `Array(Int8)` reference is a complete query and is always reconstructed at full 8-bit "
+          "precision, so this is a symmetric quantized-vs-quantized distance only at `p = 8` (for `p < 8` only the stored side is "
+          "read at coarser precision). It must live in the same space as the values were in before quantization (i.e. after the same "
+          "random rotation and scaling), which is the caller's responsibility. Cosine distance is scale-invariant; dot product and "
+          "L2 distance are not.";
     const auto quantized_precision_argument = FunctionDocumentation::Argument{
         "p",
-        "Number of top bits of each Int8 code to use (1 to 8). Fewer bits reconstruct a coarser embedded quantizer for faster I/O "
-        "with reduced accuracy; 8 bits is the full-precision reconstruction.",
+        "Number of top bits of each stored `QBit` code to use (1 to 8). Fewer bits reconstruct a coarser embedded quantizer for "
+        "faster I/O with reduced accuracy; 8 bits is the full-precision reconstruction. `p` truncates only the stored `QBit`; an "
+        "`Array(Int8)` reference is always reconstructed at full 8-bit precision.",
         {"UInt"}};
     const auto quantized_used_dims_argument = FunctionDocumentation::Argument{
         "used_dims",
