@@ -573,7 +573,7 @@ void AggregateFunctionTuple::mergeStateFromDifferentVariant(
         const auto & rhs_nested = rhs_tuple.nested_functions[i];
         AggregateDataPtr lhs_element = place + state_offsets[i];
         ConstAggregateDataPtr rhs_element = rhs_place + rhs_tuple.state_offsets[i];
-        if (lhs_nested->haveSameStateRepresentation(*rhs_nested))
+        if (lhs_nested->getStateVariant() == rhs_nested->getStateVariant())
             lhs_nested->merge(lhs_element, rhs_element, arena);
         else
             lhs_nested->mergeStateFromDifferentVariant(lhs_element, *rhs_nested, rhs_element, arena);
