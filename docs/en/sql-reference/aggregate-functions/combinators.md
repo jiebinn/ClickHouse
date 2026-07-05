@@ -188,18 +188,32 @@ ORDER BY k;
 └───┴─────────────┘
 ```
 
-Using with a multi-argument aggregate function — each `Tuple` supplies one argument, so element `i` computes `corr` of the `i`-th elements of both tuples:
+Using with a multi-argument aggregate function: each `Tuple` argument supplies one argument of the underlying function, and the elements are paired up by position:
+
+```text
+corrTuple((a1, a2), (b1, b2)) = (corr(a1, b1), corr(a2, b2))
+```
 
 ```sql
-SELECT corrTuple(tuple(x, x), tuple(y, x))
-FROM (SELECT toFloat64(number) AS x, toFloat64(100 - number) AS y FROM numbers(10));
+SELECT corrTuple((a1, a2), (b1, b2))
+FROM
+(
+    SELECT
+        toFloat64(number) AS a1,
+        toFloat64(number * 2) AS a2,
+        toFloat64(100 - number) AS b1,
+        toFloat64(number * 3) AS b2
+    FROM numbers(10)
+);
 ```
 
 ```text
-┌─corrTuple((x, x), (y, x))─┐
-│ (-1,1)                    │
-└───────────────────────────┘
+┌─corrTuple((a1, a2), (b1, b2))─┐
+│ (-1,1)                        │
+└───────────────────────────────┘
 ```
+
+`a1` and `b1` are anticorrelated, while `a2` and `b2` are proportional, so the result is `(-1, 1)`.
 
 `-Tuple` can be combined with other combinators such as `-If`. For example: `sumTupleIf(tuple_column, cond)`.
 
