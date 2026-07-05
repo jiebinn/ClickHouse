@@ -40,26 +40,17 @@ def test_statistics_minmax_upgrade(start_cluster):
         )
         ENGINE = MergeTree
         ORDER BY id
-        SETTINGS min_bytes_for_wide_part = 0
+        SETTINGS min_bytes_for_wide_part = 0, allow_experimental_statistics = 1
         """,
-        settings={"allow_statistics": 1},
     )
 
     node.query("SYSTEM STOP MERGES t_minmax")
     # Two non-overlapping parts so the minmax statistics can prune one of them.
+    # `materialize_statistics_on_insert` does not exist on the old version, so the statistics
+    # objects are persisted explicitly below via MATERIALIZE STATISTICS.
+    node.query("INSERT INTO t_minmax SELECT number, number FROM numbers(1000)")
     node.query(
-        "INSERT INTO t_minmax SELECT number, number FROM numbers(1000)",
-        settings={"materialize_statistics_on_insert": 1},
-    )
-    node.query(
-        "INSERT INTO t_minmax SELECT number + 1000, number + 1000000 FROM numbers(1000)",
-        settings={"materialize_statistics_on_insert": 1},
-    )
-    # Make sure the statistics objects are persisted in the parts, independent of the
-    # materialize_statistics_on_insert default of the old version.
-    node.query(
-        "ALTER TABLE t_minmax MATERIALIZE STATISTICS value",
-        settings={"mutations_sync": 2},
+        "INSERT INTO t_minmax SELECT number + 1000, number + 1000000 FROM numbers(1000)"
     )
 
     assert node.query("SELECT count() FROM t_minmax").strip() == "2000"

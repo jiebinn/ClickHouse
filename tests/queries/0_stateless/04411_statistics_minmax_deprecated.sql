@@ -1,7 +1,9 @@
 -- Tags: no-fasttest
 -- Tests that the deprecated `minmax` column statistics type can no longer be created, while `basic`
--- (its superset) works. Existing tables/parts that still reference `minmax` are covered by the
--- integration test test_statistics_minmax_upgrade.
+-- (its superset) works. The rejection covers the `auto_statistics_types` setting-change path (both
+-- CREATE and ALTER ... MODIFY SETTING). Already-loaded old metadata that still carries `minmax` keeps
+-- working and remains alterable: that upgrade path is covered by the integration test
+-- test_statistics_minmax_upgrade.
 
 SET allow_statistics = 1;
 
@@ -10,8 +12,13 @@ DROP TABLE IF EXISTS t_minmax_deprecated;
 -- Explicit `minmax` in CREATE is rejected.
 CREATE TABLE t_minmax_deprecated (a UInt64 STATISTICS(minmax)) ENGINE = MergeTree ORDER BY tuple(); -- { serverError INCORRECT_QUERY }
 
--- `minmax` via auto statistics is rejected too.
+-- `minmax` via the auto statistics setting is rejected too, regardless of its position in the list.
 CREATE TABLE t_minmax_deprecated (a UInt64) ENGINE = MergeTree ORDER BY tuple() SETTINGS auto_statistics_types = 'minmax'; -- { serverError INCORRECT_QUERY }
+CREATE TABLE t_minmax_deprecated (a UInt64) ENGINE = MergeTree ORDER BY tuple() SETTINGS auto_statistics_types = 'basic, minmax, uniq'; -- { serverError INCORRECT_QUERY }
+
+-- A non-`minmax` auto statistics setting is accepted.
+CREATE TABLE t_minmax_deprecated (a UInt64) ENGINE = MergeTree ORDER BY tuple() SETTINGS auto_statistics_types = 'basic, uniq';
+DROP TABLE t_minmax_deprecated;
 
 -- `basic` (the replacement) works.
 CREATE TABLE t_minmax_deprecated (a UInt64 STATISTICS(basic)) ENGINE = MergeTree ORDER BY tuple();
@@ -23,5 +30,8 @@ ALTER TABLE t_minmax_deprecated MODIFY SETTING auto_statistics_types = 'minmax, 
 ALTER TABLE t_minmax_deprecated MODIFY STATISTICS a TYPE basic;
 
 SHOW CREATE TABLE t_minmax_deprecated;
+
+-- Migrating the auto statistics setting to a non-`minmax` value is allowed.
+ALTER TABLE t_minmax_deprecated MODIFY SETTING auto_statistics_types = 'basic, uniq';
 
 DROP TABLE t_minmax_deprecated;

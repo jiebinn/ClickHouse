@@ -643,9 +643,13 @@ void MergeTreeStatisticsFactory::validate(const ColumnStatisticsDescription & st
     for (const auto & [type, desc] : stats.types_to_desc)
     {
         /// The `minmax` statistics type is deprecated: it is a subset of `basic`, which should be used instead.
-        /// Creating it anew is rejected here. This check is skipped when loading existing tables (ATTACH / startup),
-        /// so old tables and parts that still reference `minmax` keep working.
-        if (type == StatisticsType::MinMax)
+        /// Reject it only when it is declared explicitly (`STATISTICS(minmax)` in CREATE / ALTER). Implicit
+        /// `minmax` produced by the `auto_statistics_types` setting is tolerated here, so old tables that still
+        /// carry it in their metadata remain loadable and alterable; introducing `minmax` anew through that
+        /// setting is rejected separately on the setting-change path (see `validateAutoStatisticsTypes`).
+        /// This whole validation is also skipped when loading existing tables (ATTACH / startup), so old tables
+        /// and parts that still reference `minmax` keep working.
+        if (type == StatisticsType::MinMax && !desc.is_implicit)
             throw Exception(
                 ErrorCodes::INCORRECT_QUERY,
                 "Statistics type 'minmax' is deprecated. Use 'basic' instead, which is a superset of 'minmax'.");
@@ -777,6 +781,23 @@ void removeImplicitStatistics(ColumnsDescription & columns)
                     ++it;
             }
         });
+    }
+}
+
+void validateAutoStatisticsTypes(const String & statistics_types_str)
+{
+    if (statistics_types_str.empty())
+        return;
+
+    /// Runs only on the setting-change path (CREATE / ALTER ... MODIFY SETTING auto_statistics_types),
+    /// never when loading existing metadata, so tables that still carry `minmax` in the setting keep working.
+    auto stats_ast_map = parseColumnStatisticsFromString(statistics_types_str);
+    for (const auto & entry : stats_ast_map)
+    {
+        if (entry.first == StatisticsType::MinMax)
+            throw Exception(
+                ErrorCodes::INCORRECT_QUERY,
+                "Statistics type 'minmax' is deprecated. Use 'basic' instead, which is a superset of 'minmax'.");
     }
 }
 
