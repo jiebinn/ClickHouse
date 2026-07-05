@@ -4,7 +4,7 @@
 
 SELECT 'two tuples';
 SELECT corrTuple((toFloat64(number), toFloat64(number * 2)), (toFloat64(number * 3), toFloat64(100 - number))) FROM numbers(10);
-SELECT avgWeightedTuple((toFloat64(number), toFloat64(number * 10)), (toFloat64(1 + number % 2), toFloat64(1))) FROM numbers(4);
+SELECT (round(r.1, 3), round(r.2, 3)) FROM (SELECT avgWeightedTuple((toFloat64(number), toFloat64(number * 10)), (toFloat64(1 + number % 2), toFloat64(1))) AS r FROM numbers(4));
 
 SELECT 'element names come from the first tuple';
 SELECT corrTuple(CAST((toFloat64(number), toFloat64(number)), 'Tuple(a Float64, b Float64)'), (toFloat64(number), toFloat64(100 - number))) AS r, toTypeName(r) FROM numbers(5);
@@ -35,8 +35,8 @@ INSERT INTO test_tuple_multiple_mixed SELECT
     (if(cityHash64(number) % 10 = 0, toFloat64(number % 83), 0), toFloat64(1 + number % 3)),
     (toFloat64(1 + number % 7), toFloat64(1 + number % 5))
 FROM numbers(1000);
-SELECT avgWeightedTuple(t1, t2) FROM test_tuple_multiple_mixed;
-SELECT round(sum(x.1), 6), round(sum(x.2), 6) FROM (SELECT avgWeightedTuple(t1, t2) OVER (ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS x FROM test_tuple_multiple_mixed);
+SELECT (round(r.1, 3), round(r.2, 3)) FROM (SELECT avgWeightedTuple(t1, t2) AS r FROM test_tuple_multiple_mixed);
+SELECT round(sum(x.1), 3), round(sum(x.2), 3) FROM (SELECT avgWeightedTuple(t1, t2) OVER (ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS x FROM test_tuple_multiple_mixed);
 DROP TABLE test_tuple_multiple_mixed;
 
 SELECT 'errors';

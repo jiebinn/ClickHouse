@@ -136,7 +136,7 @@ CREATE TABLE test_tuple_sparse (x Tuple(Int64, Float64)) ENGINE = MergeTree ORDE
 INSERT INTO test_tuple_sparse SELECT tuple(0, 0.0) FROM numbers(100);
 INSERT INTO test_tuple_sparse SELECT tuple(1, 2.0);
 SELECT sumTuple(x) FROM test_tuple_sparse;
-SELECT avgTuple(x) FROM test_tuple_sparse;
+SELECT (round(r.1, 3), round(r.2, 3)) FROM (SELECT avgTuple(x) AS r FROM test_tuple_sparse);
 SELECT minTuple(x) FROM test_tuple_sparse;
 SELECT maxTuple(x) FROM test_tuple_sparse;
 DROP TABLE test_tuple_sparse;

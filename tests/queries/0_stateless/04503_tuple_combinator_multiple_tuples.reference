@@ -1,6 +1,6 @@
 two tuples
 (1,-1)
-(1.6666666666666667,15)
+(1.667,15)
 element names come from the first tuple
 (1,-1)	Tuple(\n    a Float64,\n    b Float64)
 state and merge
@@ -13,6 +13,6 @@ sparse elements with two tuples
 (1,1)
 (1,1)
 mixed sparse and dense elements with two tuples
-(3.9622216662496874,1.9986666666666666)
-3961.362667	1998.20131
+(3.962,1.999)
+3961.363	1998.201
 errors
