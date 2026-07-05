@@ -24,7 +24,7 @@ struct Settings;
   * will return:
   *  (avg(1,3,6), avg(2.0,4.0,7.0), avg(3.0,5.0,8.0))
   *
-  * Since each tuple element may have a different type, we create
+  * Since each tuple element may have a different type, the factory resolves
   * a separate nested aggregate function instance per element.
   */
 class AggregateFunctionTuple final : public IAggregateFunctionHelper<AggregateFunctionTuple>
@@ -38,22 +38,16 @@ private:
     size_t max_state_align = 1;
     String nested_func_name;
 
-    struct NestedFunctionsAndResultType
-    {
-        VectorWithMemoryTracking<AggregateFunctionPtr> functions;
-        DataTypePtr result_type;
-    };
-
-    /// Build one nested aggregate function per tuple element and derive the result type.
-    /// Returns both so the constructor can reuse the functions without recreating them.
-    static NestedFunctionsAndResultType initNested(
-        const AggregateFunctionPtr & representative_nested_func,
-        const DataTypes & arguments,
-        const Array & params);
+    /// Result type: a Tuple of the nested result types, preserving explicit element names.
+    static DataTypePtr deriveResultType(
+        const VectorWithMemoryTracking<AggregateFunctionPtr> & nested_functions,
+        const DataTypes & arguments);
 
 public:
+    /// Receives one nested aggregate function per tuple element, resolved by the factory.
     AggregateFunctionTuple(
-        const AggregateFunctionPtr & representative_nested_func,
+        const String & nested_name,
+        VectorWithMemoryTracking<AggregateFunctionPtr> nested_functions_,
         const DataTypes & arguments,
         const Array & params);
 
@@ -109,14 +103,6 @@ public:
     DataTypePtr getNormalizedStateType() const override;
 
 private:
-    /// Delegating constructor: receives the pre-built nested functions and result type
-    /// produced by `initNested`, so each nested function is created exactly once.
-    AggregateFunctionTuple(
-        const String & func_name,
-        const DataTypes & arguments,
-        const Array & params,
-        NestedFunctionsAndResultType && nested_and_type);
-
     template <bool for_merge>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {

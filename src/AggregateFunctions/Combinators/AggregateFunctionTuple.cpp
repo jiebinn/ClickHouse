@@ -2,7 +2,6 @@
 #include <AggregateFunctions/Combinators/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/Combinators/AggregateFunctionTuple.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSparse.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/Arena.h>
@@ -22,88 +21,32 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
-AggregateFunctionTuple::NestedFunctionsAndResultType AggregateFunctionTuple::initNested(
-    const AggregateFunctionPtr & representative_nested_func,
-    const DataTypes & arguments,
-    const Array & params)
+DataTypePtr AggregateFunctionTuple::deriveResultType(
+    const VectorWithMemoryTracking<AggregateFunctionPtr> & nested_functions,
+    const DataTypes & arguments)
 {
-    const String & base_name = representative_nested_func->getName();
-
-    /// Every construction path goes through the combinator's `transformArguments`, which has
+    /// Every construction path goes through the combinator's `transformArgumentsForMultipleNestedFunctions`, which has
     /// already validated that there is exactly one non-empty `Tuple` argument.
     const auto & tuple_type = assert_cast<const DataTypeTuple &>(*arguments[0]);
-    const auto & elem_types = tuple_type.getElements();
 
-    auto & factory = AggregateFunctionFactory::instance();
-    VectorWithMemoryTracking<AggregateFunctionPtr> functions;
-    functions.resize(elem_types.size());
     DataTypes result_types;
-    result_types.reserve(elem_types.size());
+    result_types.reserve(nested_functions.size());
+    for (const auto & nested_function : nested_functions)
+        result_types.push_back(nested_function->getResultType());
 
-    /// When every tuple element is only-null (e.g. `Tuple(Nullable(Nothing))`), the factory has
-    /// collapsed the representative function to `AggregateFunctionNothing`, whose name is a
-    /// placeholder such as `nothingNull` rather than the original aggregate name. Re-resolving
-    /// each element by that placeholder name would feed the original parameters to the `nothing*`
-    /// creators, which reject parameters, turning otherwise valid parametric aggregates over
-    /// `NULL` into an exception (e.g. `groupArrayMovingAvgTuple(2)(tuple(NULL))`). Since all
-    /// elements are only-null and therefore resolve identically, reuse the already-created
-    /// representative function for every element instead of re-resolving by name.
-    bool all_only_null = true;
-    for (const auto & type : elem_types)
-    {
-        if (!type->onlyNull())
-        {
-            all_only_null = false;
-            break;
-        }
-    }
-
-    /// The combinator interface resolves a single nested function from a representative element
-    /// type, so the per-element functions are re-resolved here by the canonical nested name. The
-    /// original `NullsAction` is not available in this context; elements are resolved with
-    /// `NullsAction::EMPTY`.
-    for (size_t i = 0; i < elem_types.size(); ++i)
-    {
-        if (all_only_null)
-        {
-            functions[i] = representative_nested_func;
-        }
-        else
-        {
-            AggregateFunctionProperties props;
-            DataTypes nested_arg_types = {elem_types[i]};
-            auto action = NullsAction::EMPTY;
-            functions[i] = factory.get(base_name, action, nested_arg_types, params, props);
-        }
-        result_types.push_back(functions[i]->getResultType());
-    }
-
-    DataTypePtr result_type;
     if (tuple_type.hasExplicitNames())
-        result_type = std::make_shared<DataTypeTuple>(result_types, tuple_type.getElementNames());
-    else
-        result_type = std::make_shared<DataTypeTuple>(result_types);
-
-    return {std::move(functions), std::move(result_type)};
+        return std::make_shared<DataTypeTuple>(result_types, tuple_type.getElementNames());
+    return std::make_shared<DataTypeTuple>(result_types);
 }
 
 AggregateFunctionTuple::AggregateFunctionTuple(
-    const AggregateFunctionPtr & representative_nested_func,
+    const String & nested_name,
+    VectorWithMemoryTracking<AggregateFunctionPtr> nested_functions_,
     const DataTypes & arguments,
     const Array & params)
-    : AggregateFunctionTuple(representative_nested_func->getName(), arguments, params,
-        initNested(representative_nested_func, arguments, params))
-{
-}
-
-AggregateFunctionTuple::AggregateFunctionTuple(
-    const String & func_name,
-    const DataTypes & arguments,
-    const Array & params,
-    NestedFunctionsAndResultType && nested_and_type)
-    : IAggregateFunctionHelper<AggregateFunctionTuple>(arguments, params, nested_and_type.result_type)
-    , nested_functions(std::move(nested_and_type.functions))
-    , nested_func_name(func_name)
+    : IAggregateFunctionHelper<AggregateFunctionTuple>(arguments, params, deriveResultType(nested_functions_, arguments))
+    , nested_functions(std::move(nested_functions_))
+    , nested_func_name(nested_name)
 {
     state_offsets.resize(nested_functions.size());
 
@@ -380,8 +323,8 @@ DataTypePtr AggregateFunctionTuple::getNormalizedStateType() const
     }
 
     String normalized_nested_name = normalized_nested_functions.front()->getName();
-    AggregateFunctionPtr normalized_function(new AggregateFunctionTuple(
-        normalized_nested_name, argument_types, Array{}, {std::move(normalized_nested_functions), getResultType()}));
+    auto normalized_function = std::make_shared<AggregateFunctionTuple>(
+        normalized_nested_name, std::move(normalized_nested_functions), argument_types, Array{});
     return std::make_shared<DataTypeAggregateFunction>(std::move(normalized_function), nested_normalized_state_types, Array{});
 }
 
@@ -395,7 +338,9 @@ public:
 
     bool transformsArgumentTypes() const override { return true; }
 
-    DataTypes transformArguments(const DataTypes & arguments) const override
+    bool transformsMultipleNestedFunctions() const override { return true; }
+
+    VectorWithMemoryTracking<DataTypes> transformArgumentsForMultipleNestedFunctions(const DataTypes & arguments) const override
     {
         if (arguments.size() != 1)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
@@ -412,25 +357,21 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Tuple must not be empty for aggregate function with {} suffix", getName());
 
-        /// Return a representative element type as a placeholder so that the factory can resolve the nested function name.
-        /// Prefer the first non-only-null element: if the first element happens to be `Nullable(Nothing)`, the recursive
-        /// `get` would wrap with the `Null` combinator and collapse to `AggregateFunctionNothing*`, which would then
-        /// be used as the base function name and force every per-element nested function to also collapse to Nothing.
-        /// The actual per-element functions are still created inside AggregateFunctionTuple based on real elem_types.
-        for (const auto & type : elem_types)
-            if (!type->onlyNull())
-                return DataTypes({type});
-
-        return DataTypes({elem_types[0]});
+        VectorWithMemoryTracking<DataTypes> nested_arguments_list;
+        nested_arguments_list.reserve(elem_types.size());
+        for (const auto & elem_type : elem_types)
+            nested_arguments_list.push_back(DataTypes{elem_type});
+        return nested_arguments_list;
     }
 
-    AggregateFunctionPtr transformAggregateFunction(
-        const AggregateFunctionPtr & nested_function,
+    AggregateFunctionPtr transformAggregateFunctionFromMultipleNestedFunctions(
+        const String & nested_name,
+        VectorWithMemoryTracking<AggregateFunctionPtr> nested_functions,
         const AggregateFunctionProperties &,
         const DataTypes & arguments,
         const Array & params) const override
     {
-        return std::make_shared<AggregateFunctionTuple>(nested_function, arguments, params);
+        return std::make_shared<AggregateFunctionTuple>(nested_name, std::move(nested_functions), arguments, params);
     }
 };
 
