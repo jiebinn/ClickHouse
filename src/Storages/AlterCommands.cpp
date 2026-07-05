@@ -1414,23 +1414,14 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     if (metadata_copy.sampling_key.definition_ast != nullptr)
         metadata_copy.sampling_key.recalculateWithNewAST(metadata_copy.sampling_key.definition_ast, metadata_copy.columns, metadata_copy.virtuals, context);
 
-    /// Changes in columns may lead to changes in secondary indices.
-    /// Implicit indices may reference persistent virtual columns (e.g. `_block_number`); resolve them
-    /// against the full column set (incl. alias/ephemeral) plus virtuals, a physical column shadowing
-    /// a virtual of the same name.
-    ColumnsDescription columns_with_virtuals = metadata_copy.columns;
-    for (const auto & virtual_column : metadata_copy.virtuals.toColumnsDescription(VirtualsKind::All, VirtualsMaterializationPlace::All))
-        if (!columns_with_virtuals.has(virtual_column.name))
-            columns_with_virtuals.add(virtual_column);
-
+    /// Changes in columns may lead to changes in secondary indices
+    const ColumnsDescription columns_with_virtuals = metadata_copy.getColumnsWithVirtuals();
     for (auto & index : metadata_copy.secondary_indices)
     {
         try
         {
             index = IndexDescription::getIndexFromAST(
-                index.definition_ast,
-                index.isImplicitlyCreated() ? columns_with_virtuals : metadata_copy.columns,
-                index.isImplicitlyCreated(), index.escape_filenames, context);
+                index.definition_ast, columns_with_virtuals, index.isImplicitlyCreated(), index.escape_filenames, context);
         }
         catch (const Exception & exception)
         {
