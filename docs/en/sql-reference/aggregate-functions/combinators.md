@@ -125,6 +125,8 @@ The `-Tuple` suffix can be appended to any aggregate function. The combined func
 
 If the first input `Tuple` has explicit element names, they are preserved in the result.
 
+Aggregate functions that handle `NULL` values themselves (`anyRespectNulls`, `anyLastRespectNulls`, the `RESPECT NULLS` modifier) do not support the `Nullable(Tuple(...))` type as an argument; use `Nullable` elements instead.
+
 **Syntax**
 
 ```sql
