@@ -192,10 +192,13 @@ struct DotProductTransposed
 /// When `Quantized` is true the function operates on a `QBit(Int8)` whose codes were produced by the `quantizeBFloat16ToInt8`
 /// Lloyd-Max codec. Because that quantizer is non-linear, the distance cannot be computed on the `Int8` codes directly: each
 /// reconstructed code is dequantized to its Lloyd-Max reconstruction level (as `Float32`) on the fly and the distance is
-/// computed against the reference (query) vector. The reference vector is polymorphic: a `Float` reference is the full-precision
-/// query used as-is (asymmetric distance), while an `Array(Int8)` reference is itself treated as `quantizeBFloat16ToInt8` codes and
-/// dequantized to its exact Lloyd-Max levels (equivalent to `dequantizeInt8ToBFloat16`), giving a symmetric quantized-vs-quantized
-/// distance. The function is registered under the `...Quantized` name (e.g. `cosineDistanceTransposedQuantized`).
+/// computed against the reference (query) vector. The reference vector is polymorphic: a `Float` reference is the query, compared
+/// directly (asymmetric distance) and cast to `Float32` -- the reconstruction precision of the dequantized codes -- exactly as the
+/// non-quantized transposed functions cast the reference to the QBit element type (so a `BFloat16` query widens to `Float32`
+/// losslessly and a `Float64` query is narrowed to the `Float32` compute precision, since the stored side reconstructs only to
+/// `Float32`). An `Array(Int8)` reference is instead treated as `quantizeBFloat16ToInt8` codes and dequantized to its exact Lloyd-Max
+/// levels (equivalent to `dequantizeInt8ToBFloat16`), giving a symmetric quantized-vs-quantized distance. The function is registered
+/// under the `...Quantized` name (e.g. `cosineDistanceTransposedQuantized`).
 template <typename Kernel, bool Quantized = false>
 class FunctionArrayDistance : public IFunction
 {

@@ -2577,9 +2577,12 @@ SELECT dotProductTransposed(vec, array(1, 2), 16) FROM qbit;
     /// Quantized transposed distance functions. These operate on a QBit(Int8) whose codes were produced by the
     /// quantizeBFloat16ToInt8 Lloyd-Max codec. Because the quantizer is non-linear, the codes are dequantized to their
     /// reconstruction levels on the fly and the distance is computed against the reference (query) vector, which may be a
-    /// full-precision Float array or a quantized Array(Int8) that is dequantized the same way.
+    /// Float array (the query, cast to Float32 -- the reconstruction precision of the dequantized codes) or a quantized Array(Int8)
+    /// that is dequantized the same way.
     const String quantized_reference_note
-        = "A `Float` reference (query) vector is used at full precision (asymmetric distance computation); an `Array(Int8)` reference "
+        = "A `Float` reference (query) vector is compared directly at `Float32` precision -- the reconstruction precision of the "
+          "dequantized codes, so a `Float64` query is narrowed to `Float32` while a `BFloat16` query widens to it exactly "
+          "(asymmetric distance computation); an `Array(Int8)` reference "
           "is itself treated as `quantizeBFloat16ToInt8` codes and dequantized to its reconstruction levels (symmetric distance "
           "computation). It must live in the same space as the values were in before quantization (i.e. after the same random "
           "rotation and scaling), which is the caller's responsibility. Cosine distance is scale-invariant; dot product and L2 "
@@ -2607,8 +2610,8 @@ SELECT dotProductTransposed(vec, array(1, 2), 16) FROM qbit;
     FunctionDocumentation::Arguments arguments_l2_distance_transposed_quantized
         = {{"vectors", "Vectors of `quantizeBFloat16ToInt8` codes.", {"QBit(Int8, UInt64[, UInt64])"}},
            {"reference",
-            "Reference (query) vector: a `Float` array used at full precision, or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes "
-            "dequantized on the fly.",
+            "Reference (query) vector: a `Float` array (the query, compared at `Float32` precision -- a `Float64` query is narrowed "
+            "to `Float32`), or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes dequantized on the fly.",
             {"Array(Float32)", "Array(Int8)"}},
            quantized_precision_argument,
            quantized_used_dims_argument};
@@ -2646,8 +2649,8 @@ SELECT L2DistanceTransposedQuantized(vec, [0.1, -0.5]::Array(Float32), 8) FROM q
     FunctionDocumentation::Arguments arguments_cosine_distance_transposed_quantized
         = {{"vectors", "Vectors of `quantizeBFloat16ToInt8` codes.", {"QBit(Int8, UInt64[, UInt64])"}},
            {"reference",
-            "Reference (query) vector: a `Float` array used at full precision, or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes "
-            "dequantized on the fly.",
+            "Reference (query) vector: a `Float` array (the query, compared at `Float32` precision -- a `Float64` query is narrowed "
+            "to `Float32`), or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes dequantized on the fly.",
             {"Array(Float32)", "Array(Int8)"}},
            quantized_precision_argument,
            quantized_used_dims_argument};
@@ -2684,8 +2687,8 @@ SELECT cosineDistanceTransposedQuantized(vec, [0.1, -0.5]::Array(Float32), 8) FR
     FunctionDocumentation::Arguments arguments_dot_product_transposed_quantized
         = {{"vectors", "Vectors of `quantizeBFloat16ToInt8` codes.", {"QBit(Int8, UInt64[, UInt64])"}},
            {"reference",
-            "Reference (query) vector: a `Float` array used at full precision, or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes "
-            "dequantized on the fly.",
+            "Reference (query) vector: a `Float` array (the query, compared at `Float32` precision -- a `Float64` query is narrowed "
+            "to `Float32`), or an `Array(Int8)` of `quantizeBFloat16ToInt8` codes dequantized on the fly.",
             {"Array(Float32)", "Array(Int8)"}},
            quantized_precision_argument,
            quantized_used_dims_argument};
