@@ -47,8 +47,9 @@ void MergeTreeDataPartTTLInfos::update(const MergeTreeDataPartTTLInfos & other_i
         updatePartMinMaxTTL(ttl_info);
     }
 
-    for (const auto & [name, ttl_info] : other_infos.group_by_ttl)
+    for (auto [name, ttl_info] : other_infos.group_by_ttl)
     {
+        ttl_info.ttl_finished = false;
         group_by_ttl[name].update(ttl_info);
         updatePartMinMaxTTL(ttl_info);
     }
