@@ -5248,12 +5248,16 @@ document.addEventListener('mousedown', (e) => {
     connection_pointerdown_inside = connection_menu_elem.contains(e.target);
 }, true);
 document.addEventListener('click', (e) => {
-    if (!connection_menu_elem.contains(e.target) && !connection_pointerdown_inside) closeConnectionDropdown();
-    /// Consume the latch: it describes only the pointer interaction that produced this `click`.
-    /// A keyboard activation (Space/Enter on a focused control) fires a `click` with no preceding
-    /// `mousedown`, so a stale `true` left over from opening the menu with the mouse must not carry
-    /// over and suppress that outside dismissal.
-    connection_pointerdown_inside = false;
+    /// The latch is meaningful only for the pointer press that produced this `click`, and a press
+    /// arms it only when it goes on to emit a `click` (`detail !== 0`). Two kinds of `click` must
+    /// therefore ignore it: a keyboard or synthetic activation (Space/Enter on a focused control, or
+    /// a programmatic `.click()`) reports `detail === 0` and has no preceding `mousedown`; and a
+    /// mouse interaction that ends without a `click` — a right-click's `contextmenu`, a middle-click,
+    /// or a drag released outside the window — leaves a stale latch that no `click` ever consumes.
+    /// In both cases a stale `true` would otherwise wrongly suppress the outside dismissal, so the
+    /// latch counts only for a real pointer `click`.
+    const started_inside = e.detail !== 0 && connection_pointerdown_inside;
+    if (!connection_menu_elem.contains(e.target) && !started_inside) closeConnectionDropdown();
 }, true);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !connection_dropdown_elem.hidden) {
