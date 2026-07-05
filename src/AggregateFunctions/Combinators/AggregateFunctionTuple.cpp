@@ -443,6 +443,40 @@ void AggregateFunctionTuple::parallelizeMergeMulti(
     }
 }
 
+void AggregateFunctionTuple::mergeBatch(
+    size_t row_begin,
+    size_t row_end,
+    AggregateDataPtr * places,
+    size_t place_offset,
+    const AggregateDataPtr * rhs,
+    ThreadPool & thread_pool,
+    std::atomic<bool> & is_cancelled,
+    Arena * arena) const
+{
+    AggregateDataPtrs nested_rhs(row_end);
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+    {
+        for (size_t r = row_begin; r < row_end; ++r)
+            nested_rhs[r] = rhs[r] + state_offsets[i];
+        nested_functions[i]->mergeBatch(
+            row_begin, row_end, places, place_offset + state_offsets[i], nested_rhs.data(), thread_pool, is_cancelled, arena);
+    }
+}
+
+void AggregateFunctionTuple::mergeAndDestroyBatch(
+    AggregateDataPtr * dst_places,
+    AggregateDataPtr * rhs_places,
+    size_t size,
+    size_t offset,
+    ThreadPool & thread_pool,
+    std::atomic<bool> & is_cancelled,
+    Arena * arena) const
+{
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+        nested_functions[i]->mergeAndDestroyBatch(
+            dst_places, rhs_places, size, offset + state_offsets[i], thread_pool, is_cancelled, arena);
+}
+
 void AggregateFunctionTuple::serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version) const
 {
     for (size_t i = 0; i < nested_functions.size(); ++i)
