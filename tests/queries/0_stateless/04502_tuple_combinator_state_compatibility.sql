@@ -27,6 +27,8 @@ FROM
 SELECT 'only-null placeholder ignores parameters';
 -- An only-null tuple element is aggregated by a placeholder with an empty state, so states produced
 -- with different finalization parameters stay interchangeable, like they are without the placeholder.
+-- This exercises the -Merge acceptance check `haveSameStateRepresentation`, whose default
+-- implementation compares normalized state types, across differing finalization parameters.
 SELECT quantileExactTupleMerge(0.9)(s)
 FROM (SELECT quantileExactTupleState(0.5)((NULL, toFloat64(number))) AS s FROM numbers(1, 101));
 
