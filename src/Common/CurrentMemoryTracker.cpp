@@ -98,7 +98,7 @@ AllocationTrace CurrentMemoryTracker::allocImpl(Int64 size, bool enforce_memory_
                 else
                     std::ignore = memory_tracker->free(-new_untracked_memory, /*_sample_probability=*/ 0.0);
 
-                current_thread->untracked_memory.store(0);
+                current_thread->untracked_memory.add(-previous_untracked_memory);
             }
             catch (...)
             {
