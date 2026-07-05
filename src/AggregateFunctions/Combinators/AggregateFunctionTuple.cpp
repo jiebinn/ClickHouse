@@ -366,6 +366,83 @@ void AggregateFunctionTuple::mergeImpl(AggregateDataPtr __restrict place, ConstA
         nested_functions[i]->merge(place + state_offsets[i], rhs + state_offsets[i], arena);
 }
 
+bool AggregateFunctionTuple::isParallelizeMergePrepareNeeded() const
+{
+    for (const auto & func : nested_functions)
+        if (func->isParallelizeMergePrepareNeeded())
+            return true;
+    return false;
+}
+
+bool AggregateFunctionTuple::isAbleToParallelizeMerge() const
+{
+    for (const auto & func : nested_functions)
+        if (func->isAbleToParallelizeMerge())
+            return true;
+    return false;
+}
+
+bool AggregateFunctionTuple::canOptimizeEqualKeysRanges() const
+{
+    for (const auto & func : nested_functions)
+        if (!func->canOptimizeEqualKeysRanges())
+            return false;
+    return true;
+}
+
+void AggregateFunctionTuple::parallelizeMergePrepare(
+    AggregateDataPtrs & places, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled) const
+{
+    AggregateDataPtrs nested_places(places.size());
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+    {
+        if (!nested_functions[i]->isParallelizeMergePrepareNeeded())
+            continue;
+        for (size_t p = 0; p < places.size(); ++p)
+            nested_places[p] = places[p] + state_offsets[i];
+        nested_functions[i]->parallelizeMergePrepare(nested_places, thread_pool, is_cancelled);
+    }
+}
+
+void AggregateFunctionTuple::mergeImpl(
+    AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const
+{
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+    {
+        const auto & func = nested_functions[i];
+        if (func->isAbleToParallelizeMerge())
+            func->merge(place + state_offsets[i], rhs + state_offsets[i], thread_pool, is_cancelled, arena);
+        else
+            func->merge(place + state_offsets[i], rhs + state_offsets[i], arena);
+    }
+}
+
+void AggregateFunctionTuple::parallelizeMergeMulti(
+    AggregateDataPtrs & places, ThreadPool & thread_pool, std::atomic<bool> & is_cancelled, Arena * arena) const
+{
+    AggregateDataPtrs nested_places(places.size());
+    for (size_t i = 0; i < nested_functions.size(); ++i)
+    {
+        const auto & func = nested_functions[i];
+        for (size_t p = 0; p < places.size(); ++p)
+            nested_places[p] = places[p] + state_offsets[i];
+
+        if (func->isAbleToParallelizeMerge())
+        {
+            func->parallelizeMergeMulti(nested_places, thread_pool, is_cancelled, arena);
+        }
+        else
+        {
+            for (size_t p = 1; p < nested_places.size(); ++p)
+            {
+                if (is_cancelled.load(std::memory_order_seq_cst))
+                    return;
+                func->merge(nested_places[0], nested_places[p], arena);
+            }
+        }
+    }
+}
+
 void AggregateFunctionTuple::serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version) const
 {
     for (size_t i = 0; i < nested_functions.size(); ++i)
