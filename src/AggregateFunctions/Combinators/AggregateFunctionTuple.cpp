@@ -496,13 +496,13 @@ void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory
 void registerAggregateFunctionCombinatorTuple(AggregateFunctionCombinatorFactory & factory)
 {
     factory.registerCombinator(std::make_shared<AggregateFunctionCombinatorTuple>(), Documentation{
-        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take one `Tuple` argument per argument of the underlying function (all tuples of the same size) and aggregate each element position independently, producing a tuple of per-element results.",
+        .description = "Applied as a suffix to an aggregate function name (e.g. `sumTuple`), it makes the function take one `Tuple` argument per argument of the underlying function (all tuples of the same size) and aggregate each element position independently, producing a tuple of per-element results. Elements are paired by position: `corrTuple((a1, a2), (b1, b2)) = (corr(a1, b1), corr(a2, b2))`.",
         .syntax = "<aggregate_function>Tuple(tuple1[, tuple2, ...])",
         .examples = {{"`sum` aggregate function",
             "SELECT sumTuple(t) FROM (SELECT tuple(toInt64(1), toFloat64(2.5)) AS t UNION ALL SELECT tuple(toInt64(3), toFloat64(4.5)) UNION ALL SELECT tuple(toInt64(5), toFloat64(6.5)))",
             "(9,13.5)"},
             {"`corr` aggregate function with two tuples",
-            "SELECT corrTuple(tuple(x, x), tuple(y, x)) FROM (SELECT toFloat64(number) AS x, toFloat64(100 - number) AS y FROM numbers(10))",
+            "SELECT corrTuple((a1, a2), (b1, b2)) FROM (SELECT toFloat64(number) AS a1, toFloat64(number * 2) AS a2, toFloat64(100 - number) AS b1, toFloat64(number * 3) AS b2 FROM numbers(10))",
             "(-1,1)"}},
         .introduced_in = {26, 7},
         .related = {"Array", "ForEach", "Map"}});
