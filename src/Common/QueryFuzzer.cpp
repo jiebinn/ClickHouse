@@ -5140,9 +5140,42 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                                                  : Field(static_cast<UInt64>(fuzz_rand() % 1001));
                 select->setExpression(ASTSelectQuery::Expression::LIMIT_BY_OFFSET, make_intrusive<ASTLiteral>(val));
             }
-            /// Toggle LIMIT BY ALL (limits by every selected column instead of an explicit list)
+            /// Toggle LIMIT BY ALL (limits by every selected column instead of an explicit list).
+            /// The parser represents `LIMIT n BY ALL` as `limit_by_all = true` plus an *empty*
+            /// LIMIT_BY list, and explicit keys as `limit_by_all = false` plus a non-empty list;
+            /// `ASTSelectQuery::formatImpl` renders ` ALL` only in the first case and the key list
+            /// only in the second. The list must therefore be kept in sync with the flag: flipping
+            /// only the flag would format `LIMIT n BY` with no keys (a syntax error) when switching
+            /// to explicit, and leave stale, unrendered keys attached when switching to ALL.
             if (fuzz_rand() % 50 == 0)
-                select->setIsLimitByAll(!select->isLimitByAll());
+            {
+                if (select->isLimitByAll())
+                {
+                    /// ALL -> explicit: attach at least one key, since ALL mode left the list empty.
+                    /// Reuse a selected expression (any is valid as a BY key, including `*`) or fall
+                    /// back to a constant when there is nothing to reuse.
+                    ASTPtr key;
+                    if (select->select() && !select->select()->children.empty())
+                    {
+                        const auto & sel = select->select()->children;
+                        key = sel[fuzz_rand() % sel.size()]->clone();
+                    }
+                    else
+                        key = make_intrusive<ASTLiteral>(Field(static_cast<UInt64>(1)));
+
+                    auto keys = make_intrusive<ASTExpressionList>();
+                    keys->children.push_back(std::move(key));
+                    select->setExpression(ASTSelectQuery::Expression::LIMIT_BY, std::move(keys));
+                    select->setIsLimitByAll(false);
+                }
+                else
+                {
+                    /// explicit -> ALL: drop the now-unrendered explicit keys, matching how the
+                    /// parser leaves an empty LIMIT_BY list in ALL mode.
+                    select->setExpression(ASTSelectQuery::Expression::LIMIT_BY, make_intrusive<ASTExpressionList>());
+                    select->setIsLimitByAll(true);
+                }
+            }
         }
         fuzzColumnLikeExpressionList(select->limitBy().get());
 
