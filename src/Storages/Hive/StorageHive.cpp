@@ -8,7 +8,9 @@
 #include <Poco/URI.h>
 #include <Common/logger_useful.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/FieldVisitorToString.h>
 #include <Common/RemoteHostFilter.h>
+#include <Common/SipHash.h>
 
 #include <Columns/ColumnConst.h>
 #include <Columns/IColumn.h>
@@ -68,6 +70,13 @@ namespace Setting
     extern const SettingsNonZeroUInt64 max_block_size;
     extern const SettingsInt64 max_partitions_to_read;
     extern const SettingsMaxThreads max_threads;
+}
+
+namespace HiveSetting
+{
+    extern const HiveSettingsBool enable_orc_file_minmax_index;
+    extern const HiveSettingsBool enable_orc_stripe_minmax_index;
+    extern const HiveSettingsBool enable_parquet_rowgroup_minmax_index;
 }
 
 namespace ErrorCodes
@@ -671,6 +680,34 @@ StorageHive::listDirectory(const String & path, const HiveTableMetadataPtr & hiv
     return hive_table_metadata->getFilesByLocation(fs, path);
 }
 
+/// The `hive_files_cache` lives on the per-remote-table `HiveTableMetadata`, so it is shared by every
+/// `StorageHive` table over the same remote Hive table. A cached `IHiveFile` bakes in table-specific
+/// state: the partition values, the minmax-index column layout (`index_names_and_types`), the file
+/// format, and the minmax-index settings. `Hive` explicitly allows different ClickHouse schemas/settings
+/// over one remote table, so two such tables must not share a cached file - otherwise the second table
+/// would prune (and materialize partition columns) against the first table's cached layout, silently
+/// keeping or skipping the wrong data. Key the cache by the remote path plus a signature of that
+/// table-specific state so mismatched tables get independent entries while an identical table still
+/// reuses the cache. Any new `HiveSettings` value that changes how a cached file is built or pruned must
+/// be added to this signature.
+static String getHiveFileCacheKey(
+    const String & path,
+    const String & format_name,
+    const FieldVector & partition_values,
+    const NamesAndTypesList & index_names_and_types,
+    const HiveSettings & storage_settings)
+{
+    SipHash hash;
+    hash.update(format_name);
+    hash.update(index_names_and_types.toString());
+    hash.update(static_cast<UInt8>(storage_settings[HiveSetting::enable_orc_file_minmax_index] ? 1 : 0));
+    hash.update(static_cast<UInt8>(storage_settings[HiveSetting::enable_orc_stripe_minmax_index] ? 1 : 0));
+    hash.update(static_cast<UInt8>(storage_settings[HiveSetting::enable_parquet_rowgroup_minmax_index] ? 1 : 0));
+    for (const auto & value : partition_values)
+        hash.update(applyVisitor(FieldVisitorToString(), value));
+    return path + "#" + getSipHash128AsHexString(hash);
+}
+
 HiveFileWithSkipSplits StorageHive::getHiveFileIfNeeded(
     const FileInfo & file_info,
     const FieldVector & fields,
@@ -685,7 +722,8 @@ HiveFileWithSkipSplits StorageHive::getHiveFileIfNeeded(
         return {};
 
     auto cache = hive_table_metadata->getHiveFilesCache();
-    auto hive_file = cache->get(file_info.path);
+    const String cache_key = getHiveFileCacheKey(file_info.path, format_name, fields, hivefile_name_types, *storage_settings);
+    auto hive_file = cache->get(cache_key);
     if (!hive_file || hive_file->getLastModTs() < file_info.last_modify_time)
     {
         LOG_TRACE(log, "Create hive file {}, prune_level {}", file_info.path, pruneLevelToString(prune_level));
@@ -699,7 +737,7 @@ HiveFileWithSkipSplits StorageHive::getHiveFileIfNeeded(
             hivefile_name_types,
             storage_settings,
             context_->getGlobalContext());
-        cache->set(file_info.path, hive_file);
+        cache->set(cache_key, hive_file);
     }
     else
     {

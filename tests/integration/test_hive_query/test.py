@@ -152,3 +152,59 @@ def test_orc_split_skip_state_is_query_local(started_cluster):
     assert node.query("SELECT count(*) FROM default.hive_demo_orc WHERE score > 5").strip() == "2"
     assert node.query("SELECT count(*) FROM default.hive_demo_orc").strip() == "4"
     assert node.query("SELECT id, score FROM default.hive_demo_orc ORDER BY score") == "a\t1\nb\t2\nc\t10\nd\t11\n"
+
+
+def test_hive_files_cache_is_table_local(started_cluster):
+    # Regression test for https://github.com/ClickHouse/ClickHouse/pull/108094#discussion_r3507709555.
+    #
+    # The `hive_files_cache` lives on the per-remote-table Hive metadata, so it is shared by every
+    # ClickHouse `Hive` table over the same remote Hive table (it is keyed only by the remote file
+    # path). A cached `IHiveFile` bakes in table-specific state: the minmax-index column layout
+    # (`index_names_and_types`), the file format, the partition values, and the `enable_orc_*` minmax
+    # settings. `Hive` explicitly allows different ClickHouse schemas/settings over one remote table,
+    # so two such tables must not share one cached file - otherwise the second table would prune and
+    # interpret the cached minmax index against the first table's layout and could silently keep or
+    # skip the wrong data. The fix keys the cache by the remote path plus a signature of that
+    # table-specific state, giving mismatched tables independent cache entries.
+    #
+    # Both tables below point at the same remote `test.demo_orc` (two ORC files, `score` ranges
+    # [1, 2] and [10, 11]) but differ in column order and in the minmax settings, so with the fix they
+    # occupy separate cache entries. We warm the shared cache through the first table with a selective
+    # read (which builds and caches file objects, and loads the stripe minmax, under its own layout and
+    # settings), then assert the second table still returns its own correct rows - and that the first
+    # table is unaffected by the second's reads.
+    node = started_cluster.instances["h0_0_0"]
+
+    node.query("DROP TABLE IF EXISTS default.hive_orc_a")
+    node.query("DROP TABLE IF EXISTS default.hive_orc_b")
+
+    # Table A: (id, score) column order, stripe-level pruning on, file-level pruning off.
+    node.query(
+        """
+        CREATE TABLE default.hive_orc_a (`id` Nullable(String), `score` Nullable(Int32), `day` Nullable(String))
+        ENGINE = Hive('thrift://hivetest:9083', 'test', 'demo_orc') PARTITION BY(day)
+        SETTINGS enable_orc_stripe_minmax_index = 1, enable_orc_file_minmax_index = 0
+        """
+    )
+    # Table B: (score, id) column order and all minmax pruning off - a different cached layout/settings.
+    node.query(
+        """
+        CREATE TABLE default.hive_orc_b (`score` Nullable(Int32), `id` Nullable(String), `day` Nullable(String))
+        ENGINE = Hive('thrift://hivetest:9083', 'test', 'demo_orc') PARTITION BY(day)
+        SETTINGS enable_orc_stripe_minmax_index = 0, enable_orc_file_minmax_index = 0
+        """
+    )
+
+    # Warm the shared cache through table A with a selective read (builds the file objects and stripe
+    # minmax under A's layout and settings).
+    assert query_with_retry(node, "SELECT count(*) FROM default.hive_orc_a WHERE score < 5").strip() == "2"
+
+    # Table B must return its own correct results, evaluated against its own layout and settings - not
+    # table A's cached ones (before the fix both tables shared one cached file keyed only by the path).
+    assert node.query("SELECT count(*) FROM default.hive_orc_b").strip() == "4"
+    assert node.query("SELECT count(*) FROM default.hive_orc_b WHERE score > 5").strip() == "2"
+    assert node.query("SELECT id, score FROM default.hive_orc_b ORDER BY score") == "a\t1\nb\t2\nc\t10\nd\t11\n"
+
+    # Table A is likewise unaffected by table B's reads (independent cache entries).
+    assert node.query("SELECT count(*) FROM default.hive_orc_a").strip() == "4"
+    assert node.query("SELECT id, score FROM default.hive_orc_a ORDER BY score") == "a\t1\nb\t2\nc\t10\nd\t11\n"
