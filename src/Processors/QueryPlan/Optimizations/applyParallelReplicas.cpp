@@ -46,6 +46,9 @@ public:
 
     void visitBottomUpImpl(QueryPlan::Node * current_node, QueryPlan::Node * parent_node)
     {
+        if (!parent_node)
+            return;
+
         auto * original_split_step = typeid_cast<ParallelReplicasSplitStep *>(current_node->step.get());
         if (!original_split_step)
             return;
@@ -161,6 +164,10 @@ private:
             [&](auto &) {},
             [&](auto & node)
             {
+                auto * split_step = typeid_cast<ParallelReplicasSplitStep *>(node.step.get());
+                if (split_step)
+                    return;
+
                 auto clone_step = node.step->clone();
                 plan_fragment->addStep(std::move(clone_step));
             });

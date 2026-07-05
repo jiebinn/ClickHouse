@@ -461,6 +461,7 @@ void optimizeTreeSecondPass(
                 local_optimization_settings.distinct_in_order = subquery_optimization_settings.distinct_in_order;
                 local_optimization_settings.reuse_storage_ordering_for_window_functions
                     = subquery_optimization_settings.reuse_storage_ordering_for_window_functions;
+                local_optimization_settings.enable_parallel_replicas = false;
             }
 
             auto local_plan = read_from_local->extractQueryPlan();

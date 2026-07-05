@@ -316,8 +316,8 @@ QueryPlanPtr createLocalPlanFragmentForParallelReplicas(
     {
         auto * reading = typeid_cast<ReadFromMergeTree *>(reading_node->step.get());
 
-        MergeTreeAllRangesCallback all_ranges_cb = [coordinator](InitialAllRangesAnnouncement announcement)
-        { coordinator->handleInitialAllRangesAnnouncement(std::move(announcement)); };
+        MergeTreeAllRangesCallback all_ranges_cb = [coordinator](InitialAllRangesAnnouncement announcement) -> std::optional<InitialAllRangesAnnouncementResponse>
+        { return coordinator->handleInitialAllRangesAnnouncement(std::move(announcement)); };
 
         MergeTreeReadTaskCallback read_task_cb = [coordinator](ParallelReadRequest req) -> std::optional<ParallelReadResponse>
         {

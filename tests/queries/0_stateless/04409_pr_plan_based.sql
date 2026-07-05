@@ -13,6 +13,7 @@ SET parallel_replicas_for_non_replicated_merge_tree = 1;
 SET max_parallel_replicas = 3;
 SET cluster_for_parallel_replicas = 'test_cluster_one_shard_three_replicas_localhost';
 SET parallel_replicas_plan_based = 1;
+SET parallel_replicas_local_plan = 1;
 
 -- Correctness: identical to non-parallel execution. count() is the key regression guard against the
 -- "each replica reads everything" (N x) bug.
@@ -24,8 +25,8 @@ SELECT count() FROM t_pr_plan_based;
 SELECT
     countIf(explain LIKE '%ParallelReplicasSplitStep%') > 0 AS has_split,
     countIf(explain LIKE '%Union%') > 0 AS has_union,
-    countIf(explain LIKE '%ReadFromRemoteParallelReplicas%') > 0 AS has_remote_read,
+    countIf(explain LIKE '%ReadFromParallelReplicas%') > 0 AS has_remote_read,
     countIf(explain LIKE '%ReadFromMergeTree%') > 0 AS has_local_read
-FROM (EXPLAIN SELECT sum(b) FROM t_pr_plan_based WHERE a > 5);
+FROM (EXPLAIN pretty=0, description=0 SELECT sum(b) FROM t_pr_plan_based WHERE a > 5);
 
 -- DROP TABLE t_pr_plan_based;

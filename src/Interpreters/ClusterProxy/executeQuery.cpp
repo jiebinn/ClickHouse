@@ -876,6 +876,7 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
         auto union_step = std::make_unique<UnionStep>(std::move(input_headers));
         auto query_plan = std::make_unique<QueryPlan>();
         query_plan->unitePlans(std::move(union_step), std::move(plans));
+        return query_plan;
     }
     else {
     }
