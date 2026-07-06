@@ -504,7 +504,7 @@ void optimizeTreeSecondPass(
 
             if (frame.next_child == 0)
             {
-                if (optimizeVectorSearchSecondPass(root, stack, nodes, extra_settings))
+                if (optimizeVectorSearchWithVectorIndexSecondPass(root, stack, nodes, extra_settings))
                     break;
             }
 

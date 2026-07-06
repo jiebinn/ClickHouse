@@ -87,6 +87,8 @@ std::optional<QuantizedCodecParams> findQuantizeCodecParams(const ReadFromMergeT
 
 }
 
+/// Brute-force vector search over a vector column carrying a `Quantized(...)` codec: rewrite ORDER BY distance LIMIT
+/// into a two-stage shortlist (over the quantized codes subcolumn) + rescore (against the full-precision vector).
 bool optimizeVectorSearchWithQuantizedCodes(
     QueryPlan::Node & /*root*/, Stack & stack, QueryPlan::Nodes & nodes,
     const Optimization::ExtraSettings & settings, size_t max_limit_for_lazy_materialization)
