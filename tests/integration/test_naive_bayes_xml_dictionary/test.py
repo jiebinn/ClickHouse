@@ -11,6 +11,7 @@ DICTIONARY_FILES = [
     "configs/dictionaries/nb_valid.xml",
     "configs/dictionaries/nb_unexpected_element.xml",
     "configs/dictionaries/nb_missing_probability.xml",
+    "configs/dictionaries/nb_two_layouts.xml",
 ]
 
 cluster = ClickHouseCluster(__file__)
@@ -62,3 +63,13 @@ def test_prior_without_probability(started_cluster):
         "SELECT dictGet('nb_missing_probability', 'class_id', 'good')"
     )
     assert "each prior must contain a 'class' id and a 'probability'" in error
+
+
+def test_layout_with_two_children(started_cluster):
+    # The layout element of this hand-written definition has two children. naiveBayesClassifier reads
+    # the layout type from the configuration during query analysis, so the malformed definition is
+    # reported there, with the same error loading the dictionary would produce.
+    error = instance.query_and_get_error(
+        "SELECT naiveBayesClassifier('nb_two_layouts', 'good')"
+    )
+    assert "element dictionary.layout should have exactly one child element" in error
