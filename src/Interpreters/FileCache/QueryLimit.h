@@ -23,7 +23,11 @@ public:
         const FilesystemCacheSettings & settings,
         const CachePriorityGuard::WriteLock &);
 
-    void removeQueryContext(const std::string & query_id, QueryContextPtr & context, const CachePriorityGuard::WriteLock &);
+    /// Releases this holder's reference to the query context and, when it was the last holder,
+    /// removes the map entry and returns the now-orphaned context so the caller can destroy it
+    /// after releasing the cache write lock (see ~QueryContextHolder). Returns nullptr when the
+    /// context is still owned by another live holder.
+    QueryContextPtr removeQueryContext(const std::string & query_id, QueryContextPtr & context, const CachePriorityGuard::WriteLock &);
 
     class QueryContext
     {

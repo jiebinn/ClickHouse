@@ -3101,8 +3101,11 @@ TEST_F(FileCacheTest, QueryLimitContextRevivedDuringRelease)
     ASSERT_EQ(context1.use_count(), 3);
 
     /// holder1 releases. The map still maps query_id to the live context and another holder is
-    /// alive, so the entry must be kept (no erase, no throw).
-    ASSERT_NO_THROW(query_limit.removeQueryContext(query_id, context1, cache_guard.writeLock()));
+    /// alive, so the entry must be kept (no erase, no throw) and nothing is handed back for
+    /// destruction.
+    FileCacheQueryLimit::QueryContextPtr doomed1;
+    ASSERT_NO_THROW(doomed1 = query_limit.removeQueryContext(query_id, context1, cache_guard.writeLock()));
+    ASSERT_EQ(doomed1, nullptr);
     context1.reset();
 
     /// Enforcement is preserved: the revived context is still discoverable.
@@ -3117,8 +3120,13 @@ TEST_F(FileCacheTest, QueryLimitContextRevivedDuringRelease)
         ASSERT_EQ(found.get(), context2.get());
     }
 
-    /// holder2 is now the last holder; releasing it actually removes the entry, once.
-    ASSERT_NO_THROW(query_limit.removeQueryContext(query_id, context2, cache_guard.writeLock()));
+    /// holder2 is now the last holder; releasing it actually removes the entry, once, and hands the
+    /// orphaned context back so it is destroyed by the caller outside the cache lock.
+    const auto * context2_raw = context2.get();
+    FileCacheQueryLimit::QueryContextPtr doomed2;
+    ASSERT_NO_THROW(doomed2 = query_limit.removeQueryContext(query_id, context2, cache_guard.writeLock()));
+    ASSERT_EQ(doomed2.get(), context2_raw);
+    ASSERT_EQ(doomed2.use_count(), 1);
     context2.reset();
 
     /// After full release the context is gone.
@@ -3159,15 +3167,27 @@ TEST_F(FileCacheTest, QueryLimitConcurrentReleaseNoLeak)
     ASSERT_EQ(context1.get(), context2.get());
     ASSERT_EQ(context1.use_count(), 3);
 
+    /// Keep a raw pointer to assert which release actually surrenders the context for destruction.
+    const auto * context_raw = context1.get();
+
     /// Both holders decide to release while both are still alive (the interleaving that leaks): each
     /// removeQueryContext drops that holder's reference under the lock. The first keeps the entry (one
-    /// holder still alive), the second erases it. Neither throws.
-    ASSERT_NO_THROW(query_limit.removeQueryContext(query_id, context1, cache_guard.writeLock()));
-    ASSERT_NO_THROW(query_limit.removeQueryContext(query_id, context2, cache_guard.writeLock()));
+    /// holder still alive) and returns nullptr; the second erases it and returns the now-orphaned
+    /// context so the caller destroys it after the cache lock is released. Neither throws.
+    FileCacheQueryLimit::QueryContextPtr doomed1;
+    FileCacheQueryLimit::QueryContextPtr doomed2;
+    ASSERT_NO_THROW(doomed1 = query_limit.removeQueryContext(query_id, context1, cache_guard.writeLock()));
+    ASSERT_NO_THROW(doomed2 = query_limit.removeQueryContext(query_id, context2, cache_guard.writeLock()));
 
     /// removeQueryContext resets each passed reference, so both are already null here.
     ASSERT_EQ(context1, nullptr);
     ASSERT_EQ(context2, nullptr);
+
+    /// Only the last release hands the context back for out-of-lock destruction; the earlier one
+    /// returns nullptr because another holder was still alive.
+    ASSERT_EQ(doomed1, nullptr);
+    ASSERT_EQ(doomed2.get(), context_raw);
+    ASSERT_EQ(doomed2.use_count(), 1);
 
     /// The entry must be gone: with the pre-fix logic both releases skipped the erase and the entry
     /// leaked, so tryGetQueryContext would still find it.
