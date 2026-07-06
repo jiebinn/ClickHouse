@@ -19,11 +19,7 @@
 /** This file was edited for ClickHouse.
   */
 
-#include <cstdint>
 #include <cstring>
-
-#include <zlib.h>
-#include <zstd.h>
 
 #include <Common/Elf.h>
 #include <Common/Dwarf.h>
@@ -169,12 +165,9 @@ Dwarf::Dwarf(const std::shared_ptr<Elf> & elf)
     //  - debugRanges_ (DWARF 4) / debugRnglists_ (DWARF 5): non-contiguous
     //    address ranges of debugging information entries.
     //    Used for inline function address lookup.
-    if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
+    if (info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         elf_ = nullptr;
-        // findAddress returns early on the null elf_ without touching the section views, so release
-        // any buffers already inflated rather than pinning them for the lifetime of a cached Dwarf.
-        decompressed_sections_.clear();
     }
 }
 
@@ -194,10 +187,9 @@ Dwarf::Dwarf(const std::shared_ptr<MachO> & macho)
     , str_(getSection(".debug_str"))
     , str_offsets_(getSection(".debug_str_offsets"))
 {
-    if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
+    if (info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         macho_ = nullptr;
-        decompressed_sections_.clear();
     }
 }
 #endif
@@ -502,119 +494,9 @@ std::string_view Dwarf::getSection(const char * name) const
         return {};
 
     if (elf_section->header.flags & SectionHeaderFlag::COMPRESSED)
-        return decompressSection({elf_section->begin(), elf_section->size()});
+        return {};
 
     return { elf_section->begin(), elf_section->size()};
-}
-
-namespace
-{
-
-// ELF section compression header (`Elf64_Chdr`), located at the beginning of a section that has the
-// `SHF_COMPRESSED` flag. Defined locally to avoid depending on the platform `<elf.h>` (this file is
-// also compiled on macOS). ClickHouse only supports 64-bit ELF, so the 64-bit layout is assumed.
-struct __attribute__((__packed__)) ElfCompressionHeader
-{
-    uint32_t type; // ELFCOMPRESS_ZLIB = 1, ELFCOMPRESS_ZSTD = 2
-    uint32_t reserved;
-    uint64_t size; // Size of the uncompressed data.
-    uint64_t addralign; // Alignment of the uncompressed data.
-};
-
-constexpr uint32_t ELFCOMPRESS_ZLIB = 1;
-constexpr uint32_t ELFCOMPRESS_ZSTD = 2;
-
-// Inflate a zlib stream into `dst` (exactly `dst_size` bytes). `avail_in`/`avail_out` are 32-bit,
-// and the single-shot `uncompress` mishandles outputs larger than 2 GiB (e.g. `.debug_info` of the
-// whole server binary), so drive `inflate` in bounded chunks instead. Returns false on any error.
-bool inflateZlibStream(const char * src, size_t src_size, char * dst, size_t dst_size)
-{
-    z_stream stream{};
-    if (inflateInit(&stream) != Z_OK)
-        return false;
-
-    stream.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(src));
-    stream.next_out = reinterpret_cast<Bytef *>(dst);
-    size_t in_left = src_size;
-    size_t out_left = dst_size;
-    static constexpr size_t max_chunk = static_cast<size_t>(1) << 30; // 1 GiB, well within a 32-bit count
-
-    int ret = Z_OK;
-    do
-    {
-        if (stream.avail_in == 0 && in_left > 0)
-        {
-            stream.avail_in = static_cast<uInt>(in_left < max_chunk ? in_left : max_chunk);
-            in_left -= stream.avail_in;
-        }
-        if (stream.avail_out == 0 && out_left > 0)
-        {
-            stream.avail_out = static_cast<uInt>(out_left < max_chunk ? out_left : max_chunk);
-            out_left -= stream.avail_out;
-        }
-        ret = inflate(&stream, Z_NO_FLUSH);
-    } while (ret == Z_OK);
-
-    inflateEnd(&stream);
-    return ret == Z_STREAM_END && out_left == 0 && stream.avail_out == 0;
-}
-
-}
-
-std::string_view Dwarf::decompressSection(std::string_view compressed) const
-{
-    // Fail closed: a present section that ends up empty would be dereferenced by a later reader and
-    // throw mid-symbolization, so any failure below sets decompression_failed_ and the constructor
-    // then disables the whole Dwarf. Once set, stop inflating - the remaining sections are unused
-    // and would only pin heap (gigabytes) in a long-lived symbolization cache.
-    if (decompression_failed_)
-        return {};
-
-    if (compressed.size() < sizeof(ElfCompressionHeader))
-    {
-        decompression_failed_ = true;
-        return {};
-    }
-
-    ElfCompressionHeader header{};
-    memcpy(&header, compressed.data(), sizeof(header));
-
-    const char * payload = compressed.data() + sizeof(header);
-    const size_t payload_size = compressed.size() - sizeof(header);
-    const size_t uncompressed_size = header.size;
-
-    std::string out;
-    try
-    {
-        // A corrupt header can request an absurd allocation; degrade gracefully instead of letting
-        // the symbolizer throw (it runs while handling other exceptions and fatal signals).
-        out.resize(uncompressed_size);
-    }
-    catch (...)
-    {
-        /// Ok to swallow: the symbolizer must not throw (it runs while handling other exceptions
-        /// and fatal signals). Failing to allocate here just means no line info for this section.
-        decompression_failed_ = true;
-        return {};
-    }
-
-    bool ok = false;
-    if (header.type == ELFCOMPRESS_ZLIB)
-        ok = inflateZlibStream(payload, payload_size, out.data(), uncompressed_size);
-    else if (header.type == ELFCOMPRESS_ZSTD)
-    {
-        size_t rc = ZSTD_decompress(out.data(), uncompressed_size, payload, payload_size);
-        ok = !ZSTD_isError(rc) && rc == uncompressed_size;
-    }
-
-    if (!ok)
-    {
-        decompression_failed_ = true;
-        return {};
-    }
-
-    decompressed_sections_.push_back(std::move(out));
-    return decompressed_sections_.back();
 }
 
 // static

@@ -394,28 +394,22 @@ if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE")
     set(DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gdwarf-aranges")
 endif ()
 
-# Optionally compress the DWARF debug sections (`.debug_*`) with zlib (`-gz`) to reduce the on-disk
-# size of object files and binaries - in a Debug build the debug info dominates disk usage.
+# Optionally compress the DWARF debug sections (`.debug_*`) with zlib (`-gz`) in object files to
+# reduce build-directory size - the debug info dominates a Debug build's disk usage. This is a
+# compile-only flag: the linker decompresses the sections on input and emits uncompressed binaries,
+# so the runtime symbolizer (`src/Common/Dwarf.cpp`) reads them normally, with no decompression cost
+# and no change to that code. `-gz` is added via `add_compile_options` (not the `*_FLAGS` variables)
+# precisely so it does not reach the link line and re-compress the output.
 #
-# OFF by default: ClickHouse's own LLVM toolchain is built without zlib/zstd support
-# (`LLVM_ENABLE_ZLIB=OFF`, `LLVM_ENABLE_ZSTD=OFF` - see `ci/jobs/build_toolchain.py`), so its clang
-# and lld reject `-gz` with `error: cannot compress debug sections (zlib not enabled)`. Enable this
-# only when building with a compiler and linker that have zlib support (for example a distribution's
-# system clang). Because ClickHouse forbids configure-time compile probes (see
-# `cmake/block_build_time_checks.cmake`), the flag cannot be auto-detected; it is opt-in.
-#
-# ClickHouse's built-in symbolizer (`src/Common/Dwarf.cpp`) transparently decompresses
-# `SHF_COMPRESSED` sections, so runtime stack-trace symbolization keeps working (source file, line,
-# and inlined frames are preserved) whenever compressed debug info is present.
-option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections with zlib (-gz); requires a zlib-enabled compiler and linker" OFF)
+# OFF by default: ClickHouse's own LLVM toolchain is built without zlib (`LLVM_ENABLE_ZLIB=OFF` -
+# see `ci/jobs/build_toolchain.py`), so its clang rejects `-gz` with `cannot compress debug sections
+# (zlib not enabled)`. Enable only with a zlib-enabled compiler (for example a distribution's system
+# clang). Configure-time compile probes are forbidden (`cmake/block_build_time_checks.cmake`), so
+# the capability cannot be auto-detected; it is opt-in.
+option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections in object files with zlib (-gz); requires a zlib-enabled compiler" OFF)
 
 if (COMPRESS_DEBUG_SECTIONS AND OS_LINUX AND NOT DISABLE_ALL_DEBUG_SYMBOLS)
-    # Compress debug sections in object files (shrinks the build directory) ...
-    set (DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gz=zlib")
-    # ... and keep them compressed in the linked binaries.
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
-    set (CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
-    set (CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--compress-debug-sections=zlib")
+    add_compile_options (-gz=zlib)
 endif ()
 
 # Disable omit frame pointer compiler optimization using -fno-omit-frame-pointer
