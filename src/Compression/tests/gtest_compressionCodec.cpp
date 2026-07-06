@@ -1652,9 +1652,9 @@ INSTANTIATE_TEST_SUITE_P(ALPRDSequentialF32,
             Codec("ALP(AUTO)", 0.87) // AUTO will fall back to RD, STD would produce ratio slightly more than 1.0
         ),
         ::testing::Values(
-            generateSeq<Float32>(G(RandomGenerator<Float32>(42, M_Ef32, 2 * M_Ef32)), 0, 1024),
-            generateSeq<Float32>(G(RandomGenerator<Float32>(42, M_Ef32, 2 * M_Ef32)), 0, 2048),
-            generateSeq<Float32>(G(RandomGenerator<Float32>(42, M_Ef32, 2 * M_Ef32)), 0, 2816)
+            generateSeq<Float32>(G(RandomGenerator<Float32>(42, std::numbers::e_v<float>, 2 * std::numbers::e_v<float>)), 0, 1024),
+            generateSeq<Float32>(G(RandomGenerator<Float32>(42, std::numbers::e_v<float>, 2 * std::numbers::e_v<float>)), 0, 2048),
+            generateSeq<Float32>(G(RandomGenerator<Float32>(42, std::numbers::e_v<float>, 2 * std::numbers::e_v<float>)), 0, 2816)
         )
     )
 );
@@ -1843,7 +1843,7 @@ INSTANTIATE_TEST_SUITE_P(ALPRDSameValuesF32,
     ::testing::Combine(
         ::testing::Values(Codec("ALP(RD)", 0.52)),
         ::testing::Values(
-            generateSeq<Float32>(G([](auto) { return M_PIf32; }))
+            generateSeq<Float32>(G([](auto) { return std::numbers::pi_v<float>; }))
         )
     )
 );
