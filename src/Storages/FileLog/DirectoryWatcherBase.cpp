@@ -8,9 +8,18 @@
 
 #include <filesystem>
 #include <unistd.h>
-#include <sys/inotify.h>
 #include <poll.h>
 #include <Common/ErrnoException.h>
+
+#if defined(OS_LINUX)
+#include <sys/inotify.h>
+#elif defined(OS_DARWIN)
+#include <map>
+#include <fcntl.h>
+#include <sys/event.h>
+#include <sys/stat.h>
+#include <base/scope_guard.h>
+#endif
 
 namespace DB
 {
@@ -28,7 +37,9 @@ namespace FileLogSetting
     extern const FileLogSettingsMilliseconds poll_directory_watch_events_backoff_max;
 }
 
+#if defined(OS_LINUX)
 static constexpr int buffer_size = 4096;
+#endif
 
 DirectoryWatcherBase::DirectoryWatcherBase(
     FileLogDirectoryWatcher & owner_, const std::string & path_, ContextPtr context_, int event_mask_)
@@ -44,14 +55,17 @@ DirectoryWatcherBase::DirectoryWatcherBase(
     if (!std::filesystem::is_directory(path))
         throw Exception(ErrorCodes::BAD_FILE_TYPE, "Path {} is not a directory", path);
 
+#if defined(OS_LINUX)
     inotify_fd = inotify_init();
     if (inotify_fd == -1)
         throw ErrnoException(ErrorCodes::IO_SETUP_ERROR, "Cannot initialize inotify");
+#endif
 
     watch_task = getContext()->getSchedulePool().createTask(StorageID::createEmpty(), "directory_watch", [this] { watchFunc(); });
     start();
 }
 
+#if defined(OS_LINUX)
 void DirectoryWatcherBase::watchFunc()
 {
     int mask = 0;
@@ -140,12 +154,241 @@ void DirectoryWatcherBase::watchFunc()
         }
     }
 }
+#elif defined(OS_DARWIN)
+void DirectoryWatcherBase::watchFunc()
+{
+    /// macOS has no inotify. We reconstruct the same event stream by diffing a filename ->
+    /// (inode, mtime, size) snapshot of the directory. Tracking the inode lets us tell a rename
+    /// (same inode reappearing under a new name) apart from a delete followed by a create, so the
+    /// read offset of a renamed file is preserved just like with inotify's IN_MOVED_FROM/IN_MOVED_TO.
+    ///
+    /// kqueue reports "the directory changed" (an entry added/removed/renamed) but neither names the
+    /// entry nor fires on appends to files already inside it. So we use it only to wake up promptly
+    /// on structural changes (matching inotify's latency, which the no-sleep test sequences rely on),
+    /// and fall back to the timed rescan to pick up appends to existing files.
+    struct FileState
+    {
+        UInt64 inode;
+        Int64 mtime_ns;
+        Int64 size;
+    };
+
+    auto scan = [this](std::map<std::string, FileState> & out)
+    {
+        out.clear();
+        for (const auto & entry : std::filesystem::directory_iterator(path))
+        {
+            if (!entry.is_regular_file())
+                continue;
+            struct stat st{};
+            if (::stat(entry.path().c_str(), &st) != 0)
+                continue;
+            out.emplace(
+                entry.path().filename().string(),
+                FileState{
+                    static_cast<UInt64>(st.st_ino),
+                    static_cast<Int64>(st.st_mtimespec.tv_sec) * 1'000'000'000 + st.st_mtimespec.tv_nsec,
+                    static_cast<Int64>(st.st_size)});
+        }
+    };
+
+    /// A kqueue is used only to wake up promptly. The directory fd fires on structural changes
+    /// (an entry added/removed/renamed) but not on appends/truncations to files already inside it,
+    /// so we additionally watch each file's own fd for content changes. If kqueue cannot be set up
+    /// we simply fall back to pure timed polling.
+    int dir_fd = ::open(path.c_str(), O_EVTONLY);
+    int kq = kqueue();
+    std::map<std::string, int> watched_fds;
+
+    SCOPE_EXIT({
+        for (const auto & [name, fd] : watched_fds)
+            ::close(fd);
+        if (kq != -1)
+            ::close(kq);
+        if (dir_fd != -1)
+            ::close(dir_fd);
+    });
+
+    if (dir_fd != -1 && kq != -1)
+    {
+        struct kevent change{};
+        EV_SET(&change, dir_fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
+               NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_ATTRIB | NOTE_LINK, 0, nullptr);
+        kevent(kq, &change, 1, nullptr, 0, nullptr);
+    }
+
+    /// Keep the set of per-file kqueue watches in sync with the files currently present.
+    auto sync_file_watches = [&](const std::map<std::string, FileState> & files)
+    {
+        if (kq == -1)
+            return;
+        for (const auto & [name, state] : files)
+        {
+            if (watched_fds.contains(name))
+                continue;
+            int fd = ::open((std::filesystem::path(path) / name).c_str(), O_EVTONLY);
+            if (fd == -1)
+                continue;
+            struct kevent change{};
+            EV_SET(&change, fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
+                   NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_DELETE | NOTE_RENAME, 0, nullptr);
+            kevent(kq, &change, 1, nullptr, 0, nullptr);
+            watched_fds.emplace(name, fd);
+        }
+        for (auto it = watched_fds.begin(); it != watched_fds.end();)
+        {
+            if (files.contains(it->first))
+            {
+                ++it;
+                continue;
+            }
+            ::close(it->second); /// closing the fd removes it from the kqueue
+            it = watched_fds.erase(it);
+        }
+    };
+
+    /// Pre-existing files are loaded by StorageFileLog's own directory scan; the watcher, like
+    /// inotify, reports only subsequent changes. So seed the snapshot without emitting events.
+    std::map<std::string, FileState> snapshot;
+    try
+    {
+        scan(snapshot);
+    }
+    catch (const std::exception & e)
+    {
+        owner.onError(Exception(ErrorCodes::IO_SETUP_ERROR, "Watch directory {} failed: {}", path, e.what()));
+        return;
+    }
+    sync_file_watches(snapshot);
+
+    pollfd pfds[2];
+    pfds[0].fd = event_pipe.fds_rw[0];
+    pfds[0].events = POLLIN;
+    pfds[1].fd = kq;
+    pfds[1].events = POLLIN;
+
+    while (!stopped)
+    {
+        const nfds_t nfds = kq != -1 ? 2 : 1;
+        if (poll(pfds, nfds, static_cast<int>(milliseconds_to_wait)) < 0 && errno != EINTR)
+            break;
+        if (stopped)
+            break;
+
+        /// Drain kqueue notifications (level-triggered otherwise) before rescanning.
+        if (kq != -1 && (pfds[1].revents & POLLIN))
+        {
+            struct kevent evs[16];
+            struct timespec no_wait{0, 0};
+            while (kevent(kq, nullptr, 0, evs, 16, &no_wait) > 0)
+                ;
+        }
+
+        const auto & settings = owner.storage.getFileLogSettings();
+
+        std::map<std::string, FileState> current;
+        try
+        {
+            scan(current);
+        }
+        catch (...)
+        {
+            /// The directory may be transiently unavailable (e.g. being recreated); retry next tick.
+            continue;
+        }
+
+        bool changed = false;
+
+        /// Names that were present before but are gone now: removed, or the source side of a rename.
+        for (const auto & [name, state] : snapshot)
+        {
+            if (current.contains(name))
+                continue;
+
+            bool moved = false;
+            for (const auto & [new_name, new_state] : current)
+            {
+                if (new_state.inode == state.inode && !snapshot.contains(new_name))
+                {
+                    moved = true;
+                    break;
+                }
+            }
+
+            changed = true;
+            if (moved)
+            {
+                if (eventMask() & DW_ITEM_MOVED_FROM)
+                    owner.onItemMovedFrom(DirectoryEvent(name, DW_ITEM_MOVED_FROM));
+            }
+            else if (eventMask() & DW_ITEM_REMOVED)
+                owner.onItemRemoved(DirectoryEvent(name, DW_ITEM_REMOVED));
+        }
+
+        /// Names present now: newly added, the target side of a rename, replaced, or modified.
+        for (const auto & [name, state] : current)
+        {
+            auto it = snapshot.find(name);
+            if (it == snapshot.end())
+            {
+                bool moved = false;
+                for (const auto & [old_name, old_state] : snapshot)
+                {
+                    if (old_state.inode == state.inode && !current.contains(old_name))
+                    {
+                        moved = true;
+                        break;
+                    }
+                }
+
+                changed = true;
+                if (moved)
+                {
+                    if (eventMask() & DW_ITEM_MOVED_TO)
+                        owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
+                }
+                else if (eventMask() & DW_ITEM_ADDED)
+                    owner.onItemAdded(DirectoryEvent(name, DW_ITEM_ADDED));
+            }
+            else if (it->second.inode != state.inode)
+            {
+                /// Same name, different inode: the file was replaced. Treat it as freshly added;
+                /// onFileAppeared drops the now-stale meta.
+                changed = true;
+                if (eventMask() & DW_ITEM_ADDED)
+                    owner.onItemAdded(DirectoryEvent(name, DW_ITEM_ADDED));
+            }
+            else if (it->second.mtime_ns != state.mtime_ns || it->second.size != state.size)
+            {
+                changed = true;
+                if (eventMask() & DW_ITEM_MODIFIED)
+                    owner.onItemModified(DirectoryEvent(name, DW_ITEM_MODIFIED));
+            }
+        }
+
+        snapshot.swap(current);
+        sync_file_watches(snapshot);
+
+        if (changed)
+        {
+            milliseconds_to_wait = (*settings)[FileLogSetting::poll_directory_watch_events_backoff_init].totalMilliseconds();
+            owner.storage.wakeUp();
+        }
+        else if (milliseconds_to_wait < static_cast<uint64_t>((*settings)[FileLogSetting::poll_directory_watch_events_backoff_max].totalMilliseconds()))
+        {
+            milliseconds_to_wait *= (*settings)[FileLogSetting::poll_directory_watch_events_backoff_factor].value;
+        }
+    }
+}
+#endif
 
 DirectoryWatcherBase::~DirectoryWatcherBase()
 {
     stop();
+#if defined(OS_LINUX)
     [[maybe_unused]] int err = ::close(inotify_fd);
     chassert(!err || errno == EINTR);
+#endif
 }
 
 void DirectoryWatcherBase::start()
