@@ -186,8 +186,13 @@ def should_skip_job(job_name):
             "Skipped, labeled with 'ci-performance' - run performance jobs only",
         )
 
-    # Skip the whole coverage "LLVM Coverage" family.
-    if Labels.CI_NO_COVERAGE in _info_cache.pr_labels and ("llvm_coverage" in job_name or job_name == JobNames.LLVM_COVERAGE):
+    # Skip the whole coverage family together: the coverage build, the amd_llvm_coverage test shards, the excluded_from_llvm jobs
+    # (they only run the tests the coverage shards skip, so they are pointless without them), and the final "LLVM Coverage" merge job.
+    if Labels.CI_NO_COVERAGE in _info_cache.pr_labels and (
+        "llvm_coverage" in job_name
+        or "excluded_from_llvm" in job_name
+        or job_name == JobNames.LLVM_COVERAGE
+    ):
         return True, f"Skipped, labeled with '{Labels.CI_NO_COVERAGE}'"
 
     if " Bug Fix" not in _info_cache.pr_body and "Bugfix" in job_name:
