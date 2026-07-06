@@ -1,4 +1,4 @@
-SET enable_analyzer=1;
+-- Tags: no-old-analyzer
 
 DROP TABLE IF EXISTS test_table;
 CREATE TABLE test_table (test_column Int32) ENGINE = MergeTree ORDER BY test_column;
