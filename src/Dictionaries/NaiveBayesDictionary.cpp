@@ -682,7 +682,7 @@ void registerDictionaryNaiveBayes(DictionaryFactory & factory)
             .syntax = "LAYOUT(NAIVE_BAYES(class_attribute 'name' n N mode 'byte'|'codepoint'|'token' [alpha 1.0] "
                       "[priors_mode 'proportional'|'uniform'|'explicit'] [priors [(0, 0.6), (1, 0.4)]] [start_token ...] "
                       "[end_token ...] [store_source 0]))",
-            .related = {}});
+            .introduced_in = {26, 7}});
 }
 
 }
