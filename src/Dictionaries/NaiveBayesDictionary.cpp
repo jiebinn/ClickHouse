@@ -3,11 +3,14 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
 #include <Dictionaries/DictionaryFactory.h>
 #include <Dictionaries/DictionaryPipelineExecutor.h>
+#include <Dictionaries/DictionarySourceFactory.h>
 #include <Dictionaries/NaiveBayesTrainer.h>
 #include <IO/ReadHelpers.h>
+#include <Interpreters/castColumn.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 #include <QueryPipeline/BlockIO.h>
 #include <QueryPipeline/Pipe.h>
@@ -134,6 +137,46 @@ MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const Poco::Util::Abst
     return priors;
 }
 
+/// A copy of the dictionary structure with the class and count attributes widened to UInt64.
+/// The source pipeline uses it to deliver the source values at their full width, so the training
+/// loop can validate them against the declared attribute types instead of receiving them already
+/// wrapped by the narrowing cast.
+DictionaryStructure widenAttributesToUInt64(const DictionaryStructure & dict_struct)
+{
+    DictionaryStructure widened = dict_struct;
+    widened.attributes.clear();
+
+    const auto wide_type = std::make_shared<DataTypeUInt64>();
+    for (const auto & attribute : dict_struct.attributes)
+        widened.attributes.emplace_back(DictionaryAttribute{
+            .name = attribute.name,
+            .type = wide_type,
+            .type_serialization = wide_type->getDefaultSerialization(),
+            .expression = attribute.expression,
+            .null_value = attribute.null_value,
+            .underlying_type = AttributeUnderlyingType::UInt64,
+            .hierarchical = attribute.hierarchical,
+            .bidirectional = attribute.bidirectional,
+            .injective = attribute.injective,
+            .is_object_id = attribute.is_object_id,
+            .is_nullable = attribute.is_nullable});
+
+    return widened;
+}
+
+/// Highest value representable in the declared unsigned attribute type.
+UInt64 maxValueOfDeclaredType(const DataTypePtr & type)
+{
+    WhichDataType which(type);
+    if (which.isUInt8())
+        return std::numeric_limits<UInt8>::max();
+    if (which.isUInt16())
+        return std::numeric_limits<UInt16>::max();
+    if (which.isUInt32())
+        return std::numeric_limits<UInt32>::max();
+    return std::numeric_limits<UInt64>::max();
+}
+
 }
 
 
@@ -186,6 +229,14 @@ void NaiveBayesDictionary::loadData()
     /// string; the class and count attributes are located by the indices resolved from `class_attribute`.
     const size_t key_size = dict_struct.getKeysSize();
 
+    /// The source delivers the class and count columns widened to UInt64 (see the source creation in
+    /// `registerDictionaryNaiveBayes`), so out-of-range values arrive unwrapped and can be validated
+    /// against the declared attribute types here.
+    const auto & class_attribute = dict_struct.attributes[configuration.class_index];
+    const auto & count_attribute = dict_struct.attributes[configuration.count_index];
+    const UInt64 class_id_declared_max = maxValueOfDeclaredType(class_attribute.type);
+    const UInt64 count_declared_max = maxValueOfDeclaredType(count_attribute.type);
+
     MutableColumnPtr ngram_accumulator;
     MutableColumnPtr class_id_accumulator;
     MutableColumnPtr count_accumulator;
@@ -219,7 +270,17 @@ void NaiveBayesDictionary::loadData()
                     /// each column to its concrete type once per block and reading the raw buffer instead of the
                     /// per-row getDataAt/getUInt.
                     const std::string_view ngram_sv = ngram_col->getDataAt(i);
+                    /// The declared-type check covers every type up to UInt32; the model-limit check
+                    /// is reachable only when the class attribute is declared UInt64, since the model
+                    /// represents class ids as 32-bit values.
                     const UInt64 raw_class_id = class_id_col->getUInt(i);
+                    if (raw_class_id > class_id_declared_max)
+                        throw Exception(
+                            ErrorCodes::BAD_ARGUMENTS,
+                            "NaiveBayes dictionary: the source class id {} does not fit the declared type {} of attribute '{}'",
+                            raw_class_id,
+                            class_attribute.type->getName(),
+                            class_attribute.name);
                     if (raw_class_id > std::numeric_limits<UInt32>::max())
                         throw Exception(
                             ErrorCodes::BAD_ARGUMENTS,
@@ -228,6 +289,13 @@ void NaiveBayesDictionary::loadData()
                             std::numeric_limits<UInt32>::max());
                     const auto class_id = static_cast<UInt32>(raw_class_id);
                     const UInt64 count = count_col->getUInt(i);
+                    if (count > count_declared_max)
+                        throw Exception(
+                            ErrorCodes::BAD_ARGUMENTS,
+                            "NaiveBayes dictionary: the source count {} does not fit the declared type {} of attribute '{}'",
+                            count,
+                            count_attribute.type->getName(),
+                            count_attribute.name);
                     std::visit(
                         [&](auto & trainer)
                         {
@@ -256,19 +324,24 @@ void NaiveBayesDictionary::loadData()
                 if (configuration.store_source)
                 {
                     /// A source column may arrive in sparse serialization; inserting it into a dense accumulator
-                    /// would fail, so materialize each column to full before retaining it.
+                    /// would fail, so materialize each column to full before retaining it. The class and count
+                    /// columns arrive widened to UInt64; cast each block back to the declared attribute types
+                    /// (every row of the block was validated above to fit) so the retained rows keep the
+                    /// declared schema for `read` without accumulating the widened columns.
                     const auto ngram_full = ngram_col->convertToFullColumnIfSparse();
-                    const auto class_id_full = class_id_col->convertToFullColumnIfSparse();
-                    const auto count_full = count_col->convertToFullColumnIfSparse();
+                    const auto wide_type = std::make_shared<DataTypeUInt64>();
+                    const auto class_id_declared
+                        = castColumn({class_id_col->convertToFullColumnIfSparse(), wide_type, ""}, class_attribute.type);
+                    const auto count_declared = castColumn({count_col->convertToFullColumnIfSparse(), wide_type, ""}, count_attribute.type);
                     if (!ngram_accumulator)
                     {
                         ngram_accumulator = ngram_full->cloneEmpty();
-                        class_id_accumulator = class_id_full->cloneEmpty();
-                        count_accumulator = count_full->cloneEmpty();
+                        class_id_accumulator = class_id_declared->cloneEmpty();
+                        count_accumulator = count_declared->cloneEmpty();
                     }
                     ngram_accumulator->insertRangeFrom(*ngram_full, 0, rows);
-                    class_id_accumulator->insertRangeFrom(*class_id_full, 0, rows);
-                    count_accumulator->insertRangeFrom(*count_full, 0, rows);
+                    class_id_accumulator->insertRangeFrom(*class_id_declared, 0, rows);
+                    count_accumulator->insertRangeFrom(*count_declared, 0, rows);
                 }
             }
         });
@@ -420,13 +493,13 @@ Pipe NaiveBayesDictionary::read(const Names & column_names, size_t /* max_block_
 void registerDictionaryNaiveBayes(DictionaryFactory & factory);
 void registerDictionaryNaiveBayes(DictionaryFactory & factory)
 {
-    auto create_layout = [](const std::string & /* full_name */,
+    auto create_layout = [](const std::string & full_name,
                             const DictionaryStructure & dict_struct,
                             const Poco::Util::AbstractConfiguration & config,
                             const std::string & config_prefix,
                             DictionarySourcePtr source_ptr,
-                            ContextPtr /* global_context */,
-                            bool /* created_from_ddl */) -> DictionaryPtr
+                            ContextPtr global_context,
+                            bool created_from_ddl) -> DictionaryPtr
     {
         /// The structure must be a complex key with a single String element, followed by two unsigned-integer
         /// attributes: a class label and a count.
@@ -563,6 +636,20 @@ void registerDictionaryNaiveBayes(DictionaryFactory & factory)
         const size_t count_index = 1 - class_index;
 
         const DictionaryLifetime dict_lifetime{config, config_prefix + ".lifetime"};
+
+        /// The source pipeline casts every column to the declared attribute types with a plain wrapping
+        /// cast, so a source class id or count that does not fit the declared type would be silently
+        /// truncated before this dictionary could see it. Recreate the source with both attributes
+        /// widened to UInt64 — a lossless conversion for every unsigned source column — and let the
+        /// training loop validate the true values against the declared types.
+        source_ptr = DictionarySourceFactory::instance().create(
+            full_name,
+            config,
+            config_prefix + ".source",
+            widenAttributesToUInt64(dict_struct),
+            global_context,
+            config.getString(config_prefix + ".database", ""),
+            created_from_ddl);
 
         NaiveBayesDictionary::Configuration cfg{
             .n = n,

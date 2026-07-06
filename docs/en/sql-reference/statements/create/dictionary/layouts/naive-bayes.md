@@ -151,7 +151,7 @@ The algorithm follows the multinomial Naive Bayes model for text classification;
 A `NAIVE_BAYES` dictionary has a fixed shape:
 
 - The `PRIMARY KEY` is a single `String` column — the n-gram. At query time this "key" is the text you pass in to classify, not a stored lookup key.
-- Alongside it, declare **exactly two unsigned-integer attributes**: the class label and the occurrence count. Class ids always use `UInt32` internally, so a class label must fit in `UInt32` (at most `4294967295`) even if you declare its attribute as `UInt64`. A larger value is rejected when the dictionary loads, not when you create it.
+- Alongside it, declare **exactly two unsigned-integer attributes**: the class label and the occurrence count. Class ids always use `UInt32` internally, so a class label must fit in `UInt32` (at most `4294967295`) even if you declare its attribute as `UInt64`. A larger value is rejected when the dictionary loads, not when you create it. The same applies to the declared types: a source class id or count that does not fit the declared attribute type fails the load instead of being silently truncated.
 - The `class_attribute` layout parameter names which attribute is the class label; the other is automatically the count. The two attributes can be declared in either order.
 
 The source table holds **pre-aggregated** counts: one row per `(n-gram, class)` with how many times that n-gram appeared in that class. You produce those counts by tokenizing your corpus and grouping the result, either in your own training pipeline or in ClickHouse from raw labelled text (see [Build training data from raw text](#build-training-data-from-raw-text)). The dictionary only consumes them.
