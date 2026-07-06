@@ -168,6 +168,10 @@ private:
                 if (split_step)
                     return;
 
+                auto * read_step = typeid_cast<ReadFromMergeTree *>(node.step.get());
+                if (read_step)
+                    read_step->enableParallelReadingFromReplicasForSerialization();
+
                 auto clone_step = node.step->clone();
                 plan_fragment->addStep(std::move(clone_step));
             });
