@@ -750,7 +750,7 @@ BlocksList ConcurrentHashJoin::releaseSlotBlocks(size_t slot_idx)
 }
 
 void ConcurrentHashJoin::onBuildPhaseFinish()
-{    
+{
     /// The last block might not have seen the full join state because the state is updated asynchonously.
     /// This check is a safety net to ensure the THROW overflow mode still triggers even if the last block did not see the overflow.
     /// BREAK overflow mode remains unchanged as all blocks have been added already.
