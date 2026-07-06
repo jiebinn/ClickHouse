@@ -104,7 +104,7 @@ public:
         if (!nested_->supportsPooling())
             return std::shared_ptr<ISerialization>(new SerializationPQCodebook(nested_, value_type_));
         SipHash hash;
-        hash.update("PQCodebook");
+        hash.update("ProductQuantizationCodebook");
         hash.update(nested_->getHash());
         return ISerialization::pooled(hash.get128(), [&] { return new SerializationPQCodebook(nested_, value_type_); });
     }
@@ -180,7 +180,7 @@ SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPt
         codebook_type = std::make_shared<DataTypeFixedString>(codebook_bytes);
         codebook_serialization = SerializationNamed::create(
             SerializationPQCodebook::create(codebook_type->getDefaultSerialization(), codebook_type),
-            pq_codebook_subcolumn_name, ISerialization::Substream::PQCodebook);
+            pq_codebook_subcolumn_name, ISerialization::Substream::ProductQuantizationCodebook);
     }
 }
 
@@ -207,7 +207,7 @@ void SerializationQuantizedVector::enumerateStreams(
     /// The per-part trained codebook, exposed as the `<column>.pq_codebook` subcolumn (`pq` only).
     if (is_pq)
     {
-        settings.path.push_back(Substream::PQCodebook);
+        settings.path.push_back(Substream::ProductQuantizationCodebook);
         settings.path.back().name_of_substream = pq_codebook_subcolumn_name;
         settings.path.back().data = SubstreamData(codebook_serialization)
                                         .withType(data.type ? codebook_type : nullptr)

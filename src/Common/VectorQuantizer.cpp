@@ -11,13 +11,9 @@
 #endif
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <cmath>
 #include <cstring>
-#include <limits>
-#include <map>
-#include <mutex>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -35,34 +31,34 @@ namespace ErrorCodes
 namespace
 {
 
-/// Quantization codec id.
-enum class FlatQuantization : UInt8
+/// Quantization codecs (flat codecs, i.e. without codebook)
+enum class QuantizationMethod : UInt8
 {
-    TurboQuant = 2,
-    RaBitQ = 3,
+    TurboQuant = 2, /// https://arxiv.org/abs/2504.19874
+    RaBitQ = 3,     /// https://doi.org/10.1145/3654970
     Int8 = 5,
-    /// `mrl` (Matryoshka): store only the leading `bits` dimensions (the prefix), quantized to int8 (with a per-vector
-    /// scale) or bfloat16. For MRL-trained embeddings the prefix carries most of the signal, so this is a cheap shortlist.
+    /// Prefix: store only the leading dimensions (the prefix), quantized to int8 or bfloat16.
+    /// For models with Matryoshka embeddings model, the leading bits carry most of the information, so the compression loses only little data
     PrefixInt8 = 6,
     PrefixBf16 = 7,
 };
 
-/// For `mrl`, `bits` is the number of leading dimensions kept (the prefix), not a bit width.
-size_t expectedFlatBytesPerVector(FlatQuantization quantization, size_t dimensions, size_t bits)
+/// For prefix quantization, `bits` is the number of leading dimensions kept (the prefix), not a bit width.
+size_t expectedFlatBytesPerVector(QuantizationMethod quantization, size_t dimensions, size_t bits)
 {
     switch (quantization)
     {
-        case FlatQuantization::TurboQuant:
+        case QuantizationMethod::TurboQuant:
             return dimensions / 4 + sizeof(float);
-        case FlatQuantization::RaBitQ:
+        case QuantizationMethod::RaBitQ:
             return dimensions / 8 + sizeof(float);
-        case FlatQuantization::Int8:
+        case QuantizationMethod::Int8:
             /// One Int8 Lloyd-Max code per coordinate, followed by the 4-byte original L2 norm.
             return dimensions + sizeof(float);
-        case FlatQuantization::PrefixInt8:
+        case QuantizationMethod::PrefixInt8:
             /// `bits` int8 codes of the leading dimensions, followed by the 4-byte per-vector scale.
             return bits + sizeof(float);
-        case FlatQuantization::PrefixBf16:
+        case QuantizationMethod::PrefixBf16:
             /// `bits` leading dimensions as bfloat16 (2 bytes each).
             return bits * 2;
     }
@@ -483,18 +479,18 @@ inline float turboQuantDistanceFast(const TurboQuantQuery & q, const char * code
 
 namespace
 {
-FlatQuantization methodToCodec(std::string_view method)
+QuantizationMethod methodToCodec(std::string_view method)
 {
     if (method == "turboquant")
-        return FlatQuantization::TurboQuant;
+        return QuantizationMethod::TurboQuant;
     if (method == "rabitq")
-        return FlatQuantization::RaBitQ;
+        return QuantizationMethod::RaBitQ;
     if (method == "int8")
-        return FlatQuantization::Int8;
+        return QuantizationMethod::Int8;
     if (method == "mrl_int8")
-        return FlatQuantization::PrefixInt8;
+        return QuantizationMethod::PrefixInt8;
     if (method == "mrl_bf16")
-        return FlatQuantization::PrefixBf16;
+        return QuantizationMethod::PrefixBf16;
     throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown quantization method '{}'", method);
 }
 }
@@ -509,7 +505,7 @@ bool VectorQuantizer::supportsL2(std::string_view method)
 
 std::string VectorQuantizer::validateParams(std::string_view method, size_t dimensions, size_t bits)
 {
-    const FlatQuantization codec = methodToCodec(method);
+    const QuantizationMethod codec = methodToCodec(method);
 
     if (dimensions == 0)
         return "The number of dimensions must be greater than zero";
@@ -521,13 +517,13 @@ std::string VectorQuantizer::validateParams(std::string_view method, size_t dime
         return fmt::format("the number of dimensions ({}) exceeds the maximum {}", dimensions, MAX_DIMENSIONS);
 
     /// 'turboquant' and 'rabitq' pack their codes 8 coordinates to the byte, so a dimension that is not a multiple of 8
-    /// would silently drop the tail coordinates. 'int8' and the 'mrl' methods have no such constraint.
-    if ((codec == FlatQuantization::TurboQuant || codec == FlatQuantization::RaBitQ)
+    /// would silently drop the tail coordinates. 'int8' and the prefix methods have no such constraint.
+    if ((codec == QuantizationMethod::TurboQuant || codec == QuantizationMethod::RaBitQ)
         && dimensions % 8 != 0)
         return fmt::format("method '{}' requires the number of dimensions to be a multiple of 8, got {}", method, dimensions);
 
     /// For the prefix methods `bits` is the number of leading dimensions stored (the prefix); it must be in (0, dimensions].
-    if ((codec == FlatQuantization::PrefixInt8 || codec == FlatQuantization::PrefixBf16) && (bits < 1 || bits > dimensions))
+    if ((codec == QuantizationMethod::PrefixInt8 || codec == QuantizationMethod::PrefixBf16) && (bits < 1 || bits > dimensions))
         return fmt::format("method '{}' requires the number of leading dimensions to be in [1, {}], got {}", method, dimensions, bits);
 
     return {};
@@ -540,7 +536,7 @@ size_t VectorQuantizer::bytesPerVector(std::string_view method, size_t dimension
 
 struct VectorQuantizer::Encoder
 {
-    FlatQuantization codec = FlatQuantization::RaBitQ;
+    QuantizationMethod codec = QuantizationMethod::RaBitQ;
     size_t dimensions = 0;
     size_t bits = 0;
     std::vector<float> projection;   /// rabitq/int8: the (HD)^3 projection; turboquant: P1
@@ -557,15 +553,15 @@ std::shared_ptr<VectorQuantizer::Encoder> VectorQuantizer::createEncoder(std::st
     encoder->bits = bits;
     /// The projection is a deterministic function of (method, dimensions, seed) only, so it is generated once here and
     /// reused for every vector rather than regenerated per row - the data-independent analogue of the pq Encoder. The
-    /// `mrl` methods are prefix truncation and need no projection.
+    /// prefix methods need no projection.
     switch (encoder->codec)
     {
-        case FlatQuantization::RaBitQ:
-        case FlatQuantization::Int8:
+        case QuantizationMethod::RaBitQ:
+        case QuantizationMethod::Int8:
             encoder->projection = generateRandomProjection(dimensions);
             encoder->work.resize(encoder->projection.size() / PROJECTION_ROUNDS);
             break;
-        case FlatQuantization::TurboQuant:
+        case QuantizationMethod::TurboQuant:
         {
             encoder->projection = generateRandomProjection(dimensions);
             encoder->projection2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
@@ -574,8 +570,8 @@ std::shared_ptr<VectorQuantizer::Encoder> VectorQuantizer::createEncoder(std::st
             encoder->work2.resize(padded);
             break;
         }
-        case FlatQuantization::PrefixInt8:
-        case FlatQuantization::PrefixBf16:
+        case QuantizationMethod::PrefixInt8:
+        case QuantizationMethod::PrefixBf16:
             break;
     }
     return encoder;
@@ -587,13 +583,13 @@ void VectorQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
     const size_t bits = encoder.bits;
     switch (encoder.codec)
     {
-        case FlatQuantization::RaBitQ:
+        case QuantizationMethod::RaBitQ:
             encodeRaBitQ(encoder.projection, vec, dimensions, encoder.work.data(), dst);
             return;
-        case FlatQuantization::TurboQuant:
+        case QuantizationMethod::TurboQuant:
             encodeTurboQuant(encoder.projection, encoder.projection2, vec, dimensions, encoder.work.data(), encoder.work2.data(), dst);
             return;
-        case FlatQuantization::PrefixInt8:
+        case QuantizationMethod::PrefixInt8:
         {
             /// Store the leading `bits` dimensions as int8 with a per-vector symmetric scale (max|x| over the prefix),
             /// followed by the 4-byte scale. Robust to any vector magnitude. Non-finite prefix values are skipped in the
@@ -613,7 +609,7 @@ void VectorQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
             std::memcpy(dst + bits, &scale, sizeof(float));
             return;
         }
-        case FlatQuantization::PrefixBf16:
+        case QuantizationMethod::PrefixBf16:
         {
             /// Store the leading `bits` dimensions as bfloat16 (the top 16 bits of the float32, round-to-nearest-even).
             for (size_t i = 0; i < bits; ++i)
@@ -625,7 +621,7 @@ void VectorQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
             }
             return;
         }
-        case FlatQuantization::Int8:
+        case QuantizationMethod::Int8:
         {
             double norm_sq = 0.0;
             for (size_t i = 0; i < dimensions; ++i)
@@ -674,7 +670,7 @@ struct Int8Query
 /// Prepared query state for computing approximate distances from codes.
 struct VectorQuantizer::Query
 {
-    FlatQuantization codec = FlatQuantization::RaBitQ;
+    QuantizationMethod codec = QuantizationMethod::RaBitQ;
     size_t dimensions = 0;
     size_t bits = 0;
     size_t code_bytes = 0;
@@ -706,7 +702,7 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
 
     switch (query->codec)
     {
-        case FlatQuantization::RaBitQ:
+        case QuantizationMethod::RaBitQ:
         {
             query->code_bytes = dimensions / 8 + sizeof(float);
             const std::vector<float> projection = generateRandomProjection(dimensions);
@@ -715,7 +711,7 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
             query->rabitq = buildRaBitQQuery(work.data(), dimensions);
             break;
         }
-        case FlatQuantization::TurboQuant:
+        case QuantizationMethod::TurboQuant:
         {
             query->code_bytes = dimensions / 4 + sizeof(float);
             const std::vector<float> p1 = generateRandomProjection(dimensions);
@@ -724,11 +720,11 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
             query->turbo = buildTurboQuantQuery(p1, p2, ref64.data(), dimensions);
             break;
         }
-        case FlatQuantization::PrefixInt8:
-        case FlatQuantization::PrefixBf16:
+        case QuantizationMethod::PrefixInt8:
+        case QuantizationMethod::PrefixBf16:
         {
             /// Distance is computed on the leading `bits` dimensions only (the stored prefix), against the query's prefix.
-            query->code_bytes = (query->codec == FlatQuantization::PrefixInt8) ? bits : bits * 2;
+            query->code_bytes = (query->codec == QuantizationMethod::PrefixInt8) ? bits : bits * 2;
             query->mrl_query.assign(ref, ref + bits);
             double pn = 0.0;
             for (size_t i = 0; i < bits; ++i)
@@ -737,7 +733,7 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
             query->is_l2 = is_l2;
             break;
         }
-        case FlatQuantization::Int8:
+        case QuantizationMethod::Int8:
         {
             query->code_bytes = dimensions; /// Int8 codes; the 4-byte norm factor follows.
             const std::vector<float> projection = generateRandomProjection(dimensions);
@@ -765,19 +761,19 @@ float VectorQuantizer::distance(const Query & query, const char * code)
 {
     switch (query.codec)
     {
-        case FlatQuantization::RaBitQ:
+        case QuantizationMethod::RaBitQ:
             return raBitQDistanceFast(query.rabitq, code, query.use_icelake);
-        case FlatQuantization::TurboQuant:
+        case QuantizationMethod::TurboQuant:
             return turboQuantDistanceFast(query.turbo, code, query.use_icelake);
-        case FlatQuantization::PrefixInt8:
-        case FlatQuantization::PrefixBf16:
+        case QuantizationMethod::PrefixInt8:
+        case QuantizationMethod::PrefixBf16:
         {
             /// Decode the stored prefix and compute L2 (squared, monotone for ranking) or cosine distance against the
             /// query's prefix.
             const size_t n = query.mrl_query.size();
             auto decoded = [&](size_t i) -> float
             {
-                if (query.codec == FlatQuantization::PrefixInt8)
+                if (query.codec == QuantizationMethod::PrefixInt8)
                 {
                     float scale = 0.0f;
                     std::memcpy(&scale, code + n, sizeof(float));
@@ -814,7 +810,7 @@ float VectorQuantizer::distance(const Query & query, const char * code)
             const float cosine = (denom > 0.0f) ? std::clamp(dot / denom, -1.0f, 1.0f) : 0.0f;
             return 1.0f - cosine;
         }
-        case FlatQuantization::Int8:
+        case QuantizationMethod::Int8:
         {
             const Int8Query & iq = query.int8;
             const Int8 * codes = reinterpret_cast<const Int8 *>(code);

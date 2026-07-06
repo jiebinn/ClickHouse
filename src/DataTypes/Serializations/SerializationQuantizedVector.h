@@ -59,7 +59,7 @@ private:
     /// `pq` only: the per-part trained codebook, written once per part as the `pq_codebook` substream.
     size_t codebook_bytes = 0;            /// FixedString size of the flat codebook (ProductQuantization::codebookFloats * 4)
     DataTypePtr codebook_type;
-    SerializationPtr codebook_serialization; /// SerializationNamed(FixedString, "pq_codebook", PQCodebook)
+    SerializationPtr codebook_serialization; /// SerializationNamed(FixedString, "pq_codebook", ProductQuantizationCodebook)
 
     /// Encode rows [offset, offset + count) into a FixedString(bytes_per_vector) column. For `pq`, `codebook` is the
     /// trained centroids (`ProductQuantization`); for the data-independent methods it is null.
