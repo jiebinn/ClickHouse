@@ -9,7 +9,10 @@
 //   2. Navigation entries pointing into the slice resolve to files.
 //   3. Every page inside the slice parses (via Mintlify's own `createPage`,
 //      so the errors match what `mint validate` would print).
-//   4. `import ... from '/snippets/...'` inside the slice resolves to a file.
+//   4. Imports in the slice resolve, via Mintlify's own import pipeline
+//      (`findAndRemoveImports` + `resolveAllImports`): path validity, file
+//      existence, and named-export resolution, followed transitively through
+//      imported snippets.
 //
 // Site-wide link/anchor integrity is left to the lychee check that runs
 // alongside, and the aggregator's own CI still runs the full validate.
@@ -21,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // The Mintlify packages come from the `mint` CLI installed globally in the
@@ -136,10 +139,6 @@ async function listPages(dir)
     return out;
 }
 
-// Only absolute /snippets imports are checked; relative imports inside the
-// scope are covered by the per-page parse.
-const SNIPPET_IMPORT_RE = /^import\s[^;'"]*['"](\/snippets\/[^'"]+)['"]/gm;
-
 async function main()
 {
     const { scopes, docsRoot } = parseArgs(process.argv.slice(2));
@@ -149,10 +148,13 @@ async function main()
     if (!existsSync(docsJsonPath))
         throw new Error(`No docs.json in docs root: ${docsRoot}`);
 
-    const [{ validateDocsConfig }, { createPage, getConfigObj }] = await Promise.all([
+    const [{ validateDocsConfig }, { createPage, getConfigObj, preparseMdxTree }, common] = await Promise.all([
         importMintlifyPackage('@mintlify/validation'),
         importMintlifyPackage('@mintlify/prebuild'),
+        importMintlifyPackage('@mintlify/common'),
     ]);
+    const { findAndRemoveImports, hasImports, resolveAllImports, resolveImportPath,
+            isSnippetExtension, topologicalSort } = common;
 
     // getConfigObj resolves `$ref` includes (the redirects map, per-slice
     // navigation fragments) before the schema sees the config.
@@ -175,6 +177,34 @@ async function main()
                 `under the scope (looked for ${page}.mdx and ${page}.md)`);
     }
 
+    // The import graph reachable from the scope pages. Filenames use the same
+    // leading-slash docs-root-relative form full prebuild uses, which is what
+    // resolveAllImports matches import paths against. A missing entry is left
+    // out so resolveAllImports reports it as a missing file, like full validate.
+    const importedEntries = new Map();
+    async function loadImportedFile(filename)
+    {
+        if (importedEntries.has(filename))
+            return;
+        importedEntries.set(filename, null);
+        const absPath = join(docsRoot, filename);
+        if (!isSnippetExtension(extname(filename).toLowerCase()) || !existsSync(absPath))
+            return;
+        const content = await readFile(absPath, 'utf8');
+        const tree = await preparseMdxTree(content, docsRoot, absPath, message => errors.push(message.trim()));
+        if (!tree)
+            return;
+        const entry = { ...(await findAndRemoveImports(tree)), filename };
+        importedEntries.set(filename, entry);
+        for (const source of Object.keys(entry.importMap))
+        {
+            const resolved = resolveImportPath(source, filename);
+            if (resolved)
+                await loadImportedFile(resolved);
+        }
+    }
+
+    const pagesWithImports = [];
     let pageCount = 0;
     for (const scope of scopes)
     {
@@ -200,18 +230,49 @@ async function main()
             {
                 errors.push(`${relPath}: ${error.message}`);
             }
-            for (const match of content.matchAll(SNIPPET_IMPORT_RE))
-            {
-                const snippetPath = match[1];
-                if (!existsSync(join(docsRoot, snippetPath.replace(/^\/+/, ''))))
-                    errors.push(`${relPath}: imports "${snippetPath}" but the file does not exist`);
-            }
+            // Parse errors were already reported by createPage above.
+            const tree = await preparseMdxTree(content, docsRoot, absPath, () => {});
+            if (!tree)
+                return;
+            const fileWithImports = { ...(await findAndRemoveImports(tree)), filename: '/' + relPath };
+            if (hasImports(fileWithImports))
+                pagesWithImports.push(fileWithImports);
         }));
     }
 
+    for (const page of pagesWithImports)
+        for (const source of Object.keys(page.importMap))
+        {
+            const resolved = resolveImportPath(source, page.filename);
+            if (resolved)
+                await loadImportedFile(resolved);
+        }
+
+    // Resolve imports the way full prebuild does (resolveImportsAndWriteFiles):
+    // snippets first, in reverse topological order so nested imports are
+    // already inlined, then the pages. Every problem -- invalid path, missing
+    // file, unresolvable named export -- arrives via onWarning, which strict
+    // mode turns into failures.
+    const snippetEntries = [...importedEntries.values()].filter(entry => entry !== null);
+    const graph = {};
+    for (const entry of snippetEntries)
+        graph[entry.filename] = Object.keys(entry.importMap)
+            .map(source => resolveImportPath(source, entry.filename))
+            .filter(resolved => resolved !== null);
+    const onWarning = warning => errors.push(warning.message);
+    for (const filename of topologicalSort(graph).reverse())
+    {
+        const entry = importedEntries.get(filename);
+        if (entry && hasImports(entry))
+            entry.tree = await resolveAllImports({ snippets: snippetEntries, fileWithImports: entry, onWarning });
+    }
+    for (const page of pagesWithImports)
+        await resolveAllImports({ snippets: snippetEntries, fileWithImports: page, onWarning });
+
     console.log(
         `Scoped validate: checked docs.json, ${scopedNavPages.length} in-scope navigation ` +
-        `entries, and ${pageCount} pages under: ${scopes.join(', ')}`);
+        `entries, ${pageCount} pages, and ${snippetEntries.length} imported files ` +
+        `under: ${scopes.join(', ')}`);
     if (errors.length > 0)
     {
         console.error(`\n${errors.length} error(s):`);
