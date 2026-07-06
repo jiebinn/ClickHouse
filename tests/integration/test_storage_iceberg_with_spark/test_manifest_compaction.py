@@ -76,7 +76,7 @@ def get_all_snapshot_ids(path_to_table):
     return {snap.get("snapshot-id") for snap in (best or {}).get("snapshots", [])}
 
 
-@pytest.mark.parametrize("format_version", ["1", "2"])
+@pytest.mark.parametrize("format_version", ["2"])
 @pytest.mark.parametrize("storage_type", ["s3"])
 def test_optimize_manifest_files(started_cluster_iceberg_with_spark, storage_type, format_version):
     instance = started_cluster_iceberg_with_spark.instances["node1"]
@@ -759,8 +759,6 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
     original_snapshot_ids = get_all_snapshot_ids(table_path)
     assert original_snapshot_ids, "expected the pre-compaction metadata to record snapshots"
 
-    # Capture each data file's original (data, file) sequence numbers so we can prove the rewrite
-    # preserves file_sequence_number rather than re-stamping it with the data sequence number.
     def read_data_file_sequence_numbers(manifests):
         by_path = {}
         for manifest in manifests:
@@ -830,11 +828,8 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
                 f"entry snapshot_id {snapshot_id} should be an original adder, "
                 f"not a snapshot created by the compaction"
             )
-            # EXISTING entries require explicit, preserved (non-null) data and file sequence numbers.
             assert sequence_number != "\\N", "sequence_number must be preserved (non-null)"
             assert file_sequence_number != "\\N", "file_sequence_number must be preserved (non-null)"
-            # A manifest-only rewrite must keep the source entry's data and file sequence numbers
-            # unchanged, rather than re-stamping file_sequence_number with the data sequence number.
             assert file_path in original_seq_by_path, (
                 f"data file {file_path} was not present before compaction"
             )
@@ -987,6 +982,43 @@ def test_optimize_manifest_files_v3_rejected(started_cluster_iceberg_with_spark,
     assert "not yet supported for Iceberg format-version 3" in error_message
 
     # The rejected compaction must leave the table untouched and still readable.
+    assert int(instance.query(f"SELECT count() FROM {TABLE_NAME}")) == 40
+
+
+@pytest.mark.parametrize("storage_type", ["s3"])
+def test_optimize_manifest_files_v1_rejected(started_cluster_iceberg_with_spark, storage_type):
+    instance = started_cluster_iceberg_with_spark.instances["node1"]
+    spark = started_cluster_iceberg_with_spark.spark_session
+    TABLE_NAME = "test_optimize_manifest_v1_rejected_" + storage_type + "_" + get_uuid_str()
+
+    spark.sql(
+        f"CREATE TABLE {TABLE_NAME} (id long, data string) USING iceberg "
+        f"TBLPROPERTIES ('format-version' = '1')"
+    )
+    for lo in range(0, 40, 10):
+        spark.sql(
+            f"INSERT INTO {TABLE_NAME} select id, char(id + ascii('a')) from range({lo}, {lo + 10})"
+        )
+
+    default_upload_directory(
+        started_cluster_iceberg_with_spark,
+        storage_type,
+        f"/iceberg_data/default/{TABLE_NAME}/",
+        f"/iceberg_data/default/{TABLE_NAME}/",
+    )
+    create_iceberg_table(storage_type, instance, TABLE_NAME, started_cluster_iceberg_with_spark)
+
+    assert int(instance.query(f"SELECT count() FROM {TABLE_NAME}")) == 40
+
+    error_message = instance.query_and_get_error(
+        f"OPTIMIZE TABLE {TABLE_NAME} MANIFEST",
+        settings={
+            "allow_experimental_iceberg_compaction": 1,
+            "iceberg_manifest_min_count_to_compact": 2,
+        },
+    )
+    assert "supported only for Iceberg format_version 2" in error_message
+
     assert int(instance.query(f"SELECT count() FROM {TABLE_NAME}")) == 40
 
 
