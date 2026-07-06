@@ -3,6 +3,7 @@
 #include <chrono>
 #include <functional>
 #include <exception>
+#include <optional>
 #include <unordered_map>
 #include <base/types.h>
 #include <Interpreters/IExternalLoadable.h>
@@ -225,6 +226,10 @@ protected:
     /// Updates the object from the configuration without reloading as much as possible.
     virtual void updateObjectFromConfigWithoutReloading(
         IExternalLoadable & /* object */, const Poco::Util::AbstractConfiguration & /* config */, const String & /* key_in_config */) const {}
+
+    /// Returns whether the object's configuration overrides lazy loading, or no value to follow the loader-wide setting.
+    virtual std::optional<bool> isObjectLazy(
+        const Poco::Util::AbstractConfiguration & /* config */, const String & /* key_in_config */) const { return {}; }
 
     Strings getAllTriedToLoadNames() const;
 

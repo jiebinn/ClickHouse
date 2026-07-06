@@ -3912,6 +3912,9 @@ Allow '.' to match newline characters for a regexp_tree dictionary.
     DECLARE(Bool, dictionary_use_async_executor, false, R"(
 Execute a pipeline for reading dictionary source in several threads. It's supported only by dictionaries with local CLICKHOUSE source.
 )", 0) \
+    DECLARE(BoolAuto, dictionary_lazy_load, Field("auto"), R"(
+Controls loading of a dictionary when specified in the `SETTINGS` clause of `CREATE DICTIONARY`: `1` defers loading until first use, `0` loads the dictionary at creation, `'auto'` follows the server setting `dictionaries_lazy_load`. Has no effect when set on a session or query level.
+)", 0) \
     DECLARE(LogsLevel, send_logs_level, LogsLevel::fatal, R"(
 Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'
 )", 0) \

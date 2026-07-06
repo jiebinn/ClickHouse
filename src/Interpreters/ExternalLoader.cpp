@@ -490,7 +490,7 @@ public:
             if (!infos.contains(name))
             {
                 Info & info = infos.emplace(name, Info{name, config}).first->second;
-                if (!isObjectLazy(*config->config, config->key_in_config))
+                if (!isObjectLazy(*config))
                 {
                     LOG_TRACE(log, "Will load '{}' because it is not loaded lazily.", name);
                     startLoading(info);
@@ -529,7 +529,7 @@ public:
         {
             /// Start loading all the objects which were not loaded yet and are not configured to load lazily.
             for (auto & [name, info] : infos)
-                if (!info.triedToLoad() && !isObjectLazy(*info.config->config, info.config->key_in_config))
+                if (!info.triedToLoad() && !isObjectLazy(*info.config))
                     startLoading(info);
         }
     }
@@ -636,7 +636,7 @@ public:
         auto should_load = [this](const String & name)
         {
             const Info * info = getInfo(name);
-            return info && (info->triedToLoad() || !isObjectLazy(*info->config->config, info->config->key_in_config));
+            return info && (info->triedToLoad() || !isObjectLazy(*info->config));
         };
         loadImpl(should_load, timeout, false, lock);
         return collectLoadResults<ReturnType>(FilterByNameFunction{});
@@ -744,9 +744,9 @@ public:
 
 private:
 
-    bool isObjectLazy(const Poco::Util::AbstractConfiguration & config, const String & key_in_config) const
+    bool isObjectLazy(const ObjectConfig & config) const
     {
-        return config.getBool(key_in_config + ".lazy_load", !always_load_everything);
+        return external_loader.isObjectLazy(*config.config, config.key_in_config).value_or(!always_load_everything);
     }
 
     struct Info

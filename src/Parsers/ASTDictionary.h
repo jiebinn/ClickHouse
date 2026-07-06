@@ -1,7 +1,5 @@
 #pragma once
 
-#include <optional>
-
 #include <Parsers/IAST.h>
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ASTExpressionList.h>
@@ -108,8 +106,6 @@ public:
     ASTDictionaryRange * range = nullptr;
     /// Settings for dictionary (optionally)
     ASTDictionarySettings * dict_settings = nullptr;
-    /// Whether to load this dictionary lazily, overriding the server `dictionaries_lazy_load` setting (optionally)
-    std::optional<bool> lazy_load;
 
     String getID(char) const override { return "Dictionary definition"; }
 

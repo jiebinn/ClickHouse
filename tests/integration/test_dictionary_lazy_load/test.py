@@ -41,14 +41,16 @@ def get_status(node, name):
     ).strip()
 
 
-# lazy = the effective decision: the LAZY_LOAD clause if present, else the server's default.
+# lazy = the effective decision: the dictionary_lazy_load setting if not 'auto', else the server's default.
 @pytest.mark.parametrize("node, clause, lazy", [
     pytest.param(node_lazy, "", True),
-    pytest.param(node_lazy, "LAZY_LOAD(1)", True),
-    pytest.param(node_lazy, "LAZY_LOAD(0)", False),
+    pytest.param(node_lazy, "SETTINGS(dictionary_lazy_load = 'auto')", True),
+    pytest.param(node_lazy, "SETTINGS(dictionary_lazy_load = 1)", True),
+    pytest.param(node_lazy, "SETTINGS(dictionary_lazy_load = 0)", False),
     pytest.param(node_eager, "", False),
-    pytest.param(node_eager, "LAZY_LOAD(1)", True),
-    pytest.param(node_eager, "LAZY_LOAD(0)", False),
+    pytest.param(node_eager, "SETTINGS(dictionary_lazy_load = 'auto')", False),
+    pytest.param(node_eager, "SETTINGS(dictionary_lazy_load = 1)", True),
+    pytest.param(node_eager, "SETTINGS(dictionary_lazy_load = 0)", False),
 ])
 def test_dictionary_lazy_load(started_cluster, node, clause, lazy):
     if lazy:

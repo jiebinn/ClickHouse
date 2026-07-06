@@ -121,8 +121,6 @@ ASTPtr ASTDictionary::clone() const
     if (dict_settings)
         res->set(res->dict_settings, dict_settings->clone());
 
-    res->lazy_load = lazy_load;
-
     return res;
 }
 
@@ -166,9 +164,6 @@ void ASTDictionary::formatImpl(WriteBuffer & ostr, const FormatSettings & settin
         ostr << settings.nl_or_ws;
         dict_settings->format(ostr, settings, state, frame);
     }
-
-    if (lazy_load.has_value())
-        ostr << settings.nl_or_ws << "LAZY_LOAD(" << (*lazy_load ? "1" : "0") << ")";
 }
 
 }
