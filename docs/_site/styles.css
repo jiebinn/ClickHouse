@@ -2675,6 +2675,16 @@ html:not(.dark) .card a {
     text-decoration: underline;
 }
 
+/* External goal-card links: the arrow rotates to point up-right on hover,
+   hinting that the link leaves the docs site */
+.goal-card-link .ch-external-arrow {
+    transition: transform 0.15s ease;
+}
+
+.goal-card-link:hover .ch-external-arrow {
+    transform: rotate(-45deg);
+}
+
 /* ============================================
    Sidebar Section Spacing
    ============================================ */
