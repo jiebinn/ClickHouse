@@ -409,7 +409,9 @@ endif ()
 option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections in object files with zlib (-gz); requires a zlib-enabled compiler" OFF)
 
 if (COMPRESS_DEBUG_SECTIONS AND OS_LINUX AND NOT DISABLE_ALL_DEBUG_SYMBOLS)
-    add_compile_options (-gz=zlib)
+    # Only C/C++ (and GNU-style ASM handled by clang) understand -gz; scope it away from other
+    # languages such as ASM_NASM (ISA-L on amd64), whose nasm assembler rejects the flag.
+    add_compile_options ($<$<COMPILE_LANGUAGE:C,CXX,ASM>:-gz=zlib>)
 endif ()
 
 # Disable omit frame pointer compiler optimization using -fno-omit-frame-pointer
