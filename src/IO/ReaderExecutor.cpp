@@ -308,7 +308,10 @@ void ReaderExecutor::dropLongConnection()
     {
         const auto drain = long_conn->drainTail(max_tail_for_drain, block_size, log);
         if (drain.bytes)
+        {
             stats.add(Stats::BytesFromSource, drain.bytes);
+            stats.add(Stats::LongConnectionBytes, drain.bytes);
+        }
         drain_failed = drain.failed;
         ended_at_eof = !drain_failed && drain.bytes > 0 && !long_conn->atBound();
     }
