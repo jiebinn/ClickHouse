@@ -16,6 +16,7 @@
 #elif defined(OS_DARWIN)
 #include <map>
 #include <set>
+#include <vector>
 #include <fcntl.h>
 #include <sys/event.h>
 #include <sys/stat.h>
@@ -389,16 +390,67 @@ void DirectoryWatcherBase::watchFunc()
                 owner.onItemRemoved(DirectoryEvent(name, DW_ITEM_REMOVED));
         }
 
-        /// Arrived identities that are the target of a rename.
+        /// Arrived identities that are the target of a rename. StorageFileLog processes MOVED_TO in
+        /// order and reuses each target name, so a target whose OLD inode is itself being moved
+        /// elsewhere must be emitted AFTER the MOVED_TO that relocates that old inode - otherwise
+        /// reusing the name erases the still-live inode's meta and it is re-read from offset 0 (e.g.
+        /// a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). We recover that chronological order
+        /// with a topological sort over "target T must follow the target that receives T's old
+        /// inode". The only unsatisfiable shape is a rename cycle (an `a <-> b` swap), which no order
+        /// can fully preserve; such leftovers are emitted last as a best effort.
+        std::vector<std::string> move_targets;
         for (const auto & [name, state] : current)
         {
-            if (same_identity(snapshot, name, state.inode))
-                continue;
-            if (is_rename(state.inode))
+            if (!same_identity(snapshot, name, state.inode) && is_rename(state.inode))
+                move_targets.push_back(name);
+        }
+
+        if (!move_targets.empty())
+        {
+            const std::set<std::string> target_set(move_targets.begin(), move_targets.end());
+            std::map<std::string, std::string> predecessor;
+            for (const auto & name : move_targets)
+            {
+                auto snap_it = snapshot.find(name);
+                if (snap_it == snapshot.end())
+                    continue;
+                const UInt64 old_inode = snap_it->second.inode;
+                auto relocated_it = current_inode_name.find(old_inode);
+                if (is_rename(old_inode) && relocated_it != current_inode_name.end()
+                    && relocated_it->second != name && target_set.contains(relocated_it->second))
+                    predecessor[name] = relocated_it->second;
+            }
+
+            auto emit_moved_to = [&](const std::string & name)
             {
                 changed = true;
                 if (eventMask() & DW_ITEM_MOVED_TO)
                     owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
+            };
+
+            std::set<std::string> emitted;
+            bool progress = true;
+            while (emitted.size() < move_targets.size() && progress)
+            {
+                progress = false;
+                for (const auto & name : move_targets)
+                {
+                    if (emitted.contains(name))
+                        continue;
+                    auto p = predecessor.find(name);
+                    if (p == predecessor.end() || emitted.contains(p->second))
+                    {
+                        emit_moved_to(name);
+                        emitted.insert(name);
+                        progress = true;
+                    }
+                }
+            }
+            /// Whatever is left is a rename cycle; emit it in a deterministic (lexical) order.
+            for (const auto & name : move_targets)
+            {
+                if (!emitted.contains(name))
+                    emit_moved_to(name);
             }
         }
 
