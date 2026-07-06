@@ -5044,21 +5044,20 @@ function uniqueTitle(desired, excludeId) {
     }
 }
 
-/// Title for a duplicated tab: a base title with a " N" suffix, N starting at 1 and
-/// incrementing until the result is free (titles must stay unique — see `uniqueTitle`).
+/// Title for a duplicated tab: the whole source title is the family base, and the copy gets a
+/// " N" suffix, N starting at 1 and incrementing until the result is free (titles must stay
+/// unique — see `uniqueTitle`). Duplicating "Query A" yields "Query A 1", "Query A 2", …
 ///
-/// A trailing " N" on the source is collapsed only when it is a real duplicate-family suffix,
-/// i.e. the title with it removed is itself an existing tab (the family root). So with a tab
-/// "Query A" present, duplicating "Query A 2" yields "Query A 3" rather than "Query A 2 1".
-/// Otherwise the digits are part of a user-authored name — "Incident 2025", "Release 24 7" —
-/// so the whole title is kept as the base and we append the copy counter to it, never rewriting
-/// a meaningful numeric ending down to "Incident 1" / "Release 24 1".
+/// The full source title is always used as the base — a trailing " N" is never stripped — so a
+/// user-authored numeric ending is preserved and the duplicate lineage stays unambiguous:
+/// duplicating "Incident 2025" yields "Incident 2025 1" (not "Incident 1"), and "Release 24 7"
+/// yields "Release 24 7 1". A title-only heuristic cannot tell a user's trailing digits from a
+/// duplicate counter — e.g. with both "Incident" and "Incident 2025" open, stripping " 2025"
+/// would wrongly collapse the copy into the unrelated "Incident" family — so we do not strip.
 function duplicateTitle(title) {
     const taken = new Set(tabs.map(t => t.title));
-    const stripped = title.replace(/ \d+$/, '');
-    const base = (stripped !== title && taken.has(stripped)) ? stripped : title;
     for (let i = 1; ; ++i) {
-        const candidate = base + ' ' + i;
+        const candidate = title + ' ' + i;
         if (!taken.has(candidate)) return candidate;
     }
 }
