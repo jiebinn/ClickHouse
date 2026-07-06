@@ -388,7 +388,7 @@ ISerialization::DeserializeBinaryBulkStatePtr SerializationDynamic::deserializeD
                     /// always decode: use 0 (unlimited) there. Native input carries format_settings and enforces the limit.
                     variants.push_back(settings.format_settings
                         ? decodeDataType(*structure_stream, settings.format_settings->binary.max_binary_type_complexity)
-                        : decodeDataType(*structure_stream, 0));
+                        : decodeDataType(*structure_stream));
             }
             else
             {
@@ -571,7 +571,7 @@ void SerializationDynamic::serializeBinaryBulkWithMultipleStreamsAndCountTotalSi
                 {
                     auto value = shared_variant.getDataAt(offsets[i]);
                     ReadBufferFromMemory buf(value);
-                    auto type = decodeDataType(buf, 0);
+                    auto type = decodeDataType(buf);
                     auto type_name = type->getName();
                     if (auto it = dynamic_state->statistics.shared_variants_statistics.find(type_name); it != dynamic_state->statistics.shared_variants_statistics.end())
                         ++it->second;
@@ -730,7 +730,7 @@ void SerializationDynamic::serializeForHashCalculation(const IColumn & column, s
     {
         auto value = dynamic_column.getSharedVariant().getDataAt(variant_column.offsetAt(row_num));
         ReadBufferFromMemory value_buf(value);
-        auto type = decodeDataType(value_buf, 0);
+        auto type = decodeDataType(value_buf);
         auto type_name = type->getName();
         auto serialization = getDataTypesCache().getSerialization(type_name);
         auto tmp_column = type->createColumn();
@@ -901,7 +901,7 @@ static void serializeTextImpl(
     {
         auto value = dynamic_column.getSharedVariant().getDataAt(variant_column.offsetAt(row_num));
         ReadBufferFromMemory buf(value);
-        auto variant_type = decodeDataType(buf, 0);
+        auto variant_type = decodeDataType(buf);
         auto tmp_variant_column = variant_type->createColumn();
         auto variant_serialization = variant_type->getDefaultSerialization();
         variant_serialization->deserializeBinary(*tmp_variant_column, buf, FormatSettings{});

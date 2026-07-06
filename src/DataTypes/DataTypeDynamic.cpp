@@ -938,7 +938,7 @@ std::unique_ptr<IDataType::SubstreamData> DataTypeDynamic::getDynamicSubcolumnDa
                 {
                     auto value = shared_variant.getDataAt(offsets[i]);
                     ReadBufferFromMemory buf(value);
-                    auto type = decodeDataType(buf, 0);
+                    auto type = decodeDataType(buf);
                     if (type->getName() == subcolumn_type_name)
                     {
                         subcolumn_serialization->deserializeBinary(*subcolumn, buf, format_settings);

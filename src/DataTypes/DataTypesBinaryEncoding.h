@@ -194,11 +194,11 @@ void encodeDataType(const DataTypePtr & type, WriteBuffer & buf);
 /// It can skip serializing some data types parameters.
 void encodeDataTypeForHashCalculation(const DataTypePtr & type, WriteBuffer & buf);
 
-/// Decode a type, enforcing a limit on the number of decoded type nodes (0 == unlimited). Callers reading
-/// untrusted input (input formats, and query plans deserialized from a client via receiveQueryPlan) pass the
-/// effective `input_format_binary_max_type_complexity` to guard against malicious input; callers decoding
-/// already-stored server data (columns, shared-data) pass 0.
-DataTypePtr decodeDataType(ReadBuffer & buf, size_t max_complexity);
+/// Decode a type. max_complexity limits the number of decoded type nodes (0 == unlimited, the default).
+/// Callers reading untrusted input (input formats, and query plans deserialized from a client via
+/// receiveQueryPlan) pass the effective `input_format_binary_max_type_complexity` to guard against malicious
+/// input; callers decoding already-stored server data (columns, shared-data) use the default (unlimited).
+DataTypePtr decodeDataType(ReadBuffer & buf, size_t max_complexity = 0);
 
 /// Resolve the effective input_format_binary_max_type_complexity from a context, to pass to decodeDataType.
 /// Reads the setting once (not per type node), so it does not reintroduce per-value context contention.

@@ -82,7 +82,7 @@ public:
     String getTypeNameFromSharedVariantValue(std::string_view value) const
     {
         ReadBufferFromMemory buf(value);
-        return decodeDataType(buf, 0)->getName();
+        return decodeDataType(buf)->getName();
     }
 };
 
