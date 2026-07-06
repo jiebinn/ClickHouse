@@ -155,6 +155,12 @@ void DirectoryWatcherBase::watchFunc()
     }
 }
 #elif defined(OS_DARWIN)
+static void closeFileDescriptor(int fd)
+{
+    [[maybe_unused]] int err = ::close(fd);
+    chassert(!err || errno == EINTR);
+}
+
 void DirectoryWatcherBase::watchFunc()
 {
     /// macOS has no inotify. We reconstruct the same event stream by diffing a filename ->
@@ -202,11 +208,11 @@ void DirectoryWatcherBase::watchFunc()
 
     SCOPE_EXIT({
         for (const auto & [name, fd] : watched_fds)
-            ::close(fd);
+            closeFileDescriptor(fd);
         if (kq != -1)
-            ::close(kq);
+            closeFileDescriptor(kq);
         if (dir_fd != -1)
-            ::close(dir_fd);
+            closeFileDescriptor(dir_fd);
     });
 
     if (dir_fd != -1 && kq != -1)
@@ -242,7 +248,7 @@ void DirectoryWatcherBase::watchFunc()
                 ++it;
                 continue;
             }
-            ::close(it->second); /// closing the fd removes it from the kqueue
+            closeFileDescriptor(it->second); /// closing the fd removes it from the kqueue
             it = watched_fds.erase(it);
         }
     };
@@ -291,9 +297,8 @@ void DirectoryWatcherBase::watchFunc()
         {
             scan(current);
         }
-        catch (...)
+        catch (...) // Ok: the directory may be transiently unavailable (e.g. being recreated); retry next tick.
         {
-            /// The directory may be transiently unavailable (e.g. being recreated); retry next tick.
             continue;
         }
 

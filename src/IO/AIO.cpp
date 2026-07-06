@@ -135,9 +135,9 @@ AIOContext::~AIOContext()
 
 #elif defined(OS_DARWIN)
 
-#    include <deque>
 #    include <cerrno>
 #    include <unistd.h>
+#    include <Common/DequeWithMemoryTracking.h>
 
 
 /** Synchronous emulation of the asynchronous I/O interface for macOS.
@@ -146,7 +146,8 @@ AIOContext::~AIOContext()
 
 struct DarwinAIOContext
 {
-    std::deque<io_event> completed;
+    /// Results recorded by io_submit and drained (FIFO) by io_getevents.
+    DB::DequeWithMemoryTracking<io_event> completed;
 };
 
 int io_setup(unsigned, aio_context_t * ctxp)

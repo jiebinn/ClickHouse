@@ -81,10 +81,12 @@ struct AIOContext : private boost::noncopyable
 #    include <aio.h>
 #    include <sys/types.h>
 
-/// macOS has POSIX aio but not Linux AIO and not FreeBSD's SIGEV_KEVENT notification, and its
-/// per-process POSIX aio limits are small. So this shim performs the I/O synchronously behind the
-/// io_submit/io_getevents interface (used only by the SSD cache dictionary storage). Requests are
-/// set up as FreeBSD-style aiocb; results are read Linux-style via io_event::res.
+/// macOS has POSIX aio but not Linux AIO and not FreeBSD's SIGEV_KEVENT notification. POSIX aio
+/// also caps outstanding operations at _SC_AIO_MAX (90 here), which the SSD cache's read window can
+/// exceed - and the caller only retries io_submit on EINTR, not the EAGAIN that would follow. So
+/// this shim performs the I/O synchronously behind the io_submit/io_getevents interface (used only
+/// by the SSD cache dictionary storage). Requests are set up as FreeBSD-style aiocb; results are
+/// read Linux-style via io_event::res.
 
 struct iocb
 {
