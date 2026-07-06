@@ -209,11 +209,12 @@ else()
 endif()
 
 # The vendored Rust crates otherwise build with cargo's default dev profile (full DWARF debug=2 +
-# incremental). Line tables (debug=1) still resolve file:line in Rust backtraces, and dropping the
+# incremental). debug=1 is cargo's "limited" level: line tables plus function/scope info - so Rust
+# backtraces still resolve file:line - but no type or variable-level info; and dropping the
 # incremental cache stops target/debug/incremental growing unbounded across rebuilds. On by default
 # to keep Debug build dirs lean; set -DREDUCE_RUST_DEBUG_INFO=OFF for full DWARF + incremental when
 # stepping into the crates. Affects Debug only (Release uses profile.release, where this is inert).
-option(REDUCE_RUST_DEBUG_INFO "Build vendored Rust crates with line-tables-only debug info (debug=1) and no incremental caches" ON)
+option(REDUCE_RUST_DEBUG_INFO "Build vendored Rust crates with reduced debug info (cargo debug=1, the \"limited\" level) and no incremental caches" ON)
 if (REDUCE_RUST_DEBUG_INFO)
     set(RUST_DEV_PROFILE "[profile.dev]
 debug = 1
