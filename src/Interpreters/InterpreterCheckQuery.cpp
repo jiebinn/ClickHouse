@@ -150,11 +150,8 @@ public:
         }
         catch (const Exception & e)
         {
-            /// A retryable exception (e.g. a transient ZooKeeper hardware error such as connection loss or session
-            /// expiration) does not mean a part is broken. Let it propagate so the CHECK query fails and can be
-            /// retried, instead of silently reporting a healthy part as broken (returning a "0" row).
-            /// The shutdown ABORTED exception is still swallowed here (that is what this catch was originally added
-            /// for); `isRetryableException` treats ABORTED as retryable, so exclude it explicitly.
+            /// Rethrow transient errors instead of reporting a false "broken" row. Keep swallowing the shutdown
+            /// ABORTED (what this catch was added for) — `isRetryableException` treats ABORTED as retryable.
             if (e.code() != ErrorCodes::ABORTED && isRetryableException(std::current_exception()))
                 throw;
 

@@ -10285,10 +10285,7 @@ std::optional<CheckResult> StorageReplicatedMergeTree::checkDataNext(DataValidat
         }
         catch (const Exception & ex)
         {
-            /// A retryable exception (e.g. a transient ZooKeeper hardware error such as connection loss or session
-            /// expiration) does not mean the part is broken. Let it propagate so the CHECK query fails and can be
-            /// retried, instead of silently reporting a healthy part as broken. This mirrors what the non-replicated
-            /// StorageMergeTree::checkDataNext already does.
+            /// A transient error does not prove the part is broken; rethrow so the CHECK query fails and can be retried.
             if (isRetryableException(std::current_exception()))
                 throw;
 
