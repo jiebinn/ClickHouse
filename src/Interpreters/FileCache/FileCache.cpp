@@ -1562,7 +1562,7 @@ namespace
 {
 /// Reschedule delays (ms) and the state-lock acquire timeout for background free-space keeping.
 constexpr size_t free_space_keeping_reschedule_ms = 5000;
-constexpr size_t free_space_keeping_lock_failed_reschedule_ms = 1000;
+constexpr size_t free_space_keeping_retry_reschedule_ms = 1000;
 constexpr size_t free_space_keeping_state_lock_timeout_ms = 1000;
 
 /// A batch handed to a remover: file segments to delete, plus zero-size queue entries to drop.
@@ -1644,7 +1644,7 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
         auto lock = cache_state_guard.tryLockFor(std::chrono::milliseconds(free_space_keeping_state_lock_timeout_ms));
         if (!lock)
         {
-            reschedule_ms = free_space_keeping_lock_failed_reschedule_ms;
+            reschedule_ms = free_space_keeping_retry_reschedule_ms;
             return;
         }
         eviction_info = collectFreeSpaceEvictionInfo(lock, 0, 0);
@@ -1771,7 +1771,7 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
                 auto lock = cache_state_guard.tryLockFor(std::chrono::milliseconds(free_space_keeping_state_lock_timeout_ms));
                 if (!lock)
                 {
-                    reschedule_ms = free_space_keeping_lock_failed_reschedule_ms;
+                    reschedule_ms = free_space_keeping_retry_reschedule_ms;
                     status = IFileCachePriority::CollectStatus::CANNOT_EVICT;
                     break;
                 }
@@ -1832,6 +1832,7 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
                     max_push_attempts, push_timeout_ms);
 
                 status = IFileCachePriority::CollectStatus::CANNOT_EVICT;
+                reschedule_ms = free_space_keeping_retry_reschedule_ms;
                 break;
             }
 
