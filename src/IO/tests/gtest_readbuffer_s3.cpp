@@ -35,7 +35,6 @@ namespace DB::Setting
     extern const SettingsBool filesystem_cache_prefer_bigger_buffer_size;
     extern const SettingsBool read_from_filesystem_cache_if_exists_otherwise_bypass_cache;
     extern const SettingsUInt64 remote_read_min_bytes_for_seek;
-    extern const SettingsBool remote_filesystem_read_prefetch;
 }
 
 namespace DB::FileCacheSetting
@@ -378,10 +377,6 @@ TEST_F(ReadBufferFromS3Test, HavingZeroBytes)
     const_cast<DB::Settings &>(settings)[DB::Setting::filesystem_cache_prefer_bigger_buffer_size] = false;
     //const_cast<DB::Settings &>(settings)[DB::Setting::read_from_filesystem_cache_if_exists_otherwise_bypass_cache] = true;
     const_cast<DB::Settings &>(settings)[DB::Setting::remote_read_min_bytes_for_seek] = 0;
-    /// This test drives prefetch() manually and asserts an exact read/seek sequence; disable the
-    /// automatic initial prefetch that createReadBuffer() issues for small objects (also over the
-    /// filesystem cache) so it does not inject an extra prefetch and change the observed sequence.
-    const_cast<DB::Settings &>(settings)[DB::Setting::remote_filesystem_read_prefetch] = false;
 
     DB::FileCacheSettings cache_settings;
     cache_settings[DB::FileCacheSetting::path] = cache_base_path;
@@ -409,18 +404,23 @@ TEST_F(ReadBufferFromS3Test, HavingZeroBytes)
     object_metadata.size_bytes = data.size();
     object_metadata.etag = "tag1";
     DB::RelativePathWithMetadata relative_path_with_metadata("test_key", object_metadata);
-    auto buf = DB::createReadBuffer(relative_path_with_metadata, object_storage, query_context, log);
-
+    /// Configure the fake GET stub before createReadBuffer: for a small object it issues the
+    /// initial prefetch eagerly (also over the filesystem cache), so the data must already be
+    /// servable when that background read runs.
     auto session = std::make_shared<CountedSession>();
     const auto stream_buf = std::make_shared<StringHTTPBasicStreamBuf>(data);
     auto storage_client = object_storage->getS3StorageClient();
     dynamic_cast<ClientFake *>(const_cast<DB::S3::Client *>(storage_client.get()))->setGetObjectSuccess(session, stream_buf.get());
 
+    auto buf = DB::createReadBuffer(relative_path_with_metadata, object_storage, query_context, log);
+
     auto * async_buf = dynamic_cast<DB::AsynchronousBoundedReadBuffer *>(buf.get());
-    auto * cached_buf = dynamic_cast<DB::CachedOnDiskReadBufferFromFile *>(async_buf->getImpl().get());
     ASSERT_TRUE(async_buf);
+    auto * cached_buf = dynamic_cast<DB::CachedOnDiskReadBufferFromFile *>(async_buf->getImpl().get());
     ASSERT_TRUE(cached_buf);
 
+    /// The initial small-object prefetch is already in flight, so this manual prefetch is a no-op
+    /// on the pending future; the driven read/seek sequence below is unchanged.
     async_buf->prefetch(Priority{0});
     async_buf->next();
     ASSERT_EQ(async_buf->available(), 4);
