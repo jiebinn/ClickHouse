@@ -40,6 +40,7 @@
 #include <Common/thread_local_rng.h>
 #include <Common/formatReadable.h>
 #include <Common/ThrottlerArray.h>
+#include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <Core/Settings.h>
 #include <Core/ServerSettings.h>
 
@@ -797,8 +798,10 @@ void BackupsWorker::writeBackupEntries(
         /// Using references here is fine as the variables reference objects either belonging to `this` or passed as references in the
         /// function. The exception is file_info, which is itself a reference to `file_infos`, created before the runner (so it will be
         /// destroyed after)
-        auto job = [&failed, &process_list_element, &backup, &file_info, &entry, this, is_internal_backup, &backup_id]()
+        auto job = [&failed, &process_list_element, &backup, &file_info, &entry, this, is_internal_backup, &backup_id,
+                    current_component = Coordination::getCurrentComponent()]()
         {
+            auto local_component_guard = Coordination::setCurrentComponent(current_component);
             if (failed)
                 return;
             try

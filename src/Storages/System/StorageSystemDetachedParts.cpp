@@ -17,6 +17,7 @@
 #include <IO/SharedThreadPools.h>
 #include <Common/threadPoolCallbackRunner.h>
 #include <Common/setThreadName.h>
+#include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 
@@ -44,6 +45,7 @@ void calculateTotalSizeOnDiskImpl(const DiskPtr & disk, const String & from, UIn
 
 UInt64 calculateTotalSizeOnDisk(const DiskPtr & disk, const String & from)
 {
+    auto component_guard = Coordination::setCurrentComponent("StorageSystemDetachedParts::calculateTotalSizeOnDisk");
     UInt64 total_size = 0;
     try
     {
@@ -113,6 +115,7 @@ protected:
 
     Chunk generate() override
     {
+        auto component_guard = Coordination::setCurrentComponent("DetachedPartsSource::generate");
         MutableColumns new_columns = getPort().getHeader().cloneEmptyColumns();
         chassert(!new_columns.empty());
 
