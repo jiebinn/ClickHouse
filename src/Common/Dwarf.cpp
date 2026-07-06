@@ -172,6 +172,9 @@ Dwarf::Dwarf(const std::shared_ptr<Elf> & elf)
     if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         elf_ = nullptr;
+        // findAddress returns early on the null elf_ without touching the section views, so release
+        // any buffers already inflated rather than pinning them for the lifetime of a cached Dwarf.
+        decompressed_sections_.clear();
     }
 }
 
@@ -194,6 +197,7 @@ Dwarf::Dwarf(const std::shared_ptr<MachO> & macho)
     if (decompression_failed_ || info_.empty() || abbrev_.empty() || line_.empty() || str_.empty())
     {
         macho_ = nullptr;
+        decompressed_sections_.clear();
     }
 }
 #endif
@@ -559,9 +563,13 @@ bool inflateZlibStream(const char * src, size_t src_size, char * dst, size_t dst
 
 std::string_view Dwarf::decompressSection(std::string_view compressed) const
 {
-    // On any failure, mark the whole Dwarf as failed so the constructor disables it (fail-closed):
-    // a section that is present but ends up empty would otherwise be dereferenced by later readers
-    // and throw while the symbolizer is handling another exception or a fatal signal.
+    // Fail closed: a present section that ends up empty would be dereferenced by a later reader and
+    // throw mid-symbolization, so any failure below sets decompression_failed_ and the constructor
+    // then disables the whole Dwarf. Once set, stop inflating - the remaining sections are unused
+    // and would only pin heap (gigabytes) in a long-lived symbolization cache.
+    if (decompression_failed_)
+        return {};
+
     if (compressed.size() < sizeof(ElfCompressionHeader))
     {
         decompression_failed_ = true;
