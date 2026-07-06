@@ -105,8 +105,6 @@ public:
 
         bool has(std::string_view key) const { return values.contains(key); }
 
-        /// A missing key is a programming error (the spec guarantees resolution): these throw a
-        /// `DB::Exception` rather than `std::map::at`'s `std::out_of_range`.
         String getString(std::string_view key) const;
         Float64 getFloat(std::string_view key) const;
         UInt64 getUInt(std::string_view key) const;
