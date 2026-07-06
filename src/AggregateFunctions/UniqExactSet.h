@@ -33,13 +33,10 @@ class UniqExactSet
     static_assert(std::is_same_v<typename SingleLevelSet::value_type, typename TwoLevelSet::value_type>);
     static_assert(std::is_same_v<typename SingleLevelSet::Cell::State, HashTableNoState>);
 
-    /// The two-level set together with a flag that records whether it has ever been handed out for sharing.
-    /// `getTwoLevelSet` may return this pointee to another `UniqExactSet` (see the fast path in `merge`), so several
-    /// destinations can hold the same instance and read it concurrently. `is_shared` is set (once, monotonically) the
-    /// moment the pointee escapes, and `doDeepCopyIfNeeded` forks before any in-place mutation once it is set. This
-    /// replaces the previous `shared_ptr::use_count()` guard, which is not a synchronization primitive: another holder
-    /// dropping its reference (count 2 -> 1) does not establish a happens-before with the memory of the pointee, so a
-    /// concurrent reader could still race an in-place writer that observed count == 1.
+    /// Two-level set plus a flag marking whether it has been handed out to another `UniqExactSet`.
+    /// `getTwoLevelSet` sets it before the pointee escapes; `doDeepCopyIfNeeded` forks when it is set instead of
+    /// using `shared_ptr::use_count()`, which is not a cross-thread synchronization primitive (a holder dropping
+    /// its reference 2 -> 1 establishes no happens-before, so an in-place writer could race a concurrent reader).
     struct SharedTwoLevelSet
     {
         TwoLevelSet set;
@@ -246,8 +243,7 @@ public:
             if (other.isSingleLevel())
                 return lhs.merge(other.asSingleLevel());
 
-            /// `rhs_ptr` keeps the pointee alive; `rhs` is its two-level set. `getTwoLevelSet` marked the pointee shared,
-            /// so no other holder can mutate it in place while we read its buckets here.
+            /// `getTwoLevelSet` marked the pointee shared, so no other holder mutates it in place while we read it.
             const auto rhs_ptr = other.getTwoLevelSet();
             const auto & rhs = rhs_ptr->set;
             if (!thread_pool)
@@ -337,11 +333,11 @@ public:
 
     size_t size() const { return isSingleLevel() ? asSingleLevel().size() : asTwoLevel().size(); }
 
-    /// To convert set to two level before merging (we cannot just call convertToTwoLevel() on the right hand side set, because it is const).
-    /// This is `const` and may run concurrently for the same source set (ROLLUP/CUBE/GROUPING SETS merge one state into several
-    /// destinations at once), so it must not mutate the buckets of `*this`. Handing out the pointee makes it reachable from another
-    /// `UniqExactSet`, so mark it shared before returning: from then on `doDeepCopyIfNeeded` forks before any in-place mutation of it,
-    /// keeping the shared instance read-only. Concurrent calls only store the same `true` into the flag, which is safe.
+    /// Hand out the two-level pointee for reading or merging. It is `const` and may run concurrently for the same
+    /// source (ROLLUP/CUBE/GROUPING SETS merge one state into several destinations at once), so it must not mutate the
+    /// buckets. Marking the pointee shared before it escapes lets `doDeepCopyIfNeeded` fork before any later in-place
+    /// mutation, keeping the shared instance read-only. A freshly built pointee is solely owned by the caller, so it
+    /// stays unshared and mutable in place.
     std::shared_ptr<SharedTwoLevelSet> getTwoLevelSet() const
     {
         if (two_level_set)
@@ -349,7 +345,6 @@ public:
             two_level_set->is_shared.store(true, std::memory_order_release);
             return two_level_set;
         }
-        /// Freshly built from the single-level set: solely owned by the caller, so it stays unshared and can be mutated in place.
         return std::make_shared<SharedTwoLevelSet>(asSingleLevel());
     }
 
@@ -357,13 +352,9 @@ public:
 
     void convertToTwoLevel()
     {
-        /// Already two-level: nothing to convert. (Rebuilding from the now-empty single-level set here would
-        /// discard the existing data -- the single-level set is cleared once the pointee is built.)
+        /// Already two-level: rebuilding from the cleared single-level set would drop the data.
         if (two_level_set)
             return;
-
-        /// Build a fresh, solely-owned pointee from the single-level set. It is not marked shared, so it can be
-        /// mutated in place until it is handed out via `getTwoLevelSet`.
         two_level_set = std::make_shared<SharedTwoLevelSet>(asSingleLevel());
         single_level_set.clear();
     }
@@ -384,11 +375,9 @@ private:
     TwoLevelSet & asTwoLevel() { return two_level_set->set; }
     const TwoLevelSet & asTwoLevel() const { return two_level_set->set; }
 
-    /// Fork a private copy before mutating a `two_level_set` that may be shared (adopted by another `UniqExactSet`
-    /// via the fast path in `merge`, or handed out for reading). The fork decision uses the pointee's `is_shared`
-    /// flag, not `shared_ptr::use_count()`: `use_count` is not a synchronization primitive across threads, whereas
-    /// `is_shared` only ever goes false -> true (release) before the pointee escapes, so a shared pointee is never
-    /// mutated in place. The forked copy is solely owned and unshared, so later mutations stay in place.
+    /// Fork a private copy before mutating a pointee that may be shared (adopted by another `UniqExactSet` via the fast
+    /// path in `merge`, or handed out for reading). Forks on the pointee's `is_shared` flag, not `shared_ptr::use_count()`,
+    /// which is not a cross-thread synchronization primitive. The fork is solely owned, so later mutations stay in place.
     void doDeepCopyIfNeeded()
     {
         if (two_level_set && two_level_set->is_shared.load(std::memory_order_acquire))
