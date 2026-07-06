@@ -15,6 +15,7 @@
 #include <sys/inotify.h>
 #elif defined(OS_DARWIN)
 #include <map>
+#include <set>
 #include <fcntl.h>
 #include <sys/event.h>
 #include <sys/stat.h>
@@ -281,13 +282,37 @@ void DirectoryWatcherBase::watchFunc()
         if (stopped)
             break;
 
-        /// Drain kqueue notifications (level-triggered otherwise) before rescanning.
+        /// Drain kqueue notifications (level-triggered otherwise) before rescanning, noting which
+        /// watched files were unlinked. A same-name delete+recreate that reuses the inode looks
+        /// identical to a plain modification in a snapshot diff, so we rely on the per-file
+        /// NOTE_DELETE to force an identity reset (REMOVED + ADDED) instead of MODIFIED, which would
+        /// otherwise keep a stale read offset - matching what inotify's IN_DELETE + IN_CREATE gives.
+        std::set<std::string> deleted;
         if (kq != -1 && (pfds[1].revents & POLLIN))
         {
             struct kevent evs[16];
             struct timespec no_wait{0, 0};
-            while (kevent(kq, nullptr, 0, evs, 16, &no_wait) > 0)
-                ;
+            int drained = 0;
+            while ((drained = kevent(kq, nullptr, 0, evs, 16, &no_wait)) > 0)
+            {
+                for (int i = 0; i < drained; ++i)
+                {
+                    if (!(evs[i].fflags & NOTE_DELETE))
+                        continue;
+                    const int event_fd = static_cast<int>(evs[i].ident);
+                    for (auto it = watched_fds.begin(); it != watched_fds.end(); ++it)
+                    {
+                        if (it->second != event_fd)
+                            continue;
+                        deleted.insert(it->first);
+                        /// The name's identity ended; drop its now-stale fd so sync_file_watches
+                        /// reopens a fresh one if the name is recreated.
+                        closeFileDescriptor(it->second);
+                        watched_fds.erase(it);
+                        break;
+                    }
+                }
+            }
         }
 
         const auto & settings = owner.storage.getFileLogSettings();
@@ -304,24 +329,58 @@ void DirectoryWatcherBase::watchFunc()
 
         bool changed = false;
 
-        /// Names that were present before but are gone now: removed, or the source side of a rename.
+        /// Track identities by inode so a rename is recognized even when the source name is
+        /// recreated in the same scan window (e.g. `a -> b` plus a fresh `a`): the old inode still
+        /// left name `a` for name `b`, which must stay a MOVED pair (preserving the read offset)
+        /// rather than degenerating into two ADDED events. An inode is only trusted for move
+        /// detection when it maps to exactly one name on both sides (guards against hard links).
+        std::map<UInt64, size_t> snapshot_inode_count;
+        std::map<UInt64, size_t> current_inode_count;
+        std::map<UInt64, std::string> snapshot_inode_name;
+        std::map<UInt64, std::string> current_inode_name;
         for (const auto & [name, state] : snapshot)
         {
-            if (current.contains(name))
+            ++snapshot_inode_count[state.inode];
+            snapshot_inode_name[state.inode] = name;
+        }
+        for (const auto & [name, state] : current)
+        {
+            ++current_inode_count[state.inode];
+            current_inode_name[state.inode] = name;
+        }
+
+        /// True if `inode` uniquely identifies one name on each side and those names differ, i.e. it
+        /// is a rename of that inode from its old name to its new name.
+        auto is_rename = [&](UInt64 inode)
+        {
+            auto sc = snapshot_inode_count.find(inode);
+            auto cc = current_inode_count.find(inode);
+            if (sc == snapshot_inode_count.end() || cc == current_inode_count.end() || sc->second != 1 || cc->second != 1)
+                return false;
+            return snapshot_inode_name.at(inode) != current_inode_name.at(inode);
+        };
+
+        /// A name keeps its identity if it exists on both sides with the same inode and was not
+        /// unlinked in between (a delete+recreate reusing the inode breaks the identity).
+        auto same_identity = [&deleted](const std::map<std::string, FileState> & other, const std::string & name, UInt64 inode)
+        {
+            if (deleted.contains(name))
+                return false;
+            auto it = other.find(name);
+            return it != other.end() && it->second.inode == inode;
+        };
+
+        /// Emit events in the order StorageFileLog expects: MOVED_FROM, then MOVED_TO, then REMOVED,
+        /// then ADDED, then MODIFIED. In particular MOVED_TO must precede the ADDED of a recreated
+        /// source name so the moved inode's meta is renamed before the fresh file resets it.
+
+        /// Departed identities (name gone, or its inode replaced at that name).
+        for (const auto & [name, state] : snapshot)
+        {
+            if (same_identity(current, name, state.inode))
                 continue;
-
-            bool moved = false;
-            for (const auto & [new_name, new_state] : current)
-            {
-                if (new_state.inode == state.inode && !snapshot.contains(new_name))
-                {
-                    moved = true;
-                    break;
-                }
-            }
-
             changed = true;
-            if (moved)
+            if (is_rename(state.inode))
             {
                 if (eventMask() & DW_ITEM_MOVED_FROM)
                     owner.onItemMovedFrom(DirectoryEvent(name, DW_ITEM_MOVED_FROM));
@@ -330,40 +389,39 @@ void DirectoryWatcherBase::watchFunc()
                 owner.onItemRemoved(DirectoryEvent(name, DW_ITEM_REMOVED));
         }
 
-        /// Names present now: newly added, the target side of a rename, replaced, or modified.
+        /// Arrived identities that are the target of a rename.
         for (const auto & [name, state] : current)
         {
-            auto it = snapshot.find(name);
-            if (it == snapshot.end())
+            if (same_identity(snapshot, name, state.inode))
+                continue;
+            if (is_rename(state.inode))
             {
-                bool moved = false;
-                for (const auto & [old_name, old_state] : snapshot)
-                {
-                    if (old_state.inode == state.inode && !current.contains(old_name))
-                    {
-                        moved = true;
-                        break;
-                    }
-                }
+                changed = true;
+                if (eventMask() & DW_ITEM_MOVED_TO)
+                    owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
+            }
+        }
 
-                changed = true;
-                if (moved)
-                {
-                    if (eventMask() & DW_ITEM_MOVED_TO)
-                        owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
-                }
-                else if (eventMask() & DW_ITEM_ADDED)
-                    owner.onItemAdded(DirectoryEvent(name, DW_ITEM_ADDED));
-            }
-            else if (it->second.inode != state.inode)
-            {
-                /// Same name, different inode: the file was replaced. Treat it as freshly added;
-                /// onFileAppeared drops the now-stale meta.
-                changed = true;
-                if (eventMask() & DW_ITEM_ADDED)
-                    owner.onItemAdded(DirectoryEvent(name, DW_ITEM_ADDED));
-            }
-            else if (it->second.mtime_ns != state.mtime_ns || it->second.size != state.size)
+        /// Arrived identities that are genuinely new (including a name whose inode was replaced).
+        for (const auto & [name, state] : current)
+        {
+            if (same_identity(snapshot, name, state.inode) || is_rename(state.inode))
+                continue;
+            changed = true;
+            if (eventMask() & DW_ITEM_ADDED)
+                owner.onItemAdded(DirectoryEvent(name, DW_ITEM_ADDED));
+        }
+
+        /// Same name and inode, but the contents changed (an append or truncation). A name that was
+        /// unlinked and recreated is excluded here - it was already emitted as REMOVED + ADDED above.
+        for (const auto & [name, state] : current)
+        {
+            if (deleted.contains(name))
+                continue;
+            auto it = snapshot.find(name);
+            if (it == snapshot.end() || it->second.inode != state.inode)
+                continue;
+            if (it->second.mtime_ns != state.mtime_ns || it->second.size != state.size)
             {
                 changed = true;
                 if (eventMask() & DW_ITEM_MODIFIED)
