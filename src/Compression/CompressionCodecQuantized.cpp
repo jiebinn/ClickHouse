@@ -72,17 +72,17 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
             "Codec Quantized requires 2 to 4 parameters: Quantized(method, dimensions[, bits[, m]]) "
             "(the trained 'pq' method uses Quantized('pq', dimensions, nbits, m))");
 
-    const auto * method_literal = arguments->children[0]->as<ASTLiteral>();
-    if (!method_literal || method_literal->value.getType() != Field::Types::String)
+    const auto * method = arguments->children[0]->as<ASTLiteral>();
+    if (!method || method->value.getType() != Field::Types::String)
         throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "First argument of codec Quantized (method) must be a string literal");
 
-    const auto * dimensions_literal = arguments->children[1]->as<ASTLiteral>();
-    if (!dimensions_literal || dimensions_literal->value.getType() != Field::Types::UInt64)
+    const auto * dimensions = arguments->children[1]->as<ASTLiteral>();
+    if (!dimensions || dimensions->value.getType() != Field::Types::UInt64)
         throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Second argument of codec Quantized (dimensions) must be an unsigned integer");
 
     QuantizedCodecParams params;
-    params.method = method_literal->value.safeGet<String>();
-    params.dimensions = dimensions_literal->value.safeGet<UInt64>();
+    params.method = method->value.safeGet<String>();
+    params.dimensions = dimensions->value.safeGet<UInt64>();
 
     /// Sugar for the Matryoshka prefix method: Quantized('mrl', dimensions, leading_dimensions, 'int8'|'bf16'). It stores
     /// only the leading `leading_dimensions` of the vector, quantized to int8 (per-vector scale) or bfloat16. Fold the
@@ -92,14 +92,13 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
     {
         if (arguments->children.size() != 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
-                "Codec Quantized method 'mrl' requires Quantized('mrl', dimensions, leading_dimensions, format) "
-                "where format is 'int8' or 'bf16'");
+                "Codec Quantized method 'mrl' requires Quantized('mrl', dimensions, leading_dimensions, format)");
 
-        const auto * prefix_literal = arguments->children[2]->as<ASTLiteral>();
-        if (!prefix_literal || prefix_literal->value.getType() != Field::Types::UInt64)
+        const auto * leading_dimensions_literal = arguments->children[2]->as<ASTLiteral>();
+        if (!leading_dimensions_literal || leading_dimensions_literal->value.getType() != Field::Types::UInt64)
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER,
                 "Third argument of codec Quantized('mrl', ...) (number of leading dimensions) must be an unsigned integer");
-        params.bits = prefix_literal->value.safeGet<UInt64>();
+        params.bits = leading_dimensions_literal->value.safeGet<UInt64>();
 
         const auto * format_literal = arguments->children[3]->as<ASTLiteral>();
         if (!format_literal || format_literal->value.getType() != Field::Types::String)
@@ -164,16 +163,16 @@ std::optional<QuantizedCodecParams> tryExtractQuantizedCodecParams(const ASTPtr 
     if (!func || !func->arguments)
         return {};
 
-    for (const auto & inner_codec_ast : func->arguments->children)
+    for (const auto & param_ast : func->arguments->children)
     {
-        if (const auto * inner_func = inner_codec_ast->as<ASTFunction>())
+        if (const auto * inner_func = param_ast->as<ASTFunction>())
         {
-            if (Poco::toLower(inner_func->name) == "Quantized")
+            if (inner_func->name == "Quantized")
                 return parseQuantizeCodecArguments(inner_func->arguments);
         }
-        else if (const auto * inner_identifier = inner_codec_ast->as<ASTIdentifier>())
+        else if (const auto * inner_identifier = param_ast->as<ASTIdentifier>())
         {
-            if (Poco::toLower(inner_identifier->name()) == "Quantized")
+            if (inner_identifier->name() == "Quantized")
                 throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
                     "Codec Quantized requires parameters: Quantized(method, dimensions[, bits])");
         }
