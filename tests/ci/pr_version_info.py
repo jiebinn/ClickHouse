@@ -7,9 +7,15 @@ delimited, bot-owned section into the PR body, e.g.:
 
     <!-- ch-version-info:start -->
     ### Version info
-    - Merged into: `26.6.1.1`
+    - Merged into: `26.6.1.1` (master)
     - Backported to: `25.12.1.100`, `25.8.1.200`
     <!-- ch-version-info:end -->
+
+For an original PR the `Merged into` line names the branch (`master`) whose
+commit counter produced the version: master keeps stamping `26.2.1.<n>` where
+`n` counts master commits, so such a version is not a `release/26.2` build and
+is not comparable with release-branch build numbers. Backport PRs get a bare
+version -- theirs is a real release-branch build.
 
 The version is taken from the CIDB `version_history` table, populated per build
 by `ci/jobs/scripts/workflow_hooks/version_log.py`. Each build stores the
@@ -111,11 +117,24 @@ def version_key(version: str) -> Tuple[int, ...]:
     return tuple(int(part) for part in version.split(".") if part.isdigit())
 
 
-def render_section(merged_into: Optional[str], backported_to: List[str]) -> str:
-    """Render the inner markdown of the version-info section (no delimiters)."""
+def render_section(
+    merged_into: Optional[str],
+    backported_to: List[str],
+    merged_into_ref: Optional[str] = None,
+) -> str:
+    """Render the inner markdown of the version-info section (no delimiters).
+
+    ``merged_into_ref`` names the branch whose commit counter produced
+    ``merged_into``. It is set for original PRs (merged into the default
+    branch), where the version looks like a release-branch build but its last
+    number counts commits on the default branch -- e.g. master's `26.2.1.1291`
+    is not comparable with `release/26.2` build numbers. Backport PRs pass no
+    ref: their version is a real release-branch build.
+    """
     lines = ["### Version info"]
     if merged_into:
-        lines.append(f"- Merged into: `{merged_into}`")
+        ref_note = f" ({merged_into_ref})" if merged_into_ref else ""
+        lines.append(f"- Merged into: `{merged_into}`{ref_note}")
     if backported_to:
         versions = ", ".join(f"`{v}`" for v in backported_to)
         lines.append(f"- Backported to: {versions}")
@@ -338,7 +357,9 @@ def scan_backport_versions(
     )
 
 
-def apply_issue_section(gh, repo, issue_number: int, section_body: str, dry_run: bool) -> bool:
+def apply_issue_section(
+    gh, repo, issue_number: int, section_body: str, dry_run: bool
+) -> bool:
     """Upsert the version-info section into an issue's body. Returns True if it
     changed. The issue is fetched live so the body reflects the current state."""
     issue = repo.get_issue(issue_number)
@@ -403,7 +424,10 @@ def update_original_pr(
     if not merged_into and not backported:
         # Nothing known yet -- the post-merge build has likely not finished.
         return False
-    section_body = render_section(merged_into, backported)
+    # Name the default branch next to the version: an original PR's version is
+    # the default branch's commit counter, which is easy to mistake for a
+    # release-branch build when the version prefix matches (see render_section).
+    section_body = render_section(merged_into, backported, repo.default_branch)
     changed = apply_section(gh, repo, info, section_body, dry_run)
     # Mirror the section into the body of the issues this PR resolved (its
     # "Development" links). Only PRs that actually close an issue pay for this.

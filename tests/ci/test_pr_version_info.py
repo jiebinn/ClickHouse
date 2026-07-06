@@ -41,6 +41,23 @@ class TestRenderSection(unittest.TestCase):
             "- Backported to: `25.12.1.100`, `25.8.1.200`",
         )
 
+    def test_merged_into_ref_names_the_branch(self):
+        # An original PR's version comes from the default branch's commit
+        # counter (master's `26.2.1.1291` is not a `release/26.2` build), so
+        # the branch is named next to the version.
+        self.assertEqual(
+            render_section("26.2.1.1291", [], "master"),
+            "### Version info\n- Merged into: `26.2.1.1291` (master)",
+        )
+
+    def test_merged_into_ref_with_backports(self):
+        self.assertEqual(
+            render_section("26.2.1.1291", ["26.2.1.500"], "master"),
+            "### Version info\n"
+            "- Merged into: `26.2.1.1291` (master)\n"
+            "- Backported to: `26.2.1.500`",
+        )
+
     def test_backported_only(self):
         self.assertEqual(
             render_section(None, ["25.8.1.200"]),
