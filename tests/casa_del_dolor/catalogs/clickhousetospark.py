@@ -312,6 +312,16 @@ class ClickHouseTypeMapper:
                 )
             return ("STRING", False, module.StringType())
 
+        # Bare `Decimal` (no arguments) is a valid ClickHouse type that resolves to Decimal(10, 0);
+        # BuzzHouse emits it when a DecimalType has neither a sized notation nor an explicit
+        # precision. Map it to the same default so it is not silently downgraded to STRING.
+        if ch_type == "Decimal":
+            return (
+                "DECIMAL(10, 0)",
+                inside_nullable,
+                module.DecimalType(precision=10, scale=0),
+            )
+
         # Handle Decimal types
         decimal_match = re.match(r"Decimal(\d+)?\((\d+)(?:,\s*(\d+))?\)", ch_type)
         if decimal_match:
