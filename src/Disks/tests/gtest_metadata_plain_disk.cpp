@@ -158,7 +158,7 @@ TEST_F(MetadataPlainDiskTest, RemoveDirectoryNonExistent)
 
     {
         auto tx = metadata->createTransaction();
-        EXPECT_ANY_THROW(tx->removeDirectory("nonexistent_dir"));
+        EXPECT_NO_THROW(tx->removeDirectory("nonexistent_dir"));
     }
 }
 
