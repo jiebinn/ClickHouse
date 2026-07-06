@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <iterator>
-#include <string_view>
 #include <tuple>
 
 #include <Common/FailPoint.h>

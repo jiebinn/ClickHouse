@@ -214,10 +214,6 @@ public:
     /// This is distinct from `isExternal`, which classifies whether the engine supports ClickHouse internal table types.
     virtual bool isRemoteDatabase() const { return false; }
 
-    /// True only for DataLake catalog databases (Iceberg REST, Glue, Unity, Hive,
-    /// Paimon REST), which expose a `catalog.ns1.ns2` namespace hierarchy.
-    virtual bool isDataLakeCatalog() const { return false; }
-
     /// Load a set of existing tables.
     /// You can call only once, right after the object is created.
     virtual void loadStoredObjects( /// NOLINT
