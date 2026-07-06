@@ -1,9 +1,12 @@
--- Tags: zookeeper, no-parallel
+-- Tags: zookeeper, no-parallel, no-shared-merge-tree
 -- Regression test for CHECK TABLE on a ReplicatedMergeTree table silently reporting a healthy
 -- part as broken (returning 0) when a transient/retryable ZooKeeper error is hit during the check.
 -- A retryable error (e.g. a connection loss) must surface as a query error, not a "broken" result.
 -- Related: https://github.com/ClickHouse/ClickHouse/issues/63002
 -- The `check_table_inject_retryable_zk_error` failpoint is server-global, hence no-parallel.
+-- The failpoint lives only in `StorageReplicatedMergeTree::checkDataNext`, so the test must not run
+-- under `--replace-replicated-with-shared` (SharedMergeTree has its own check path), hence
+-- no-shared-merge-tree.
 
 SET check_query_single_value_result = 1;
 
