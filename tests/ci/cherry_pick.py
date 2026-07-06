@@ -846,7 +846,7 @@ class BackportPRs:
         pr_labels = [label.name for label in pr.labels]
 
         # Decide the target release branches (pure logic, unit-tested in
-        # `test_cherry_pick_branches.py`). A version-specific label
+        # `ci/tests/test_cherry_pick_branches.py`). A version-specific label
         # (`vX.Y-must-backport`) marks the OLDEST release the PR must reach, so
         # the PR is backported to that release and every newer active release
         # branch; the lowest such label wins. `skipped` are rolling-out branches

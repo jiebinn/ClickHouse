@@ -4,7 +4,7 @@ Pure branch-selection logic for the backport automation (`cherry_pick.py`).
 
 This module is intentionally free of GitHub / git / CI dependencies so the
 branch-selection contract can be unit-tested directly (see
-`test_cherry_pick_branches.py`). The label name constants live with `Labels`
+`ci/tests/test_cherry_pick_branches.py`). The label name constants live with `Labels`
 in `cherry_pick.py` / `pr_info.py` and are passed in by the caller, so this
 module stays the single source of truth for *which branches* a PR reaches
 without duplicating *what the labels are called*.
