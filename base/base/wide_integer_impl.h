@@ -933,29 +933,31 @@ public:
     {
         if constexpr (should_keep_size<T>())
         {
-#ifdef __SIZEOF_INT128__
-            if constexpr (Bits == 128 && std::is_same_v<T, integer<Bits, Signed>> && std::endian::native == std::endian::little)
-            {
-                /// Native 128-bit comparison compiles to branchless code (cmp/sbb), while the generic limb loop
-                /// below compiles to data-dependent branches that mispredict on real data and prevent
-                /// vectorization of columnar comparison loops.
-                using Native = std::conditional_t<std::is_same_v<Signed, signed>, __int128, unsigned __int128>;
-                return std::bit_cast<Native>(lhs) > std::bit_cast<Native>(rhs);
-            }
-#endif
-            if (std::numeric_limits<T>::is_signed && (is_negative(lhs) != is_negative(rhs)))
-                return is_negative(rhs);
-
             integer<Bits, Signed> t = rhs;
-            for (unsigned i = 0; i < item_count; ++i)
+
+            /// Branchless lexicographic comparison from the most significant limb: no early-out, so the
+            /// columnar comparison kernels stay branchless and vectorize (e.g. to AVX-512 vpcmpq). The top
+            /// limb is compared as signed for signed types, which subsumes the sign check; lower limbs unsigned.
+            base_type lhs_top = lhs.items[big(0)];
+            base_type rhs_top = get_item(t, big(0));
+
+            bool greater;
+            if constexpr (std::is_same_v<Signed, signed>)
+                greater = static_cast<signed_base_type>(lhs_top) > static_cast<signed_base_type>(rhs_top);
+            else
+                greater = lhs_top > rhs_top;
+
+            bool equal = lhs_top == rhs_top;
+            for (unsigned i = 1; i < item_count; ++i)
             {
+                base_type lhs_item = lhs.items[big(i)];
                 base_type rhs_item = get_item(t, big(i));
 
-                if (lhs.items[big(i)] != rhs_item)
-                    return lhs.items[big(i)] > rhs_item;
+                greater = greater | (equal & (lhs_item > rhs_item));
+                equal = equal & (lhs_item == rhs_item);
             }
 
-            return false;
+            return greater;
         }
         else
         {
@@ -969,27 +971,29 @@ public:
     {
         if constexpr (should_keep_size<T>())
         {
-#ifdef __SIZEOF_INT128__
-            if constexpr (Bits == 128 && std::is_same_v<T, integer<Bits, Signed>> && std::endian::native == std::endian::little)
-            {
-                /// See the rationale in operator_greater.
-                using Native = std::conditional_t<std::is_same_v<Signed, signed>, __int128, unsigned __int128>;
-                return std::bit_cast<Native>(lhs) < std::bit_cast<Native>(rhs);
-            }
-#endif
-            if (std::numeric_limits<T>::is_signed && (is_negative(lhs) != is_negative(rhs)))
-                return is_negative(lhs);
-
             integer<Bits, Signed> t = rhs;
-            for (unsigned i = 0; i < item_count; ++i)
+
+            /// See the rationale in operator_greater.
+            base_type lhs_top = lhs.items[big(0)];
+            base_type rhs_top = get_item(t, big(0));
+
+            bool less;
+            if constexpr (std::is_same_v<Signed, signed>)
+                less = static_cast<signed_base_type>(lhs_top) < static_cast<signed_base_type>(rhs_top);
+            else
+                less = lhs_top < rhs_top;
+
+            bool equal = lhs_top == rhs_top;
+            for (unsigned i = 1; i < item_count; ++i)
             {
+                base_type lhs_item = lhs.items[big(i)];
                 base_type rhs_item = get_item(t, big(i));
 
-                if (lhs.items[big(i)] != rhs_item)
-                    return lhs.items[big(i)] < rhs_item;
+                less = less | (equal & (lhs_item < rhs_item));
+                equal = equal & (lhs_item == rhs_item);
             }
 
-            return false;
+            return less;
         }
         else
         {

@@ -180,10 +180,9 @@ GTEST_TEST(WideInteger, Arithmetic)
 }
 
 
-/// The 128-bit same-type ordering operators take a fast path via native __int128
-/// (see operator_less / operator_greater in wide_integer_impl.h), while 256-bit
-/// comparisons use the generic limb-wise loop. Comparing each pair in both widths
-/// checks the fast path against an independent implementation.
+/// The ordering operators use a branchless limb-wise comparison
+/// (see operator_less / operator_greater in wide_integer_impl.h).
+/// Comparing each pair in both widths cross-checks the 2-limb and 4-limb instantiations.
 template <typename T128, typename T256>
 static void checkComparisonAgainstWiderOracle(const std::vector<T128> & values)
 {
