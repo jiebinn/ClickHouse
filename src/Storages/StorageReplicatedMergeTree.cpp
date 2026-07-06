@@ -264,6 +264,7 @@ namespace FailPoints
     extern const char rmt_delay_execute_drop_range[];
     extern const char replicated_table_remove_zk_before_get_children[];
     extern const char replicated_table_remove_zk_before_final_multi[];
+    extern const char check_table_inject_retryable_zk_error[];
 }
 
 namespace ErrorCodes
@@ -10276,10 +10277,21 @@ std::optional<CheckResult> StorageReplicatedMergeTree::checkDataNext(DataValidat
     {
         try
         {
+            fiu_do_on(FailPoints::check_table_inject_retryable_zk_error,
+            {
+                throw Coordination::Exception(Coordination::Error::ZCONNECTIONLOSS, "Injected retryable ZooKeeper error for the check_table_inject_retryable_zk_error failpoint");
+            });
             return part_check_thread.checkPartAndFix(part->name, /* recheck_after */nullptr, /* throw_on_broken_projection */true);
         }
         catch (const Exception & ex)
         {
+            /// A retryable exception (e.g. a transient ZooKeeper hardware error such as connection loss or session
+            /// expiration) does not mean the part is broken. Let it propagate so the CHECK query fails and can be
+            /// retried, instead of silently reporting a healthy part as broken. This mirrors what the non-replicated
+            /// StorageMergeTree::checkDataNext already does.
+            if (isRetryableException(std::current_exception()))
+                throw;
+
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
             return CheckResult(part->name, false, "Check of part finished with error: '" + ex.message() + "'");
         }
