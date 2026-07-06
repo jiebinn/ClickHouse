@@ -23,9 +23,8 @@ the full set (``DEFAULT_CHECKS`` plus, when a locale tree changed,
 ``LOCALE_CHECKS``); this client driver runs only ``CLIENT_CHECKS`` -- the checks
 a consuming repo can act on for the slice it owns (validate + internal links).
 Redirects, external links, and the locale checks are aggregator-global and are
-left to the aggregator job. With ``--scoped``, the full ``mint validate`` is
-replaced by ``scoped_validate.mjs`` over just the replaced folders, cutting the
-check from minutes to seconds (see that script for the coverage trade-off).
+left to the aggregator job. With ``--scoped``, ``mint validate`` is replaced by
+``scoped_validate.mjs`` over just the replaced folders.
 
 A check can be any shell command, including ``python3 <script>``. Checks run
 from the docs root, so a Python check script committed at
@@ -77,14 +76,9 @@ DEFAULT_CHECKS = [
 CLIENT_CHECKS = [VALIDATE_CHECK, INTERNAL_LINKS_CHECK]
 
 
-# `--scoped` swaps the full `mint validate` for scoped_validate.mjs, which
-# validates docs.json (with `$ref` includes resolved) and runs Mintlify's own
-# per-page processing over just the replaced folders instead of the whole
-# site. Full validate MDX-parses every page of the aggregated site (~13
-# minutes, single-threaded); the scoped check covers everything a client PR
-# can break in seconds -- the aggregator's own CI still runs the full validate
-# before anything deploys. See the header of scoped_validate.mjs for exactly
-# what is and is not covered.
+# Swaps the full `mint validate` (which MDX-parses the whole site, ~13 minutes)
+# for scoped_validate.mjs over just the replaced folders -- see that script's
+# header for what it covers.
 def scoped_validate_check(scopes):
     command = "node ../ci/jobs/scripts/docs/scoped_validate.mjs " + " ".join(
         f"--scope {shlex.quote(scope)}" for scope in scopes
@@ -219,8 +213,7 @@ def main(argv=None):
     # A consuming client repo owns only its docs slice, so it runs just the
     # checks it can act on (see CLIENT_CHECKS): validate + internal links. The
     # aggregator-global checks -- redirects, external links, and the locale
-    # checks -- are run by the aggregator's own Praktika job, not here. With
-    # --scoped, the full validate is narrowed to the replaced folders.
+    # checks -- are run by the aggregator's own Praktika job, not here.
     checks = list(CLIENT_CHECKS)
     if args.scoped:
         checks[0] = scoped_validate_check(replace_dests)
