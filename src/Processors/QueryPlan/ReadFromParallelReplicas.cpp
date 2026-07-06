@@ -76,10 +76,6 @@ namespace Setting
 
 namespace ErrorCodes
 {
-    extern const int ALL_CONNECTION_TRIES_FAILED;
-    extern const int LOGICAL_ERROR;
-    extern const int UNKNOWN_TABLE;
-    extern const int ALL_REPLICAS_ARE_STALE;
     extern const int NOT_IMPLEMENTED;
 }
 

@@ -151,7 +151,7 @@ void executeQueryWithParallelReplicas(
     std::shared_ptr<const StorageLimitsList> storage_limits,
     QueryPlanStepPtr read_from_merge_tree);
 
-QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr query_plan, ContextPtr context);
+QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr context);
 
 void executeQueryWithParallelReplicasCustomKey(
     QueryPlan & query_plan,
