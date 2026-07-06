@@ -1,5 +1,3 @@
-import uuid
-
 import pytest
 
 from helpers.cluster import ClickHouseCluster
@@ -11,6 +9,12 @@ node = cluster.add_instance(
     "node",
     image="clickhouse/clickhouse-server",
     tag="25.12",
+    # System logs are disabled to avoid pulling in newer server-side additions
+    # (like the `table_readonly` MergeTree setting on rotated log tables, or
+    # `with_types` `SerializationInfo` fields that gained keys after 25.12)
+    # that the older binary started via `restart_with_original_version` would
+    # not know and would fail to attach.
+    main_configs=["configs/zz_disable_system_logs.xml"],
     with_installed_binary=True,
     stay_alive=True,
 )
@@ -47,20 +51,19 @@ def read_serialization_json(part_name):
     )
 
 
-def count_with_trivial_count_setting(setting_value):
-    query_id = str(uuid.uuid4())
-    count = node.query(
-        "SELECT count() FROM t_compat WHERE x != 0 "
-        f"SETTINGS optimize_trivial_count_with_sparsity_filter = {setting_value}",
-        query_id=query_id,
-    ).strip()
-    node.query("SYSTEM FLUSH LOGS query_log")
-    read_rows = int(node.query(
-        "SELECT read_rows FROM system.query_log "
-        f"WHERE query_id = '{query_id}' AND type = 'QueryFinish' "
-        "ORDER BY event_time_microseconds DESC LIMIT 1"
-    ).strip())
-    return count, read_rows
+def rewrite_fires():
+    # `EXPLAIN` labels the rewrite step with this description in `PlannerJoinTree`,
+    # which lets us check whether the trivial-count-with-sparsity-filter step is
+    # in the plan without depending on `system.query_log` (disabled above).
+    plan = node.query(
+        "EXPLAIN SELECT count() FROM t_compat WHERE x != 0 "
+        "SETTINGS optimize_trivial_count_with_sparsity_filter = 1"
+    )
+    return "Optimized trivial count with sparsity filter" in plan
+
+
+def scan_count():
+    return node.query("SELECT count() FROM t_compat WHERE x != 0").strip()
 
 
 def test_exact_num_defaults_compat(started_cluster):
@@ -96,27 +99,16 @@ def test_exact_num_defaults_compat(started_cluster):
     assert active_part_count() == 2
     BASELINE = "4000"
 
-    # When the rewrite fires, `read_rows` is just the single prepared row
-    # emitted by `ReadFromPreparedSource`. When it doesn't fire, the count comes
-    # from an actual scan of the column data, so `read_rows` matches what running
-    # the same query with the setting disabled would scan.
-    def assert_trivial_count_was_used(used):
-        count_on,  read_rows_on  = count_with_trivial_count_setting(1)
-        count_off, read_rows_off = count_with_trivial_count_setting(0)
-        assert count_on == BASELINE and count_off == BASELINE
-        if used:
-            assert read_rows_on <= 1 and read_rows_on < read_rows_off
-        else:
-            assert read_rows_on == read_rows_off
-
     assert '"exact_num_defaults":true' in read_serialization_json("all_1_1_0")
-    assert_trivial_count_was_used(used=True)
+    assert rewrite_fires()
+    assert scan_count() == BASELINE
 
     node.query("SYSTEM START MERGES t_compat")
     node.query("OPTIMIZE TABLE t_compat FINAL")
     assert active_part_count() == 1
     assert '"exact_num_defaults":true' in read_serialization_json(active_part_name())
-    assert_trivial_count_was_used(used=True)
+    assert rewrite_fires()
+    assert scan_count() == BASELINE
 
     # 25.12 does not know `compute_exact_num_defaults_for_sparse_columns` and would
     # refuse to load the CREATE TABLE that still mentions it. The parts are already
@@ -131,7 +123,7 @@ def test_exact_num_defaults_compat(started_cluster):
     )
 
     node.restart_with_original_version()
-    assert node.query("SELECT count() FROM t_compat WHERE x != 0").strip() == BASELINE
+    assert scan_count() == BASELINE
 
     node.query("OPTIMIZE TABLE t_compat FINAL")
     assert active_part_count() == 1
@@ -139,6 +131,9 @@ def test_exact_num_defaults_compat(started_cluster):
 
     node.restart_with_latest_version()
     assert "exact_num_defaults" not in read_serialization_json(active_part_name())
-    assert_trivial_count_was_used(used=False)
+    # The rewrite must not fire on parts written by the old binary because the
+    # flag is missing; the count still comes from an actual scan.
+    assert not rewrite_fires()
+    assert scan_count() == BASELINE
 
     node.query("DROP TABLE t_compat SYNC")
