@@ -6248,6 +6248,9 @@ MergeTreeData::getColumnDefaultnessStats(const String & column_name, ContextPtr 
     ColumnDefaultnessStats aggregate;
     for (const auto & part : getActivePartsForColumnDefaultnessStats(query_context))
     {
+        if (part->isEmpty())
+            continue;
+
         const auto & infos = part->getSerializationInfos();
         auto it = infos.find(column_name);
         if (it == infos.end())
