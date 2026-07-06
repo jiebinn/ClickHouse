@@ -55,7 +55,10 @@ bool isUnsignedInteger(const DataTypePtr & type)
 /// default" for the per column stat.
 bool isStringLike(const DataTypePtr & type)
 {
-    return !type->isNullable() && WhichDataType(*type).isString();
+    if (type->isNullable())
+        return false;
+    WhichDataType w(*type);
+    return w.isString() || w.isFixedString();
 }
 
 /// `num_defaults` is produced by `IColumn::isDefaultAt`, which is bitwise: row is
