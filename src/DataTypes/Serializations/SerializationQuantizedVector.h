@@ -8,24 +8,23 @@ namespace DB
 
 class IDataType;
 
-/// Serialization of a dense vector column (e.g. `Array(Float32)`) that carries a `Quantized(...)` codec.
+/// Serialization of a dense vector column (e.g. `Array(Float32)`) that is encoded with a `Quantized(...)` codec.
 ///
-/// On top of the normal full-precision array streams it writes one extra on-disk stream holding a compact,
-/// data-independent quantized code per row (see `Common/VectorQuantizer.h`). The codes are derived from the
-/// full-precision data at write time and exposed as the readable subcolumn `<column>.quantized` of type
-/// `FixedString(bytesPerVector)`. The full-precision array reconstructs from the float streams alone; the code stream
-/// is read only when the subcolumn is explicitly requested.
+/// On top of the normal array streams (that contain the original, full-precision vectors), it writes one extra
+/// stream storing a compact quantized code. The codes is exposed as subcolumn `<column>.quantized` of type
+/// `FixedString(bytesPerVector)`. The code stream is only read when the subcolumn is explicitly requested.
 ///
-/// This lets a vector search rank cheaply over the small codes (reading only `<column>.quantized`) and rescore the
-/// shortlist against the full-precision vectors (reading `<column>`), without a second user-declared column.
+/// Used by vector search to rank vectors quickly by reading only `<column>.quantized` + rescoring the
+/// result vectors against the full-precision vectors, i.e. reading `<column>`.
 class SerializationQuantizedVector final : public SerializationWrapper
 {
 public:
     SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizedCodecParams & params_);
 
     static constexpr auto subcolumn_name = "quantized";
-    /// For the trained `pq` method only: the per-part codebook, exposed as the readable subcolumn `<column>.pq_codebook`.
-    static constexpr auto pq_codebook_subcolumn_name = "pq_codebook";
+
+    /// Only for the `pq` method: the codebook, exposed as the subcolumn `<column>.product_quantization_codebook`.
+    static constexpr auto product_quantization_subcolumn_name = "product_quantization_codebook";
 
     void enumerateStreams(
         EnumerateStreamsSettings & settings,
@@ -51,15 +50,15 @@ public:
 
 private:
     QuantizedCodecParams params;
-    bool is_pq;                           /// trained Product Quantization (codebook + codes) vs data-independent codes
+    bool is_product_quantization;                           /// trained Product Quantization (codebook + codes) vs data-independent codes
     size_t bytes_per_vector;
     DataTypePtr codes_type;               /// FixedString(bytes_per_vector)
     SerializationPtr codes_serialization; /// SerializationNamed(FixedString, "quantized", QuantizedCodes)
 
-    /// `pq` only: the per-part trained codebook, written once per part as the `pq_codebook` substream.
+    /// `pq` only: the per-part trained codebook, written once per part as the `product_quantization_codebook` substream.
     size_t codebook_bytes = 0;            /// FixedString size of the flat codebook (ProductQuantization::codebookFloats * 4)
     DataTypePtr codebook_type;
-    SerializationPtr codebook_serialization; /// SerializationNamed(FixedString, "pq_codebook", ProductQuantizationCodebook)
+    SerializationPtr codebook_serialization; /// SerializationNamed(FixedString, "product_quantization_codebook", ProductQuantizationCodebook)
 
     /// Encode rows [offset, offset + count) into a FixedString(bytes_per_vector) column. For `pq`, `codebook` is the
     /// trained centroids (`ProductQuantization`); for the data-independent methods it is null.

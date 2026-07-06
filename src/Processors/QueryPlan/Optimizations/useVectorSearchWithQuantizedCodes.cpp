@@ -257,7 +257,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
     const UInt64 bits = params->bits;
     /// The trained `pq` method also needs the per-part codebook subcolumn, and ranks with `pqDistance`.
     const bool is_pq = method == "pq";
-    const String codebook_column = search_column + "." + SerializationQuantizedVector::pq_codebook_subcolumn_name;
+    const String codebook_column = search_column + "." + SerializationQuantizedVector::product_quantization_subcolumn_name;
 
     /// ClickHouse lets a physical dotted column shadow a subcolumn (`ColumnsDescription::tryGetColumn` returns the
     /// physical column first). If the table also declares a physical column named like one of these companions - e.g.
