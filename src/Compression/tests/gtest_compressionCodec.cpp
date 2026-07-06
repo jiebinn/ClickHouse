@@ -1558,7 +1558,7 @@ TEST(GetCompressionCodecForFileTest, ThrowsOnCompressedSizeBelowHeader)
         0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
         0x82, /// LZ4 method byte
         0x05, 0x00, 0x00, 0x00, /// size_compressed = 5
-        0x00, 0x00, 0x00, 0x00, /// size_decompressed
+        0x01, 0x00, 0x00, 0x00, /// size_decompressed = 1
     };
 
     ReadBufferFromMemory in(reinterpret_cast<const char *>(block), std::size(block));
@@ -1572,7 +1572,7 @@ TEST(GetCompressionCodecForFileTest, ThrowsOnCorruptSizeEvenWithoutSkip)
         0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
         0x82, /// LZ4 method byte
         0x05, 0x00, 0x00, 0x00, /// size_compressed = 5
-        0x00, 0x00, 0x00, 0x00, /// size_decompressed
+        0x01, 0x00, 0x00, 0x00, /// size_decompressed = 1
     };
 
     ReadBufferFromMemory in(reinterpret_cast<const char *>(block), std::size(block));
@@ -1586,7 +1586,7 @@ TEST(GetCompressionCodecForFileTest, ThrowsOnCompressedSizeAboveLimit)
         0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
         0x82, /// LZ4 method byte
         0x00, 0x00, 0x00, 0x80, /// size_compressed = 2 GiB
-        0x00, 0x00, 0x00, 0x00, /// size_decompressed
+        0x01, 0x00, 0x00, 0x00, /// size_decompressed = 1
     };
 
     ReadBufferFromMemory in(reinterpret_cast<const char *>(block), std::size(block));
