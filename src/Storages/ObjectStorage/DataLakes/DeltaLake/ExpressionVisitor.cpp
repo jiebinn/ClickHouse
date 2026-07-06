@@ -8,7 +8,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -851,7 +850,7 @@ private:
                 LOG_TEST(state->logger(), "List id: {}, type: Binary", sibling_list_id);
 
             std::string value(reinterpret_cast<const char *>(buffer), len);
-            state->addLiteral(sibling_list_id, value, std::make_shared<DB::DataTypeFixedString>(len));
+            state->addLiteral(sibling_list_id, value, std::make_shared<DB::DataTypeString>());
         });
     }
 
