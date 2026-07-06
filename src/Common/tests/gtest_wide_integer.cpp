@@ -204,6 +204,31 @@ static void checkComparisonAgainstWiderOracle(const std::vector<T128> & values)
 }
 
 
+/// Oracle for the full 4-limb walk: the widen-to-256 helper above keeps bits 255:128 fixed to
+/// sign extension or zero, so it never exercises a decisive difference in the upper two limbs.
+/// Here the caller supplies a strictly ascending sequence and every pair is checked against the
+/// index order, which is independent of the comparison implementation under test.
+template <typename T>
+static void checkStrictlyAscending(const std::vector<T> & values)
+{
+    for (size_t i = 0; i < values.size(); ++i)
+    {
+        for (size_t j = 0; j < values.size(); ++j)
+        {
+            const T & lhs = values[i];
+            const T & rhs = values[j];
+
+            EXPECT_EQ(lhs < rhs, i < j) << toString(lhs) << " < " << toString(rhs);
+            EXPECT_EQ(lhs > rhs, i > j) << toString(lhs) << " > " << toString(rhs);
+            EXPECT_EQ(lhs <= rhs, i <= j) << toString(lhs) << " <= " << toString(rhs);
+            EXPECT_EQ(lhs >= rhs, i >= j) << toString(lhs) << " >= " << toString(rhs);
+            EXPECT_EQ(lhs == rhs, i == j) << toString(lhs) << " == " << toString(rhs);
+            EXPECT_EQ(lhs != rhs, i != j) << toString(lhs) << " != " << toString(rhs);
+        }
+    }
+}
+
+
 GTEST_TEST(WideInteger, Comparison128Boundaries)
 {
     /// Constexpr evaluation must take the same fast path.
@@ -255,6 +280,66 @@ GTEST_TEST(WideInteger, Comparison128Boundaries)
             two_pow_64 - 1, two_pow_64, two_pow_64 + 1,
             sign_bit - 1, sign_bit, sign_bit + 1,
             high_limb - 1, high_limb, high_limb + 1,
+        });
+    }
+}
+
+
+GTEST_TEST(WideInteger, Comparison256Boundaries)
+{
+    /// Constexpr evaluation must take the same fast path, with the decisive difference above bit 127.
+    static_assert((Int256(1) << 192) > (Int256(1) << 128));
+    static_assert((Int256(1) << 128) > Int256(0));
+    static_assert(std::numeric_limits<Int256>::min() < (Int256(1) << 128));
+    static_assert((UInt256(1) << 255) > (UInt256(1) << 192));
+
+    {
+        const Int256 min = std::numeric_limits<Int256>::min();
+        const Int256 max = std::numeric_limits<Int256>::max();
+        const Int256 limb2 = Int256(1) << 128;
+        const Int256 limb3 = Int256(1) << 192;
+
+        checkStrictlyAscending<Int256>({
+            min,
+            min + 1,
+            -limb3,
+            -limb3 + 1,
+            -limb2 - 1,
+            -limb2,
+            -limb2 + 1,
+            -1,
+            0,
+            1,
+            limb2 - 1,
+            limb2,
+            limb2 + 1,
+            limb3 - 1,
+            limb3,
+            limb3 + 1,
+            max - 1,
+            max,
+        });
+    }
+
+    {
+        const UInt256 max = std::numeric_limits<UInt256>::max();
+        const UInt256 limb2 = UInt256(1) << 128;
+        const UInt256 limb3 = UInt256(1) << 192;
+        const UInt256 top_bit = UInt256(1) << 255;
+
+        checkStrictlyAscending<UInt256>({
+            0,
+            1,
+            limb2 - 1,
+            limb2,
+            limb2 + 1,
+            limb3 - 1,
+            limb3,
+            limb3 + 1,
+            top_bit,
+            top_bit + 1,
+            max - 1,
+            max,
         });
     }
 }
