@@ -1,5 +1,4 @@
 #include <Interpreters/Context.h>
-#include <DataTypes/DataTypesBinaryEncoding.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 #include <Processors/QueryPlan/MergingAggregatedStep.h>
 #include <Processors/QueryPlan/QueryPlanFormat.h>
@@ -292,7 +291,7 @@ QueryPlanStepPtr MergingAggregatedStep::deserialize(Deserialization & ctx)
     }
 
     AggregateDescriptions aggregates;
-    deserializeAggregateDescriptions(aggregates, ctx.in, getBinaryTypeDecodingComplexityLimit(ctx.context));
+    deserializeAggregateDescriptions(aggregates, ctx.in, ctx.max_type_complexity);
 
     SortDescription group_by_sort_description;
     deserializeSortDescription(group_by_sort_description, ctx.in);

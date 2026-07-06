@@ -139,7 +139,8 @@ QueryPlanAndSets QueryPlan::deserializeSets(
     DeserializedSetsRegistry & registry,
     ReadBuffer & in,
     const SerializationFlags & flags,
-    const ContextPtr & context)
+    const ContextPtr & context,
+    size_t max_type_complexity)
 {
     UInt64 num_sets = 0;
     readVarUInt(num_sets, in);
@@ -178,16 +179,15 @@ QueryPlanAndSets QueryPlan::deserializeSets(
             ColumnsWithTypeAndName set_columns;
             set_columns.reserve(num_columns);
 
-            /// Sets can be deserialized from an untrusted client (TCPHandler::receiveQueryPlan), so enforce the
-            /// type-complexity guard both on the column type and on the column data (which, for a Dynamic column,
-            /// decodes further types via NativeReader). Passing the limit through FormatSettings keeps the guard
-            /// active on that path; internal part reads use null FormatSettings and stay unlimited.
+            /// The set data comes from the same plan stream, so it carries the plan's resolved type-complexity
+            /// limit (the effective setting for client packets, 0 for trusted server-to-server plans). Pass it
+            /// on both the column type and the column data (a Dynamic column decodes further types via NativeReader).
             FormatSettings format_settings;
-            format_settings.binary.max_binary_type_complexity = getBinaryTypeDecodingComplexityLimit(context);
+            format_settings.binary.max_binary_type_complexity = max_type_complexity;
 
             for (size_t col = 0; col < num_columns; ++col)
             {
-                auto type = decodeDataType(in, format_settings.binary.max_binary_type_complexity);
+                auto type = decodeDataType(in, max_type_complexity);
                 auto serialization = type->getDefaultSerialization();
                 ColumnPtr column = type->createColumn();
                 NativeReader::readData(*serialization, column, in, &format_settings, num_rows, nullptr, nullptr);
@@ -199,7 +199,7 @@ QueryPlanAndSets QueryPlan::deserializeSets(
         }
         else if (kind == UInt8(SetSerializationKind::SubqueryPlan))
         {
-            auto plan_for_set = QueryPlan::deserialize(in, context, flags);
+            auto plan_for_set = QueryPlan::deserialize(in, context, flags, max_type_complexity);
 
             res.sets_from_subquery.emplace_back(QueryPlanAndSets::SetFromSubquery{
                 {hash, std::move(columns)},
