@@ -310,17 +310,6 @@ void optimizeTreeSecondPass(
             });
     }
 
-    /// After PREWHERE has claimed cheap WHERE conjuncts. Its own `!getPrewhereInfo()`
-    /// guard then keeps `__topKFilter` from stealing PREWHERE from a sparse conjunct.
-    if (optimization_settings.try_use_top_k_optimization)
-    {
-        traverseQueryPlan(stack, root,
-            [&](auto & frame_node)
-            {
-                tryOptimizeTopK(&frame_node, nodes, extra_settings);
-            });
-    }
-
     /// WITH TOTALS / ROLLUP / CUBE / extremes produce extra streams the exchange protocol does not
     /// carry, so such plans cannot be distributed. make_distributed_plan is explicit, so fail rather
     /// than silently running single-node.
