@@ -408,7 +408,14 @@ endif ()
 # the capability cannot be auto-detected; it is opt-in.
 option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections in object files with zlib (-gz); requires a zlib-enabled compiler" OFF)
 
-if (COMPRESS_DEBUG_SECTIONS AND OS_LINUX AND NOT DISABLE_ALL_DEBUG_SYMBOLS)
+if (COMPRESS_DEBUG_SECTIONS AND (NOT OS_LINUX OR DISABLE_ALL_DEBUG_SYMBOLS))
+    # -gz only compresses debug sections, so it is inert without debug info and off Linux. Force the
+    # option back off (as ENABLE_XRAY does) so the cache never advertises a feature that has no effect.
+    message (STATUS "Not compressing debug sections: requires OS_LINUX and debug symbols enabled")
+    set (COMPRESS_DEBUG_SECTIONS 0)
+endif ()
+
+if (COMPRESS_DEBUG_SECTIONS)
     # Only C/C++ (and GNU-style ASM handled by clang) understand -gz; scope it away from other
     # languages such as ASM_NASM (ISA-L on amd64), whose nasm assembler rejects the flag.
     add_compile_options ($<$<COMPILE_LANGUAGE:C,CXX,ASM>:-gz=zlib>)
