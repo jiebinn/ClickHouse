@@ -4166,23 +4166,22 @@ let toggle_columns_generation = new WeakMap();
 /// `system.columns` on first expand and kept in the DOM; collapsing removes them. A late load is
 /// dropped if the row was collapsed/reopened, detached, or the connection changed meanwhile.
 async function toggleColumns(table, table_icon, database, table_name_str, server_address, user, password) {
-    /// The disclosure (expanded) state lives on the row's own `<button>` - the control keyboard
-    /// users focus and toggle - so assistive technology announces it on the operated element,
-    /// not on the unfocusable icon. The icon still carries the visual caret (`expanded` class).
-    let table_button = table.querySelector(':scope > button');
+    /// The column list is a secondary control, reached by clicking the icon (or pressing Left on
+    /// the focused row). The icon carries the visual caret (`expanded` class). The row `<button>`
+    /// deliberately does not advertise `aria-expanded`: its normal activation runs `SELECT *`
+    /// rather than toggling the list, so announcing it as a disclosure widget would be a false
+    /// promise to assistive technology.
     let columns_elem = table.querySelector(':scope > .table-columns');
     if (columns_elem) {
         /// Collapse.
         columns_elem.remove();
         delete table.dataset['columnsOpen'];
         table_icon.classList.remove('expanded');
-        if (table_button) table_button.setAttribute('aria-expanded', 'false');
         return;
     }
 
     table.dataset['columnsOpen'] = 1;
     table_icon.classList.add('expanded');
-    if (table_button) table_button.setAttribute('aria-expanded', 'true');
     columns_elem = document.createElement('div');
     columns_elem.className = 'table-columns';
     let loading = document.createElement('div');
@@ -4294,12 +4293,11 @@ async function loadTables(server_address, user, password, database, container, s
         table_name.className = 'table-name';
         let table_icon = getTableIcon(elem.engine);
         table_icon.setAttribute('title', 'Show columns');
-        /// The row `<button>` is the disclosure control for the column list: it is the element
-        /// keyboard users focus and toggle (with Left), and clicking its icon toggles it too.
-        /// Expose the expanded state on the button itself, not on the unfocusable icon, so
-        /// assistive technology announces it on the control actually operated; the icon keeps
-        /// only the visual caret (its `expanded` class).
-        table_link.setAttribute('aria-expanded', 'false');
+        /// The row `<button>`'s primary action is `SELECT *`, so it must not advertise
+        /// `aria-expanded`: that would promise a disclosure widget whose normal activation
+        /// (click / Enter / Space) never toggles the column list. Toggling is a secondary
+        /// action, reached by clicking the icon or pressing Left on the focused row; the icon
+        /// carries the visual caret (its `expanded` class).
         table_name.append(table_icon, elem.table);
         table_link.appendChild(table_name);
 
