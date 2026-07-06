@@ -1,14 +1,14 @@
 #pragma once
 
 #include <DataTypes/Serializations/SerializationWrapper.h>
-#include <Compression/CompressionCodecQuantize.h>
+#include <Compression/CompressionCodecQuantized.h>
 
 namespace DB
 {
 
 class IDataType;
 
-/// Serialization of a dense vector column (e.g. `Array(Float32)`) that carries a `Quantize(...)` codec.
+/// Serialization of a dense vector column (e.g. `Array(Float32)`) that carries a `Quantized(...)` codec.
 ///
 /// On top of the normal full-precision array streams it writes one extra on-disk stream holding a compact,
 /// data-independent quantized code per row (see `Common/VectorQuantization.h`). The codes are derived from the
@@ -21,7 +21,7 @@ class IDataType;
 class SerializationQuantizedVector final : public SerializationWrapper
 {
 public:
-    SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizeCodecParams & params_);
+    SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizedCodecParams & params_);
 
     static constexpr auto subcolumn_name = "quantized";
     /// For the trained `pq` method only: the per-part codebook, exposed as the readable subcolumn `<column>.pq_codebook`.
@@ -50,7 +50,7 @@ public:
         SerializeBinaryBulkStatePtr & state) const override;
 
 private:
-    QuantizeCodecParams params;
+    QuantizedCodecParams params;
     bool is_pq;                           /// trained Product Quantization (codebook + codes) vs data-independent codes
     size_t bytes_per_vector;
     DataTypePtr codes_type;               /// FixedString(bytes_per_vector)

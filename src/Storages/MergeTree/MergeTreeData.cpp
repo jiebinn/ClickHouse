@@ -19,7 +19,7 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnConst.h>
 #include <Compression/CompressedReadBuffer.h>
-#include <Compression/CompressionCodecQuantize.h>
+#include <Compression/CompressionCodecQuantized.h>
 #include <Compression/CompressionFactory.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/QueryProcessingStage.h>
@@ -4525,7 +4525,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
     {
         auto quantize_signature = [](const ASTPtr & codec) -> String
         {
-            const auto params = tryExtractQuantizeCodecParams(codec);
+            const auto params = tryExtractQuantizedCodecParams(codec);
             if (!params)
                 return {};
             return fmt::format("{}:{}:{}:{}", params->method, params->dimensions, params->bits, params->m);
@@ -5283,7 +5283,7 @@ MergeTreeDataPartFormat MergeTreeData::choosePartFormat(
         const auto metadata_snapshot = getInMemoryMetadataPtr(getContext(), false);
         for (const auto & column : metadata_snapshot->getColumns())
         {
-            const auto params = tryExtractQuantizeCodecParams(column.codec);
+            const auto params = tryExtractQuantizedCodecParams(column.codec);
             if (params && params->method == "pq")
             {
                 part_type = PartType::Wide;

@@ -1,6 +1,6 @@
 #include <Columns/ColumnConst.h>
 #include <Common/VectorWithMemoryTracking.h>
-#include <Compression/CompressionCodecQuantize.h>
+#include <Compression/CompressionCodecQuantized.h>
 #include <Core/Field.h>
 #include <Core/Settings.h>
 #include <Core/SortDescription.h>
@@ -77,11 +77,11 @@ namespace
 {
 
 /// If the storage column `search_column` carries a `Quantize(...)` codec, return its parameters.
-std::optional<QuantizeCodecParams> findQuantizeCodecParams(const ReadFromMergeTree & read_step, const String & search_column)
+std::optional<QuantizedCodecParams> findQuantizeCodecParams(const ReadFromMergeTree & read_step, const String & search_column)
 {
     for (const auto & column : read_step.getStorageMetadata()->getColumns())
         if (column.name == search_column)
-            return tryExtractQuantizeCodecParams(column.codec);
+            return tryExtractQuantizedCodecParams(column.codec);
     return {};
 }
 

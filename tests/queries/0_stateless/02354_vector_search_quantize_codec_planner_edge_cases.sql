@@ -1,7 +1,7 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertions below
 --  cannot hold there.)
--- Edge cases of the two-stage `Quantize(...)` planner rewrite: it must not corrupt or fail queries that select the
+-- Edge cases of the two-stage `Quantized(...)` planner rewrite: it must not corrupt or fail queries that select the
 -- companion subcolumn, or that already contain a column named like the rewrite's internal sort key. In those cases the
 -- rewrite either preserves the needed column or bails out to the exact path (the exact full-precision result is always
 -- correct, just unaccelerated).
@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS quantize_edge;
 CREATE TABLE quantize_edge
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('rabitq', 64))
+    vec Array(Float32) CODEC(Quantized('rabitq', 64))
 )
 ENGINE = MergeTree ORDER BY id;
 
@@ -40,7 +40,7 @@ DROP TABLE IF EXISTS quantize_collide;
 CREATE TABLE quantize_collide
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('rabitq', 64)),
+    vec Array(Float32) CODEC(Quantized('rabitq', 64)),
     `__quantize_approx_distance` Float32
 )
 ENGINE = MergeTree ORDER BY id;

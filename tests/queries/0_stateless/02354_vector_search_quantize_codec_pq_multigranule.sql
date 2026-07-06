@@ -13,7 +13,7 @@ DROP TABLE IF EXISTS quantize_pq_mg;
 CREATE TABLE quantize_pq_mg
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('pq', 64, 8, 8))
+    vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8))
 )
 ENGINE = MergeTree ORDER BY id SETTINGS index_granularity = 1024;
 

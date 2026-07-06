@@ -163,7 +163,7 @@ private:
 
 }
 
-SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizeCodecParams & params_)
+SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizedCodecParams & params_)
     : SerializationWrapper(nested_)
     , params(params_)
     , is_pq(params_.method == "pq")

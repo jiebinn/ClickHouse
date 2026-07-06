@@ -15,7 +15,7 @@ CREATE TABLE quantize_prewhere
 (
     id UInt32,
     tag UInt8,
-    vec Array(Float32) CODEC(Quantize('int8', 8))
+    vec Array(Float32) CODEC(Quantized('int8', 8))
 )
 ENGINE = MergeTree ORDER BY id;
 

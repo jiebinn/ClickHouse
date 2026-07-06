@@ -14,7 +14,7 @@ DROP TABLE IF EXISTS quantize_rabitq_simd;
 CREATE TABLE quantize_rabitq_simd
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('rabitq', 1024))
+    vec Array(Float32) CODEC(Quantized('rabitq', 1024))
 )
 ENGINE = MergeTree ORDER BY id;
 

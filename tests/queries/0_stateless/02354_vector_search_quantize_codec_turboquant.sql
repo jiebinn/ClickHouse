@@ -1,4 +1,4 @@
--- End-to-end coverage for the `turboquant` method of the `Quantize(...)` vector codec: a 2-bit QJL (Quantized
+-- End-to-end coverage for the `turboquant` method of the `Quantized(...)` vector codec: a 2-bit QJL (Quantized
 -- Johnson-Lindenstrauss) cosine estimator that, like `rabitq`, drops the vector norm and is therefore cosine-only.
 -- This checks the whole path - encode, the per-part codes subcolumn, and the two-stage shortlist rewrite ranked with
 -- `turboquant` codes - stays correct (exact top-k under a full-coverage shortlist, a high-recall shortlist, and
@@ -14,7 +14,7 @@ DROP TABLE IF EXISTS quantize_turboquant;
 CREATE TABLE quantize_turboquant
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('turboquant', 1024))
+    vec Array(Float32) CODEC(Quantized('turboquant', 1024))
 )
 ENGINE = MergeTree ORDER BY id;
 

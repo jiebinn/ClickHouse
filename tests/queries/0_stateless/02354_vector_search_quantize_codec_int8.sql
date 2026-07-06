@@ -1,7 +1,7 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertion below
 --  cannot hold there; the query still returns exact results in that case.)
--- The `int8` method of the `Quantize(...)` column codec stores one Lloyd-Max Int8 code per coordinate (of the rotated,
+-- The `int8` method of the `Quantized(...)` column codec stores one Lloyd-Max Int8 code per coordinate (of the rotated,
 -- unit-variance vector) plus the per-vector L2 norm, exposed as the readable subcolumn `<column>.quantized`. The
 -- full-precision data is stored verbatim, so reading the vector itself is unaffected. The codec is gated behind
 -- `allow_experimental_codecs`.
@@ -21,12 +21,12 @@ DROP TABLE IF EXISTS quantize_int8;
 CREATE TABLE quantize_int8
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('int8', 64))
+    vec Array(Float32) CODEC(Quantized('int8', 64))
 )
 ENGINE = MergeTree ORDER BY id;
 
 -- The codec round-trips through SHOW CREATE.
-SELECT 'show_create_has_codec', position(create_table_query, 'Quantize(\'int8\', 64') > 0
+SELECT 'show_create_has_codec', position(create_table_query, 'Quantized(\'int8\', 64') > 0
 FROM system.tables WHERE database = currentDatabase() AND name = 'quantize_int8';
 
 INSERT INTO quantize_int8 (id, vec)

@@ -1,11 +1,11 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertion below
 --  cannot hold there; the query still returns exact results in that case.)
--- The `pq` (trained Product Quantization) method of the `Quantize(...)` column codec learns a per-part codebook with
+-- The `pq` (trained Product Quantization) method of the `Quantized(...)` column codec learns a per-part codebook with
 -- k-means and stores one m-byte code per vector, exposed as the readable subcolumn `<column>.quantized`, plus the
 -- per-part codebook as the subcolumn `<column>.pq_codebook`. The full-precision data is stored verbatim, so reading the
 -- vector itself (and the exact rescore) is unaffected. The codec is gated behind `allow_experimental_codecs`.
--- Syntax: `Quantize('pq', dimensions, nbits, m)`.
+-- Syntax: `Quantized('pq', dimensions, nbits, m)`.
 
 SET allow_experimental_codecs = 1;
 SET vector_search_use_quantized_codes = 1;
@@ -22,12 +22,12 @@ DROP TABLE IF EXISTS quantize_pq;
 CREATE TABLE quantize_pq
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('pq', 64, 8, 8))
+    vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8))
 )
 ENGINE = MergeTree ORDER BY id;
 
 -- The codec round-trips through SHOW CREATE.
-SELECT 'show_create_has_codec', position(create_table_query, 'Quantize(\'pq\', 64, 8, 8') > 0
+SELECT 'show_create_has_codec', position(create_table_query, 'Quantized(\'pq\', 64, 8, 8') > 0
 FROM system.tables WHERE database = currentDatabase() AND name = 'quantize_pq';
 
 INSERT INTO quantize_pq (id, vec)

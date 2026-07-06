@@ -1,7 +1,7 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertions below
 --  cannot hold there; the query still returns exact results in that case.)
--- A vector column carrying a `Quantize(...)` codec makes the query planner automatically rewrite
+-- A vector column carrying a `Quantized(...)` codec makes the query planner automatically rewrite
 -- ORDER BY distance LIMIT into a two-stage shortlist (over the small quantized codes subcolumn) + rescore
 -- (against the full-precision vector), reading the heavy vector column lazily for the shortlisted rows only.
 -- The codec is gated behind `allow_experimental_codecs`.
@@ -21,7 +21,7 @@ DROP TABLE IF EXISTS quantize_auto;
 CREATE TABLE quantize_auto
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('rabitq', 64))
+    vec Array(Float32) CODEC(Quantized('rabitq', 64))
 )
 ENGINE = MergeTree ORDER BY id;
 

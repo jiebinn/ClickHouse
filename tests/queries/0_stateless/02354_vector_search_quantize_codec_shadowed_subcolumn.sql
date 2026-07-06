@@ -2,7 +2,7 @@
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas; the plan-shape assertion cannot hold
 --  there. The query still returns exact results in that case.)
 -- Regression test: ClickHouse lets a physical dotted column shadow a subcolumn (`tryGetColumn` returns the physical
--- column first). A table that declares both a `Quantize(...)` column `vec` and a physical column named `vec.quantized`
+-- column first). A table that declares both a `Quantized(...)` column `vec` and a physical column named `vec.quantized`
 -- would otherwise make the quantized-vector-search rewrite resolve the physical column instead of the companion codes
 -- subcolumn, ranking the shortlist on unrelated bytes (silently, when the widths match). The rewrite must detect the
 -- shadow and fall back to exact KNN. Exercises `useVectorSearchWithQuantizedCodes`.
@@ -17,7 +17,7 @@ DROP TABLE IF EXISTS quantize_shadow;
 CREATE TABLE quantize_shadow
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('int8', 8)),
+    vec Array(Float32) CODEC(Quantized('int8', 8)),
     `vec.quantized` FixedString(12)
 )
 ENGINE = MergeTree ORDER BY id;

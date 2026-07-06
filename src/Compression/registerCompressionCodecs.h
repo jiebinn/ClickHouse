@@ -20,7 +20,7 @@ void registerCodecEncrypted(CompressionCodecFactory & factory);
 void registerCodecFPC(CompressionCodecFactory & factory);
 void registerCodecGCD(CompressionCodecFactory & factory);
 void registerCodecALP(CompressionCodecFactory & factory);
-void registerCodecQuantize(CompressionCodecFactory & factory);
+void registerCodecQuantized(CompressionCodecFactory & factory);
 
 CompressionCodecPtr getCompressionCodecLZ4(int level);
 CompressionCodecPtr getCompressionCodecZSTD(int level);

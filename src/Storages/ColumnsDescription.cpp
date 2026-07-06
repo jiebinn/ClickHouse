@@ -17,7 +17,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationQuantizedVector.h>
-#include <Compression/CompressionCodecQuantize.h>
+#include <Compression/CompressionCodecQuantized.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
@@ -378,12 +378,12 @@ static auto getNameRange(const ColumnsDescription::ColumnsContainer & columns, c
 namespace
 {
 
-/// If the column carries a `Quantize(...)` codec, attach the serialization that writes the quantized companion stream
+/// If the column carries a `Quantized(...)` codec, attach the serialization that writes the quantized companion stream
 /// and exposes the `<column>.quantized` subcolumn. The customization is attached to this column's own (freshly parsed,
 /// non-shared) type instance, so it does not affect any other column of the same type.
 void attachQuantizeSerializationIfNeeded(ColumnDescription & column)
 {
-    auto params = tryExtractQuantizeCodecParams(column.codec);
+    auto params = tryExtractQuantizedCodecParams(column.codec);
     if (!params)
         return;
 
@@ -396,7 +396,7 @@ void attachQuantizeSerializationIfNeeded(ColumnDescription & column)
     WhichDataType nested = array_type ? WhichDataType(array_type->getNestedType()) : WhichDataType(column.type);
     if (!array_type || !(nested.isFloat32() || nested.isFloat64() || nested.isBFloat16()))
         throw Exception(ErrorCodes::ILLEGAL_COLUMN,
-            "Column {} has a Quantize codec, which is only supported for Array(Float32), Array(Float64) or "
+            "Column {} has a Quantized codec, which is only supported for Array(Float32), Array(Float64) or "
             "Array(BFloat16) columns, but its type is {}", column.name, column.type->getName());
 
     auto custom_serialization = std::make_shared<SerializationQuantizedVector>(column.type->getDefaultSerialization(), *params);

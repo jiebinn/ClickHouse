@@ -1,4 +1,4 @@
--- The `pq` method of the `Quantize(...)` codec trains a codebook per part. A merge re-runs the serialization write path
+-- The `pq` method of the `Quantized(...)` codec trains a codebook per part. A merge re-runs the serialization write path
 -- on the merged data, so the merged part gets a freshly retrained codebook: two source parts (two codebooks) collapse
 -- to one part with one codebook, and the two-stage search stays correct against it.
 
@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS quantize_pq_merge;
 CREATE TABLE quantize_pq_merge
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('pq', 64, 8, 8))
+    vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8))
 )
 ENGINE = MergeTree ORDER BY id;
 

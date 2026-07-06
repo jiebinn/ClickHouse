@@ -1,4 +1,4 @@
--- The structured random projection behind the `Quantize(...)` codec uses an exact Kronecker Hadamard transform
+-- The structured random projection behind the `Quantized(...)` codec uses an exact Kronecker Hadamard transform
 -- H_{2^k} (x) H_m for dimensions of the form 2^k * m (m in {12, 20}), instead of zero-padding to the next power of two.
 -- This exercises that path with dimension 96 = 8 * 12 (which would otherwise pad to 128): encode and query must use the
 -- same rotation, so the codes path still reproduces the exact brute-force top-k and ranks the query vector first.
@@ -14,7 +14,7 @@ DROP TABLE IF EXISTS quantize_kron;
 CREATE TABLE quantize_kron
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantize('rabitq', 96))
+    vec Array(Float32) CODEC(Quantized('rabitq', 96))
 )
 ENGINE = MergeTree ORDER BY id;
 
