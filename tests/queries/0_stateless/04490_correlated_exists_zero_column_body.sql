@@ -32,4 +32,25 @@ SELECT count() FROM users_04490 AS t WHERE EXISTS (SELECT 1 FROM users_04490 AS 
 -- Must-not-regress: empty inner relation -> EXISTS is false for all rows.
 SELECT count() FROM users_04490 AS t WHERE EXISTS (SELECT t.name FROM users_04490 AS v WHERE v.age > 1000);
 
+-- Correlated UNION with mixed arms: one arm's body is zero-column (correlation only in the
+-- projection), the other projects a real inner column. The row marker must stay internal to its
+-- arm; otherwise the arms get mismatched widths (UNION_ALL_RESULT_STRUCTURES_MISMATCH). Must return 3.
+SELECT count() FROM users_04490 AS t WHERE EXISTS (
+    SELECT t.name FROM users_04490 WHERE age != uid
+    UNION ALL
+    SELECT name FROM users_04490 WHERE age != uid
+);
+-- Reversed arm order (non-zero-column arm first).
+SELECT count() FROM users_04490 AS t WHERE EXISTS (
+    SELECT name FROM users_04490 WHERE age != uid
+    UNION ALL
+    SELECT t.name FROM users_04490 WHERE age != uid
+);
+-- Both arms zero-column (both correlated in the projection only, same correlated column).
+SELECT count() FROM users_04490 AS t WHERE EXISTS (
+    SELECT t.name FROM users_04490 WHERE age != uid
+    UNION ALL
+    SELECT t.name FROM users_04490 WHERE uid != age
+);
+
 DROP TABLE users_04490;
