@@ -140,7 +140,7 @@ CREATE DICTIONARY nb_priors_model
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' alpha 1.0 priors_mode 'explicit' priors '0=0.9,1=0.1'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' alpha 1.0 priors_mode 'explicit' priors [(0, 0.9), (1, 0.1)]))
 LIFETIME(0);
 
 SELECT 'Explicit priors';

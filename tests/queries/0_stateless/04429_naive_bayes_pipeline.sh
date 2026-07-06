@@ -38,25 +38,25 @@ $CLICKHOUSE_CLIENT -q "INSERT INTO nb_pipe_token_train SELECT ngram, class_id, c
 
 # Explicit document-frequency prior (documents in class / total documents), computed from the data and reused for all models.
 PRIORS=$($CLICKHOUSE_CLIENT -q "
-SELECT arrayStringConcat(groupArray(concat(toString(class_id), '=', toString(round(cnt / (SELECT count() FROM nb_pipe_raw), 9)))), ',')
+SELECT toString(groupArray((class_id, round(cnt / (SELECT count() FROM nb_pipe_raw), 9))))
 FROM (SELECT class_id, count() AS cnt FROM nb_pipe_raw GROUP BY class_id)")
 
 $CLICKHOUSE_CLIENT -q "
 CREATE DICTIONARY nb_pipe_byte (ngram String, class_id UInt32 DEFAULT 0, count UInt64 DEFAULT 0)
 PRIMARY KEY ngram SOURCE(CLICKHOUSE(TABLE 'nb_pipe_byte_train'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'byte' start_token '0x01' end_token '0xFF' priors_mode 'explicit' priors '$PRIORS'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'byte' start_token '0x01' end_token '0xFF' priors_mode 'explicit' priors $PRIORS))
 LIFETIME(0)"
 
 $CLICKHOUSE_CLIENT -q "
 CREATE DICTIONARY nb_pipe_codepoint (ngram String, class_id UInt32 DEFAULT 0, count UInt64 DEFAULT 0)
 PRIMARY KEY ngram SOURCE(CLICKHOUSE(TABLE 'nb_pipe_codepoint_train'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'codepoint' start_token '0x10FFFE' end_token '0x10FFFF' priors_mode 'explicit' priors '$PRIORS'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'codepoint' start_token '0x10FFFE' end_token '0x10FFFF' priors_mode 'explicit' priors $PRIORS))
 LIFETIME(0)"
 
 $CLICKHOUSE_CLIENT -q "
 CREATE DICTIONARY nb_pipe_token (ngram String, class_id UInt32 DEFAULT 0, count UInt64 DEFAULT 0)
 PRIMARY KEY ngram SOURCE(CLICKHOUSE(TABLE 'nb_pipe_token_train'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'token' start_token '<s>' end_token '</s>' priors_mode 'explicit' priors '$PRIORS'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 2 mode 'token' start_token '<s>' end_token '</s>' priors_mode 'explicit' priors $PRIORS))
 LIFETIME(0)"
 
 # Each model recovers its training labels well (a robust floor; the real numbers are >= 0.99).

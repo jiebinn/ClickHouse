@@ -125,7 +125,7 @@ CREATE DICTIONARY nb_bad_priors_sum
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.5,1=0.3'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.5), (1, 0.3)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_bad_priors_sum', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -142,7 +142,7 @@ CREATE DICTIONARY nb_neg_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=-0.5,1=1.5'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, -0.5), (1, 1.5)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_neg_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -159,7 +159,7 @@ CREATE DICTIONARY nb_big_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=2.0,1=0.5'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 2.0), (1, 0.5)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_big_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -176,7 +176,7 @@ CREATE DICTIONARY nb_nan_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=nan,1=0.5'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 'nan'), (1, 0.5)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_nan_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -191,16 +191,16 @@ CREATE DICTIONARY nb_inf_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=inf,1=0.5'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 'inf'), (1, 0.5)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_inf_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
 
 DROP DICTIONARY IF EXISTS nb_inf_prior;
 
--- Priors with malformed format (missing '=')
+-- Priors whose probability is itself a collection instead of a scalar
 
-CREATE DICTIONARY nb_malformed_prior
+CREATE DICTIONARY nb_nested_prior
 (
     ngram String,
     class_id UInt32 DEFAULT 0,
@@ -208,16 +208,14 @@ CREATE DICTIONARY nb_malformed_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0:0.5,1:0.5'))
-LIFETIME(0);
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, (0.5, 0.5)), (1, 0.5)]))
+LIFETIME(0); -- { serverError BAD_ARGUMENTS }
 
-SELECT dictGet('nb_malformed_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
+DROP DICTIONARY IF EXISTS nb_nested_prior;
 
-DROP DICTIONARY IF EXISTS nb_malformed_prior;
+-- A priors entry with more than two elements is not a (class, probability) pair
 
--- Priors with a trailing comma (empty final entry)
-
-CREATE DICTIONARY nb_trailing_comma_prior
+CREATE DICTIONARY nb_wide_prior
 (
     ngram String,
     class_id UInt32 DEFAULT 0,
@@ -225,12 +223,10 @@ CREATE DICTIONARY nb_trailing_comma_prior
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.5,1=0.5,'))
-LIFETIME(0);
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.5, 1), (1, 0.5)]))
+LIFETIME(0); -- { serverError BAD_ARGUMENTS }
 
-SELECT dictGet('nb_trailing_comma_prior', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
-
-DROP DICTIONARY IF EXISTS nb_trailing_comma_prior;
+DROP DICTIONARY IF EXISTS nb_wide_prior;
 
 -- Priors class count mismatch (3 priors for 2 classes)
 
@@ -242,7 +238,7 @@ CREATE DICTIONARY nb_prior_count_mismatch
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.4,1=0.3,2=0.3'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.4), (1, 0.3), (2, 0.3)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_prior_count_mismatch', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -259,7 +255,7 @@ CREATE DICTIONARY nb_prior_unknown_class
 )
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.5,5=0.5'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.5), (5, 0.5)]))
 LIFETIME(0);
 
 SELECT dictGet('nb_prior_unknown_class', 'class_id', 'test'); -- { serverError BAD_ARGUMENTS }
@@ -416,6 +412,21 @@ DROP DICTIONARY IF EXISTS nb_nonnumeric_prior;
 -- Reading from the dictionary without store_source
 
 SELECT * FROM nb_err_dict; -- { serverError UNSUPPORTED_METHOD }
+
+-- A map literal is not valid priors syntax: priors are written as an array of (class, probability) pairs.
+
+CREATE DICTIONARY nb_map_prior
+(
+    ngram String,
+    class_id UInt32 DEFAULT 0,
+    count UInt64 DEFAULT 0
+)
+PRIMARY KEY ngram
+SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors {0: 0.9, 1: 0.1}))
+LIFETIME(0); -- { clientError SYNTAX_ERROR }
+
+DROP DICTIONARY IF EXISTS nb_map_prior;
 
 -- Cleanup (dictionaries first, then tables)
 
