@@ -195,6 +195,19 @@ def test_generate_content_multiple_rows(started_cluster):
     assert result.strip().split("\n") == ["row1", "row2", "row3"]
 
 
+def test_generate_uses_text_default_credentials(started_cluster):
+    """End-to-end default-credentials path: with no `credentials` in the call, a real (non-empty)
+    request must actually use `ai_function_text_default_credentials`, not just resolve it for the
+    zero-row fast path. The mock echoes the input back, so a wiring bug would show up here."""
+    instance.query("TRUNCATE TABLE test_input")
+    instance.query("INSERT INTO test_input VALUES ('row1'), ('row2')")
+    result = instance.query(
+        "SELECT aiGenerate(x) FROM test_input ORDER BY x",
+        settings={**AI_SETTINGS, "ai_function_text_default_credentials": "ai_mock"},
+    )
+    assert result.strip().split("\n") == ["row1", "row2"]
+
+
 def test_generate_content_profile_events(started_cluster):
     instance.query("TRUNCATE TABLE test_input")
     instance.query("INSERT INTO test_input VALUES ('a'), ('b'), ('c')")
@@ -481,6 +494,19 @@ def test_embed_basic(started_cluster):
     result = instance.query(
         "SELECT aiEmbed('hello', map('credentials', 'ai_embed'))",
         settings=AI_SETTINGS,
+    )
+    vec = parse_embedding(result)
+    assert len(vec) == 4  # DEFAULT_EMBED_DIM in mock server
+    assert any(v != 0.0 for v in vec)
+
+
+def test_embed_uses_embedding_default_credentials(started_cluster):
+    """End-to-end default-credentials path for embeddings: with no `credentials` in the call, a real
+    (non-empty) request must actually use `ai_function_embedding_default_credentials`. Confirms the
+    embedding default is applied on the request path, not only for the zero-row fast path."""
+    result = instance.query(
+        "SELECT aiEmbed('hello')",
+        settings={**AI_SETTINGS, "ai_function_embedding_default_credentials": "ai_embed"},
     )
     vec = parse_embedding(result)
     assert len(vec) == 4  # DEFAULT_EMBED_DIM in mock server
