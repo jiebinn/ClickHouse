@@ -1013,11 +1013,17 @@ bool MergeTask::ExecuteAndFinalizeHorizontalPart::prepare() const
 
 bool MergeTask::enabledBlockNumberColumn(GlobalRuntimeContextPtr global_ctx)
 {
+    if (global_ctx->parent_part)
+        return false;
+
     return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_number_column];
 }
 
 bool MergeTask::enabledBlockOffsetColumn(GlobalRuntimeContextPtr global_ctx)
 {
+    if (global_ctx->parent_part)
+        return false;
+
     return (*global_ctx->data_settings)[MergeTreeSetting::enable_block_offset_column];
 }
 
