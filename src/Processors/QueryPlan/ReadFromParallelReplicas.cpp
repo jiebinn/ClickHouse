@@ -101,7 +101,7 @@ ReadFromParallelReplicasStep::ReadFromParallelReplicasStep(
     // , scalars(scalars_)
     // , external_tables{external_tables_}
     // , storage_limits(std::move(storage_limits_))
-    , log(getLogger(this->getName()))
+    , log(getLogger("ReadFromParallelReplicas"))
     , pools_to_use(std::move(pools_to_use_))
     , exclude_pool_index(exclude_pool_index_)
     , connection_pool_with_failover(connection_pool_with_failover_)
