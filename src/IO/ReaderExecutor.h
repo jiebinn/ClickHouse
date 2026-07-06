@@ -3,7 +3,7 @@
 #include <IO/OffsetMap.h>
 #include <IO/IFileBasedSourceReader.h>
 #include <IO/ChainedBuffers.h>
-#include <IO/ContinuityTracker.h>
+#include <IO/ReadContinuityTracker.h>
 #include <IO/LongConnectionLimit.h>
 
 #include <Common/CurrentMetrics.h>
@@ -138,10 +138,10 @@ private:
         bool isComplete(bool at_eof) const { return at_eof || atBound(); }
         /// Whether any bytes have been consumed from the stream (read or skipped) since it opened.
         bool consumedAnyBytes() const { return current_position > opened_at; }
-        /// Forward, within `near_gap`, and `[off, off+want)` stays inside the bound.
-        bool canContinue(size_t off, size_t want, size_t near_gap) const
+        /// Forward, within `bridgeable_gap`, and `[off, off+want)` stays inside the bound.
+        bool canContinue(size_t off, size_t want, size_t bridgeable_gap) const
         {
-            return off >= current_position && off - current_position <= near_gap && off + want <= read_until;
+            return off >= current_position && off - current_position <= bridgeable_gap && off + want <= read_until;
         }
 
         /// Read up to `want` bytes from the open stream into `dst`; advances the frontier.
@@ -185,7 +185,7 @@ private:
     /// One-shot bounded read (the stateless path): open, seek, read `want` into `dst`.
     size_t readOneShot(const StoredObject & object, size_t object_offset, size_t want, char * dst);
     /// Drop the held connection: drain a small tail to complete it, else account it incomplete.
-    void dropLong();
+    void dropLongConnection();
 
     std::shared_ptr<IFileBasedSourceReader> source;
     OffsetMap offset_map;
@@ -198,8 +198,8 @@ private:
 
     /// Held source connection reused across sequential windows; empty when none is open.
     std::optional<LongConnection> long_conn;
-    /// Forward-reach estimator, fed `onServe`/`onSeek`; drives the open-long decision.
-    ContinuityTracker continuity_tracker;
+    /// Forward-reach estimator, fed `recordReadRange`/`recordSeek`; drives the open-long decision.
+    ReadContinuityTracker continuity_tracker;
     /// Connection-reuse budget; null disables long connections (the stateless path).
     std::shared_ptr<LongConnectionLimit> long_connection_limit;
     size_t min_bytes_for_seek;

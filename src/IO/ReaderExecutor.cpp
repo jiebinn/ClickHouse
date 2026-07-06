@@ -117,7 +117,7 @@ ReaderExecutor::ReaderExecutor(
     Options options)
     : source(std::move(source_))
     , block_size(options.block_size ? options.block_size : DEFAULT_BLOCK_SIZE)
-    , continuity_tracker(ContinuityTracker::Options{.near_gap = options.min_bytes_for_seek})
+    , continuity_tracker(ReadContinuityTracker::Options{.bridgeable_gap = options.min_bytes_for_seek})
     , long_connection_limit(std::move(options.long_connection_limit))
     , min_bytes_for_seek(options.min_bytes_for_seek)
     , max_tail_for_drain(options.max_tail_for_drain)
@@ -140,12 +140,12 @@ ReaderExecutor::ReaderExecutor(
 ReaderExecutor::~ReaderExecutor()
 {
     /// Release any held connection (drains a small tail to complete it, frees its slot, and
-    /// accounts an incomplete drop if it was abandoned mid-response). `dropLong`'s drain is
+    /// accounts an incomplete drop if it was abandoned mid-response). `dropLongConnection`'s drain is
     /// best-effort and non-throwing, but keep a guard so nothing escapes a destructor -- a throw
     /// would `std::terminate`; the slot still releases via `long_conn`'s own destruction.
     try
     {
-        dropLong();
+        dropLongConnection();
     }
     catch (...)
     {
@@ -225,7 +225,7 @@ bool ReaderExecutor::shouldOpenLongConnection() const
     if (long_conn || !long_connection_limit)
         return false;
     /// Open a long connection when the predicted contiguous reach runs past this window.
-    return clampReach(continuity_tracker.predictedReach(), position) > position + block_size;
+    return clampReach(continuity_tracker.predictedForwardLength(), position) > position + block_size;
 }
 
 bool ReaderExecutor::tryOpenLongConnection(const StoredObject & object, size_t object_offset)
@@ -243,7 +243,7 @@ bool ReaderExecutor::tryOpenLongConnection(const StoredObject & object, size_t o
     /// reads ahead only as far as the pattern predicts (no full-object over-read when just a
     /// slice is used). Reuse spans this bound; once the read runs past it the connection completes
     /// (pool-reusable) and the next window opens a fresh, longer one as the run keeps growing.
-    const size_t forward = clampReach(continuity_tracker.predictedReach(), position) - position;
+    const size_t forward = clampReach(continuity_tracker.predictedForwardLength(), position) - position;
     size_t read_until_obj = object_offset + forward;
     if (!offset_map.hasUnknownSize())
         read_until_obj = std::min<size_t>(read_until_obj, object.bytes_size);
@@ -295,7 +295,7 @@ size_t ReaderExecutor::readOneShot(const StoredObject & object, size_t object_of
     return readIntoBlock(*buffer, dst, want);
 }
 
-void ReaderExecutor::dropLong()
+void ReaderExecutor::dropLongConnection()
 {
     if (!long_conn)
         return;
@@ -373,7 +373,7 @@ ChainedBuffers ReaderExecutor::readNextWindow()
         /// bound) is dropped; then open a fresh long connection when the read is predicted
         /// to continue, else fall back to a one-shot read.
         if (long_conn)
-            dropLong();
+            dropLongConnection();
         if (shouldOpenLongConnection() && tryOpenLongConnection(*object, object_offset))
             got = serveFromLongConnection(object_offset, want, block->data());
         else
@@ -403,7 +403,7 @@ ChainedBuffers ReaderExecutor::readNextWindow()
             got, want, position, object->remote_path, object->bytes_size);
     }
 
-    continuity_tracker.onServe(position, got);
+    continuity_tracker.recordReadRange(position, got);
 
     ChainedBuffers chain;
     chain.append(ChainedBufferNode{std::move(block), 0, got, position});
@@ -416,7 +416,7 @@ void ReaderExecutor::seek(size_t new_position)
     LOG_TRACE(log, "seek: {} -> {}", position, new_position);
     /// Feed the estimator; a held connection that can't continue to `new_position` is dropped
     /// lazily by the next `readNextWindow` (its `canContinue` check).
-    continuity_tracker.onSeek(new_position);
+    continuity_tracker.recordSeek(new_position);
     position = new_position;
     reached_eof = false;
 }

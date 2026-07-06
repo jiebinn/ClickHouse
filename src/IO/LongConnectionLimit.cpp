@@ -33,7 +33,7 @@ LongConnectionSlot & LongConnectionSlot::operator=(LongConnectionSlot && other) 
     return *this;
 }
 
-LongConnectionSlot::LongConnectionSlot(std::shared_ptr<LongConnectionLimit> limit_)
+LongConnectionSlot::LongConnectionSlot(std::shared_ptr<LongConnectionLimit> limit_) noexcept
     : limit(std::move(limit_))
     , held(true)
 {

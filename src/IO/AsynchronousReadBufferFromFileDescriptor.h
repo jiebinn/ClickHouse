@@ -85,10 +85,6 @@ public:
 
     size_t getFileOffsetOfBufferEnd() const override { return file_offset_of_buffer_end; }
 
-    /// Reads into its own `memory`, sized at construction, so set()+next() with a chunk larger
-    /// than that would overflow it. Returning false tells callers like
-    /// `ReaderExecutor::readIntoBlock` to use an explicit `read()` copy instead of the set()+next()
-    /// zero-copy pattern.
     bool supportsExternalBufferMode() const override { return false; }
 
 private:

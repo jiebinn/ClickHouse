@@ -628,11 +628,11 @@ TEST_F(ReaderExecutorTest, IncompleteConnectionOnAbandonedDrop)
 
 TEST_F(ReaderExecutorTest, DrainFailureDoesNotAbortQuery)
 {
-    /// The drain in `dropLong` is best-effort: it completes the held GET on discarded tail bytes so
+    /// The drain in `dropLongConnection` is best-effort: it completes the held GET on discarded tail bytes so
     /// the connection returns to the keep-alive pool. If the held response throws while draining,
     /// the query must NOT fail -- the connection is released as incomplete and the required
     /// (backward) read still succeeds on a fresh connection. Fails before the fix, when the drain
-    /// exception escaped `dropLong` on the foreground path.
+    /// exception escaped `dropLongConnection` on the foreground path.
     TestThreadGroup tg;
     constexpr size_t size = 2 * 1024 * 1024;
     constexpr size_t block = 128 * 1024;
@@ -657,7 +657,7 @@ TEST_F(ReaderExecutorTest, DrainFailureDoesNotAbortQuery)
         ex.readNextWindow();
     ASSERT_GE(tg.get(ProfileEvents::ReaderExecutorLongConnectionOpened), 1u);
 
-    /// Backward seek: `dropLong` drains the tail and the held buffer throws past its budget. The
+    /// Backward seek: `dropLongConnection` drains the tail and the held buffer throws past its budget. The
     /// drain is swallowed; the required read must still return correct data without throwing.
     ex.seek(0);
     ChainedBuffers w;
