@@ -172,12 +172,12 @@ SYSTEM RELOAD DICTIONARY sentiment;
 | `mode` | Tokenization method: `byte`, `codepoint`, or `token`. See [Tokenization modes](#tokenization-modes). | `'token'` | *Required* |
 | `alpha` | Additive (Lidstone) smoothing for n-gram likelihoods; `alpha = 1` is Laplace smoothing (must be finite and `> 0`). | `0.5` | `1.0` |
 | `priors_mode` | How class priors are determined: `uniform`, `proportional`, or `explicit`. See [Prior modes](#prior-modes). | `'uniform'` | `'proportional'` |
-| `priors` | Explicit per-class priors. Valid only with `priors_mode 'explicit'`, where it is required; supplying it in any other mode is an error. Must sum to `1.0`. | `'0=0.6,1=0.4'` | — |
+| `priors` | Explicit per-class priors: a collection of `(class, probability)` pairs. Valid only with `priors_mode 'explicit'`, where it is required; supplying it in any other mode is an error. Must sum to `1.0`. | `[(0, 0.6), (1, 0.4)]` | — |
 | `store_source` | Retain the source rows so `SELECT * FROM dictionary` works. Roughly doubles memory. | `1` | `0` |
 | `start_token` | Boundary token prepended `(n-1)` times to the input. See [Boundary tokens](#boundary-tokens-padding). | `'0x01'` / `'<s>'` | — (no padding) |
 | `end_token` | Boundary token appended `(n-1)` times to the input. | `'0xFF'` / `'</s>'` | — (no padding) |
 
-You can define the dictionary with `CREATE DICTIONARY` DDL (as in the quickstart above) or in an XML configuration file; see [Dictionary layouts](/sql-reference/statements/create/dictionary/layouts) for where that file goes. The example below sets every layout option so you can see them all — only `class_attribute`, `n`, and `mode` are required, and the table above gives the defaults for the rest. In a configuration file, write `byte` and `codepoint` padding tokens as numbers (the config cannot carry raw bytes), and XML-escape a `token` literal where needed, so `<s>` becomes `&lt;s&gt;`.
+You can define the dictionary with `CREATE DICTIONARY` DDL (as in the quickstart above) or in an XML configuration file; see [Dictionary layouts](/sql-reference/statements/create/dictionary/layouts) for where that file goes. The example below sets every layout option so you can see them all — only `class_attribute`, `n`, and `mode` are required, and the table above gives the defaults for the rest. In a configuration file, the priors are written as repeated `prior` elements (one per class, as shown below), padding tokens for `byte` and `codepoint` are numbers (the config cannot carry raw bytes), and a `token` literal is XML-escaped where needed, so `<s>` becomes `&lt;s&gt;`.
 
 <Tabs>
 <TabItem value="ddl" label="DDL" default>
@@ -192,7 +192,7 @@ LAYOUT(NAIVE_BAYES(
     mode 'token'
     alpha 0.5
     priors_mode 'explicit'
-    priors '0=0.6,1=0.4'
+    priors [(0, 0.6), (1, 0.4)]
     store_source 1
     start_token '<s>'
     end_token '</s>'
@@ -236,7 +236,16 @@ LIFETIME(3600);
             <mode>token</mode>
             <alpha>0.5</alpha>
             <priors_mode>explicit</priors_mode>
-            <priors>0=0.6,1=0.4</priors>
+            <priors>
+                <prior>
+                    <class>0</class>
+                    <probability>0.6</probability>
+                </prior>
+                <prior>
+                    <class>1</class>
+                    <probability>0.4</probability>
+                </prior>
+            </priors>
             <store_source>1</store_source>
             <start_token>&lt;s&gt;</start_token>
             <end_token>&lt;/s&gt;</end_token>
@@ -273,10 +282,10 @@ The prior is the model's belief about each class *before* it looks at the text. 
   LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'uniform'))
   ```
 
-- `explicit` — you provide the priors with `priors '0=0.6,1=0.4'`: one `class=probability` entry per class, each greater than 0 and at most 1, together summing to `1.0`. **Choose it** when you know the real base rates and they differ from training — e.g. only 1% of production traffic is spam even though the training set was balanced. **Compute them** from the expected real-world share of each class.
+- `explicit` — you provide the priors with `priors [(0, 0.6), (1, 0.4)]`: one `(class, probability)` pair per class, each probability greater than 0 and at most 1, together summing to `1.0`. **Choose it** when you know the real base rates and they differ from training — e.g. only 1% of production traffic is spam even though the training set was balanced. **Compute them** from the expected real-world share of each class.
 
   ```sql
-  LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.9,1=0.1'))
+  LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.9), (1, 0.1)]))
   ```
 
 ## Boundary tokens (padding) {#boundary-tokens-padding}
@@ -356,15 +365,14 @@ SELECT * FROM training_data ORDER BY ngram LIMIT 5;
 The `proportional` prior (the default) is weighted by each class's **total n-gram count**, not by its number of documents. If you want the classic document-frequency prior (`documents_in_class / total_documents`), compute it from the raw `docs` table and pass it with `priors_mode 'explicit'`:
 
 ```sql
-SELECT arrayStringConcat(
-         groupArray(concat(toString(class_id), '=', toString(frac))), ',') as prior
+SELECT groupArray((class_id, frac)) AS priors
 FROM (SELECT class_id, count() / sum(count()) OVER () AS frac FROM docs GROUP BY class_id);
 ```
 
 ```response
-   ┌─prior───────┐
-1. │ 0=0.6,1=0.4 │
-   └─────────────┘
+   ┌─priors────────────┐
+1. │ [(0,0.6),(1,0.4)] │
+   └───────────────────┘
 ```
 :::
 
@@ -374,7 +382,7 @@ Then, create the dictionary from `training_data`, passing the explicit prior com
 CREATE DICTIONARY review_sentiment (ngram String, class_id UInt32, count UInt64)
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'training_data'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors '0=0.6,1=0.4'))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.6), (1, 0.4)]))
 LIFETIME(0);
 ```
 
