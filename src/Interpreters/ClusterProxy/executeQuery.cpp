@@ -1044,7 +1044,8 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
         query_plan->unitePlans(std::move(union_step), std::move(plans));
         return query_plan;
     }
-    else {
+    else
+    {
     }
 
     return nullptr;
