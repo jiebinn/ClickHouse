@@ -323,9 +323,11 @@ REGISTER_FUNCTION(NaiveBayesClassifier)
     factory.registerFunction<FunctionNaiveBayesClassifier>(FunctionDocumentation{
         .description = "Classifies input text using a "
                        "[`NAIVE_BAYES`](/sql-reference/statements/create/dictionary/layouts/naive-bayes) dictionary. "
-                       "Equivalent to dictGet(dictionary_name, class_attribute, input_text), where class_attribute is the "
-                       "name of the class label attribute configured in the dictionary's "
-                       "[layout](/sql-reference/statements/create/dictionary/layouts/naive-bayes#layout-parameters).",
+                       "Returns the same predicted class value as `dictGet(dictionary_name, class_attribute, input_text)`, "
+                       "where class_attribute is the name of the class label attribute configured in the dictionary's "
+                       "[layout](/sql-reference/statements/create/dictionary/layouts/naive-bayes#layout-parameters). "
+                       "Unlike `dictGet`, the result type is always `UInt32` rather than the declared type of the class "
+                       "attribute, and `input_text` must be a `String` (no key type conversion is applied).",
         .syntax = "naiveBayesClassifier(dictionary_name, input_text)",
         .arguments
         = {{"dictionary_name", "Name of a dictionary with the NAIVE_BAYES layout.", {"String"}},
