@@ -133,6 +133,8 @@ private:
     std::mutex totals_mutex;
     Block totals;
 
+    std::atomic<bool> check_limits_requested{false};
+
     ScatteredBlocks dispatchBlock(const Strings & key_columns_names, Block && from_block);
 };
 

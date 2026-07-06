@@ -286,6 +286,9 @@ ConcurrentHashJoin::~ConcurrentHashJoin()
 
 bool ConcurrentHashJoin::addBlockToJoin(const Block & right_block_, bool check_limits)
 {
+    if (check_limits)
+        check_limits_requested.store(true, std::memory_order_relaxed);
+
     /// We materialize columns here to avoid materializing them multiple times on different threads
     /// (inside different `hash_join`-s) because the block will be shared.
     Block right_block = hash_joins[0]->data->materializeColumnsFromRightBlock(right_block_);
@@ -747,7 +750,13 @@ BlocksList ConcurrentHashJoin::releaseSlotBlocks(size_t slot_idx)
 }
 
 void ConcurrentHashJoin::onBuildPhaseFinish()
-{
+{    
+    /// The last block might not have seen the full join state because the state is updated asynchonously.
+    /// This check is a safety net to ensure the THROW overflow mode still triggers even if the last block did not see the overflow.
+    /// BREAK overflow mode remains unchanged as all blocks have been added already.
+    if (check_limits_requested && table_join->sizeLimits().hasLimits() && table_join->sizeLimits().overflow_mode == OverflowMode::THROW)
+        table_join->sizeLimits().check(getTotalRowCount(), getTotalByteCount(), "JOIN", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED);
+
     if (hash_joins[0]->data->twoLevelMapIsUsed())
     {
         // At this point, the build phase is finished. We need to build a shared common hash map to be used in the probe phase.
