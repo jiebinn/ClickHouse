@@ -1826,8 +1826,11 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
             }
             if (!pushed)
             {
-                /// Should not happen: removers only delete files, which cannot take this long.
-                chassert(false);
+                LOG_WARNING(
+                    log, "Background eviction workers take too much time to evict "
+                    "(max_push_attempts: {}, push_timeout_ms: {})",
+                    max_push_attempts, push_timeout_ms);
+
                 status = IFileCachePriority::CollectStatus::CANNOT_EVICT;
                 break;
             }
@@ -1856,6 +1859,8 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
 
     LOG_TRACE(log, "Free space ratio keeping thread finished with status `{}`, evicted {} file segments ({} bytes)",
               status, evicted_elements, evicted_size);
+
+    assertCacheCorrectness();
 }
 
 void FileCache::iterate(IterateFunc && func, const UserID & user_id)
