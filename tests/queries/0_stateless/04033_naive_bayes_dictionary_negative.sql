@@ -414,17 +414,10 @@ DROP DICTIONARY IF EXISTS nb_nonnumeric_prior;
 SELECT * FROM nb_err_dict; -- { serverError UNSUPPORTED_METHOD }
 
 -- A map literal is not valid priors syntax: priors are written as an array of (class, probability) pairs.
+-- The whole statement stays on one line: on a syntax error the client searches for the expected-error
+-- hint only until the end of the line where parsing failed.
 
-CREATE DICTIONARY nb_map_prior
-(
-    ngram String,
-    class_id UInt32 DEFAULT 0,
-    count UInt64 DEFAULT 0
-)
-PRIMARY KEY ngram
-SOURCE(CLICKHOUSE(TABLE 'nb_err_source'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors {0: 0.9, 1: 0.1}))
-LIFETIME(0); -- { clientError SYNTAX_ERROR }
+CREATE DICTIONARY nb_map_prior (ngram String, class_id UInt32 DEFAULT 0, count UInt64 DEFAULT 0) PRIMARY KEY ngram SOURCE(CLICKHOUSE(TABLE 'nb_err_source')) LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors {0: 0.9, 1: 0.1})) LIFETIME(0); -- { clientError SYNTAX_ERROR }
 
 DROP DICTIONARY IF EXISTS nb_map_prior;
 
