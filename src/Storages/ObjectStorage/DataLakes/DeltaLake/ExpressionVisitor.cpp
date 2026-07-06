@@ -516,7 +516,7 @@ private:
             .visit_literal_float = &visitSimpleLiteral<float, DB::DataTypeFloat32>,
             .visit_literal_double = &visitSimpleLiteral<double, DB::DataTypeFloat64>,
             .visit_literal_string = &visitStringLiteral,
-            .visit_literal_bool = &visitSimpleLiteral<bool, DB::DataTypeUInt8>,
+            .visit_literal_bool = &visitBoolLiteral,
             .visit_literal_timestamp = &visitTimestampLiteral,
             .visit_literal_timestamp_ntz = &visitTimestampNtzLiteral,
             .visit_literal_date = &visitDateLiteral,
@@ -745,6 +745,20 @@ private:
         {
             auto value_str = KernelUtils::fromDeltaString(value);
             visitSimpleLiteral<std::string, DB::DataTypeString>(data, sibling_list_id, value_str);
+        });
+    }
+
+    /// `boolean` maps to ClickHouse `Bool` in the schema, so the literal must carry `Bool` too;
+    /// a plain `DataTypeUInt8` would mismatch a `Nullable(Bool)` partition column's advertised type.
+    static void visitBoolLiteral(void * data, uintptr_t sibling_list_id, bool value)
+    {
+        ExpressionVisitorData * state = static_cast<ExpressionVisitorData *>(data);
+        visitorImpl(*state, [&]()
+        {
+            if (state->enableLogging())
+                LOG_TEST(state->logger(), "List id: {}, type: Bool", sibling_list_id);
+
+            state->addLiteral(sibling_list_id, static_cast<UInt8>(value), DB::DataTypeFactory::instance().get("Bool"));
         });
     }
 

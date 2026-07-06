@@ -1913,6 +1913,67 @@ def test_partition_columns_2(started_cluster, cluster):
     check_pruned(num_files - 1, query_id)
 
 
+def test_partition_by_nullable_bool(started_cluster):
+    # Nullable(Bool) partition column with true / false / NULL in separate files, exercising
+    # both the Bool literal visitor and the null visitor; all must yield Nullable(Bool).
+    node = started_cluster.instances["node1"]
+    table_name = randomize_table_name("test_partition_by_nullable_bool")
+
+    schema = pa.schema(
+        [
+            ("id", pa.int32()),
+            ("flag", pa.bool_()),
+        ]
+    )
+    data = [
+        pa.array([1, 2, 3], type=pa.int32()),
+        pa.array([True, False, None], type=pa.bool_()),
+    ]
+
+    storage_options = {
+        "AWS_ENDPOINT_URL": f"http://{started_cluster.minio_ip}:{started_cluster.minio_port}",
+        "AWS_ACCESS_KEY_ID": minio_access_key,
+        "AWS_SECRET_ACCESS_KEY": minio_secret_key,
+        "AWS_ALLOW_HTTP": "true",
+        "AWS_S3_ALLOW_UNSAFE_RENAME": "true",
+    }
+    path = f"s3://root/{table_name}"
+    table = pa.Table.from_arrays(data, schema=schema)
+
+    write_deltalake_with_retry(
+        path, table, storage_options=storage_options, partition_by=["flag"]
+    )
+
+    delta_function = f"""
+    deltaLake(
+            'http://{started_cluster.minio_ip}:{started_cluster.minio_port}/root/{table_name}',
+            '{minio_access_key}',
+            '{minio_secret_key}')
+    """
+
+    # The partition column must be advertised as Nullable(Bool), not Nullable(UInt8).
+    assert (
+        "id\tNullable(Int32)\t\t\t\t\t\n"
+        "flag\tNullable(Bool)"
+        == node.query(
+            f"DESCRIBE TABLE {delta_function}",
+            settings={"allow_experimental_delta_kernel_rs": 1},
+        ).strip()
+    )
+
+    # true / false / NULL are materialized correctly across the separate data files.
+    assert (
+        "1\ttrue\n2\tfalse\n3\t\\N"
+        == node.query(
+            f"SELECT id, flag FROM {delta_function} ORDER BY id",
+            settings={
+                "allow_experimental_delta_kernel_rs": 1,
+                "use_hive_partitioning": 0,
+            },
+        ).strip()
+    )
+
+
 @pytest.mark.parametrize(
     "column_mapping", ["", "name"]
 )  # "id" is not supported by delta-kernel at the moment
