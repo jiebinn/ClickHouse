@@ -25,7 +25,6 @@ getCompressionCodecForFile(ReadBuffer & read_buffer, UInt32 & size_compressed, U
     read_buffer.ignore(sizeof(Checksum));
 
     UInt8 header_size = ICompressionCodec::getHeaderSize();
-    size_t starting_bytes = read_buffer.count();
     PODArray<char> compressed_buffer;
     compressed_buffer.resize(header_size);
     read_buffer.readStrict(compressed_buffer.data(), header_size);
@@ -63,15 +62,16 @@ getCompressionCodecForFile(ReadBuffer & read_buffer, UInt32 & size_compressed, U
         compressed_buffer.resize(1);
         read_buffer.readStrict(compressed_buffer.data(), 1);
         const size_t codecs_count = static_cast<UInt8>(compressed_buffer[0]);
-        const size_t bytes_needed = static_cast<UInt32>(header_size) + 1 + codecs_count;
+        /// Multiple block layout: [9-byte header][1-byte codec count N][N method bytes][nested compressed block].
+        const size_t nested_block_offset = static_cast<UInt32>(header_size) + 1 + codecs_count;
 
-        if (size_compressed < bytes_needed)
+        if (size_compressed < nested_block_offset)
             throw Exception(
                 ErrorCodes::CORRUPTED_DATA,
                 "Compressed block header reports compressed size {}, too small for its declared {}-codec chain (needs {} bytes)",
                 size_compressed,
                 codecs_count,
-                bytes_needed);
+                nested_block_offset);
 
         compressed_buffer.resize(1 + codecs_count);
         read_buffer.readStrict(compressed_buffer.data() + 1, codecs_count);
@@ -81,13 +81,13 @@ getCompressionCodecForFile(ReadBuffer & read_buffer, UInt32 & size_compressed, U
             codecs.push_back(CompressionCodecFactory::instance().get(byte));
 
         if (skip_to_next_block)
-            read_buffer.ignore(size_compressed - bytes_needed);
+            read_buffer.ignore(size_compressed - nested_block_offset);
 
         return std::make_shared<CompressionCodecMultiple>(codecs);
     }
 
     if (skip_to_next_block)
-        read_buffer.ignore(size_compressed - (read_buffer.count() - starting_bytes));
+        read_buffer.ignore(size_compressed - header_size);
 
     return CompressionCodecFactory::instance().get(method);
 }
