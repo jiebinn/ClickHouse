@@ -15,11 +15,20 @@ SET cluster_for_parallel_replicas = 'test_cluster_one_shard_three_replicas_local
 SET parallel_replicas_plan_based = 1;
 SET parallel_replicas_local_plan = 1;
 
+-- Slow down the initiator's local read so the remote replicas emit rows before the local read
+-- completes. Without coordination this deterministically triggered the "each replica reads
+-- everything" (N x) bug; with the shipped fragment marked for coordinated parallel reading the
+-- counts stay correct. Without the failpoint the bug hides behind a race (the fast local read
+-- cancels the remote sources before they emit).
+SYSTEM ENABLE FAILPOINT slowdown_parallel_replicas_local_plan_read;
+
 -- Correctness: identical to non-parallel execution. count() is the key regression guard against the
 -- "each replica reads everything" (N x) bug.
 SELECT count(), sum(b), min(a), max(a) FROM t_pr_plan_based WHERE a > 5;
 SELECT b, count() FROM t_pr_plan_based GROUP BY b ORDER BY b;
 SELECT count() FROM t_pr_plan_based;
+
+SYSTEM DISABLE FAILPOINT slowdown_parallel_replicas_local_plan_read;
 
 -- The read is split into a local read + a remote parallel-replicas read (deterministic, no addresses).
 SELECT
