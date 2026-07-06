@@ -59,6 +59,21 @@ void validateArguments(
         });
 }
 
+void validateDictionaryIsNaiveBayes(const ContextPtr & context, const IFunction & func, const ColumnsWithTypeAndName & arguments)
+{
+    chassert(arguments[0].column);
+    const String dictionary_name{arguments[0].column->getDataAt(0)};
+
+    const auto layout_type = context->getExternalDictionariesLoader().getDictionaryLayoutType(dictionary_name, context);
+    if (layout_type != "naive_bayes")
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Dictionary '{}' has layout '{}', but function {} requires a dictionary with the NAIVE_BAYES layout",
+            dictionary_name,
+            layout_type,
+            func.getName());
+}
+
 template <typename ClassifyRow>
 void executeNaiveBayes(
     const ContextPtr & context,
@@ -146,6 +161,7 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         validateArguments(*this, arguments);
+        validateDictionaryIsNaiveBayes(context, *this, arguments);
         DataTypePtr result_type = std::make_shared<DataTypeUInt32>();
         return arguments[1].type->isNullable() ? makeNullable(result_type) : result_type;
     }
@@ -195,6 +211,7 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         validateArguments(*this, arguments);
+        validateDictionaryIsNaiveBayes(context, *this, arguments);
         DataTypePtr result_type = makeClassProbTuple();
         return arguments[1].type->isNullable() ? makeNullable(result_type) : result_type;
     }
@@ -262,6 +279,7 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         validateArguments(*this, arguments);
+        validateDictionaryIsNaiveBayes(context, *this, arguments);
         DataTypePtr result_type = std::make_shared<DataTypeArray>(makeClassProbTuple());
         return arguments[1].type->isNullable() ? makeNullableSafe(result_type) : result_type;
     }
