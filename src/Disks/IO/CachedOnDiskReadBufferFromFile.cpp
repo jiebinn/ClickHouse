@@ -1145,7 +1145,10 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
 
             auto & file_segment = info.file_segments->front();
 
-            if (file_segment.isDownloader())
+            const bool could_be_downloader
+                = !state || state->read_type != ReadType::CACHED || std::uncaught_exceptions() > 0;
+
+            if (could_be_downloader && file_segment.isDownloader())
             {
                 if (!implementation_buffer_can_be_reused)
                     file_segment.resetRemoteFileReader();
@@ -1241,7 +1244,7 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
 
     working_buffer = Buffer(internal_buffer.begin(), internal_buffer.begin() + size);
 
-    if (file_segment.isDownloader())
+    if (state->read_type != ReadType::CACHED && file_segment.isDownloader())
         file_segment.completePartAndResetDownloader();
 
     chassert(!file_segment.isDownloader(), "!isDownloader() failed in the end of nextImpl: " + getInfoForLog());
