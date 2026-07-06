@@ -27,8 +27,8 @@ LAYOUT({{ layout }})
 {% if layout != 'DIRECT()' %}LIFETIME(MIN 1 MAX 1000){% endif %};
 
 SELECT '{{ layout }}';
-SELECT dictGetRoot('hierarchy_dictionary', number) FROM system.numbers LIMIT 6;
-SELECT 'equivalence', min(dictGetRoot('hierarchy_dictionary', number) = if(empty(dictGetHierarchy('hierarchy_dictionary', number)), 0, dictGetHierarchy('hierarchy_dictionary', number)[-1])) FROM system.numbers LIMIT 6;
+SELECT dictGetRoot('hierarchy_dictionary', number) FROM numbers(6);
+SELECT 'equivalence', min(dictGetRoot('hierarchy_dictionary', number) = if(empty(dictGetHierarchy('hierarchy_dictionary', number)), 0, dictGetHierarchy('hierarchy_dictionary', number)[-1])) FROM numbers(6);
 
 DROP DICTIONARY hierarchy_dictionary;
 
