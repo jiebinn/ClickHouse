@@ -257,6 +257,16 @@ bool optimizeVectorSearchWithQuantizedCodes(
     const bool is_pq = method == "pq";
     const String codebook_column = search_column + "." + SerializationQuantizedVector::pq_codebook_subcolumn_name;
 
+    /// ClickHouse lets a physical dotted column shadow a subcolumn (`ColumnsDescription::tryGetColumn` returns the
+    /// physical column first). If the table also declares a physical column named like one of these companions - e.g.
+    /// `vec Array(Float32) CODEC(Quantize(...))` alongside a physical `vec.quantized` - then resolving the codes/codebook
+    /// column by name below would bind that physical column instead of the companion subcolumn and rank the shortlist on
+    /// unrelated bytes (silently, when the widths happen to match). Leave the query exact in that case: the same
+    /// fall-back-to-exact this rewrite already takes wherever it cannot apply cleanly.
+    const auto & storage_columns = read_step->getStorageMetadata()->getColumns();
+    if (storage_columns.has(codes_column) || (is_pq && storage_columns.has(codebook_column)))
+        return false;
+
     /// `rabitq`/`turboquant` are cosine-only estimators (they drop the vector norm), so their shortlist ranks by angle.
     /// Do not use it for an L2Distance query: a true L2-nearest row could be dropped before the exact rescore. Leave the
     /// query exact instead. (`int8`, `mrl` and `pq` retain enough to rank L2.)
