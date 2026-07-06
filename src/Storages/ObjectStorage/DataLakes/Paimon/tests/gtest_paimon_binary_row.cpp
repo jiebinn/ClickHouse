@@ -66,8 +66,18 @@ TEST(PaimonBinaryRow, GetLongReadsFull64Bits)
 }
 
 /// getInt must keep reading exactly 32 bits (regression guard for the sibling getter).
+/// The payloads use differing high/low 32-bit halves so a mistaken widening to 64 bits
+/// (getFixedSizeData<Int64> narrowed back to Int32) would change the result and fail here.
 TEST(PaimonBinaryRow, GetIntReads32Bits)
 {
-    BinaryRow row(makeSingleFieldRow(static_cast<UInt64>(-1LL)));
-    EXPECT_EQ(row.getInt(0), -1);
+    {
+        /// Low half 0x00000005, high half 0xFFFFFFFF: 32-bit read -> 5, wrong 64-bit read -> -4294967291.
+        BinaryRow row(makeSingleFieldRow(0xFFFFFFFF00000005ULL));
+        EXPECT_EQ(row.getInt(0), 5);
+    }
+    {
+        /// Low half 0xFFFFFFFF, high half 0x00000001: 32-bit read -> -1, wrong 64-bit read -> 8589934591.
+        BinaryRow row(makeSingleFieldRow(0x00000001FFFFFFFFULL));
+        EXPECT_EQ(row.getInt(0), -1);
+    }
 }
