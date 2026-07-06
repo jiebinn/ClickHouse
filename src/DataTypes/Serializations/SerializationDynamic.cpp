@@ -383,12 +383,10 @@ ISerialization::DeserializeBinaryBulkStatePtr SerializationDynamic::deserializeD
             variants.reserve(structure_state->num_dynamic_types + 1); /// +1 for shared variant.
             if ((settings.native_format && settings.format_settings && settings.format_settings->native.decode_types_in_binary_format) || structure_state->structure_version.value == SerializationVersion::V3)
             {
+                /// Native input carries the effective limit via format_settings; a V3 part read has none and decodes unlimited.
+                const size_t max_complexity = settings.format_settings ? settings.format_settings->binary.max_binary_type_complexity : 0;
                 for (size_t i = 0; i != structure_state->num_dynamic_types; ++i)
-                    /// V3 without format_settings is reached when reading already-stored parts, which must
-                    /// always decode: use 0 (unlimited) there. Native input carries format_settings and enforces the limit.
-                    variants.push_back(settings.format_settings
-                        ? decodeDataType(*structure_stream, settings.format_settings->binary.max_binary_type_complexity)
-                        : decodeDataType(*structure_stream));
+                    variants.push_back(decodeDataType(*structure_stream, max_complexity));
             }
             else
             {
