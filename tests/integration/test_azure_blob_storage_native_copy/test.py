@@ -369,7 +369,7 @@ def test_backup_restore_read_write_multipart_inflight_limit(cluster, inflight):
         settings=copy_settings,
     )
 
-    assert node1.contains_in_log("Reading and writing Blob")
+    assert node1.contains_in_log(f"Reading and writing Blob.*from Container: {cont}")
 
     assert (
         azure_query(
