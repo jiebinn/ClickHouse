@@ -338,9 +338,9 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
     std::shared_ptr<ProductQuantization::Encoder> pq_encoder;
     std::shared_ptr<VectorQuantization::Encoder> flat_encoder;
     if (is_pq)
-        pq_encoder = ProductQuantization::prepareEncoder(codebook, params.dimensions, params.m, params.bits);
+        pq_encoder = ProductQuantization::createEncoder(codebook, params.dimensions, params.m, params.bits);
     else
-        flat_encoder = VectorQuantization::prepareEncoder(params.method, params.dimensions, params.bits);
+        flat_encoder = VectorQuantization::createEncoder(params.method, params.dimensions, params.bits);
 
     std::vector<float> buf;
     for (size_t i = 0; i < count; ++i)

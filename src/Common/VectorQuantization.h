@@ -21,8 +21,6 @@
 namespace DB::VectorQuantization
 {
 
-bool isSupportedMethod(std::string_view method);
-
 /// Whether the method's approximate distance can rank by L2 (it retains/estimates the vector norm). The cosine-only
 /// estimators (`rabitq`, `turboquant`) return false: their shortlist must not be used for an `L2Distance` query.
 bool supportsL2(std::string_view method);
@@ -35,19 +33,18 @@ std::string validateParams(std::string_view method, size_t dimensions, size_t bi
 /// Size of one encoded vector in bytes for the given method/dimensions/bits.
 size_t bytesPerVector(std::string_view method, size_t dimensions, size_t bits);
 
-/// Opaque prepared encoder (defined in the .cpp): the deterministic projection state for a data-independent method,
+/// Opaque quantization encoder: the deterministic projection state for a data-independent method,
 /// built once and reused for every vector. Not thread-safe (it carries per-vector scratch); one encoder per writer.
 struct Encoder;
 
-/// Prepare an encoder for a method/dimensions/bits; build once per block/serialization state and reuse for many vectors
-/// so the projection is not regenerated per row.
-std::shared_ptr<Encoder> prepareEncoder(std::string_view method, size_t dimensions, size_t bits);
+/// Prepare an encoder for a method/dimensions/bits
+std::shared_ptr<Encoder> createEncoder(std::string_view method, size_t dimensions, size_t bits);
 
 /// Encode one `dimensions`-element vector into `dst` (exactly `bytesPerVector` bytes) with a prepared encoder.
 void encode(Encoder & encoder, const float * vec, char * dst);
 
 /// Encode one `dimensions`-element vector into `dst` (exactly `bytesPerVector` bytes). Convenience one-shot that builds
-/// an `Encoder` internally; prefer `prepareEncoder` + `encode(encoder, ...)` for many vectors.
+/// an `Encoder` internally; prefer `createEncoder` + `encode(encoder, ...)` for many vectors.
 void encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst);
 
 /// Opaque prepared query (defined in the .cpp) for computing approximate distances from codes.
@@ -57,6 +54,6 @@ struct Query;
 std::shared_ptr<const Query> prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2);
 
 /// Approximate distance between the prepared query and one encoded vector (`code` is `bytesPerVector` bytes).
-float distance(const Query & q, const char * code);
+float distance(const Query & query, const char * code);
 
 }

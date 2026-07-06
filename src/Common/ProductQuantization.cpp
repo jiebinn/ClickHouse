@@ -70,7 +70,7 @@ inline size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_
 }
 
 /// Squared norm ||c||^2 of each of the `k` centroids (each `d_sub` floats); double accumulation for stability. Computed
-/// once per codebook in `prepareEncoder`, so it stays off the hot per-vector path.
+/// once per codebook in `createEncoder`, so it stays off the hot per-vector path.
 inline void centroidSquaredNorms(const float * centroids, size_t k, size_t d_sub, float * out)
 {
     for (size_t c = 0; c < k; ++c)
@@ -85,7 +85,7 @@ inline void centroidSquaredNorms(const float * centroids, size_t k, size_t d_sub
 
 /// Transpose one subspace's `k` centroids from row-major (centroid c at `src + c * d_sub`) to the column-major layout
 /// `dst[i * k + c]` (all centroids' coordinate i contiguous) that the nearest-centroid kernel scans across. Done once
-/// per codebook in `prepareEncoder`, so it stays off the hot per-vector path.
+/// per codebook in `createEncoder`, so it stays off the hot per-vector path.
 inline void transposeCentroids(const float * src, size_t k, size_t d_sub, float * dst)
 {
     for (size_t c = 0; c < k; ++c)
@@ -279,35 +279,35 @@ struct Encoder
     std::vector<float> acc;        /// k floats of per-vector kernel scratch (the encoder is used by one writer thread)
 };
 
-std::shared_ptr<Encoder> prepareEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
+std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
 {
-    auto e = std::make_shared<Encoder>();
-    e->m = m;
-    e->d_sub = dimensions / m;
-    e->k = numCentroids(nbits);
-    e->two_bytes = nbits > 8;
+    auto encoder = std::make_shared<Encoder>();
+    encoder->m = m;
+    encoder->d_sub = dimensions / m;
+    encoder->k = numCentroids(nbits);
+    encoder->two_bytes = nbits > 8;
 
     /// Per-codebook setup, reused across every row of a part: the column-major centroid layout and their squared norms.
-    e->codebook_t.resize(e->m * e->k * e->d_sub);
-    e->cb_sqnorm.resize(e->m * e->k);
-    e->acc.resize(e->k);
-    for (size_t mm = 0; mm < e->m; ++mm)
+    encoder->codebook_t.resize(encoder->m * encoder->k * encoder->d_sub);
+    encoder->cb_sqnorm.resize(encoder->m * encoder->k);
+    encoder->acc.resize(encoder->k);
+    for (size_t mm = 0; mm < encoder->m; ++mm)
     {
-        const float * centroids = codebook + mm * e->k * e->d_sub;
-        transposeCentroids(centroids, e->k, e->d_sub, e->codebook_t.data() + mm * e->k * e->d_sub);
-        centroidSquaredNorms(centroids, e->k, e->d_sub, e->cb_sqnorm.data() + mm * e->k);
+        const float * centroids = codebook + mm * encoder->k * encoder->d_sub;
+        transposeCentroids(centroids, encoder->k, encoder->d_sub, encoder->codebook_t.data() + mm * encoder->k * encoder->d_sub);
+        centroidSquaredNorms(centroids, encoder->k, encoder->d_sub, encoder->cb_sqnorm.data() + mm * encoder->k);
     }
-    return e;
+    return encoder;
 }
 
-void encode(Encoder & e, const float * vec, char * dst)
+void encode(Encoder & encoder, const float * vec, char * dst)
 {
-    for (size_t mm = 0; mm < e.m; ++mm)
+    for (size_t mm = 0; mm < encoder.m; ++mm)
     {
-        const float * centroids_t = e.codebook_t.data() + mm * e.k * e.d_sub;
-        const float * sqn = e.cb_sqnorm.data() + mm * e.k;
-        const size_t idx = nearestCentroid(centroids_t, sqn, e.k, e.d_sub, vec + mm * e.d_sub, e.acc.data());
-        if (e.two_bytes)
+        const float * centroids_t = encoder.codebook_t.data() + mm * encoder.k * encoder.d_sub;
+        const float * sqn = encoder.cb_sqnorm.data() + mm * encoder.k;
+        const size_t idx = nearestCentroid(centroids_t, sqn, encoder.k, encoder.d_sub, vec + mm * encoder.d_sub, encoder.acc.data());
+        if (encoder.two_bytes)
         {
             const UInt16 v = static_cast<UInt16>(idx);
             std::memcpy(dst + mm * 2, &v, sizeof(UInt16));
@@ -320,9 +320,9 @@ void encode(Encoder & e, const float * vec, char * dst)
 void encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst)
 {
     /// Convenience one-shot for callers encoding a single vector; encoding many vectors against the same codebook
-    /// should `prepareEncoder` once and reuse it to amortize the per-codebook setup.
-    auto e = prepareEncoder(codebook, dimensions, m, nbits);
-    encode(*e, vec, dst);
+    /// should `createEncoder` once and reuse it to amortize the per-codebook setup.
+    auto encoder = createEncoder(codebook, dimensions, m, nbits);
+    encode(*encoder, vec, dst);
 }
 
 struct Query

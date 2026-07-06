@@ -43,8 +43,8 @@ enum class FlatQuantization : UInt8
     Int8 = 5,
     /// `mrl` (Matryoshka): store only the leading `bits` dimensions (the prefix), quantized to int8 (with a per-vector
     /// scale) or bfloat16. For MRL-trained embeddings the prefix carries most of the signal, so this is a cheap shortlist.
-    MrlInt8 = 6,
-    MrlBf16 = 7,
+    PrefixInt8 = 6,
+    PrefixBf16 = 7,
 };
 
 /// For `mrl`, `bits` is the number of leading dimensions kept (the prefix), not a bit width.
@@ -59,10 +59,10 @@ size_t expectedFlatBytesPerVector(FlatQuantization quantization, size_t dimensio
         case FlatQuantization::Int8:
             /// One Int8 Lloyd-Max code per coordinate, followed by the 4-byte original L2 norm.
             return dimensions + sizeof(float);
-        case FlatQuantization::MrlInt8:
+        case FlatQuantization::PrefixInt8:
             /// `bits` int8 codes of the leading dimensions, followed by the 4-byte per-vector scale.
             return bits + sizeof(float);
-        case FlatQuantization::MrlBf16:
+        case FlatQuantization::PrefixBf16:
             /// `bits` leading dimensions as bfloat16 (2 bytes each).
             return bits * 2;
     }
@@ -495,17 +495,11 @@ FlatQuantization methodToCodec(std::string_view method)
     if (method == "int8")
         return FlatQuantization::Int8;
     if (method == "mrl_int8")
-        return FlatQuantization::MrlInt8;
+        return FlatQuantization::PrefixInt8;
     if (method == "mrl_bf16")
-        return FlatQuantization::MrlBf16;
-    throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown fastknn quantization method '{}'", method);
+        return FlatQuantization::PrefixBf16;
+    throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown quantization method '{}'", method);
 }
-}
-
-bool isSupportedMethod(std::string_view method)
-{
-    return method == "turboquant" || method == "rabitq" || method == "int8"
-        || method == "mrl_int8" || method == "mrl_bf16";
 }
 
 bool supportsL2(std::string_view method)
@@ -518,8 +512,8 @@ bool supportsL2(std::string_view method)
 
 std::string validateParams(std::string_view method, size_t dimensions, size_t bits)
 {
-    if (!isSupportedMethod(method))
-        return fmt::format("unknown quantization method '{}'", method);
+    const FlatQuantization codec = methodToCodec(method);
+
     if (dimensions == 0)
         return "the number of dimensions must be greater than zero";
     /// Bound dimensions before any derived-size arithmetic (`bytesPerVector`, the padded projection size): an absurd
@@ -529,8 +523,6 @@ std::string validateParams(std::string_view method, size_t dimensions, size_t bi
     if (dimensions > MAX_DIMENSIONS)
         return fmt::format("the number of dimensions ({}) exceeds the maximum {}", dimensions, MAX_DIMENSIONS);
 
-    const FlatQuantization codec = methodToCodec(method);
-
     /// 'turboquant' and 'rabitq' pack their codes 8 coordinates to the byte, so a dimension that is not a multiple of 8
     /// would silently drop the tail coordinates. 'int8' and the 'mrl' methods have no such constraint.
     if ((codec == FlatQuantization::TurboQuant || codec == FlatQuantization::RaBitQ)
@@ -538,7 +530,7 @@ std::string validateParams(std::string_view method, size_t dimensions, size_t bi
         return fmt::format("method '{}' requires the number of dimensions to be a multiple of 8, got {}", method, dimensions);
 
     /// For the 'mrl' methods `bits` is the number of leading dimensions stored (the prefix); it must be in (0, dimensions].
-    if ((codec == FlatQuantization::MrlInt8 || codec == FlatQuantization::MrlBf16) && (bits < 1 || bits > dimensions))
+    if ((codec == FlatQuantization::PrefixInt8 || codec == FlatQuantization::PrefixBf16) && (bits < 1 || bits > dimensions))
         return fmt::format("method '{}' requires the number of leading dimensions to be in [1, {}], got {}", method, dimensions, bits);
 
     return {};
@@ -560,51 +552,51 @@ struct Encoder
     std::vector<float> work2;        /// turboquant: second per-vector scratch
 };
 
-std::shared_ptr<Encoder> prepareEncoder(std::string_view method, size_t dimensions, size_t bits)
+std::shared_ptr<Encoder> createEncoder(std::string_view method, size_t dimensions, size_t bits)
 {
-    auto e = std::make_shared<Encoder>();
-    e->codec = methodToCodec(method);
-    e->dimensions = dimensions;
-    e->bits = bits;
+    auto encoder = std::make_shared<Encoder>();
+    encoder->codec = methodToCodec(method);
+    encoder->dimensions = dimensions;
+    encoder->bits = bits;
     /// The projection is a deterministic function of (method, dimensions, seed) only, so it is generated once here and
     /// reused for every vector rather than regenerated per row - the data-independent analogue of the pq Encoder. The
     /// `mrl` methods are prefix truncation and need no projection.
-    switch (e->codec)
+    switch (encoder->codec)
     {
         case FlatQuantization::RaBitQ:
         case FlatQuantization::Int8:
-            e->projection = generateRandomProjection(dimensions);
-            e->work.resize(e->projection.size() / PROJECTION_ROUNDS);
+            encoder->projection = generateRandomProjection(dimensions);
+            encoder->work.resize(encoder->projection.size() / PROJECTION_ROUNDS);
             break;
         case FlatQuantization::TurboQuant:
         {
-            e->projection = generateRandomProjection(dimensions);
-            e->projection2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
-            const size_t padded = e->projection.size() / PROJECTION_ROUNDS;
-            e->work.resize(padded);
-            e->work2.resize(padded);
+            encoder->projection = generateRandomProjection(dimensions);
+            encoder->projection2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
+            const size_t padded = encoder->projection.size() / PROJECTION_ROUNDS;
+            encoder->work.resize(padded);
+            encoder->work2.resize(padded);
             break;
         }
-        case FlatQuantization::MrlInt8:
-        case FlatQuantization::MrlBf16:
+        case FlatQuantization::PrefixInt8:
+        case FlatQuantization::PrefixBf16:
             break;
     }
-    return e;
+    return encoder;
 }
 
-void encode(Encoder & e, const float * vec, char * dst)
+void encode(Encoder & encoder, const float * vec, char * dst)
 {
-    const size_t dimensions = e.dimensions;
-    const size_t bits = e.bits;
-    switch (e.codec)
+    const size_t dimensions = encoder.dimensions;
+    const size_t bits = encoder.bits;
+    switch (encoder.codec)
     {
         case FlatQuantization::RaBitQ:
-            encodeRaBitQ(e.projection, vec, dimensions, e.work.data(), dst);
+            encodeRaBitQ(encoder.projection, vec, dimensions, encoder.work.data(), dst);
             return;
         case FlatQuantization::TurboQuant:
-            encodeTurboQuant(e.projection, e.projection2, vec, dimensions, e.work.data(), e.work2.data(), dst);
+            encodeTurboQuant(encoder.projection, encoder.projection2, vec, dimensions, encoder.work.data(), encoder.work2.data(), dst);
             return;
-        case FlatQuantization::MrlInt8:
+        case FlatQuantization::PrefixInt8:
         {
             /// Store the leading `bits` dimensions as int8 with a per-vector symmetric scale (max|x| over the prefix),
             /// followed by the 4-byte scale. Robust to any vector magnitude. Non-finite prefix values are skipped in the
@@ -624,7 +616,7 @@ void encode(Encoder & e, const float * vec, char * dst)
             std::memcpy(dst + bits, &scale, sizeof(float));
             return;
         }
-        case FlatQuantization::MrlBf16:
+        case FlatQuantization::PrefixBf16:
         {
             /// Store the leading `bits` dimensions as bfloat16 (the top 16 bits of the float32, round-to-nearest-even).
             for (size_t i = 0; i < bits; ++i)
@@ -643,10 +635,10 @@ void encode(Encoder & e, const float * vec, char * dst)
                 norm_sq += static_cast<double>(vec[i]) * static_cast<double>(vec[i]);
             const float norm = static_cast<float>(std::sqrt(norm_sq));
 
-            applyRandomProjection(e.projection, vec, dimensions, e.work.data());
+            applyRandomProjection(encoder.projection, vec, dimensions, encoder.work.data());
             double rnorm_sq = 0.0;
             for (size_t i = 0; i < dimensions; ++i)
-                rnorm_sq += static_cast<double>(e.work[i]) * static_cast<double>(e.work[i]);
+                rnorm_sq += static_cast<double>(encoder.work[i]) * static_cast<double>(encoder.work[i]);
 
             /// Scale the rotated vector so each kept coordinate is ~N(0, 1): unit-normalize the rotated vector (each of
             /// its `dimensions` coordinates then has variance 1/dimensions) and multiply by sqrt(dimensions). Lloyd-Max
@@ -655,7 +647,7 @@ void encode(Encoder & e, const float * vec, char * dst)
                 ? static_cast<float>(std::sqrt(static_cast<double>(dimensions) / rnorm_sq))
                 : 0.0f;
             for (size_t i = 0; i < dimensions; ++i)
-                dst[i] = static_cast<char>(LloydMax::quantize(e.work[i] * scale));
+                dst[i] = static_cast<char>(LloydMax::quantize(encoder.work[i] * scale));
             std::memcpy(dst + dimensions, &norm, sizeof(float));
             return;
         }
@@ -664,9 +656,9 @@ void encode(Encoder & e, const float * vec, char * dst)
 
 void encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
 {
-    /// Convenience one-shot; encoding many vectors should `prepareEncoder` once and reuse it to amortize the projection.
-    auto e = prepareEncoder(method, dimensions, bits);
-    encode(*e, vec, dst);
+    /// Convenience one-shot; encoding many vectors should `createEncoder` once and reuse it to amortize the projection.
+    auto encoder = createEncoder(method, dimensions, bits);
+    encode(*encoder, vec, dst);
 }
 
 /// The query side of the 'int8' Lloyd-Max estimator: the unit-normalized rotated query direction (kept in full
@@ -735,11 +727,11 @@ std::shared_ptr<const Query> prepareQuery(std::string_view method, const float *
             q->turbo = buildTurboQuantQuery(p1, p2, ref64.data(), dimensions);
             break;
         }
-        case FlatQuantization::MrlInt8:
-        case FlatQuantization::MrlBf16:
+        case FlatQuantization::PrefixInt8:
+        case FlatQuantization::PrefixBf16:
         {
             /// Distance is computed on the leading `bits` dimensions only (the stored prefix), against the query's prefix.
-            q->code_bytes = (q->codec == FlatQuantization::MrlInt8) ? bits : bits * 2;
+            q->code_bytes = (q->codec == FlatQuantization::PrefixInt8) ? bits : bits * 2;
             q->mrl_query.assign(ref, ref + bits);
             double pn = 0.0;
             for (size_t i = 0; i < bits; ++i)
@@ -772,23 +764,23 @@ std::shared_ptr<const Query> prepareQuery(std::string_view method, const float *
     return q;
 }
 
-float distance(const Query & q, const char * code)
+float distance(const Query & query, const char * code)
 {
-    switch (q.codec)
+    switch (query.codec)
     {
         case FlatQuantization::RaBitQ:
-            return raBitQDistanceFast(q.rabitq, code, q.use_icelake);
+            return raBitQDistanceFast(query.rabitq, code, query.use_icelake);
         case FlatQuantization::TurboQuant:
-            return turboQuantDistanceFast(q.turbo, code, q.use_icelake);
-        case FlatQuantization::MrlInt8:
-        case FlatQuantization::MrlBf16:
+            return turboQuantDistanceFast(query.turbo, code, query.use_icelake);
+        case FlatQuantization::PrefixInt8:
+        case FlatQuantization::PrefixBf16:
         {
             /// Decode the stored prefix and compute L2 (squared, monotone for ranking) or cosine distance against the
             /// query's prefix.
-            const size_t n = q.mrl_query.size();
+            const size_t n = query.mrl_query.size();
             auto decoded = [&](size_t i) -> float
             {
-                if (q.codec == FlatQuantization::MrlInt8)
+                if (query.codec == FlatQuantization::PrefixInt8)
                 {
                     float scale = 0.0f;
                     std::memcpy(&scale, code + n, sizeof(float));
@@ -802,12 +794,12 @@ float distance(const Query & q, const char * code)
                 return f;
             };
 
-            if (q.is_l2)
+            if (query.is_l2)
             {
                 float d = 0.0f;
                 for (size_t i = 0; i < n; ++i)
                 {
-                    const float e = q.mrl_query[i] - decoded(i);
+                    const float e = query.mrl_query[i] - decoded(i);
                     d += e * e;
                 }
                 return d; /// squared L2 over the prefix; monotone in the true prefix distance for ranking
@@ -818,16 +810,16 @@ float distance(const Query & q, const char * code)
             for (size_t i = 0; i < n; ++i)
             {
                 const float x = decoded(i);
-                dot += q.mrl_query[i] * x;
+                dot += query.mrl_query[i] * x;
                 xn2 += x * x;
             }
-            const float denom = q.mrl_query_norm * std::sqrt(xn2);
+            const float denom = query.mrl_query_norm * std::sqrt(xn2);
             const float cosine = (denom > 0.0f) ? std::clamp(dot / denom, -1.0f, 1.0f) : 0.0f;
             return 1.0f - cosine;
         }
         case FlatQuantization::Int8:
         {
-            const Int8Query & iq = q.int8;
+            const Int8Query & iq = query.int8;
             const Int8 * codes = reinterpret_cast<const Int8 *>(code);
             /// Reconstruct the data direction from the codes (LloydMax::dequantize(code_i) ~ sqrt(d) * data_dir_i) and
             /// take its inner product with the unit-normalized query direction; the rotation is orthogonal, so this

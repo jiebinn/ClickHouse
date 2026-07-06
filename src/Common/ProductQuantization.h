@@ -36,19 +36,19 @@ std::vector<float> trainCodebook(const float * vectors, size_t n, size_t dimensi
 
 /// Opaque prepared encoder (defined in the .cpp): the codebook in the kernel's column-major layout, the centroid
 /// squared norms the reformulated nearest-centroid argmin reuses, and per-vector scratch. Build once per codebook with
-/// `prepareEncoder` and reuse for every vector. Not thread-safe: it carries per-vector scratch, so one encoder serves
+/// `createEncoder` and reuse for every vector. Not thread-safe: it carries per-vector scratch, so one encoder serves
 /// one writer thread.
 struct Encoder;
 
 /// Prepare an encoder for a codebook; the codebook is copied into the encoder, so it need not outlive the encoder.
-std::shared_ptr<Encoder> prepareEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits);
+std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits);
 
 /// Encode one vector into `m` codes (exactly `bytesPerVector` bytes) with a prepared encoder. Use this for bulk
 /// encoding so the per-codebook setup is amortized across rows.
 void encode(Encoder & encoder, const float * vec, char * dst);
 
 /// Encode one `dimensions`-element vector into `m` codes written to `dst` (exactly `bytesPerVector` bytes). Convenience
-/// one-shot that builds an `Encoder` internally; prefer `prepareEncoder` + `encode(encoder, ...)` for many vectors.
+/// one-shot that builds an `Encoder` internally; prefer `createEncoder` + `encode(encoder, ...)` for many vectors.
 void encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst);
 
 /// Opaque prepared query (defined in the .cpp): the per-subspace ADC lookup tables for one query against one codebook.
