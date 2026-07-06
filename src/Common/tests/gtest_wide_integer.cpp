@@ -180,6 +180,87 @@ GTEST_TEST(WideInteger, Arithmetic)
 }
 
 
+/// The 128-bit same-type ordering operators take a fast path via native __int128
+/// (see operator_less / operator_greater in wide_integer_impl.h), while 256-bit
+/// comparisons use the generic limb-wise loop. Comparing each pair in both widths
+/// checks the fast path against an independent implementation.
+template <typename T128, typename T256>
+static void checkComparisonAgainstWiderOracle(const std::vector<T128> & values)
+{
+    for (const T128 & lhs : values)
+    {
+        for (const T128 & rhs : values)
+        {
+            const T256 wide_lhs = lhs;
+            const T256 wide_rhs = rhs;
+
+            EXPECT_EQ(lhs < rhs, wide_lhs < wide_rhs) << toString(lhs) << " < " << toString(rhs);
+            EXPECT_EQ(lhs > rhs, wide_lhs > wide_rhs) << toString(lhs) << " > " << toString(rhs);
+            EXPECT_EQ(lhs <= rhs, wide_lhs <= wide_rhs) << toString(lhs) << " <= " << toString(rhs);
+            EXPECT_EQ(lhs >= rhs, wide_lhs >= wide_rhs) << toString(lhs) << " >= " << toString(rhs);
+            EXPECT_EQ(lhs == rhs, wide_lhs == wide_rhs) << toString(lhs) << " == " << toString(rhs);
+            EXPECT_EQ(lhs != rhs, wide_lhs != wide_rhs) << toString(lhs) << " != " << toString(rhs);
+        }
+    }
+}
+
+
+GTEST_TEST(WideInteger, Comparison128Boundaries)
+{
+    /// Constexpr evaluation must take the same fast path.
+    static_assert(std::numeric_limits<Int128>::min() < Int128(-1));
+    static_assert(Int128(-1) < Int128(0));
+    static_assert(Int128(0) < std::numeric_limits<Int128>::max());
+    static_assert(!(Int128(-1) < Int128(-1)));
+    static_assert(UInt128(0) < std::numeric_limits<UInt128>::max());
+    static_assert((UInt128(1) << 127) > ((UInt128(1) << 127) - 1));
+
+    {
+        const Int128 min = std::numeric_limits<Int128>::min();
+        const Int128 max = std::numeric_limits<Int128>::max();
+        const Int128 two_pow_64 = Int128(1) << 64;
+        const Int128 high_limb = Int128(5) << 64;
+
+        ASSERT_LT(min, Int128(-1));
+        ASSERT_LT(Int128(-1), Int128(0));
+        ASSERT_LT(Int128(0), Int128(1));
+        ASSERT_LT(Int128(1), max);
+        ASSERT_LT(min, max);
+        ASSERT_LT(-two_pow_64, Int128(-1));
+        ASSERT_LT(high_limb, high_limb + 1);
+
+        checkComparisonAgainstWiderOracle<Int128, Int256>({
+            0, 1, -1, 2, -2,
+            min, min + 1, max, max - 1,
+            two_pow_64 - 1, two_pow_64, two_pow_64 + 1,
+            -(two_pow_64 - 1), -two_pow_64, -(two_pow_64 + 1),
+            high_limb - 1, high_limb, high_limb + 1,
+            -(high_limb - 1), -high_limb, -(high_limb + 1),
+        });
+    }
+
+    {
+        const UInt128 max = std::numeric_limits<UInt128>::max();
+        const UInt128 sign_bit = UInt128(1) << 127;
+        const UInt128 two_pow_64 = UInt128(1) << 64;
+        const UInt128 high_limb = UInt128(5) << 64;
+
+        ASSERT_LT(UInt128(0), UInt128(1));
+        ASSERT_LT(sign_bit - 1, sign_bit);
+        ASSERT_LT(sign_bit, max);
+        ASSERT_LT(high_limb, high_limb + 1);
+
+        checkComparisonAgainstWiderOracle<UInt128, UInt256>({
+            0, 1, 2,
+            max, max - 1,
+            two_pow_64 - 1, two_pow_64, two_pow_64 + 1,
+            sign_bit - 1, sign_bit, sign_bit + 1,
+            high_limb - 1, high_limb, high_limb + 1,
+        });
+    }
+}
+
+
 GTEST_TEST(WideInteger, DecimalArithmetic)
 {
     Decimal128 zero{};
