@@ -186,6 +186,10 @@ def should_skip_job(job_name):
             "Skipped, labeled with 'ci-performance' - run performance jobs only",
         )
 
+    # Skip the whole coverage "LLVM Coverage" family.
+    if Labels.CI_NO_COVERAGE in _info_cache.pr_labels and ("llvm_coverage" in job_name or job_name == JobNames.LLVM_COVERAGE):
+        return True, f"Skipped, labeled with '{Labels.CI_NO_COVERAGE}'"
+
     if " Bug Fix" not in _info_cache.pr_body and "Bugfix" in job_name:
         # Don't skip if the corresponding test job file was changed
         skip = True
