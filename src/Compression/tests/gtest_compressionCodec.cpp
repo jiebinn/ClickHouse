@@ -1615,7 +1615,7 @@ TEST(GetCompressionCodecForFileTest, ThrowsOnMultipleSizeBelowConsumed)
         0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
         0x91, /// Multiple method byte
         0x0A, 0x00, 0x00, 0x00, /// size_compressed = 10
-        0x00, 0x00, 0x00, 0x00, /// size_decompressed
+        0x01, 0x00, 0x00, 0x00, /// size_decompressed = 1
         0x02, /// 2 codecs
         0x82, 0x82, /// two LZ4 method bytes (valid, so codec construction succeeds)
     };
@@ -1630,7 +1630,7 @@ TEST(GetCompressionCodecForFileTest, DoesNotOverreadMultipleCountByteWhenSizeEqu
         0,    0,    0,    0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /// 16-byte checksum (ignored)
         0x91, /// Multiple method byte
         0x09, 0x00, 0x00, 0x00, /// size_compressed = 9 (== header size, so no payload follows)
-        0x00, 0x00, 0x00, 0x00, /// size_decompressed
+        0x01, 0x00, 0x00, 0x00, /// size_decompressed = 1
         0x01, /// count byte: belongs to the next block, must NOT be read
         0x82, /// padding, so an (incorrect) read of the count byte would find real data
     };
