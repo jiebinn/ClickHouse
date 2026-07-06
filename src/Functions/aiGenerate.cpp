@@ -38,7 +38,7 @@ public:
         };
         validateFunctionArguments(*this, arguments, mandatory_args, optional_args);
 
-        return wrapReturnTypeForNullablePrompt(arguments, PROMPT_ARG_INDEX, std::make_shared<DataTypeString>());
+        return wrapReturnTypeForNullablePrompt(arguments, 0, std::make_shared<DataTypeString>());
     }
 
 private:
@@ -61,7 +61,7 @@ private:
 
     String buildUserMessage(const ColumnsWithTypeAndName & arguments, size_t row) const override
     {
-        return String(arguments[PROMPT_ARG_INDEX].column->getDataAt(row));
+        return String(arguments[0].column->getDataAt(row));
     }
 };
 

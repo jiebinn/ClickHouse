@@ -140,9 +140,6 @@ public:
     static bool isRetriableProviderError(std::exception_ptr exception);
 
 protected:
-    /// The per-row text (prompt/`text`) is always the first positional argument.
-    static constexpr size_t PROMPT_ARG_INDEX = 0;
-
     ContextPtr context;
     ContextPtr getContext() const { return context; }
 
