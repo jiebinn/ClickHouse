@@ -4,6 +4,7 @@
 #if USE_DELTA_KERNEL_RS
 
 #include <Analyzer/FunctionNode.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
@@ -846,7 +847,7 @@ private:
     {
         switch (type_tag)
         {
-            case 0: return std::make_shared<DB::DataTypeUInt8>();        /// boolean
+            case 0: return DB::DataTypeFactory::instance().get("Bool");  /// boolean (schema maps boolean -> Bool)
             case 1: return std::make_shared<DB::DataTypeInt8>();         /// byte
             case 2: return std::make_shared<DB::DataTypeInt16>();        /// short
             case 3: return std::make_shared<DB::DataTypeInt32>();        /// integer

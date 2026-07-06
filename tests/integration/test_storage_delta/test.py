@@ -3811,6 +3811,62 @@ deltaLake(
     )
 
 
+@pytest.mark.parametrize("column_mapping", ["name", "id"])
+def test_column_mapping_write_rejected(started_cluster, column_mapping):
+    # Writing to a column-mapped table must be rejected: ClickHouse writes logical
+    # Parquet field names, not the physical names/ids that a Delta reader expects,
+    # so committing an AddFile would produce an unreadable data file.
+    node = started_cluster.instances["node1"]
+    table_name = randomize_table_name(f"test_column_mapping_write_{column_mapping}")
+    spark = started_cluster.spark_session
+    minio_client = started_cluster.minio_client
+    bucket = started_cluster.minio_bucket
+    path = f"/{table_name}"
+
+    schema = StructType(
+        [
+            StructField("id", IntegerType(), True),
+            StructField("name", StringType(), True),
+        ]
+    )
+    data = [(1, "Alice"), (2, "Bob")]
+    df = spark.createDataFrame(data, schema=schema)
+    df.write.format("delta").option("delta.minReaderVersion", "2").option(
+        "delta.minWriterVersion", "5"
+    ).option("delta.columnMapping.mode", column_mapping).save(path)
+    upload_directory(minio_client, bucket, path, "")
+
+    def list_objects():
+        return sorted(
+            obj.object_name
+            for obj in minio_client.list_objects(bucket, table_name, recursive=True)
+        )
+
+    objects_before = list_objects()
+
+    delta_function = f"""
+deltaLake(
+        'http://{started_cluster.minio_ip}:{started_cluster.minio_port}/root/{table_name}',
+        '{minio_access_key}',
+        '{minio_secret_key}')
+    """
+
+    error = node.query_and_get_error(
+        f"INSERT INTO TABLE FUNCTION {delta_function} SELECT 3 AS id, 'Carol' AS name"
+    )
+    assert "NOT_IMPLEMENTED" in error
+    assert "column mapping" in error
+
+    # Nothing was committed: no new parquet data file and no new _delta_log entry.
+    assert objects_before == list_objects()
+
+    # The table is still readable and its data is unchanged.
+    assert (
+        "1\tAlice\n2\tBob"
+        == node.query(f"SELECT * FROM {delta_function} ORDER BY all").strip()
+    )
+
+
 @pytest.mark.parametrize("column_mapping", ["", "name"])
 def test_subcolumns(started_cluster, column_mapping):
     node = started_cluster.instances["node1"]
