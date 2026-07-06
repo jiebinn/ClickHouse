@@ -119,9 +119,6 @@ void CurrentThread::checkIfNotCancelled()
     if (unlikely(!current_thread))
         return;
 
-    /// Rethrow the real cancellation cause via the process-list element: TIMEOUT_EXCEEDED for a timeout,
-    /// or an exception stored by cancelQuery. The element is alive while the query executes; once it has
-    /// expired the cause is unrecoverable, and the original error is more useful than a generic one.
     current_thread->throwIfQueryCanceled();
 }
 

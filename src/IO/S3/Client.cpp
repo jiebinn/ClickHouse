@@ -415,9 +415,8 @@ template void Client::setKMSHeaders<PutObjectRequest>(PutObjectRequest & request
 
 Model::HeadObjectOutcome Client::HeadObject(HeadObjectRequest & request) const
 {
-    /// Route every attempt (initial, wrong-region, redirected) through one exit so that a query killed
-    /// while a HeadObject request is in flight is reported as a cancellation instead of the stale
-    /// S3/network outcome.
+    /// One exit for all attempts (initial, wrong-region, redirected), so a killed query is reported
+    /// as a cancellation instead of the stale S3/network outcome.
     auto outcome = headObjectInternal(request);
     if (!outcome.IsSuccess())
         CurrentThread::checkIfNotCancelled();
