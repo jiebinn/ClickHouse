@@ -5,6 +5,7 @@
 #if USE_AWS_S3
 
 #include <Disks/DiskObjectStorage/ObjectStorages/IObjectStorage.h>
+#include <atomic>
 #include <memory>
 #include <IO/S3/S3Capabilities.h>
 #include <IO/S3Settings.h>
@@ -172,7 +173,8 @@ private:
     /// `false`). `applyNewSettings` rebuilds the client when a session with a different restriction mode accesses
     /// the storage, so a restricted session never reuses a credentialed client built for an opt-in session (and
     /// vice versa). Defaults to restricted (the server default) for callers that do not pass an explicit value.
-    mutable bool client_restricts_server_credentials = true;
+    /// Atomic: `applyNewSettings` can run concurrently on a shared storage.
+    mutable std::atomic<bool> client_restricts_server_credentials = true;
     MultiVersion<S3Settings> s3_settings;
     S3Capabilities s3_capabilities;
 
