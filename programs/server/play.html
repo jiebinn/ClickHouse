@@ -952,6 +952,12 @@
         /* The token where the server reported a syntax error is painted with a red
            background. It is cleared as soon as the user returns focus to the editor. */
         #query-backdrop .q-err-pos { background-color: color-mix(in srgb, var(--syntax-error) 40%, transparent); border-radius: 2px; }
+        /* An "(end of query)" error has no token to paint (the parser reached the end of the
+           statement or a `;` separator). Mark the statement boundary with a thin vertical bar
+           instead of filling the following separator/whitespace token. The bar is zero content
+           width (drawn by the border, offset by negative margins) so the backdrop still aligns
+           character-for-character with the textarea underneath it. */
+        #query-backdrop .q-err-pos-end { display: inline-block; width: 0; border-left: 2px solid var(--syntax-error); margin: 0 -1px; }
 
         /* Rainbow parentheses: brackets are colored by their nesting depth (cycling
            through the seven --syntax-bracket-* colors). */
@@ -6530,6 +6536,13 @@ let currentBackdropText = '';
 /// painted with a red background in the backdrop until the user returns focus to the editor.
 let queryErrorPos = -1;
 
+/// True when the error was reported at the end of the query — the server writes a "(end of query)"
+/// suffix for both an unexpected end of stream and a `;` separator (see `writeCommonErrorMessage`
+/// in `src/Parsers/parseQuery.cpp`). Such an error points at the statement *boundary*, not at a
+/// token, so `renderQueryBackdrop` draws a thin marker at `queryErrorPos` instead of filling the
+/// `;`/whitespace token that happens to start there.
+let queryErrorAtEnd = false;
+
 /// Monotonic counter bumped whenever the user returns to the editor (refocus, typing, caret
 /// movement, or a click inside it). `beginFlight` snapshots it into `runEditorInteraction` at run
 /// start; if it advances before the error response arrives, `postImpl` suppresses the (now stale)
@@ -6552,6 +6565,7 @@ let suppressReturnToEditor = false;
 function clearQueryError() {
     if (queryErrorPos < 0) return;
     queryErrorPos = -1;
+    queryErrorAtEnd = false;
     renderQueryBackdrop();
 }
 
@@ -6635,6 +6649,10 @@ function highlightQueryError(errorText, query, queryStart) {
     const absolute = base + charIndex;
 
     queryErrorPos = Math.min(absolute, text.length);
+    /// "(end of query)" means the parser reached the end of the statement or its `;` separator
+    /// (see `writeCommonErrorMessage`). The reported position then falls on the `;` (or on the
+    /// end of a trimmed statement); paint the statement boundary rather than the separator token.
+    queryErrorAtEnd = / \(end of query\)/.test(errorText);
     renderQueryBackdrop();
 }
 /// Guard so that the backdrop re-renders triggered by the completion code (to update the
@@ -6696,12 +6714,23 @@ function renderQueryBackdrop() {
     let html = '';
     let offset = 0;
     let activeOpen = false;
+    /// Whether the "(end of query)" boundary marker has already been emitted (see below).
+    let errMarkerEmitted = false;
 
     for (let i = 0; i < tokens.length; ++i) {
         const elem = tokens[i];
         const tokStart = offset;
         const tokEnd = offset + elem.token.length;
         offset = tokEnd;
+
+        /// An "(end of query)" error points at a statement boundary, not a token. Draw a thin
+        /// marker at that boundary — right before the token that starts there — rather than
+        /// filling the following `;`/whitespace token. A boundary at the end of the text has no
+        /// following token and is emitted after the loop instead.
+        if (queryErrorAtEnd && !errMarkerEmitted && queryErrorPos <= tokStart) {
+            html += '<span class="q-err-pos-end"></span>';
+            errMarkerEmitted = true;
+        }
 
         const inActive = activeStart >= 0 && tokEnd > activeStart && tokStart < activeEnd;
         if (inActive && !activeOpen) {
@@ -6727,8 +6756,9 @@ function renderQueryBackdrop() {
         if (matchingIdentifiers.has(i)) {
             cls = cls ? cls + ' q-underline' : 'q-underline';
         }
-        /// The token at the reported syntax-error position gets a red background.
-        const isErrPos = queryErrorPos >= 0 && queryErrorPos >= tokStart && queryErrorPos < tokEnd;
+        /// The token at the reported syntax-error position gets a red background — except for an
+        /// "(end of query)" error, which marks the statement boundary above rather than a token.
+        const isErrPos = queryErrorPos >= 0 && !queryErrorAtEnd && queryErrorPos >= tokStart && queryErrorPos < tokEnd;
         if (isErrPos) {
             cls = cls ? cls + ' q-err-pos' : 'q-err-pos';
         }
@@ -6757,9 +6787,17 @@ function renderQueryBackdrop() {
         html += '<span class="q-err">' + escapeHTML(text.substring(offset)) + '</span>';
     }
 
-    /// An error reported at the very end of the query (e.g. "failed at position N (end of
-    /// query)") has no token to attach to, so we append a red marker at the end.
-    if (queryErrorPos >= text.length) {
+    /// A statement-boundary ("(end of query)") error whose boundary falls at the very end of the
+    /// text has no following token, so emit its marker here. `errMarkerEmitted` guards against a
+    /// double marker when the boundary already matched a token inside the loop.
+    if (queryErrorAtEnd) {
+        if (!errMarkerEmitted) {
+            html += '<span class="q-err-pos-end"></span>';
+            errMarkerEmitted = true;
+        }
+    } else if (queryErrorPos >= 0 && queryErrorPos >= text.length) {
+        /// A non-boundary error past the last token (e.g. the lexer stopped early on an
+        /// incomplete tail): fall back to the trailing filled marker.
         html += '<span class="q-err-pos"> </span>';
     }
 
@@ -7357,7 +7395,14 @@ query_area.addEventListener('keydown', (e) => {
     /// return to the editor, and without this a late error response for an in-flight query would
     /// repaint a stale syntax-error highlight (see `editorInteractionGen`). Bump it before the
     /// selection-indent early return below, which also `stopImmediatePropagation`s and returns.
+    ///
+    /// Also clear any *already visible* highlight here. Bumping the generation only suppresses a
+    /// future late response; because this handler `stopImmediatePropagation`s the keys it consumes
+    /// (Tab, Enter, arrows, Escape), the bubble-phase `onReturnToEditor` — which would clear the
+    /// marker — never runs for them, so a stale highlight would otherwise linger while the user
+    /// navigates completions. `clearQueryError` is idempotent when there is nothing to clear.
     ++editorInteractionGen;
+    clearQueryError();
     /// Tab / Shift+Tab with a non-empty selection indents / unindents the selected lines by 4
     /// spaces. Handled here (before the completion logic and the space-insert `onkeydown`) so a
     /// selection takes priority.
