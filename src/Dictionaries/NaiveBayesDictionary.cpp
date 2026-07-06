@@ -47,32 +47,40 @@ String trim(std::string_view s)
     return String(s.substr(begin, end - begin));
 }
 
-/// Parses an explicit priors specification of the form "0=0.6,1=0.4" into a map from class to probability.
-MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const String & priors_str)
+/// Reads the explicit priors from the structured `priors` layout parameter: repeated `prior` elements,
+/// each holding a `class` id and a `probability`. A DDL definition produces them from a collection
+/// literal such as `priors [(0, 0.6), (1, 0.4)]`; an XML definition spells the `prior` elements out
+/// directly.
+MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const Poco::Util::AbstractConfiguration & config, const String & priors_prefix)
 {
-    if (priors_str.empty())
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "NaiveBayes dictionary: the explicit priors specification is empty");
+    Poco::Util::AbstractConfiguration::Keys prior_keys;
+    config.keys(priors_prefix, prior_keys);
+
+    if (prior_keys.empty())
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "NaiveBayes dictionary: the explicit priors must be a non-empty collection of (class, probability) pairs, "
+            "e.g. priors [(0, 0.6), (1, 0.4)]");
 
     MapWithMemoryTracking<UInt32, double> priors;
     double total = 0.0;
 
-    /// Iterate over every comma-separated entry from input like `0=0.5,1=0.5`.
-    size_t pos = 0;
-    while (true)
+    for (const auto & prior_key : prior_keys)
     {
-        const size_t comma = priors_str.find(',', pos);
-        const size_t entry_end = (comma == String::npos) ? priors_str.size() : comma;
-        const std::string_view entry(priors_str.data() + pos, entry_end - pos);
-
-        const size_t eq = entry.find('=');
-        if (eq == std::string_view::npos)
+        if (prior_key != "prior" && !prior_key.starts_with("prior["))
             throw Exception(
-                ErrorCodes::BAD_ARGUMENTS, "NaiveBayes dictionary: invalid priors entry '{}', expected 'class=probability'", String(entry));
+                ErrorCodes::BAD_ARGUMENTS,
+                "NaiveBayes dictionary: unexpected element '{}' in priors, expected repeated 'prior' elements",
+                prior_key);
 
-        const String class_str = trim(entry.substr(0, eq));
-        const String prob_str = trim(entry.substr(eq + 1));
+        const String prior_prefix = priors_prefix + "." + prior_key;
+        if (!config.has(prior_prefix + ".class") || !config.has(prior_prefix + ".probability"))
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "NaiveBayes dictionary: each prior must contain a 'class' id and a 'probability'");
 
-        double prob = 0.0;
+        const String class_str = trim(config.getString(prior_prefix + ".class"));
+        const String prob_str = trim(config.getString(prior_prefix + ".probability"));
 
         /// Parse the class id directly into UInt32 with overflow checking. parse<>/readIntText silently wraps a
         /// value past the type's range onto a different valid class, so use from_chars, which reports overflow
@@ -84,17 +92,16 @@ MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const String & priors_
         if (class_ec == std::errc::result_out_of_range)
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "NaiveBayes dictionary: invalid priors entry '{}': the class id '{}' exceeds the supported maximum of {}",
-                String(entry),
+                "NaiveBayes dictionary: the priors class id '{}' exceeds the supported maximum of {}",
                 class_str,
                 std::numeric_limits<UInt32>::max());
         if (class_ec != std::errc{} || class_ptr != class_end)
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "NaiveBayes dictionary: invalid priors entry '{}': the class id '{}' is not a non-negative integer",
-                String(entry),
+                "NaiveBayes dictionary: the priors class id '{}' is not a non-negative integer",
                 class_str);
 
+        double prob = 0.0;
         try
         {
             prob = parse<Float64>(prob_str);
@@ -103,9 +110,9 @@ MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const String & priors_
         {
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "NaiveBayes dictionary: invalid priors entry '{}': the probability '{}' is not a number",
-                String(entry),
-                prob_str);
+                "NaiveBayes dictionary: the prior probability '{}' for class {} is not a number",
+                prob_str,
+                class_id);
         }
 
         if (!std::isfinite(prob) || prob <= 0.0 || prob > 1.0)
@@ -119,10 +126,6 @@ MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const String & priors_
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "NaiveBayes dictionary: duplicate prior for class {}", class_id);
 
         total += prob;
-
-        if (comma == String::npos)
-            break;
-        pos = comma + 1;
     }
 
     if (std::fabs(total - 1.0) > 1e-6)
@@ -521,8 +524,8 @@ void registerDictionaryNaiveBayes(DictionaryFactory & factory)
             if (!config.has(layout_prefix + ".priors"))
                 throw Exception(
                     ErrorCodes::BAD_ARGUMENTS,
-                    "NaiveBayes dictionary: priors_mode 'explicit' requires a 'priors' parameter, e.g. priors '0=0.6,1=0.4'");
-            explicit_priors = parseExplicitPriors(config.getString(layout_prefix + ".priors"));
+                    "NaiveBayes dictionary: priors_mode 'explicit' requires a 'priors' parameter, e.g. priors [(0, 0.6), (1, 0.4)]");
+            explicit_priors = parseExplicitPriors(config, layout_prefix + ".priors");
         }
         else
         {
@@ -590,7 +593,7 @@ void registerDictionaryNaiveBayes(DictionaryFactory & factory)
                            "pre-aggregated per-class n-gram counts, then classifies text through `dictGet` or the "
                            "`naiveBayesClassifier` functions.",
             .syntax = "LAYOUT(NAIVE_BAYES(class_attribute 'name' n N mode 'byte'|'codepoint'|'token' [alpha 1.0] "
-                      "[priors_mode 'proportional'|'uniform'|'explicit'] [priors '0=0.6,1=0.4'] [start_token ...] "
+                      "[priors_mode 'proportional'|'uniform'|'explicit'] [priors [(0, 0.6), (1, 0.4)]] [start_token ...] "
                       "[end_token ...] [store_source 0]))",
             .related = {}});
 }
