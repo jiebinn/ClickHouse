@@ -23,14 +23,20 @@ All functions are sharing a common infrastructure that provides:
 
 ## Configuration {#configuration}
 
-AI functions reference a **named collection** that stores provider credentials and configuration.
+AI functions reference a **named collection** that stores provider credentials and configuration. Different named collections can be created and used for different functions or functions calls. For example you may want to define a different named collection to use with the text functions (`aiGenerate`, `aiClassify`, `aiExtract`, `aiTranslate`) vs the `aiEmbed` function, which require different endpoints and usually use different models.
 
-Example statement to create a named collection with provider credentials:
+Example statement to create a named collection with provider credentials, one with a chat endpoint and another with an embedding endpoint:
 ```sql
-CREATE NAMED COLLECTION ai_credentials AS
+CREATE NAMED COLLECTION ai_text_credentials AS
     provider = 'openai',
     endpoint = 'https://api.openai.com/v1/chat/completions',
     model = 'gpt-4o-mini',
+    api_key = 'sk-...';
+
+CREATE NAMED COLLECTION ai_embedding_credentials AS
+    provider = 'openai',
+    endpoint = 'https://api.openai.com/v1/embeddings',
+    model = 'text-embedding-3-small',
     api_key = 'sk-...';
 ```
 
@@ -74,15 +80,14 @@ SELECT aiGenerate('Bonjour', map('credentials', 'other_credentials'));
 
 Each function accepts an optional trailing `Map(String, String)` of parameters. All values are strings (quote numbers, e.g. `'0.2'`). Unknown keys are rejected. A key that is present overrides the corresponding named-collection value; a key that is absent falls back to the named collection (for `model`/`max_tokens`) or the built-in default.
 
-| Key | Applies to | Description |
-|-----|------------|-------------|
-| `credentials` | all | Named collection to use (see above). |
-| `model` | all | Overrides the collection's `model`. |
-| `max_tokens` | text functions | Overrides the collection's `max_tokens`. |
-| `temperature` | text functions | Sampling temperature. Defaults: `aiGenerate` `0.7`, `aiClassify`/`aiExtract` `0.0`, `aiTranslate` `0.3`. |
-| `system_prompt` | `aiGenerate` | System-level instruction sent with each prompt. |
-| `instructions` | `aiTranslate` | Additional style/dialect instructions. |
-| `dimensions` | `aiEmbed` | Target vector dimensionality (`0` = model's native size). |
+The following parameters are common to all the AI functions:
+
+| Key | Description |
+|-----|-------------|
+| `credentials` | Named collection to use (see above). |
+| `model` | Overrides the collection's `model`. |
+
+Individual functions accept additional, function-specific parameters (such as `max_tokens`, `temperature`, `system_prompt`, `instructions`, and `dimensions`). See each function's reference below for the parameters it accepts and their defaults.
 
 ```sql
 SELECT aiGenerate(body, map('temperature', '0.2', 'system_prompt', 'You are terse.')) FROM articles;

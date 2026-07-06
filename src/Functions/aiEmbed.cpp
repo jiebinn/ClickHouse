@@ -318,7 +318,7 @@ requests a vector of the given size; otherwise the model's native size is return
         .syntax = "aiEmbed(text[, params])",
         .arguments
         = {{"text", "Text to embed.", {"String"}},
-           {"params", "Optional constant `Map(String, String)` of parameters. Keys: `credentials` (named collection with provider credentials; defaults to the `ai_function_embedding_default_credentials` setting), `model` (overrides the collection's model), `dimensions` (target dimensionality of the output vector; `0` or omitted means the model's native size).", {"Map(String, String)"}}},
+           {"params", "Optional constant `Map(String, String)` of parameters. Function-specific keys: `dimensions` (target dimensionality of the output vector; `0` or omitted means the model's native size). The common parameters `credentials` and `model` also apply (see [AI Functions](/sql-reference/functions/ai-functions)).", {"Map(String, String)"}}},
         .returned_value = {"The embedding vector, or an empty array if the input is NULL or empty, the request failed and `ai_function_throw_on_error` is disabled, or a quota was exceeded with `ai_function_throw_on_quota_exceeded` disabled.", {"Array(Float32)"}},
         .examples
         = {{"Embed a single string", "SELECT aiEmbed('Hello world')", ""},
