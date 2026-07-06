@@ -1,4 +1,4 @@
-#include <Common/ProductQuantization.h>
+#include <Common/ProductQuantizer.h>
 
 #include <Common/Exception.h>
 #include <Common/TargetSpecific.h>
@@ -14,9 +14,6 @@
 #include <fmt/format.h>
 
 namespace DB
-{
-
-namespace ProductQuantization
 {
 
 namespace
@@ -153,23 +150,23 @@ constexpr int KMEANS_ITERATIONS = 20;
 
 }
 
-size_t numCentroids(size_t nbits)
+size_t ProductQuantizer::numCentroids(size_t nbits)
 {
     return static_cast<size_t>(1) << nbits;
 }
 
-size_t codebookFloats(size_t dimensions, size_t /*m*/, size_t nbits)
+size_t ProductQuantizer::codebookFloats(size_t dimensions, size_t /*m*/, size_t nbits)
 {
     /// m * k * d_sub = k * dimensions (m cancels).
     return numCentroids(nbits) * dimensions;
 }
 
-size_t bytesPerVector(size_t /*dimensions*/, size_t m, size_t nbits)
+size_t ProductQuantizer::bytesPerVector(size_t /*dimensions*/, size_t m, size_t nbits)
 {
     return m * (nbits <= 8 ? 1 : 2);
 }
 
-std::string validateParams(size_t dimensions, size_t m, size_t nbits)
+std::string ProductQuantizer::validateParams(size_t dimensions, size_t m, size_t nbits)
 {
     if (dimensions == 0)
         return "the number of dimensions must be greater than zero";
@@ -199,7 +196,7 @@ std::string validateParams(size_t dimensions, size_t m, size_t nbits)
     return {};
 }
 
-std::vector<float> trainCodebook(const float * vectors, size_t n, size_t dimensions, size_t m, size_t nbits, UInt64 seed)
+std::vector<float> ProductQuantizer::trainCodebook(const float * vectors, size_t n, size_t dimensions, size_t m, size_t nbits, UInt64 seed)
 {
     const size_t d_sub = dimensions / m;
     const size_t k = numCentroids(nbits);
@@ -268,7 +265,7 @@ std::vector<float> trainCodebook(const float * vectors, size_t n, size_t dimensi
     return codebook;
 }
 
-struct Encoder
+struct ProductQuantizer::Encoder
 {
     size_t m = 0;
     size_t d_sub = 0;
@@ -279,7 +276,7 @@ struct Encoder
     std::vector<float> acc;        /// k floats of per-vector kernel scratch (the encoder is used by one writer thread)
 };
 
-std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
+std::shared_ptr<ProductQuantizer::Encoder> ProductQuantizer::createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
 {
     auto encoder = std::make_shared<Encoder>();
     encoder->m = m;
@@ -300,7 +297,7 @@ std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions
     return encoder;
 }
 
-void encode(Encoder & encoder, const float * vec, char * dst)
+void ProductQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
 {
     for (size_t mm = 0; mm < encoder.m; ++mm)
     {
@@ -317,7 +314,7 @@ void encode(Encoder & encoder, const float * vec, char * dst)
     }
 }
 
-void encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst)
+void ProductQuantizer::encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst)
 {
     /// Convenience one-shot for callers encoding a single vector; encoding many vectors against the same codebook
     /// should `createEncoder` once and reuse it to amortize the per-codebook setup.
@@ -325,7 +322,7 @@ void encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, c
     encode(*encoder, vec, dst);
 }
 
-struct Query
+struct ProductQuantizer::Query
 {
     size_t m = 0;
     size_t k = 0;
@@ -336,8 +333,8 @@ struct Query
     float q_norm = 0.0f;          /// ||query|| (cosine only)
 };
 
-std::shared_ptr<const Query>
-prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2)
+std::shared_ptr<const ProductQuantizer::Query>
+ProductQuantizer::prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2)
 {
     const size_t d_sub = dimensions / m;
     const size_t k = numCentroids(nbits);
@@ -388,12 +385,12 @@ prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, 
     return q;
 }
 
-float distance(const Query & q, const char * code)
+float ProductQuantizer::distance(const Query & query, const char * code)
 {
-    const size_t last = q.k - 1;
+    const size_t last = query.k - 1;
     auto codeAt = [&](size_t mm) -> size_t
     {
-        if (q.two_bytes)
+        if (query.two_bytes)
         {
             UInt16 idx = 0;
             std::memcpy(&idx, code + mm * 2, sizeof(UInt16));
@@ -402,27 +399,25 @@ float distance(const Query & q, const char * code)
         return std::min(static_cast<size_t>(static_cast<UInt8>(code[mm])), last);
     };
 
-    if (q.is_l2)
+    if (query.is_l2)
     {
         float d = 0.0f;
-        for (size_t mm = 0; mm < q.m; ++mm)
-            d += q.lut[mm * q.k + codeAt(mm)];
+        for (size_t mm = 0; mm < query.m; ++mm)
+            d += query.lut[mm * query.k + codeAt(mm)];
         return d; /// squared L2 of (query, reconstructed vector); monotone in true distance for ranking
     }
 
     float dot = 0.0f;
     float xn2 = 0.0f;
-    for (size_t mm = 0; mm < q.m; ++mm)
+    for (size_t mm = 0; mm < query.m; ++mm)
     {
         const size_t c = codeAt(mm);
-        dot += q.lut[mm * q.k + c];
-        xn2 += q.cb_sqnorm[mm * q.k + c];
+        dot += query.lut[mm * query.k + c];
+        xn2 += query.cb_sqnorm[mm * query.k + c];
     }
-    const float denom = q.q_norm * std::sqrt(xn2);
+    const float denom = query.q_norm * std::sqrt(xn2);
     const float cosine = (denom > 0.0f) ? std::clamp(dot / denom, -1.0f, 1.0f) : 0.0f;
     return 1.0f - cosine;
-}
-
 }
 
 }

@@ -512,7 +512,7 @@ std::string VectorQuantizer::validateParams(std::string_view method, size_t dime
     const FlatQuantization codec = methodToCodec(method);
 
     if (dimensions == 0)
-        return "the number of dimensions must be greater than zero";
+        return "The number of dimensions must be greater than zero";
     /// Bound dimensions before any derived-size arithmetic (`bytesPerVector`, the padded projection size): an absurd
     /// value from a fuzzer or bad DDL would otherwise overflow size_t and drive unbounded allocations / loops. Cap well
     /// above any real embedding (matches `ProductQuantization::validateParams`).
@@ -526,7 +526,7 @@ std::string VectorQuantizer::validateParams(std::string_view method, size_t dime
         && dimensions % 8 != 0)
         return fmt::format("method '{}' requires the number of dimensions to be a multiple of 8, got {}", method, dimensions);
 
-    /// For the 'mrl' methods `bits` is the number of leading dimensions stored (the prefix); it must be in (0, dimensions].
+    /// For the prefix methods `bits` is the number of leading dimensions stored (the prefix); it must be in (0, dimensions].
     if ((codec == FlatQuantization::PrefixInt8 || codec == FlatQuantization::PrefixBf16) && (bits < 1 || bits > dimensions))
         return fmt::format("method '{}' requires the number of leading dimensions to be in [1, {}], got {}", method, dimensions, bits);
 
@@ -691,12 +691,12 @@ struct VectorQuantizer::Query
 
 std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
 {
-    auto q = std::make_shared<Query>();
-    q->codec = methodToCodec(method);
-    q->dimensions = dimensions;
-    q->bits = bits;
+    auto query = std::make_shared<Query>();
+    query->codec = methodToCodec(method);
+    query->dimensions = dimensions;
+    query->bits = bits;
 #if USE_MULTITARGET_CODE
-    q->use_icelake = isArchSupported(TargetArch::x86_64_icelake);
+    query->use_icelake = isArchSupported(TargetArch::x86_64_icelake);
 #endif
 
     double ref_norm_sq = 0.0;
@@ -704,42 +704,42 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
         ref_norm_sq += static_cast<double>(ref[i]) * static_cast<double>(ref[i]);
     const float ref_norm = static_cast<float>(std::sqrt(ref_norm_sq));
 
-    switch (q->codec)
+    switch (query->codec)
     {
         case FlatQuantization::RaBitQ:
         {
-            q->code_bytes = dimensions / 8 + sizeof(float);
+            query->code_bytes = dimensions / 8 + sizeof(float);
             const std::vector<float> projection = generateRandomProjection(dimensions);
             std::vector<float> work(projection.size() / PROJECTION_ROUNDS);
             applyRandomProjection(projection, ref, dimensions, work.data());
-            q->rabitq = buildRaBitQQuery(work.data(), dimensions);
+            query->rabitq = buildRaBitQQuery(work.data(), dimensions);
             break;
         }
         case FlatQuantization::TurboQuant:
         {
-            q->code_bytes = dimensions / 4 + sizeof(float);
+            query->code_bytes = dimensions / 4 + sizeof(float);
             const std::vector<float> p1 = generateRandomProjection(dimensions);
             const std::vector<float> p2 = generateRandomProjection(dimensions, RANDOM_PROJECTION_SEED_QJL);
             std::vector<Float64> ref64(ref, ref + dimensions);
-            q->turbo = buildTurboQuantQuery(p1, p2, ref64.data(), dimensions);
+            query->turbo = buildTurboQuantQuery(p1, p2, ref64.data(), dimensions);
             break;
         }
         case FlatQuantization::PrefixInt8:
         case FlatQuantization::PrefixBf16:
         {
             /// Distance is computed on the leading `bits` dimensions only (the stored prefix), against the query's prefix.
-            q->code_bytes = (q->codec == FlatQuantization::PrefixInt8) ? bits : bits * 2;
-            q->mrl_query.assign(ref, ref + bits);
+            query->code_bytes = (query->codec == FlatQuantization::PrefixInt8) ? bits : bits * 2;
+            query->mrl_query.assign(ref, ref + bits);
             double pn = 0.0;
             for (size_t i = 0; i < bits; ++i)
                 pn += static_cast<double>(ref[i]) * static_cast<double>(ref[i]);
-            q->mrl_query_norm = static_cast<float>(std::sqrt(pn));
-            q->is_l2 = is_l2;
+            query->mrl_query_norm = static_cast<float>(std::sqrt(pn));
+            query->is_l2 = is_l2;
             break;
         }
         case FlatQuantization::Int8:
         {
-            q->code_bytes = dimensions; /// Int8 codes; the 4-byte norm factor follows.
+            query->code_bytes = dimensions; /// Int8 codes; the 4-byte norm factor follows.
             const std::vector<float> projection = generateRandomProjection(dimensions);
             std::vector<float> work(projection.size() / PROJECTION_ROUNDS);
             applyRandomProjection(projection, ref, dimensions, work.data());
@@ -747,18 +747,18 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
             for (size_t i = 0; i < dimensions; ++i)
                 rnorm_sq += static_cast<double>(work[i]) * static_cast<double>(work[i]);
             const float inv_rnorm = (rnorm_sq > 0.0) ? static_cast<float>(1.0 / std::sqrt(rnorm_sq)) : 0.0f;
-            q->int8.q_dir.resize(dimensions);
+            query->int8.q_dir.resize(dimensions);
             for (size_t i = 0; i < dimensions; ++i)
-                q->int8.q_dir[i] = work[i] * inv_rnorm;
-            q->int8.inv_sqrt_d = (dimensions > 0) ? static_cast<float>(1.0 / std::sqrt(static_cast<double>(dimensions))) : 0.0f;
-            q->int8.is_l2 = is_l2;
-            q->int8.q_norm = ref_norm;
-            q->int8.q_norm_sq = ref_norm * ref_norm;
-            q->int8.dimensions = dimensions;
+                query->int8.q_dir[i] = work[i] * inv_rnorm;
+            query->int8.inv_sqrt_d = (dimensions > 0) ? static_cast<float>(1.0 / std::sqrt(static_cast<double>(dimensions))) : 0.0f;
+            query->int8.is_l2 = is_l2;
+            query->int8.q_norm = ref_norm;
+            query->int8.q_norm_sq = ref_norm * ref_norm;
+            query->int8.dimensions = dimensions;
             break;
         }
     }
-    return q;
+    return query;
 }
 
 float VectorQuantizer::distance(const Query & query, const char * code)

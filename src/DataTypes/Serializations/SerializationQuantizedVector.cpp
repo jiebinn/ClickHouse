@@ -5,7 +5,7 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Common/ProductQuantization.h>
+#include <Common/ProductQuantizer.h>
 #include <Common/VectorQuantizer.h>
 #include <Common/Exception.h>
 #include <Common/SipHash.h>
@@ -168,7 +168,7 @@ SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPt
     , params(params_)
     , is_pq(params_.method == "pq")
     , bytes_per_vector(is_pq
-          ? ProductQuantization::bytesPerVector(params_.dimensions, params_.m, params_.bits)
+          ? ProductQuantizer::bytesPerVector(params_.dimensions, params_.m, params_.bits)
           : VectorQuantizer::bytesPerVector(params_.method, params_.dimensions, params_.bits))
     , codes_type(std::make_shared<DataTypeFixedString>(bytes_per_vector))
     , codes_serialization(SerializationNamed::create(
@@ -176,7 +176,7 @@ SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPt
 {
     if (is_pq)
     {
-        codebook_bytes = ProductQuantization::codebookFloats(params_.dimensions, params_.m, params_.bits) * sizeof(float);
+        codebook_bytes = ProductQuantizer::codebookFloats(params_.dimensions, params_.m, params_.bits) * sizeof(float);
         codebook_type = std::make_shared<DataTypeFixedString>(codebook_bytes);
         codebook_serialization = SerializationNamed::create(
             SerializationPQCodebook::create(codebook_type->getDefaultSerialization(), codebook_type),
@@ -320,7 +320,7 @@ std::vector<float> SerializationQuantizedVector::trainCodebook(const IColumn & c
                 offset + i, buf.size(), params.dimensions);
         std::memcpy(flat.data() + i * params.dimensions, buf.data(), params.dimensions * sizeof(float));
     }
-    return ProductQuantization::trainCodebook(flat.data(), n, params.dimensions, params.m, params.bits);
+    return ProductQuantizer::trainCodebook(flat.data(), n, params.dimensions, params.m, params.bits);
 }
 
 ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size_t offset, size_t count, const float * codebook) const
@@ -335,10 +335,10 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
 
     /// Build the encoder once and reuse it for every row, so the per-codebook setup (pq) or the deterministic projection
     /// (the data-independent methods) is not recomputed per row.
-    std::shared_ptr<ProductQuantization::Encoder> pq_encoder;
+    std::shared_ptr<ProductQuantizer::Encoder> pq_encoder;
     std::shared_ptr<VectorQuantizer::Encoder> flat_encoder;
     if (is_pq)
-        pq_encoder = ProductQuantization::createEncoder(codebook, params.dimensions, params.m, params.bits);
+        pq_encoder = ProductQuantizer::createEncoder(codebook, params.dimensions, params.m, params.bits);
     else
         flat_encoder = VectorQuantizer::createEncoder(params.method, params.dimensions, params.bits);
 
@@ -353,7 +353,7 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
 
         char * dst = reinterpret_cast<char *>(&chars[i * bytes_per_vector]);
         if (is_pq)
-            ProductQuantization::encode(*pq_encoder, buf.data(), dst);
+            ProductQuantizer::encode(*pq_encoder, buf.data(), dst);
         else
             VectorQuantizer::encode(*flat_encoder, buf.data(), dst);
     }

@@ -2,7 +2,7 @@
 #include <Compression/CompressionInfo.h>
 #include <Compression/CompressionFactory.h>
 #include <Compression/registerCompressionCodecs.h>
-#include <Common/ProductQuantization.h>
+#include <Common/ProductQuantizer.h>
 #include <Common/VectorQuantizer.h>
 #include <Common/SipHash.h>
 #include <Parsers/IAST.h>
@@ -138,7 +138,7 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
         if (arguments->children.size() != 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
                 "Codec Quantized method 'pq' requires Quantized('pq', dimensions, nbits, m)");
-        if (const std::string error = ProductQuantization::validateParams(params.dimensions, params.m, params.bits); !error.empty())
+        if (const auto error = ProductQuantizer::validateParams(params.dimensions, params.m, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
     }
     else

@@ -20,9 +20,9 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int BAD_ARGUMENTS;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ILLEGAL_COLUMN;
-    extern const int BAD_ARGUMENTS;
     extern const int SIZES_OF_ARRAYS_DONT_MATCH;
 }
 
@@ -43,47 +43,40 @@ UInt64 getConstUIntArgument(const ColumnWithTypeAndName & arg, const String & fn
     return arg.column->getUInt(0);
 }
 
-/// Read the float vector at `row` from an Array(Float32) / Array(Float64) column into `out` (resized to the array size).
-void readVectorRow(const ColumnArray & col_arr, size_t row, VectorWithMemoryTracking<float> & out)
+/// Read the float vector at `row` of an Array(Float32|Float64|BFloat16) column into `result`.
+void readVectorRow(const ColumnArray & col_arr, size_t row, VectorWithMemoryTracking<float> & result)
 {
-    const IColumn & nested = col_arr.getData();
-    const auto & offsets = col_arr.getOffsets();
-    const size_t begin = row == 0 ? 0 : offsets[row - 1];
-    const size_t size = offsets[row] - begin;
-    out.resize(size);
+    const IColumn & array_data = col_arr.getData();
+    const auto & array_offsets = col_arr.getOffsets();
+    const size_t begin = row == 0 ? 0 : array_offsets[row - 1];
+    const size_t size = array_offsets[row] - begin;
+    result.resize(size);
 
-    if (const auto * f32 = typeid_cast<const ColumnFloat32 *>(&nested))
+    if (const auto * f32 = typeid_cast<const ColumnFloat32 *>(&array_data))
     {
-        const auto & data = f32->getData();
         for (size_t i = 0; i < size; ++i)
-            out[i] = data[begin + i];
+            result[i] = f32->getData()[begin + i];
     }
-    else if (const auto * f64 = typeid_cast<const ColumnFloat64 *>(&nested))
+    else if (const auto * f64 = typeid_cast<const ColumnFloat64 *>(&array_data))
     {
-        const auto & data = f64->getData();
         for (size_t i = 0; i < size; ++i)
-            out[i] = static_cast<float>(data[begin + i]);
+            result[i] = static_cast<float>(f64->getData()[begin + i]);
     }
-    else if (const auto * bf16 = typeid_cast<const ColumnBFloat16 *>(&nested))
+    else if (const auto * bf16 = typeid_cast<const ColumnBFloat16 *>(&array_data))
     {
-        const auto & data = bf16->getData();
         for (size_t i = 0; i < size; ++i)
-            out[i] = static_cast<float>(data[begin + i]);
+            result[i] = static_cast<float>(bf16->getData()[begin + i]);
     }
     else
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Vector argument must be Array(Float32), Array(Float64) or Array(BFloat16)");
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Vector argument must be Array(Float32|Float64|BFloat16)");
 }
 
-void checkVectorArgument(const DataTypePtr & type, const String & fn)
+void checkVectorArgument(const DataTypePtr & type, const String & fn, size_t idx)
 {
     const auto * array_type = checkAndGetDataType<DataTypeArray>(type.get());
-    if (!array_type)
+    if (!array_type || !isFloat(array_type->getNestedType()))
         throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "First argument of function {} must be Array(Float32), Array(Float64) or Array(BFloat16)", fn);
-    const auto & nested = array_type->getNestedType();
-    if (!isFloat(nested))
-        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-            "First argument of function {} must be Array(Float32), Array(Float64) or Array(BFloat16), got Array({})", fn, nested->getName());
+            "Argument #{} of function {} must be Array(Float32|Float64|BFloat16)", idx + 1, fn);
 }
 
 }
@@ -112,12 +105,12 @@ public:
         if (!checkAndGetDataType<DataTypeFixedString>(arguments[0].type.get()))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "First argument of function {} must be a FixedString (a quantized vector)", name);
-        checkVectorArgument(arguments[1].type, name);
+        checkVectorArgument(arguments[1].type, name, 1);
 
         const String method = getConstStringArgument(arguments[2], name, 2);
         const UInt64 dimensions = getConstUIntArgument(arguments[3], name, 3);
         const UInt64 bits = getConstUIntArgument(arguments[4], name, 4);
-        if (const std::string err = VectorQuantizer::validateParams(method, dimensions, bits); !err.empty())
+        if (const auto err = VectorQuantizer::validateParams(method, dimensions, bits); !err.empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function {}: {}", name, err);
 
         return std::make_shared<DataTypeFloat32>();
@@ -125,27 +118,27 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+        if (input_rows_count == 0)
+            return ColumnFloat32::create();
+
         const String method = getConstStringArgument(arguments[2], name, 2);
         const UInt64 dimensions = getConstUIntArgument(arguments[3], name, 3);
         const UInt64 bits = getConstUIntArgument(arguments[4], name, 4);
         const bool is_l2 = getConstUIntArgument(arguments[5], name, 5) != 0;
 
-        /// Read the (constant) query vector from the constant's single-row payload and prepare the query state once.
-        /// Reading the payload directly (rather than expanding the constant) keeps this correct on empty/dry-run blocks,
-        /// where the expanded column would have zero rows.
-        const auto * query_const = checkAndGetColumnConst<ColumnArray>(arguments[1].column.get());
-        if (!query_const)
+        const auto * col_vector_const_arr = checkAndGetColumnConst<ColumnArray>(arguments[1].column.get());
+        if (!col_vector_const_arr)
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Query argument of function {} must be a constant array", name);
-        const auto * query_arr = checkAndGetColumn<ColumnArray>(&query_const->getDataColumn());
+        const auto * col_vector_arr = checkAndGetColumn<ColumnArray>(&col_vector_const_arr->getDataColumn());
 
-        VectorWithMemoryTracking<float> query_buf;
-        readVectorRow(*query_arr, 0, query_buf);
-        if (query_buf.size() != dimensions)
+        VectorWithMemoryTracking<float> vectors;
+        readVectorRow(*col_vector_arr, 0, vectors);
+        if (vectors.size() != dimensions)
             throw Exception(ErrorCodes::SIZES_OF_ARRAYS_DONT_MATCH,
                 "Query vector has {} elements but function {} was declared with {} dimensions",
-                query_buf.size(), name, dimensions);
+                vectors.size(), name, dimensions);
 
-        auto query = VectorQuantizer::prepareQuery(method, query_buf.data(), dimensions, bits, is_l2);
+        auto query = VectorQuantizer::prepareQuery(method, vectors.data(), dimensions, bits, is_l2);
 
         const auto * col_code = checkAndGetColumn<ColumnFixedString>(arguments[0].column.get());
         if (!col_code)
@@ -155,12 +148,12 @@ public:
         if (n != expected)
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
                 "Quantized vector has {} bytes but method '{}' with {} dimensions expects {}", n, method, dimensions, expected);
-        const auto & chars = col_code->getChars();
+        const auto & code_char = col_code->getChars();
 
         auto col_res = ColumnFloat32::create(input_rows_count);
         auto & res_data = col_res->getData();
         for (size_t row = 0; row < input_rows_count; ++row)
-            res_data[row] = VectorQuantizer::distance(*query, reinterpret_cast<const char *>(&chars[row * n]));
+            res_data[row] = VectorQuantizer::distance(*query, reinterpret_cast<const char *>(&code_char[row * n]));
 
         return col_res;
     }
