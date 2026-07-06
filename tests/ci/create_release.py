@@ -286,6 +286,23 @@ class ReleaseInfo:
                 version.with_description(codename)
                 release_branch = f"{version.major}.{version.minor}"
                 release_tag = version.describe
+                # Refuse to make an empty patch release. For a patch release the
+                # tweak equals the number of commits since the previous release
+                # tag (see Git.tweak). A tweak of 1 means the only commit on top
+                # of the previous release is the automated post-release version
+                # bump, so there is nothing to release. Tagging it would produce
+                # a spurious release like v25.8.28.1-lts. Recovery runs
+                # (only-repo/only-docker) rebuild an already-tagged release and
+                # do not tag, so skip the check. This is checked before the
+                # out-of-order check below because "nothing to release" is the
+                # more fundamental condition.
+                if not _skip_out_of_order_check and version.tweak == 1:
+                    raise RuntimeError(
+                        f"Refusing to release ref [{commit_ref}]: computed "
+                        f"version [{version.string}] has tweak 1, which means the "
+                        f"only commit since the previous release is the automated "
+                        f"version bump. There is nothing to release."
+                    )
             Shell.check(
                 f"{GIT_PREFIX} fetch origin {release_branch} --tags",
                 strict=True,
@@ -351,21 +368,6 @@ class ReleaseInfo:
                 f"git rev-list -n1 {previous_release_tag}"
             )
             assert previous_release_sha
-
-            # Refuse to make an empty patch release. For a patch release the
-            # tweak equals the number of commits since the previous release tag
-            # (see Git.tweak). A tweak of 1 means the only commit on top of the
-            # previous release is the automated post-release version bump, so
-            # there is nothing to release. Tagging it would produce a spurious
-            # release like v25.8.28.1-lts. Recovery runs (only-repo/only-docker)
-            # rebuild an already-tagged release and do not tag, so skip the check.
-            if not _skip_out_of_order_check and version.tweak == 1:
-                raise RuntimeError(
-                    f"Refusing to release ref [{commit_ref}]: computed version "
-                    f"[{version.string}] has tweak 1, which means the only commit "
-                    f"since the previous release [{previous_release_tag}] is the "
-                    f"automated version bump. There is nothing to release."
-                )
 
             if GH.is_latest_release_branch(release_branch):
                 print("This is going to be the latest release!")
