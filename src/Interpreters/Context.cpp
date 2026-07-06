@@ -5277,6 +5277,7 @@ BackgroundSchedulePool & Context::getStreamingSchedulePool() const
     callOnce(shared->streaming_schedule_pool_initialized, [&] {
         shared->streaming_schedule_pool = BackgroundSchedulePool::create(
             shared->server_settings[ServerSetting::background_streaming_schedule_pool_size],
+            shared->server_settings[ServerSetting::background_schedule_pool_initial_size],
             /*max_parallel_tasks_per_type*/ 0,
             CurrentMetrics::BackgroundStreamingSchedulePoolTask,
             CurrentMetrics::BackgroundStreamingSchedulePoolSize,
