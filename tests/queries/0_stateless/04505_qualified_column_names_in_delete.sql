@@ -1,11 +1,7 @@
-DROP TABLE IF EXISTS test_table;
+SET enable_analyzer=1;
 
-CREATE TABLE test_table
-(
-    test_column Int32
-)
-ENGINE = MergeTree
-ORDER BY test_column;
+DROP TABLE IF EXISTS test_table;
+CREATE TABLE test_table (test_column Int32) ENGINE = MergeTree ORDER BY test_column;
 
 INSERT INTO test_table SELECT 1;
 INSERT INTO test_table SELECT 2;
