@@ -41,6 +41,12 @@
                     <max>500000</max>
                 </max_expanded_ast_elements>
             </constraints>
+
+            <!-- Server-side backstop: keeps max_parser_backtracks `changed` so a server-side
+                 `SET compatibility=...` can't revert it to 0. The client-option compatibility
+                 path is handled by the command-line pin in run-fuzzer.sh / stress.py, which
+                 overrides this value anyway. -->
+            <max_parser_backtracks>1000000</max_parser_backtracks>
         </default>
     </profiles>
 </clickhouse>
