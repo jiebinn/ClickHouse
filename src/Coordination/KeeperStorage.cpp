@@ -343,6 +343,8 @@ uint64_t calculateDigest(std::string_view path, const Node & node)
     hash.update(node.stats.version);
     hash.update(node.stats.cversion);
     hash.update(node.stats.aversion);
+    /// ephemeralOwner() encodes isEphemeral (session id), isContainer (Long.MIN_VALUE sentinel),
+    /// and the regular case (0) — so this single field covers all three node kinds.
     hash.update(node.stats.ephemeralOwner());
     hash.update(node.numChildren());
     hash.update(node.stats.pzxid);
