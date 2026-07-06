@@ -1,7 +1,8 @@
-<!-- Comparison of 128-bit integer columns. Data shapes are chosen to exercise branch-prediction-hostile
-     patterns: fully random values (random sign for Int128), values that fit in the low 64 bits,
-     and values where half of the rows share the high 64 bits. -->
 <test>
+    <!-- Comparison of 128-bit integer columns. Data shapes are chosen to exercise branch-prediction-hostile
+         patterns: fully random values (random sign for Int128), values that fit in the low 64 bits,
+         and values where half of the rows share the high 64 bits. -->
+
     <create_query>
         CREATE TABLE cmp128
         (

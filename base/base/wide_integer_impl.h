@@ -936,7 +936,9 @@ public:
 #ifdef __SIZEOF_INT128__
             if constexpr (Bits == 128 && std::is_same_v<T, integer<Bits, Signed>> && std::endian::native == std::endian::little)
             {
-                /// See the rationale in operator_less.
+                /// Native 128-bit comparison compiles to branchless code (cmp/sbb), while the generic limb loop
+                /// below compiles to data-dependent branches that mispredict on real data and prevent
+                /// vectorization of columnar comparison loops.
                 using Native = std::conditional_t<std::is_same_v<Signed, signed>, __int128, unsigned __int128>;
                 return std::bit_cast<Native>(lhs) > std::bit_cast<Native>(rhs);
             }
@@ -970,9 +972,7 @@ public:
 #ifdef __SIZEOF_INT128__
             if constexpr (Bits == 128 && std::is_same_v<T, integer<Bits, Signed>> && std::endian::native == std::endian::little)
             {
-                /// Native 128-bit comparison compiles to branchless code (cmp/sbb), while the generic limb loop
-                /// below compiles to data-dependent branches that mispredict on real data and prevent
-                /// vectorization of columnar comparison loops.
+                /// See the rationale in operator_greater.
                 using Native = std::conditional_t<std::is_same_v<Signed, signed>, __int128, unsigned __int128>;
                 return std::bit_cast<Native>(lhs) < std::bit_cast<Native>(rhs);
             }
