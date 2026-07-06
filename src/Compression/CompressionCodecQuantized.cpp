@@ -3,7 +3,7 @@
 #include <Compression/CompressionFactory.h>
 #include <Compression/registerCompressionCodecs.h>
 #include <Common/ProductQuantization.h>
-#include <Common/VectorQuantization.h>
+#include <Common/VectorQuantizer.h>
 #include <Common/SipHash.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTLiteral.h>
@@ -111,7 +111,7 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
                 "Codec Quantized('mrl', ...): format must be 'int8' or 'bf16', got '{}'", format);
         params.method = "mrl_" + format;
 
-        if (const std::string error = VectorQuantization::validateParams(params.method, params.dimensions, params.bits); !error.empty())
+        if (const std::string error = VectorQuantizer::validateParams(params.method, params.dimensions, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
         return params;
     }
@@ -146,7 +146,7 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
         if (arguments->children.size() == 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
                 "Codec Quantized: the 4th parameter (m) is only valid for the 'pq' method");
-        if (const std::string error = VectorQuantization::validateParams(params.method, params.dimensions, params.bits); !error.empty())
+        if (const std::string error = VectorQuantizer::validateParams(params.method, params.dimensions, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
     }
 

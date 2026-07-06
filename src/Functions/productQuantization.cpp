@@ -94,7 +94,8 @@ CodebookView getCodebook(const ColumnWithTypeAndName & arg, const String & fn, s
 
 }
 
-/// Internal-only `__pqDistance(code, codebook, query, dimensions, m, nbits, is_l2) -> Float32` (asymmetric ADC).
+/// Internal-only `__pqDistance(quantized_vector, codebook, vector, dimensions, m, nbits, is_l2) -> Float32`.
+///
 /// Injected into the query plan by the vector-search optimizer; not registered in `FunctionFactory` (not user-callable).
 class FunctionPQDistance : public IFunction
 {

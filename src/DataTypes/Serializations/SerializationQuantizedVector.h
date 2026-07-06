@@ -11,7 +11,7 @@ class IDataType;
 /// Serialization of a dense vector column (e.g. `Array(Float32)`) that carries a `Quantized(...)` codec.
 ///
 /// On top of the normal full-precision array streams it writes one extra on-disk stream holding a compact,
-/// data-independent quantized code per row (see `Common/VectorQuantization.h`). The codes are derived from the
+/// data-independent quantized code per row (see `Common/VectorQuantizer.h`). The codes are derived from the
 /// full-precision data at write time and exposed as the readable subcolumn `<column>.quantized` of type
 /// `FixedString(bytesPerVector)`. The full-precision array reconstructs from the float streams alone; the code stream
 /// is read only when the subcolumn is explicitly requested.

@@ -9,7 +9,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/Serializations/SerializationQuantizedVector.h>
 #include <Common/Exception.h>
-#include <Common/VectorQuantization.h>
+#include <Common/VectorQuantizer.h>
 #include <Functions/IFunction.h>
 #include <Functions/productQuantization.h>
 #include <Functions/vectorQuantization.h>
@@ -272,7 +272,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
     /// `rabitq`/`turboquant` are cosine-only estimators (they drop the vector norm), so their shortlist ranks by angle.
     /// Do not use it for an L2Distance query: a true L2-nearest row could be dropped before the exact rescore. Leave the
     /// query exact instead. (`int8`, `mrl` and `pq` retain enough to rank L2.)
-    if (is_l2 && !is_pq && !VectorQuantization::supportsL2(method))
+    if (is_l2 && !is_pq && !VectorQuantizer::supportsL2(method))
         return false;
 
     /// Shortlist size k' = k * fetch_multiplier, clamped so that the inner LimitStep stays eligible for lazy

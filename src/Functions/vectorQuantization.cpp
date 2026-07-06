@@ -10,7 +10,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Common/VectorQuantization.h>
+#include <Common/VectorQuantizer.h>
 #include <Common/VectorWithMemoryTracking.h>
 
 #include <vector>
@@ -29,7 +29,6 @@ namespace ErrorCodes
 namespace
 {
 
-/// Pull one constant argument as a string (method name). Throws if not constant.
 String getConstStringArgument(const ColumnWithTypeAndName & arg, const String & fn, size_t idx)
 {
     if (!arg.column || !isColumnConst(*arg.column))
@@ -37,7 +36,6 @@ String getConstStringArgument(const ColumnWithTypeAndName & arg, const String & 
     return String(arg.column->getDataAt(0));
 }
 
-/// Pull one constant argument as an unsigned integer (dimensions / bits / is_l2 flag). Throws if not constant.
 UInt64 getConstUIntArgument(const ColumnWithTypeAndName & arg, const String & fn, size_t idx)
 {
     if (!arg.column || !isColumnConst(*arg.column))
@@ -91,11 +89,13 @@ void checkVectorArgument(const DataTypePtr & type, const String & fn)
 }
 
 
-/// Internal-only `__quantizeDistance(code, query, method, dimensions, bits, is_l2) -> Float32`.
+/// Internal function `__quantizeDistance(quantized_vector, vector, method, dimensions, bits, is_l2) -> Float32`.
 ///
-/// Approximate distance between a data-independent `Quantize(...)` codec's `code` and the full-precision query vector
-/// `query`. The query state is prepared once per call. `is_l2` selects L2Distance (1) vs cosineDistance (0). Injected
-/// into the query plan by the vector-search optimizer; not registered in `FunctionFactory` (not user-callable).
+/// Calculates the approximate distance between a data-independent `Quantize(...)` codec's `quantized_vector` and the
+/// full-precision query vector `vector`.
+/// The query state is prepared once per call.
+/// `is_l2` selects L2Distance (1) vs cosineDistance (0).
+/// Injected into the query plan by the vector-search optimizer; not registered in `FunctionFactory` (not user-callable).
 class FunctionQuantizeDistance : public IFunction
 {
 public:
@@ -111,13 +111,13 @@ public:
     {
         if (!checkAndGetDataType<DataTypeFixedString>(arguments[0].type.get()))
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                "First argument of function {} must be a FixedString (a quantized code)", name);
+                "First argument of function {} must be a FixedString (a quantized vector)", name);
         checkVectorArgument(arguments[1].type, name);
 
         const String method = getConstStringArgument(arguments[2], name, 2);
         const UInt64 dimensions = getConstUIntArgument(arguments[3], name, 3);
         const UInt64 bits = getConstUIntArgument(arguments[4], name, 4);
-        if (const std::string err = VectorQuantization::validateParams(method, dimensions, bits); !err.empty())
+        if (const std::string err = VectorQuantizer::validateParams(method, dimensions, bits); !err.empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function {}: {}", name, err);
 
         return std::make_shared<DataTypeFloat32>();
@@ -145,22 +145,22 @@ public:
                 "Query vector has {} elements but function {} was declared with {} dimensions",
                 query_buf.size(), name, dimensions);
 
-        auto query = VectorQuantization::prepareQuery(method, query_buf.data(), dimensions, bits, is_l2);
+        auto query = VectorQuantizer::prepareQuery(method, query_buf.data(), dimensions, bits, is_l2);
 
         const auto * col_code = checkAndGetColumn<ColumnFixedString>(arguments[0].column.get());
         if (!col_code)
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "First argument of function {} must be a FixedString", name);
         const size_t n = col_code->getN();
-        const size_t expected = VectorQuantization::bytesPerVector(method, dimensions, bits);
+        const size_t expected = VectorQuantizer::bytesPerVector(method, dimensions, bits);
         if (n != expected)
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Quantized code has {} bytes but method '{}' with {} dimensions expects {}", n, method, dimensions, expected);
+                "Quantized vector has {} bytes but method '{}' with {} dimensions expects {}", n, method, dimensions, expected);
         const auto & chars = col_code->getChars();
 
         auto col_res = ColumnFloat32::create(input_rows_count);
         auto & res_data = col_res->getData();
         for (size_t row = 0; row < input_rows_count; ++row)
-            res_data[row] = VectorQuantization::distance(*query, reinterpret_cast<const char *>(&chars[row * n]));
+            res_data[row] = VectorQuantizer::distance(*query, reinterpret_cast<const char *>(&chars[row * n]));
 
         return col_res;
     }

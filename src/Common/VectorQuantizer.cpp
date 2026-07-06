@@ -1,4 +1,4 @@
-#include <Common/VectorQuantization.h>
+#include <Common/VectorQuantizer.h>
 
 #include <Common/Exception.h>
 #include <Common/HadamardTransform.h>
@@ -481,9 +481,6 @@ inline float turboQuantDistanceFast(const TurboQuantQuery & q, const char * code
 
 }
 
-namespace VectorQuantization
-{
-
 namespace
 {
 FlatQuantization methodToCodec(std::string_view method)
@@ -502,7 +499,7 @@ FlatQuantization methodToCodec(std::string_view method)
 }
 }
 
-bool supportsL2(std::string_view method)
+bool VectorQuantizer::supportsL2(std::string_view method)
 {
     /// `rabitq` and `turboquant` are sign/rotation cosine estimators that do not retain the vector norm, so their
     /// approximate distance can only rank by angle. `int8` (stores the norm) and `mrl_*` (dequantize the kept prefix)
@@ -510,7 +507,7 @@ bool supportsL2(std::string_view method)
     return method == "int8" || method == "mrl_int8" || method == "mrl_bf16";
 }
 
-std::string validateParams(std::string_view method, size_t dimensions, size_t bits)
+std::string VectorQuantizer::validateParams(std::string_view method, size_t dimensions, size_t bits)
 {
     const FlatQuantization codec = methodToCodec(method);
 
@@ -536,12 +533,12 @@ std::string validateParams(std::string_view method, size_t dimensions, size_t bi
     return {};
 }
 
-size_t bytesPerVector(std::string_view method, size_t dimensions, size_t bits)
+size_t VectorQuantizer::bytesPerVector(std::string_view method, size_t dimensions, size_t bits)
 {
     return expectedFlatBytesPerVector(methodToCodec(method), dimensions, bits);
 }
 
-struct Encoder
+struct VectorQuantizer::Encoder
 {
     FlatQuantization codec = FlatQuantization::RaBitQ;
     size_t dimensions = 0;
@@ -552,7 +549,7 @@ struct Encoder
     std::vector<float> work2;        /// turboquant: second per-vector scratch
 };
 
-std::shared_ptr<Encoder> createEncoder(std::string_view method, size_t dimensions, size_t bits)
+std::shared_ptr<VectorQuantizer::Encoder> VectorQuantizer::createEncoder(std::string_view method, size_t dimensions, size_t bits)
 {
     auto encoder = std::make_shared<Encoder>();
     encoder->codec = methodToCodec(method);
@@ -584,7 +581,7 @@ std::shared_ptr<Encoder> createEncoder(std::string_view method, size_t dimension
     return encoder;
 }
 
-void encode(Encoder & encoder, const float * vec, char * dst)
+void VectorQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
 {
     const size_t dimensions = encoder.dimensions;
     const size_t bits = encoder.bits;
@@ -654,7 +651,7 @@ void encode(Encoder & encoder, const float * vec, char * dst)
     }
 }
 
-void encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
+void VectorQuantizer::encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
 {
     /// Convenience one-shot; encoding many vectors should `createEncoder` once and reuse it to amortize the projection.
     auto encoder = createEncoder(method, dimensions, bits);
@@ -675,7 +672,7 @@ struct Int8Query
 };
 
 /// Prepared query state for computing approximate distances from codes.
-struct Query
+struct VectorQuantizer::Query
 {
     FlatQuantization codec = FlatQuantization::RaBitQ;
     size_t dimensions = 0;
@@ -692,7 +689,7 @@ struct Query
     bool use_icelake = false;
 };
 
-std::shared_ptr<const Query> prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
+std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
 {
     auto q = std::make_shared<Query>();
     q->codec = methodToCodec(method);
@@ -764,7 +761,7 @@ std::shared_ptr<const Query> prepareQuery(std::string_view method, const float *
     return q;
 }
 
-float distance(const Query & query, const char * code)
+float VectorQuantizer::distance(const Query & query, const char * code)
 {
     switch (query.codec)
     {
@@ -838,8 +835,6 @@ float distance(const Query & query, const char * code)
         }
     }
     return 0.0f;
-}
-
 }
 
 }

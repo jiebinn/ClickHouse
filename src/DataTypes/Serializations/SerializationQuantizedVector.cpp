@@ -6,7 +6,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnsNumber.h>
 #include <Common/ProductQuantization.h>
-#include <Common/VectorQuantization.h>
+#include <Common/VectorQuantizer.h>
 #include <Common/Exception.h>
 #include <Common/SipHash.h>
 #include <Common/assert_cast.h>
@@ -169,7 +169,7 @@ SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPt
     , is_pq(params_.method == "pq")
     , bytes_per_vector(is_pq
           ? ProductQuantization::bytesPerVector(params_.dimensions, params_.m, params_.bits)
-          : VectorQuantization::bytesPerVector(params_.method, params_.dimensions, params_.bits))
+          : VectorQuantizer::bytesPerVector(params_.method, params_.dimensions, params_.bits))
     , codes_type(std::make_shared<DataTypeFixedString>(bytes_per_vector))
     , codes_serialization(SerializationNamed::create(
           codes_type->getDefaultSerialization(), subcolumn_name, ISerialization::Substream::QuantizedCodes))
@@ -336,11 +336,11 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
     /// Build the encoder once and reuse it for every row, so the per-codebook setup (pq) or the deterministic projection
     /// (the data-independent methods) is not recomputed per row.
     std::shared_ptr<ProductQuantization::Encoder> pq_encoder;
-    std::shared_ptr<VectorQuantization::Encoder> flat_encoder;
+    std::shared_ptr<VectorQuantizer::Encoder> flat_encoder;
     if (is_pq)
         pq_encoder = ProductQuantization::createEncoder(codebook, params.dimensions, params.m, params.bits);
     else
-        flat_encoder = VectorQuantization::createEncoder(params.method, params.dimensions, params.bits);
+        flat_encoder = VectorQuantizer::createEncoder(params.method, params.dimensions, params.bits);
 
     std::vector<float> buf;
     for (size_t i = 0; i < count; ++i)
@@ -355,7 +355,7 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
         if (is_pq)
             ProductQuantization::encode(*pq_encoder, buf.data(), dst);
         else
-            VectorQuantization::encode(*flat_encoder, buf.data(), dst);
+            VectorQuantizer::encode(*flat_encoder, buf.data(), dst);
     }
 
     return res;
