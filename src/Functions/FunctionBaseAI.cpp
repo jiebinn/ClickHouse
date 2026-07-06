@@ -350,7 +350,7 @@ ColumnPtr FunctionBaseAI::executeImpl(const ColumnsWithTypeAndName & arguments, 
     /// `convertToFullColumnIfConst` unwraps the latter into the former, so a single null-map path handles both.
     ColumnPtr prompt_column;
     const ColumnNullable * prompt_nullable = nullptr;
-    if (0 < arguments.size() && arguments[0].type->isNullable())
+    if (arguments[0].type->isNullable())
     {
         prompt_column = arguments[0].column->convertToFullColumnIfConst();
         prompt_nullable = typeid_cast<const ColumnNullable *>(prompt_column.get());
