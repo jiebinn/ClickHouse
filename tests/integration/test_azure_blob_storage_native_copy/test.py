@@ -9,9 +9,12 @@ from helpers.cluster import ClickHouseCluster
 
 
 def generate_config(port):
+    # Per-worker suffix so parallel xdist workers don't race on the generated file.
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
+    suffix = f"_{worker_id}" if worker_id else ""
     path = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "./_gen/storage_conf.xml",
+        f"./_gen/storage_conf{suffix}.xml",
     )
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
