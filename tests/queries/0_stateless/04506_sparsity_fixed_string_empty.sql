@@ -5,6 +5,7 @@
 -- `empty(s)` / `notEmpty(s)` before the sparsity classifier runs. The rewrite must
 -- fire for FixedString the same way it fires for String.
 
+SET optimize_trivial_count_query = 1;
 SET optimize_trivial_count_with_sparsity_filter = 1;
 
 DROP TABLE IF EXISTS t_fixed_empty;
@@ -14,6 +15,7 @@ ENGINE = MergeTree ORDER BY id
 SETTINGS index_granularity = 512,
          ratio_of_defaults_for_sparse_serialization = 0.5,
          compute_exact_num_defaults_for_sparse_columns = 1,
+         serialization_info_version = 'with_types',
          min_bytes_for_wide_part = 0;
 
 INSERT INTO t_fixed_empty
