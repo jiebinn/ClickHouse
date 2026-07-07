@@ -2,9 +2,4 @@
 
 When opening a PR follow these instructions:
 - Give the PR a title beginning with `Docs:`
-- Include the following in the PR body
-
-```markdown
-### Changelog category (leave one):
-- Documentation (changelog entry is not required)
-```
+- For the PR body use `.github/PULL_REQUEST_TEMPLATE.md` and select the `Documentation` category
