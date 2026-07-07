@@ -23,12 +23,6 @@ namespace
     constexpr size_t DEFLATE_WINDOW = 32768;
     /// Max compressed bytes pulled into in_buf per refill (bounds memory regardless of nested buffer size).
     constexpr size_t INPUT_CHUNK = 1u << 20;
-    /// Upper bound on the output buffer. libdeflate's streaming decoder only suspends at DEFLATE block
-    /// boundaries, so a block whose uncompressed size exceeds the current buffer forces us to grow until
-    /// the whole block fits. Capping the buffer keeps a crafted stream with one enormous block (a
-    /// decompression bomb) from driving input-controlled memory growth; we fail closed past this bound.
-    /// No real-world encoder emits a single block anywhere near this large.
-    constexpr size_t MAX_OUTPUT_BUFFER = 256ull << 20; /// 256 MiB
 
     /// gzip header flag bits (RFC 1952).
     constexpr uint8_t GZIP_FHCRC = 1 << 1;
@@ -352,15 +346,18 @@ bool LibdeflateInflatingReadBuffer::decompressImpl()
                     {
                         if (produced == 0)
                         {
-                            /* A single block exceeds the whole output buffer: grow it (the window at the
-                             * front is preserved) and retry, but fail closed past a fixed bound instead of
-                             * growing without limit for a crafted single-block decompression bomb. */
-                            if (memory.size() + out_capacity > MAX_OUTPUT_BUFFER)
-                                throw Exception(
-                                    ErrorCodes::CANNOT_DECOMPRESS,
-                                    "A single {} DEFLATE block does not fit into the {}-byte decompression buffer limit",
-                                    gzip ? "gzip" : "zlib", MAX_OUTPUT_BUFFER);
-                            memory.resize(memory.size() + out_capacity);
+                            /* A single DEFLATE block's uncompressed size exceeds the whole output buffer.
+                             * libdeflate's streaming decoder only suspends at block boundaries, so the whole
+                             * block must be buffered before any of its output is exposed: grow the buffer (the
+                             * 32 KiB window at the front is preserved) and retry. We grow geometrically and
+                             * don't impose an artificial ceiling; the buffer is allocated through ClickHouse's
+                             * tracked allocator, so a crafted single-block decompression bomb runs into the
+                             * query/server memory limit and throws MEMORY_LIMIT_EXCEEDED, exactly like any
+                             * other oversized allocation. Every mainstream gzip/zlib/deflate encoder bounds its
+                             * blocks to well under a megabyte of uncompressed data (zlib flushes roughly every
+                             * lit_bufsize symbols, libdeflate's SOFT_MAX_BLOCK_LENGTH is 300000 bytes, etc.),
+                             * so a real-world stream never reaches this grow path; only a hand-crafted one does. */
+                            memory.resize(std::max(memory.size() + out_capacity, memory.size() * 2));
                             continue;
                         }
                         /// Output buffer full at a block boundary: the stream is provably incomplete (the
