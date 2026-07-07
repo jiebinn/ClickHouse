@@ -353,7 +353,6 @@ protected:
 
             ++count;
         }
-        ++database_idx;
         return count;
     }
 
@@ -533,6 +532,7 @@ protected:
             {
                 size_t rows_added = fillTableNamesOnly(res_columns);
                 rows_count += rows_added;
+                ++database_idx;
                 continue;
             }
 
