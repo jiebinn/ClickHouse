@@ -391,6 +391,144 @@ async function getCIReportsFromPR(prUrl) {
 /**
  * Fetch and parse the CI report
  */
+/**
+ * Given a top-level index report URL (json.html?...&name_0=X, no name_1) and its raw JSON, return
+ * the per-job report URLs (json.html?...&name_1=<job>) for the FAILED jobs. Child names come from
+ * the report's IMMEDIATE children (the job/check rows) -- never from flattened leaf tests, whose
+ * names (e.g. "Server died") are not valid name_1 job identifiers.
+ */
+function childReportUrlsForFailedJobs(topLevelUrl, jsonData) {
+  const jobs = (jsonData && Array.isArray(jsonData.results)) ? jsonData.results : [];
+  return jobs
+    .filter(j => isFailureStatus(j.status))
+    .map(j => topLevelUrl.replace(/&name_1=[^&]*/, '') + `&name_1=${encodeURIComponent(j.name)}`);
+}
+
+/**
+ * Render a set of report URLs as a multi-report summary (one row per report, failures under each).
+ * Shared by the GitHub-PR path and the direct top-level-index path.
+ */
+async function renderMultiReport(ciUrls, options) {
+  console.log(`Fetching all reports...\n`);
+  const allResults = [];
+
+  for (let i = 0; i < ciUrls.length; i++) {
+    const url = ciUrls[i];
+    const nameMatch = url.match(/name_0=([^&]+)/);
+    const name1Match = url.match(/name_1=([^&]+)/);
+    const jobName = nameMatch ? decodeURIComponent(nameMatch[1]) : 'Unknown';
+    const subJobName = name1Match ? decodeURIComponent(name1Match[1]) : null;
+    const fullJobName = subJobName ? `${jobName} -> ${subJobName}` : jobName;
+
+    try {
+      console.log(`[${i + 1}/${ciUrls.length}] ${fullJobName}...`);
+      const result = await fetchReport(url, { ...options, isSingleReport: true });
+      allResults.push({
+        index: i + 1,
+        jobName: fullJobName,
+        url,
+        isPRLevel: !subJobName, // true if this is a PR-level report (no name_1)
+        ...result
+      });
+    } catch (error) {
+      console.log(`  Error: ${error.message}\n`);
+      allResults.push({
+        index: i + 1,
+        jobName: fullJobName,
+        url,
+        isPRLevel: !subJobName,
+        error: error.message
+      });
+    }
+  }
+
+  // Print summary
+  console.log('\n' + '='.repeat(80));
+  console.log('CI REPORTS SUMMARY');
+  console.log('='.repeat(80) + '\n');
+
+  let totalTests = 0;
+  let totalPassed = 0;
+  let totalFailed = 0;
+  let totalSkipped = 0;
+
+  // Per-failure detail is normally suppressed for the top-level PR report to avoid
+  // duplicating the nested per-job reports. But when the PR report is the ONLY report
+  // discovered (the bot comment exposed no nested job URLs), suppressing it would leave a
+  // PR URL with no failed leaves at all — so show them in that case.
+  const onlyPRLevel = allResults.every(r => r.error || r.isPRLevel);
+
+  for (const result of allResults) {
+    if (result.error) {
+      console.log(`[${result.index}] ${result.jobName}`);
+      console.log(`    ❌ Error: ${result.error}\n`);
+      continue;
+    }
+
+    const { testResults = [] } = result;
+    const failed = testResults.filter(t => isFailureStatus(t.status));
+    const passed = testResults.filter(t => t.status === 'success' || t.status === 'OK');
+    const skipped = testResults.filter(t => t.status === 'skipped' || t.status === 'SKIPPED');
+
+    // Don't let the top-level PR report contribute to the totals when nested per-job reports
+    // are also present — it aggregates the same failures, so counting both double-counts.
+    // (When the PR report is the only one, onlyPRLevel is true and it does count.)
+    if (!result.isPRLevel || onlyPRLevel) {
+      totalTests += testResults.length;
+      totalPassed += passed.length;
+      totalFailed += failed.length;
+      totalSkipped += skipped.length;
+    }
+
+    const status = failed.length > 0 ? '❌' : '✅';
+    console.log(`[${result.index}] ${status} ${result.jobName}`);
+    console.log(`    Total: ${testResults.length} | ✅ Passed: ${passed.length} | ❌ Failed: ${failed.length} | ⏭️  Skipped: ${skipped.length}`);
+
+    // For reports with failures, show the HTML link (also for the PR report when it's the
+    // only one, so the investigator can drill in).
+    if ((!result.isPRLevel || onlyPRLevel) && failed.length > 0 && result.url) {
+      console.log(`    🔗 Report: ${result.url}`);
+    }
+
+    // Show individual failures for nested reports; for the PR-level report only when it is
+    // the sole report (otherwise skip it to avoid duplicating the nested job reports).
+    if (failed.length > 0 && options.failedOnly && (!result.isPRLevel || onlyPRLevel)) {
+      for (const test of failed) {
+        console.log(`      ❌ FAIL: ${test.name}`);
+        if (test.labels && test.labels.length > 0) {
+          console.log(`         🏷️  labels: ${test.labels.join(', ')}`);
+        }
+        if (options.showCidb && test.cidbLinks && test.cidbLinks.length > 0) {
+          for (const cidbLink of test.cidbLinks) {
+            console.log(`         📊 CIDB: ${cidbLink}`);
+          }
+        }
+        if (test.links && test.links.length > 0) {
+          for (const link of test.links) {
+            console.log(`         🔗 ${link}`);
+          }
+        }
+        if (test.info) {
+          const lines = test.info.split('\n').filter(l => l.trim());
+          const tail = lines.slice(-30);
+          console.log('         --- log tail ---');
+          for (const line of tail) {
+            console.log(`         ${line}`);
+          }
+          console.log('         --- end ---');
+        }
+      }
+    }
+    console.log();
+  }
+
+  console.log('='.repeat(80));
+  console.log(`TOTAL: ${totalTests} tests | ✅ ${totalPassed} passed | ❌ ${totalFailed} failed | ⏭️  ${totalSkipped} skipped`);
+  console.log('='.repeat(80) + '\n');
+
+  return { allResults, summary: { totalTests, totalPassed, totalFailed, totalSkipped } };
+}
+
 async function fetchReport(inputUrl, options = {}) {
   try {
     if (!options.isSingleReport) {
@@ -416,13 +554,12 @@ async function fetchReport(inputUrl, options = {}) {
       if (!hasNested && topLevelUrl) {
         try {
           const top = await fetchReport(topLevelUrl, { ...options, isSingleReport: true });
-          const failedJobs = (top.testResults || []).filter(t => isFailureStatus(t.status));
-          for (const job of failedJobs) {
-            const childUrl = topLevelUrl.replace(/&name_1=[^&]*/, '') + `&name_1=${encodeURIComponent(job.name)}`;
+          const childUrls = childReportUrlsForFailedJobs(topLevelUrl, top.jsonData);
+          for (const childUrl of childUrls) {
             if (!ciUrls.includes(childUrl)) ciUrls.push(childUrl);
           }
-          if (failedJobs.length > 0) {
-            console.log(`Top-level PR report is an index — descending into ${failedJobs.length} failed job report(s).`);
+          if (childUrls.length > 0) {
+            console.log(`Top-level PR report is an index — descending into ${childUrls.length} failed job report(s).`);
           }
         } catch (e) {
           console.log(`Note: could not expand the top-level PR report into job reports (${e.message}); showing job-level failures only.`);
@@ -440,125 +577,7 @@ async function fetchReport(inputUrl, options = {}) {
         console.log(`Fetching report #${options.reportIndex}...\n`);
         inputUrl = ciUrls[idx];
       } else {
-        // Fetch all reports
-        console.log(`Fetching all reports...\n`);
-        const allResults = [];
-
-        for (let i = 0; i < ciUrls.length; i++) {
-          const url = ciUrls[i];
-          const nameMatch = url.match(/name_0=([^&]+)/);
-          const name1Match = url.match(/name_1=([^&]+)/);
-          const jobName = nameMatch ? decodeURIComponent(nameMatch[1]) : 'Unknown';
-          const subJobName = name1Match ? decodeURIComponent(name1Match[1]) : null;
-          const fullJobName = subJobName ? `${jobName} -> ${subJobName}` : jobName;
-
-          try {
-            console.log(`[${i + 1}/${ciUrls.length}] ${fullJobName}...`);
-            const result = await fetchReport(url, { ...options, isSingleReport: true });
-            allResults.push({
-              index: i + 1,
-              jobName: fullJobName,
-              url,
-              isPRLevel: !subJobName, // true if this is a PR-level report (no name_1)
-              ...result
-            });
-          } catch (error) {
-            console.log(`  Error: ${error.message}\n`);
-            allResults.push({
-              index: i + 1,
-              jobName: fullJobName,
-              url,
-              isPRLevel: !subJobName,
-              error: error.message
-            });
-          }
-        }
-
-        // Print summary
-        console.log('\n' + '='.repeat(80));
-        console.log('CI REPORTS SUMMARY');
-        console.log('='.repeat(80) + '\n');
-
-        let totalTests = 0;
-        let totalPassed = 0;
-        let totalFailed = 0;
-        let totalSkipped = 0;
-
-        // Per-failure detail is normally suppressed for the top-level PR report to avoid
-        // duplicating the nested per-job reports. But when the PR report is the ONLY report
-        // discovered (the bot comment exposed no nested job URLs), suppressing it would leave a
-        // PR URL with no failed leaves at all — so show them in that case.
-        const onlyPRLevel = allResults.every(r => r.error || r.isPRLevel);
-
-        for (const result of allResults) {
-          if (result.error) {
-            console.log(`[${result.index}] ${result.jobName}`);
-            console.log(`    ❌ Error: ${result.error}\n`);
-            continue;
-          }
-
-          const { testResults = [] } = result;
-          const failed = testResults.filter(t => isFailureStatus(t.status));
-          const passed = testResults.filter(t => t.status === 'success' || t.status === 'OK');
-          const skipped = testResults.filter(t => t.status === 'skipped' || t.status === 'SKIPPED');
-
-          // Don't let the top-level PR report contribute to the totals when nested per-job reports
-          // are also present — it aggregates the same failures, so counting both double-counts.
-          // (When the PR report is the only one, onlyPRLevel is true and it does count.)
-          if (!result.isPRLevel || onlyPRLevel) {
-            totalTests += testResults.length;
-            totalPassed += passed.length;
-            totalFailed += failed.length;
-            totalSkipped += skipped.length;
-          }
-
-          const status = failed.length > 0 ? '❌' : '✅';
-          console.log(`[${result.index}] ${status} ${result.jobName}`);
-          console.log(`    Total: ${testResults.length} | ✅ Passed: ${passed.length} | ❌ Failed: ${failed.length} | ⏭️  Skipped: ${skipped.length}`);
-
-          // For reports with failures, show the HTML link (also for the PR report when it's the
-          // only one, so the investigator can drill in).
-          if ((!result.isPRLevel || onlyPRLevel) && failed.length > 0 && result.url) {
-            console.log(`    🔗 Report: ${result.url}`);
-          }
-
-          // Show individual failures for nested reports; for the PR-level report only when it is
-          // the sole report (otherwise skip it to avoid duplicating the nested job reports).
-          if (failed.length > 0 && options.failedOnly && (!result.isPRLevel || onlyPRLevel)) {
-            for (const test of failed) {
-              console.log(`      ❌ FAIL: ${test.name}`);
-              if (test.labels && test.labels.length > 0) {
-                console.log(`         🏷️  labels: ${test.labels.join(', ')}`);
-              }
-              if (options.showCidb && test.cidbLinks && test.cidbLinks.length > 0) {
-                for (const cidbLink of test.cidbLinks) {
-                  console.log(`         📊 CIDB: ${cidbLink}`);
-                }
-              }
-              if (test.links && test.links.length > 0) {
-                for (const link of test.links) {
-                  console.log(`         🔗 ${link}`);
-                }
-              }
-              if (test.info) {
-                const lines = test.info.split('\n').filter(l => l.trim());
-                const tail = lines.slice(-30);
-                console.log('         --- log tail ---');
-                for (const line of tail) {
-                  console.log(`         ${line}`);
-                }
-                console.log('         --- end ---');
-              }
-            }
-          }
-          console.log();
-        }
-
-        console.log('='.repeat(80));
-        console.log(`TOTAL: ${totalTests} tests | ✅ ${totalPassed} passed | ❌ ${totalFailed} failed | ⏭️  ${totalSkipped} skipped`);
-        console.log('='.repeat(80) + '\n');
-
-        return { allResults, summary: { totalTests, totalPassed, totalFailed, totalSkipped } };
+        return await renderMultiReport(ciUrls, options);
       }
     }
 
@@ -586,6 +605,24 @@ async function fetchReport(inputUrl, options = {}) {
       const jsonUrl = constructJsonUrl(baseUrl, suffix, sha, nameParams[0]);
       if (!options.isSingleReport) {
         console.log(`Fetching JSON: ${jsonUrl}\n`);
+      }
+
+      // A direct top-level index URL (only name_0, no name_1) aggregates every job — it is NOT a
+      // single job report. Treat it like the PR-URL path: refuse per-job operations (they would act
+      // on the wrong job), and otherwise expand into the failed jobs' per-job reports.
+      if (nameParams.length === 1 && !options.isSingleReport && !options.reportIndex) {
+        const topJson = JSON.parse(await fetchUrl(jsonUrl, options.credentials));
+        const childUrls = childReportUrlsForFailedJobs(inputUrl, topJson);
+        if (options.downloadLogs) {
+          const failedNames = (topJson.results || []).filter(j => isFailureStatus(j.status)).map(j => j.name);
+          throw new Error(
+            `'${nameParams[0]}' is a top-level index report, not a single job — --download-logs would ` +
+            `fetch the wrong job's artifacts. Re-run against a concrete job report by appending ` +
+            `&name_1=<job>. Failed jobs: ${failedNames.join(', ') || '(none)'}.`
+          );
+        }
+        console.log(`Top-level '${nameParams[0]}' index — expanding into ${childUrls.length} failed job report(s).\n`);
+        return await renderMultiReport([inputUrl, ...childUrls], options);
       }
 
       // Fetch name_0 JSON data, and name_1 separately if present (matching json.html behavior)
