@@ -480,36 +480,28 @@ bool ShellCommand::waitIfProccesTerminated()
 }
 
 
-bool ShellCommand::tryReapWithoutStatusCheck()
+bool ShellCommand::tryWaitWithoutStatusCheck()
 {
-    /// A child that has closed stdout (so the pipeline is complete) but has only
-    /// just called `_exit` is not yet a reapable zombie the instant cleanup runs, so
-    /// a single non-blocking `wait4(WNOHANG)` can miss it and lose its `rusage` — the
-    /// CPU counters would then read zero. Poll for a bounded budget so a
-    /// promptly-exiting child is reaped and its usage captured. A child that keeps
-    /// running past the budget is still left to `~ShellCommand`'s bounded
-    /// `command_termination_timeout` + SIGTERM teardown, so cleanup never hangs.
-    ///
-    /// The budget follows the same `command_termination_timeout` contract as the
-    /// destructor's wait: it is `wait_for_normal_exit_before_termination_seconds`.
-    /// This way a child that exits naturally anywhere inside the configured teardown
-    /// window is reaped here (with its `rusage`) rather than by the destructor's
-    /// `waitForPid`, which does not collect usage. A configured timeout of 0 means
-    /// "do not wait" — a single non-blocking reap, so this path never stalls a query
-    /// beyond what the configuration allows.
-    const UInt64 reap_poll_budget_ms
+    /// A child that closed stdout but has only just called `_exit` is not yet a
+    /// zombie, so a single `wait4(WNOHANG)` can miss it and lose its `rusage`. Poll
+    /// within the same `command_termination_timeout` window the destructor uses
+    /// (`wait_for_normal_exit_before_termination_seconds`), so a child exiting inside
+    /// that window has its usage collected here rather than by the destructor's
+    /// `waitForPid`, which collects none. A configured timeout of 0 means a single
+    /// non-blocking attempt, so this never stalls a query beyond the configuration.
+    const UInt64 poll_budget_ms
         = config.terminate_in_destructor_strategy.wait_for_normal_exit_before_termination_seconds * 1000ULL;
-    static constexpr UInt64 reap_poll_step_ms = 5;
+    static constexpr UInt64 poll_step_ms = 5;
 
     UInt64 waited_ms = 0;
     while (true)
     {
         if (tryWaitImpl(/*blocking=*/false, /*check_exit_status=*/false).is_process_terminated)
             return true;
-        if (waited_ms >= reap_poll_budget_ms)
+        if (waited_ms >= poll_budget_ms)
             return false;
-        sleepForMilliseconds(std::min(reap_poll_step_ms, reap_poll_budget_ms - waited_ms));
-        waited_ms += reap_poll_step_ms;
+        sleepForMilliseconds(std::min(poll_step_ms, poll_budget_ms - waited_ms));
+        waited_ms += poll_step_ms;
     }
 }
 

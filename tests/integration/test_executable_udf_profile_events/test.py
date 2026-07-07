@@ -382,7 +382,7 @@ def test_check_exit_code_false_succeeds_and_meters(started_cluster):
     _skip_msan()
     qid = "exec-nonzero-exit-1"
     # The UDF exits with code 3; check_exit_code=false means the source takes
-    # the tryReapWithoutStatusCheck path, so the query must succeed and rusage
+    # the tryWaitWithoutStatusCheck path, so the query must succeed and rusage
     # must still be populated.
     result = _run(
         "SELECT sum(test_udf_nonzero_exit(number)) FROM numbers(20)",

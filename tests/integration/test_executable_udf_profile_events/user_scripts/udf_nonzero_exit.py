@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """executable UDF that does CPU work per row and exits with code 3 after EOF.
 
-Used to validate that with `check_exit_code=false` the source reaps via the
-non-blocking, no-status-check path (`tryReapWithoutStatusCheck`), so:
-  - a non-zero child exit does not raise an exception, and
-  - rusage is still captured (`ExecutableUserDefinedFunctionUserTimeMicroseconds > 0`),
-  - and `CHILD_WAS_NOT_EXITED_NORMALLY` is NOT logged.
+Validates that with `check_exit_code=false` the source takes the no-status-check
+wait path (`tryWaitWithoutStatusCheck`): a non-zero exit raises nothing, rusage is
+still captured (`ExecutableUserDefinedFunctionUserTimeMicroseconds > 0`), and
+`CHILD_WAS_NOT_EXITED_NORMALLY` is not logged.
 """
 
 import os
@@ -32,17 +31,12 @@ for line in sys.stdin:
     sys.stdout.write(f"{_cpu_work(n)}\n")
     sys.stdout.flush()
 
-# Flush all output, then close stdout so ClickHouse observes EOF and proceeds to
-# reap the child while this process is still alive. Sleep before exiting so the
-# child is provably still running (not yet a zombie) when cleanup runs its reap:
-# this makes the "reap loses rusage" race deterministic. A single non-blocking
-# wait4(WNOHANG) then returns 0 and loses the rusage, so the reap must poll for a
-# bounded interval to still capture the child's CPU rusage. The 2s delay is chosen
-# to sit inside command_termination_timeout (5s here) yet above a 1s window: a
-# reap budget that follows command_termination_timeout captures this child's rusage
-# in cleanup, whereas a shorter fixed budget would give up and let the destructor's
-# waitForPid reap it (which collects no rusage), so a correct reap succeeds and
-# cleanup never SIGTERM-bounds.
+# Close stdout so ClickHouse sees EOF and starts cleanup while this process is still
+# alive, then sleep so it is provably still running (not yet a zombie) when the wait
+# runs. A single wait4(WNOHANG) then returns 0 and loses the rusage; the wait must
+# poll to still capture it. The 2s delay sits inside command_termination_timeout (5s)
+# but above a 1s window, so a budget that follows command_termination_timeout captures
+# this child's rusage in cleanup while a fixed 1s budget would miss it.
 sys.stdout.flush()
 os.close(1)
 time.sleep(2.0)
