@@ -5221,7 +5221,10 @@ std::unique_ptr<IQueryPlanStep> ReadFromMergeTree::deserialize(Deserialization &
         /// On a replica this rebuilds the read in parallel-reading mode: the ReadFromMergeTree ctor
         /// resolves the coordinator callbacks from ctx.context (set by TCPHandler) and the replica number
         /// from client_info. Passing no extension keeps those resolved from the context.
-        enable_parallel_reading,
+        /// Only enable it when the callbacks are actually present: while draining leftover packets
+        /// after an early failure (TCPHandler::skipData) the plan is deserialized against the global
+        /// context, which has no coordinator callbacks, and the built step is discarded anyway.
+        enable_parallel_reading && ctx.context->hasMergeTreeAllRangesCallback(),
         /*extension*/ nullptr);
 
     if (distributed_read_bucket_count)
