@@ -158,6 +158,49 @@ TEST(TestKeeperTest, Create2ResponseHasStatInMulti)
     }
 }
 
+TEST(TestKeeperTest, Create2DuplicateReturnsZNodeExists)
+{
+    TestKeeper keeper = makeKeeper();
+
+    create(keeper, "/node", "data", /* is_ephemeral */ false);
+
+    // include_stats=true (Create2) on an existing node must return ZNODEEXISTS,
+    // even when not_exists is set — Create2 takes precedence over CreateIfNotExists.
+    for (bool not_exists : {false, true})
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = "/node";
+        req->data = "data2";
+        req->not_exists = not_exists;
+        req->include_stats = true;
+
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+        MultiResponse multi = future.get();
+        EXPECT_EQ(multi.responses[0]->error, Error::ZNODEEXISTS)
+            << "not_exists=" << not_exists;
+    }
+
+    // include_ttl=true (CreateTTL) on an existing node must also return ZNODEEXISTS.
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = "/node";
+        req->data = "data3";
+        req->not_exists = true;
+        req->include_ttl = true;
+        req->ttl = 10000;
+
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+        MultiResponse multi = future.get();
+        EXPECT_EQ(multi.responses[0]->error, Error::ZNODEEXISTS);
+    }
+}
+
 TEST(TestKeeperTest, FilteredListWithoutStatsAndData)
 {
     TestKeeper keeper = makeKeeper();

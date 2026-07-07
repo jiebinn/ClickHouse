@@ -307,7 +307,10 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
 
     if (container.contains(path))
     {
-        if (not_exists)
+        // Create2 / CreateTTL take precedence over CreateIfNotExists: a duplicate node
+        // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
+        // mirroring ZooKeeperCreateRequest::getOpNum precedence in real Keeper.
+        if (not_exists && !include_stats && !include_ttl)
             base_response.error = Error::ZOK;
         else
             base_response.error = Error::ZNODEEXISTS;
