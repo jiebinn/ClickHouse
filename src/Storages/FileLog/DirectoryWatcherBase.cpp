@@ -412,9 +412,74 @@ void DirectoryWatcherBase::watchFunc()
             return it != other.end() && it->second.inode == inode;
         };
 
-        /// Emit events in the order StorageFileLog expects: MOVED_FROM, then MOVED_TO, then REMOVED,
-        /// then ADDED, then MODIFIED. In particular MOVED_TO must precede the ADDED of a recreated
-        /// source name so the moved inode's meta is renamed before the fresh file resets it.
+        /// Decide the order of rename targets (MOVED_TO) BEFORE emitting anything this pass. A target
+        /// whose OLD inode is itself being moved elsewhere must be emitted AFTER the MOVED_TO that
+        /// relocates that old inode, otherwise reusing the name erases the still-live inode's meta and
+        /// it is re-read from offset 0 (e.g. a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). A
+        /// topological sort over "target T follows the target that receives T's old inode" recovers
+        /// that chronological order. The only unsatisfiable shape is a rename cycle (e.g. an `a <-> b`
+        /// swap via a temporary name, coalesced into one scan): no order preserves every offset, and
+        /// unlike inotify we cannot observe the intermediate temporary-name events that would break it.
+        /// We fail closed on such a cycle, and crucially do it here, before any event of this pass is
+        /// queued, so StorageFileLog never drains a half-applied batch (orphaned MOVED_FROMs without
+        /// their matching MOVED_TO would otherwise be consumed as real removals of still-present files).
+        std::vector<std::string> move_targets;
+        for (const auto & [name, state] : current)
+        {
+            if (!same_identity(snapshot, name, state.inode) && is_rename(state.inode))
+                move_targets.push_back(name);
+        }
+
+        std::vector<std::string> ordered_moves;
+        {
+            const std::set<std::string> target_set(move_targets.begin(), move_targets.end());
+            std::map<std::string, std::string> predecessor;
+            for (const auto & name : move_targets)
+            {
+                auto snap_it = snapshot.find(name);
+                if (snap_it == snapshot.end())
+                    continue;
+                const UInt64 old_inode = snap_it->second.inode;
+                auto relocated_it = current_inode_name.find(old_inode);
+                if (is_rename(old_inode) && relocated_it != current_inode_name.end()
+                    && relocated_it->second != name && target_set.contains(relocated_it->second))
+                    predecessor[name] = relocated_it->second;
+            }
+
+            std::set<std::string> ordered_set;
+            bool progress = true;
+            while (ordered_moves.size() < move_targets.size() && progress)
+            {
+                progress = false;
+                for (const auto & name : move_targets)
+                {
+                    if (ordered_set.contains(name))
+                        continue;
+                    auto p = predecessor.find(name);
+                    if (p == predecessor.end() || ordered_set.contains(p->second))
+                    {
+                        ordered_moves.push_back(name);
+                        ordered_set.insert(name);
+                        progress = true;
+                    }
+                }
+            }
+
+            if (ordered_moves.size() != move_targets.size())
+            {
+                auto e = Exception(
+                    ErrorCodes::NOT_IMPLEMENTED,
+                    "Cannot preserve read offsets across a rename cycle observed in a single batch in directory {}",
+                    path);
+                owner.onError(e);
+                throw e;
+            }
+        }
+
+        /// From here on nothing throws, so the whole batch is queued atomically. Emit in the order
+        /// StorageFileLog expects: MOVED_FROM/REMOVED, then MOVED_TO, then ADDED, then MODIFIED. In
+        /// particular MOVED_TO precedes the ADDED of a recreated source name so the moved inode's meta
+        /// is renamed before the fresh file resets it.
 
         /// Departed identities (name gone, or its inode replaced at that name).
         for (const auto & [name, state] : snapshot)
@@ -431,76 +496,12 @@ void DirectoryWatcherBase::watchFunc()
                 owner.onItemRemoved(DirectoryEvent(name, DW_ITEM_REMOVED));
         }
 
-        /// Arrived identities that are the target of a rename. StorageFileLog processes MOVED_TO in
-        /// order and reuses each target name, so a target whose OLD inode is itself being moved
-        /// elsewhere must be emitted AFTER the MOVED_TO that relocates that old inode - otherwise
-        /// reusing the name erases the still-live inode's meta and it is re-read from offset 0 (e.g.
-        /// a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). We recover that chronological order
-        /// with a topological sort over "target T must follow the target that receives T's old
-        /// inode". The only unsatisfiable shape is a rename cycle (e.g. an `a <-> b` swap via a
-        /// temporary name, coalesced into one scan): no emit order preserves every offset, and unlike
-        /// inotify we cannot observe the intermediate temporary-name events that would break it. We
-        /// fail closed on such a cycle rather than silently re-read a rotated file from offset 0.
-        std::vector<std::string> move_targets;
-        for (const auto & [name, state] : current)
+        /// Arrived rename targets, in the topologically-sorted order computed above.
+        for (const auto & name : ordered_moves)
         {
-            if (!same_identity(snapshot, name, state.inode) && is_rename(state.inode))
-                move_targets.push_back(name);
-        }
-
-        if (!move_targets.empty())
-        {
-            const std::set<std::string> target_set(move_targets.begin(), move_targets.end());
-            std::map<std::string, std::string> predecessor;
-            for (const auto & name : move_targets)
-            {
-                auto snap_it = snapshot.find(name);
-                if (snap_it == snapshot.end())
-                    continue;
-                const UInt64 old_inode = snap_it->second.inode;
-                auto relocated_it = current_inode_name.find(old_inode);
-                if (is_rename(old_inode) && relocated_it != current_inode_name.end()
-                    && relocated_it->second != name && target_set.contains(relocated_it->second))
-                    predecessor[name] = relocated_it->second;
-            }
-
-            auto emit_moved_to = [&](const std::string & name)
-            {
-                changed = true;
-                if (eventMask() & DW_ITEM_MOVED_TO)
-                    owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
-            };
-
-            std::set<std::string> emitted;
-            bool progress = true;
-            while (emitted.size() < move_targets.size() && progress)
-            {
-                progress = false;
-                for (const auto & name : move_targets)
-                {
-                    if (emitted.contains(name))
-                        continue;
-                    auto p = predecessor.find(name);
-                    if (p == predecessor.end() || emitted.contains(p->second))
-                    {
-                        emit_moved_to(name);
-                        emitted.insert(name);
-                        progress = true;
-                    }
-                }
-            }
-            /// Anything left is a rename cycle we cannot order without losing an offset; surface it.
-            for (const auto & name : move_targets)
-            {
-                if (emitted.contains(name))
-                    continue;
-                auto e = Exception(
-                    ErrorCodes::NOT_IMPLEMENTED,
-                    "Cannot preserve read offsets across a rename cycle observed in a single batch in directory {}",
-                    path);
-                owner.onError(e);
-                throw e;
-            }
+            changed = true;
+            if (eventMask() & DW_ITEM_MOVED_TO)
+                owner.onItemMovedTo(DirectoryEvent(name, DW_ITEM_MOVED_TO));
         }
 
         /// Arrived identities that are genuinely new (including a name whose inode was replaced).
