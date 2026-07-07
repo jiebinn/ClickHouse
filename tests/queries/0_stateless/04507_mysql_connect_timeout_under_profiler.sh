@@ -28,9 +28,13 @@ ${CLICKHOUSE_CLIENT_QUIET} --query_id "${ATTACH_QUERY_ID}" \
     --query_profiler_real_time_period_ns 100000000 \
     -q "ATTACH DATABASE ${MYSQL_DB} ENGINE = MySQL('192.0.2.1:3306', 'fake_db', 'user', 'password') SETTINGS connect_timeout = 1, connection_max_tries = 1"
 
+# The bound is 10x the configured connect_timeout (1 s): the fixed ATTACH takes ~1-2 s
+# (one bounded connection attempt plus attach overhead), the broken one ~135 s, and even
+# a partial regression (e.g. capping the retries instead of decrementing the budget)
+# would exceed 10 s while slow CI machines stay well below it.
 ${CLICKHOUSE_CLIENT} -q "
     SYSTEM FLUSH LOGS query_log;
-    SELECT 'attach_bounded_by_timeout', query_duration_ms < 60000 FROM system.query_log
+    SELECT 'attach_bounded_by_timeout', query_duration_ms < 10000 FROM system.query_log
     WHERE current_database = currentDatabase() AND query_id = '${ATTACH_QUERY_ID}' AND type = 'QueryFinish';
 "
 
