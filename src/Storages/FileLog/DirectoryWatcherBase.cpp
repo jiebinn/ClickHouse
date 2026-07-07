@@ -31,6 +31,7 @@ namespace ErrorCodes
     extern const int FILE_DOESNT_EXIST;
     extern const int BAD_FILE_TYPE;
     extern const int IO_SETUP_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 namespace FileLogSetting
@@ -436,8 +437,10 @@ void DirectoryWatcherBase::watchFunc()
         /// reusing the name erases the still-live inode's meta and it is re-read from offset 0 (e.g.
         /// a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). We recover that chronological order
         /// with a topological sort over "target T must follow the target that receives T's old
-        /// inode". The only unsatisfiable shape is a rename cycle (an `a <-> b` swap), which no order
-        /// can fully preserve; such leftovers are emitted last as a best effort.
+        /// inode". The only unsatisfiable shape is a rename cycle (e.g. an `a <-> b` swap via a
+        /// temporary name, coalesced into one scan): no emit order preserves every offset, and unlike
+        /// inotify we cannot observe the intermediate temporary-name events that would break it. We
+        /// fail closed on such a cycle rather than silently re-read a rotated file from offset 0.
         std::vector<std::string> move_targets;
         for (const auto & [name, state] : current)
         {
@@ -486,11 +489,17 @@ void DirectoryWatcherBase::watchFunc()
                     }
                 }
             }
-            /// Whatever is left is a rename cycle; emit it in a deterministic (lexical) order.
+            /// Anything left is a rename cycle we cannot order without losing an offset; surface it.
             for (const auto & name : move_targets)
             {
-                if (!emitted.contains(name))
-                    emit_moved_to(name);
+                if (emitted.contains(name))
+                    continue;
+                auto e = Exception(
+                    ErrorCodes::NOT_IMPLEMENTED,
+                    "Cannot preserve read offsets across a rename cycle observed in a single batch in directory {}",
+                    path);
+                owner.onError(e);
+                throw e;
             }
         }
 
