@@ -607,10 +607,14 @@ async function fetchReport(inputUrl, options = {}) {
         console.log(`Fetching JSON: ${jsonUrl}\n`);
       }
 
-      // A direct top-level index URL (only name_0, no name_1) aggregates every job — it is NOT a
-      // single job report. Treat it like the PR-URL path: refuse per-job operations (they would act
-      // on the wrong job), and otherwise expand into the failed jobs' per-job reports.
-      if (nameParams.length === 1 && !options.isSingleReport && !options.reportIndex) {
+      // A workflow-index URL (name_0 is the WORKFLOW — PR / MasterCI / REF — with no name_1)
+      // aggregates every job; it is NOT a single job report. Treat it like the PR-URL path: refuse
+      // per-job operations (they would act on the wrong job), and otherwise expand into the failed
+      // jobs' per-job reports. A concrete single-job URL also has one nameParam but its name_0 is the
+      // JOB (e.g. name_0=Stateless tests (...)) — those must stay on the single-report path below,
+      // so gate on the workflow name, not merely nameParams.length.
+      const isWorkflowIndex = /^(PR|MasterCI|REF|master)$/i.test(nameParams[0]);
+      if (isWorkflowIndex && nameParams.length === 1 && !options.isSingleReport && !options.reportIndex) {
         const topJson = JSON.parse(await fetchUrl(jsonUrl, options.credentials));
         const childUrls = childReportUrlsForFailedJobs(inputUrl, topJson);
         if (options.downloadLogs) {
