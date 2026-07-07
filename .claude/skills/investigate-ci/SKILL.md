@@ -102,9 +102,15 @@ This prints the failed tests **and their output** straight from the praktika `re
 copy-paste), with a CIDB link per failed test. Read it from the command output — do **not** add a
 `> tmp/investigate/…` redirect (a redirect is a file write the hook won't auto-approve, since it
 can't be made symlink-safe, so it would prompt); the harness persists large output to a file you
-can re-read or `grep`. If `node` is **absent**, skip the report fetch (and the step-4 download)
-and rely on the issue body's failure output plus step 3 — do not treat a missing `node` as a
-fatal error.
+can re-read or `grep`. **If `node` is absent, the fallback depends on the input type:**
+
+- **Issue URL** (step 0 already gave you `Test name:` and the `Failing test history` link) → proceed
+  without the report: run step 3 on that named test; the S3 report and step-4 artifacts are
+  best-effort enrichment. A missing `node` is not fatal here.
+- **PR or S3 report URL** → `node` is **required**. Without the report you have no failed test
+  names, job names, or labels, so steps 2–3 (issue/fix search and the `test_name IN (...)` history
+  query) cannot run. Do **not** limp on with a partial investigation — stop and tell the user to
+  install `node` (or re-run where `node` is on `PATH`).
 
 Per failure the tool prints a `🏷️ labels:` line (CI's non-CIDB labels — the `issue` match link and
 flags like `retry_ok`; see step 2a), the CIDB link, and the **log *tail*** — the last ~30 non-empty
