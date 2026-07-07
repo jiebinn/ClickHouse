@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 # For a user without global SHOW TABLES, a query on system.tables reading only
-# the name/database columns must not skip databases the user is granted on
-# (the fast path used to advance `database_idx` twice and lose a database).
+# the name/database columns must not skip databases the user is granted on.
+# The query must see all databases, granted and not: filtering by table name
+# only is what triggers the bug.
+# Suppress style check: database=$CLICKHOUSE_DATABASE
 
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
