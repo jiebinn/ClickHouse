@@ -407,12 +407,7 @@ struct QueryTreeSettings
 
 struct QueryPlanSettings
 {
-    ExplainPlanOptions query_plan_options
-    {.actions = true,
-        .indexes = true,
-        .compact = true,
-        .pretty = true
-    };
+    ExplainPlanOptions query_plan_options;
 
     /// Apply query plan optimizations.
     bool optimize = true;
@@ -464,7 +459,7 @@ struct QueryPipelineSettings
 };
 
 struct QueryAnalyzeSettings
-{ 
+{
     ExplainPlanOptions query_plan_options
     {.actions = true,
     .indexes = true,
@@ -582,7 +577,7 @@ ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings, bool 
     /// we sometimes use EXPLAIN PLAN output for logging
     if constexpr (std::is_same_v<Settings, QueryPlanSettings>)
     {
-        if (set_default_pretty_explain_settings)
+        if (!set_default_pretty_explain_settings)
         {
             settings.query_plan_options.actions = true;
             settings.query_plan_options.compact = true;

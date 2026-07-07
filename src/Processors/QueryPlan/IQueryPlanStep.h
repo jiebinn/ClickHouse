@@ -173,7 +173,7 @@ public:
 
     /// Different Steps have different stages of execution.
     /// For example JoinStep has build and probe stages.
-    /// The group tag is used in EXPLAIN ANALYZE in order to track 
+    /// The group tag is used in EXPLAIN ANALYZE in order to track
     /// correctly the time that a step spent doing work in a stage.
     /// Each step knows its stages (see AggregatingStage,
     /// JoinStage, SortingStage etc.). When adding new steps with stages
