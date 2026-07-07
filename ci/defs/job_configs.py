@@ -5,6 +5,7 @@ from ci.defs.defs import (
     LLVM_ARTIFACTS_LIST,
     LLVM_FT_NUM_BATCHES,
     LLVM_FT_OLD_S3_DB_REPL_WASM_NUM_BATCHES,
+    LLVM_FT_OLD_S3_DB_REPL_WASM_SEQUENTIAL_NUM_BATCHES,
     LLVM_IT_NUM_BATCHES,
     ArtifactNames,
     BuildTypes,
@@ -648,7 +649,7 @@ class JobConfigs:
                 runs_on=RunnerLabels.AMD_SMALL_MEM,
                 requires=[ArtifactNames.CH_AMD_ASAN_UBSAN],
             )
-            for total_batches in (2,)
+            for total_batches in (3,)
             for batch in range(1, total_batches + 1)
         ],
         *[
@@ -664,12 +665,19 @@ class JobConfigs:
             for total_batches in (LLVM_FT_OLD_S3_DB_REPL_WASM_NUM_BATCHES,)
             for batch in range(1, total_batches + 1)
         ],
-        Job.ParamSet(
-            parameter="amd_llvm_coverage, old analyzer, s3 storage, DatabaseReplicated, WasmEdge, sequential",
-            runs_on=RunnerLabels.AMD_SMALL,
-            requires=[ArtifactNames.CH_AMD_LLVM_COVERAGE_BUILD],
-            provides=[ArtifactNames.LLVM_COVERAGE_FILE + "_ft_old_s3_db_repl_wasm_sequential"],
-        ),
+        *[
+            Job.ParamSet(
+                parameter=f"amd_llvm_coverage, old analyzer, s3 storage, DatabaseReplicated, WasmEdge, sequential, {batch}/{total_batches}",
+                runs_on=RunnerLabels.AMD_SMALL,
+                requires=[ArtifactNames.CH_AMD_LLVM_COVERAGE_BUILD],
+                provides=[
+                    ArtifactNames.LLVM_COVERAGE_FILE
+                    + f"_ft_old_s3_db_repl_wasm_sequential_{batch}"
+                ],
+            )
+            for total_batches in (LLVM_FT_OLD_S3_DB_REPL_WASM_SEQUENTIAL_NUM_BATCHES,)
+            for batch in range(1, total_batches + 1)
+        ],
         Job.ParamSet(
             parameter="amd_llvm_coverage, ParallelReplicas, s3 storage, parallel",
             runs_on=RunnerLabels.AMD_MEDIUM,  # large machine - no boost, why?
