@@ -131,10 +131,7 @@ static int64_t deserializeStorageData(KeeperStorage & storage, ReadBuffer & in, 
         Coordination::read(node.stats.aversion, in);
         int64_t ephemeral_owner = 0;
         Coordination::read(ephemeral_owner, in);
-        /// ZooKeeper encodes container nodes with a sentinel ephemeralOwner of INT64_MIN
-        /// (CONTAINER_EPHEMERAL_OWNER). Recognize it here so imported containers keep their
-        /// container bookkeeping and sequential-counter semantics instead of being loaded as
-        /// ephemeral nodes owned by a bogus session.
+        /// INT64_MIN is ZooKeeper's CONTAINER_EPHEMERAL_OWNER sentinel.
         const bool is_container = ephemeral_owner == std::numeric_limits<int64_t>::min();
         const bool is_ephemeral = !is_container && ephemeral_owner != 0;
         if (is_container)
@@ -465,9 +462,7 @@ Coordination::ZooKeeperRequestPtr deserializeTxnImpl(ReadBuffer & in, bool subtx
         case 19:
             result = deserializeCreateContainerTxn(in);
             break;
-        /// OpCode.deleteContainer: ZooKeeper logs container deletions (GC-driven or explicit)
-        /// with a dedicated txn type but an ordinary DeleteTxn payload (just the path), so the
-        /// delete deserializer applies unchanged.
+        /// OpCode.deleteContainer carries an ordinary DeleteTxn payload.
         case 20:
             result = deserializeDeleteTxn(in);
             break;

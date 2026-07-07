@@ -343,8 +343,7 @@ uint64_t calculateDigest(std::string_view path, const Node & node)
     hash.update(node.stats.version);
     hash.update(node.stats.cversion);
     hash.update(node.stats.aversion);
-    /// ephemeralOwner() encodes isEphemeral (session id), isContainer (Long.MIN_VALUE sentinel),
-    /// and the regular case (0) — so this single field covers all three node kinds.
+    /// ephemeralOwner() also carries the container sentinel (Long.MIN_VALUE), covering all node kinds.
     hash.update(node.stats.ephemeralOwner());
     hash.update(node.numChildren());
     hash.update(node.stats.pzxid);
@@ -964,10 +963,8 @@ void KeeperStorage::UncommittedState::rollback(std::list<Delta> rollback_deltas)
                     }
                     else if constexpr (std::same_as<DeltaType, RemoveNodeDelta>)
                     {
-                        /// Re-register only genuinely ephemeral nodes. ephemeralOwner() returns the
-                        /// INT64_MIN container sentinel for container nodes, so an ephemeralOwner() != 0
-                        /// test would wrongly insert a rolled-back container into ephemerals[INT64_MIN]
-                        /// (a phantom session that never expires and leaks the entry).
+                        /// isEphemeral(), not ephemeralOwner() != 0 — the latter also holds for the
+                        /// container sentinel.
                         if (operation.stat.isEphemeral())
                             storage.uncommitted_state.ephemerals[operation.stat.ephemeralOwner()].emplace(delta.path);
                     }
@@ -1691,19 +1688,14 @@ static Coordination::ZooKeeperResponsePtr process(const Coordination::ZooKeeperC
     if (create_delta_it != deltas.end())
     {
         created_path = create_delta_it->path;
-        /// A container create uses ZooKeeperCreate2Response (getOpNum() == Create2), so Create2 and
-        /// CreateTTL are the only response op-nums that carry a zstat; the container case is gated
-        /// below on create_delta.is_container rather than the response op-num.
+        /// Container create replies as Create2 (see makeResponse), gated below on is_container.
         if (response->getOpNum() == Coordination::OpNum::Create2 || response->getOpNum() == Coordination::OpNum::CreateTTL)
         {
             const auto & create_delta = std::get<CreateNodeDelta>(create_delta_it->operation);
             auto & zstat = static_cast<Coordination::ZooKeeperCreate2Response &>(*response).zstat;
             zstat = create_delta.stat;
-            /// The delta stat carries ephemeralOwner == 0 for containers (a nonzero value there
-            /// would make copyStats mark the stored node ephemeral). Container nodes are reported
-            /// with the ZooKeeper CONTAINER_EPHEMERAL_OWNER sentinel by get, so patch the
-            /// client-visible response stat to match — otherwise the create reply and every later
-            /// read would disagree about the same node's type.
+            /// Delta stat keeps ephemeralOwner == 0 for containers; patch the response to the
+            /// sentinel so the create reply agrees with later get/exists reads.
             if (create_delta.is_container)
                 zstat.ephemeralOwner = std::numeric_limits<int64_t>::min();
         }
@@ -1856,14 +1848,8 @@ static Coordination::Error preprocess(
         if (!node->stats.isTTL() || time < node->stats.destroyTime())
             return {};
     }
-    /// Re-check the node is still a container with no children, matching ZooKeeper's
-    /// `deleteContainer` handling in `PrepRequestProcessor` (only `childCount == 0` and
-    /// "still a container/ttl, not a normal node" are verified here). GC eligibility
-    /// (`cversion > 0` or the never-used grace period) is decided once at sampling time
-    /// in `collectContainerCandidates`; like ZooKeeper we deliberately do not re-derive
-    /// it here, so a stale TryRemove that races a delete+recreate may delete a freshly
-    /// recreated empty container. That is accepted by the container contract: the client
-    /// recreates the container on the next child create.
+    /// Matches ZooKeeper's deleteContainer check (still a container, still empty). GC eligibility
+    /// itself was decided at sampling time in collectContainerCandidates and is not re-derived here.
     if (is_container_gc_remove)
     {
         if (!node->stats.isContainer() || node->numChildren() != 0)

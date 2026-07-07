@@ -330,14 +330,8 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "CreateTTL opnum and create-mode flag disagree on TTL");
 
-    /// Container semantics are driven by the CONTAINER create-mode flag, matching Apache
-    /// ZooKeeper's org.apache.zookeeper.server.PrepRequestProcessor.pRequest2TxnCreate, which
-    /// derives the mode from CreateMode.fromFlag(flags) and only consults the opnum to pick the
-    /// transaction record. So a plain OpNum::Create carrying a CONTAINER flag is a valid wire
-    /// form and is normalized to a container here (is_container is already set from the flag).
-    /// The only illegal combination is the inverse: an OpNum::CreateContainer packet whose flag
-    /// is not CONTAINER — that would let the opnum claim a container while the flag makes the
-    /// node sequential/ephemeral, so the leader and followers could disagree on the stored path.
+    /// A plain Create + CONTAINER flag is valid (ZooKeeper derives the mode from the flag);
+    /// only a CreateContainer opnum without the CONTAINER flag is rejected.
     if (from_create_container_opnum && !is_container)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "CreateContainer opnum requires the CONTAINER create-mode flag");

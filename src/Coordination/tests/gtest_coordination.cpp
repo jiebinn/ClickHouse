@@ -131,8 +131,6 @@ TYPED_TEST(CoordinationTest, BufferSerde)
 
 TYPED_TEST(CoordinationTest, ContainerCreateSerde)
 {
-    /// A container create request must round-trip through the wire encoding as a plain container:
-    /// opnum CreateContainer + create-mode CONTAINER, with no sequential/ephemeral bits set.
     auto request = std::make_shared<Coordination::ZooKeeperCreateRequest>();
     request->path = "/container";
     request->is_container = true;
@@ -162,10 +160,8 @@ TYPED_TEST(CoordinationTest, ContainerCreateSerde)
 
 TYPED_TEST(CoordinationTest, ContainerCreateModeMismatchRejected)
 {
-    /// A malformed packet with opnum CreateContainer but a non-container create mode
-    /// (here PERSISTENT_SEQUENTIAL) must be rejected instead of surviving as both a
-    /// container and a sequential node, which would diverge the Raft log between the
-    /// leader and its followers.
+    /// An opnum/create-mode mismatch must be rejected, not silently accepted as both a
+    /// container and a sequential node — that would diverge the Raft log across replicas.
     DB::WriteBufferFromNuraftBuffer wbuf;
     Coordination::write(std::string{"/container"}, wbuf); /// path
     Coordination::write(std::string{}, wbuf);             /// data
@@ -179,10 +175,7 @@ TYPED_TEST(CoordinationTest, ContainerCreateModeMismatchRejected)
 
 TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
 {
-    /// Apache ZooKeeper derives container semantics from the CONTAINER create-mode flag and only
-    /// uses the opnum to pick the transaction record, so a plain OpNum::Create carrying a
-    /// CONTAINER flag is a valid wire form. It must be accepted and normalized to a container
-    /// rather than rejected as an opnum/flag mismatch.
+    /// ZooKeeper derives container semantics from the flag, not the opnum (see readImpl).
     DB::WriteBufferFromNuraftBuffer wbuf;
     Coordination::write(std::string{"/container"}, wbuf); /// path
     Coordination::write(std::string{}, wbuf);             /// data
@@ -197,7 +190,6 @@ TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
     EXPECT_FALSE(create_read.is_sequential);
     EXPECT_FALSE(create_read.is_ephemeral);
     EXPECT_FALSE(create_read.include_ttl);
-    /// Normalized to a container: getOpNum now reports CreateContainer regardless of the wire opnum.
     EXPECT_EQ(create_read.getOpNum(), Coordination::OpNum::CreateContainer);
 }
 

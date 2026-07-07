@@ -81,16 +81,13 @@ private:
     /// Set before the full shutdown() to allow handlers to exit promptly.
     std::atomic<bool> shutting_down{false};
 
-    /// Shared wait state for the periodic background loops (session cleaner, TTL GC,
-    /// container GC, cluster update). Each loop sleeps between ticks on this condition
-    /// variable via `interruptibleSleep`, so a shutdown request wakes them immediately
-    /// instead of blocking a join for a full tick (up to `container_gc_period_ms`, 60s
-    /// by default). Woken from both `signalShutdown` and `shutdown`.
+    /// Wakes the TTL/container garbage collector threads from their inter-tick wait, so
+    /// shutdown does not have to block for a full GC period (up to `container_gc_period_ms`,
+    /// 60s by default). Woken from both `signalShutdown` and `shutdown`.
     std::mutex background_wait_mutex;
     std::condition_variable background_wait_cv;
 
-    /// Sleep for `period` between background-loop ticks, returning early once shutdown is
-    /// requested (via either `signalShutdown` or `shutdown`).
+    /// Sleep for `period` between GC-loop ticks, returning early once shutdown is requested.
     void interruptibleSleep(std::chrono::milliseconds period);
 
     /// Thread clean disconnected sessions from memory
@@ -142,7 +139,7 @@ public:
     Poco::JSON::Object::Ptr reconfigureClusterFromReconfigureCommand(Poco::JSON::Object::Ptr reconfig_command);
 
     /// Signal TCP handlers to close connections before the full shutdown, and wake the
-    /// background loops from their inter-tick wait so they exit promptly.
+    /// GC threads from their inter-tick wait so they exit promptly.
     void signalShutdown();
 
     /// Returns true if signalShutdown() was called.
