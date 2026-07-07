@@ -7926,6 +7926,13 @@ async function reconcileStartup() {
         }
     }
 
+    /// Whether IndexedDB actually returned a persisted workspace (before the blank-tab pruning
+    /// above). This distinguishes a first-ever visit (no records at all) from an all-blank
+    /// workspace whose every saved tab was pruned as blank: in the former a `?tab=Name` URL is an
+    /// authoritative shared link, in the latter a bare `?tab=` is only a stale echo of a dropped
+    /// tab and must not resurrect it.
+    const had_saved_records = !!(loaded && loaded.records.length);
+
     if (savedTabs.length) {
         if (bootstrap_dirty) {
             /// The user interacted with the bootstrap workspace while IndexedDB was still
@@ -8045,8 +8052,10 @@ async function reconcileStartup() {
         }
         await activateTab(activeTabId);
         activated = true;
-    } else if (url_tab_name) {
-        /// No saved tabs but the URL named a tab: adopt the name for the bootstrap tab.
+    } else if (url_tab_name && (has_url_query || !had_saved_records)) {
+        /// No saved tabs survived, and the URL is authoritative: it carries a query (a
+        /// fresh/shared link) or the browser had no persisted workspace at all (a first-ever
+        /// visit, or a shared bare `?tab=Name` link). Adopt the name for the bootstrap tab.
         const t = getActiveTab();
         if (t) {
             t.title = url_tab_name;
@@ -8061,6 +8070,21 @@ async function reconcileStartup() {
         }
         renderTabBar();
     } else {
+        /// Either a plain first-ever visit (no `?tab=` at all), or a plain reload whose every
+        /// saved tab was blank and got pruned above. In the latter case the URL still carries a
+        /// bare `?tab=<dropped title>`, but it is only a stale echo of a tab we just dropped and is
+        /// NOT authoritative: adopting it (the branch above) would rename the fresh bootstrap tab
+        /// back to the dropped blank title, and the trailing `scheduleSave` would persist it again,
+        /// resurrecting the very blank tab the pruning removed. Keep the default fresh bootstrap
+        /// tab, and strip the stale `?tab=` from the URL so it matches a first-ever visit (an
+        /// all-blank workspace falls back to a single fresh tab). The tab bar stays hidden for the
+        /// lone result-less tab, so `syncHistory` is deliberately not called here (it would re-add
+        /// a `?tab=` for the default title); a targeted `replaceState` drops only the `tab` key.
+        if (url_tab_name) {
+            const cleaned_url = new URL(location.href);
+            cleaned_url.searchParams.delete('tab');
+            history.replaceState(history.state, document.title, cleaned_url.href);
+        }
         renderTabBar();
     }
 
