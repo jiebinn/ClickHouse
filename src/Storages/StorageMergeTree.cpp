@@ -447,8 +447,6 @@ void StorageMergeTree::alter(
     ContextPtr local_context,
     AlterLockHolder & table_lock_holder)
 {
-    /// A rolled-back mutation_*.txt (removeFile on pre-commit unwind or explicit rollback below)
-    /// may reach Keeper on a keeper-metadata disk, so the scope must span the whole ALTER path.
     auto component_guard = Coordination::setCurrentComponent("StorageMergeTree::alter");
 
     /// Allow MODIFY_SETTING/RESET_SETTING through even when the table is readonly,
@@ -873,9 +871,6 @@ MergeMutateSelectedEntry::~MergeMutateSelectedEntry()
 StorageMergeTree::PreparedMutationEntry StorageMergeTree::prepareMutationEntry(
     const MutationCommands & commands, ContextPtr query_context)
 {
-    /// Both callers (`startMutation` and `alter`) hold a Keeper component guard spanning the
-    /// commit AND the removeFile rollback of the returned entry, so none is set here.
-
     /// Choose any disk, because when we load mutations we search them at each disk
     /// where storage can be placed. See `loadMutations`.
     auto disk = getStoragePolicy()->getAnyDisk();
@@ -929,8 +924,6 @@ void StorageMergeTree::addPreparedMutationEntry(PreparedMutationEntry prepared)
 
 Int64 StorageMergeTree::startMutation(const MutationCommands & commands, ContextPtr query_context)
 {
-    /// Guard spans addPreparedMutationEntry too: a throw there destructs the unregistered
-    /// entry, whose removeFile may reach Keeper on a keeper-metadata disk.
     auto component_guard = Coordination::setCurrentComponent("StorageMergeTree::startMutation");
 
     /// File I/O (`writeFile` + `sync` + `moveFile`) happens in `prepareMutationEntry`
@@ -1388,7 +1381,6 @@ std::vector<MergeTreeMutationStatus> StorageMergeTree::getMutationsStatus() cons
 
 CancellationCode StorageMergeTree::killMutation(const String & mutation_id)
 {
-    /// MergeTreeMutationEntry disk I/O (removeFile) may reach Keeper on a keeper-metadata disk.
     auto component_guard = Coordination::setCurrentComponent("StorageMergeTree::killMutation");
 
     assertNotReadonly();
