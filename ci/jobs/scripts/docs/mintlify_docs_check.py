@@ -24,7 +24,8 @@ the full set (``DEFAULT_CHECKS`` plus, when a locale tree changed,
 a consuming repo can act on for the slice it owns (validate + internal links).
 Redirects, external links, and the locale checks are aggregator-global and are
 left to the aggregator job. With ``--scoped``, ``mint validate`` is replaced by
-``scoped_validate.mjs`` over just the replaced folders.
+``scoped_validate.mjs`` over the replaced folders plus every out-of-scope file
+that imports into them.
 
 A check can be any shell command, including ``python3 <script>``. Checks run
 from the docs root, so a Python check script committed at
