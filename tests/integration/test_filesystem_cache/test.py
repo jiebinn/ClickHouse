@@ -846,27 +846,34 @@ SETTINGS disk = disk(type = cache,
             )
         )
 
+    # keep_free_space_elements_ratio = 0.9 over max_elements = 100 -> target 10.
+    expected = max_elements // 10
+
     node.query("SYSTEM ENABLE FAILPOINT file_cache_background_eviction_push_fail")
+    try:
+        node.query(
+            "INSERT INTO test_push_fail SELECT randomString(1000) FROM numbers(2000);"
+        )
+        node.query("SELECT * FROM test_push_fail FORMAT Null")
 
-    node.query(
-        "INSERT INTO test_push_fail SELECT randomString(1000) FROM numbers(2000);"
-    )
-    node.query("SELECT * FROM test_push_fail FORMAT Null")
+        blocked = elems()
+        time.sleep(15)
+        assert elems() == blocked
+        assert blocked > expected
 
-    blocked = elems()
-    time.sleep(15)
-    assert elems() == blocked
+        assert node.contains_in_log("Background eviction workers take too much time")
+    finally:
+        node.query("SYSTEM DISABLE FAILPOINT file_cache_background_eviction_push_fail")
 
-    assert node.contains_in_log("Background eviction workers take too much time")
-
-    node.query("SYSTEM DISABLE FAILPOINT file_cache_background_eviction_push_fail")
-
+    # After the dropped batch is rolled back, background keeping must converge all the
+    # way to the configured target - not just make partial progress - which proves no
+    # entries were left stuck in the `Evicting` state.
     for _ in range(60):
         converged = elems()
-        if converged < blocked:
+        if converged <= expected:
             break
         time.sleep(1)
-    assert converged < blocked
+    assert converged <= expected
 
     assert int(node.query("SELECT count() FROM test_push_fail")) == 2000
     assert node.query(
