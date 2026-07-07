@@ -22,27 +22,27 @@ Parameter = typing.Callable[[], int | float | str]
 true_false_lambda = lambda: random.choice(["false", "true"])
 
 
+# Delta liquid clustering (CLUSTER BY) and data skipping only support scalar
+# types Delta collects min/max statistics for: numeric, date, timestamp
+# (including TimestampNTZ) and string. This mirrors Delta's
+# `SkippingEligibleDataType`. Boolean, binary and container types
+# (Array/Map/Struct) are rejected at DDL time with
+# `DELTA_CLUSTERING_COLUMNS_DATATYPE_NOT_SUPPORTED`, so they must never be
+# chosen as clustering keys. `CharType`/`VarcharType` are string-like and
+# eligible (Delta materialises them as string). `TimestampNTZType` is absent
+# from older PySpark versions, hence the feature probe.
+_DELTA_SKIPPING_ELIGIBLE_TYPES = (
+    sp.NumericType,
+    sp.DateType,
+    sp.TimestampType,
+    sp.StringType,
+    sp.CharType,
+    sp.VarcharType,
+) + ((sp.TimestampNTZType,) if hasattr(sp, "TimestampNTZType") else ())
+
+
 def delta_skipping_eligible(dtype) -> bool:
-    # Delta liquid clustering (CLUSTER BY) and data skipping only support scalar
-    # types Delta collects min/max statistics for: numeric, date, timestamp
-    # (including TimestampNTZ) and string. This mirrors Delta's
-    # `SkippingEligibleDataType`. Boolean, binary and container types
-    # (Array/Map/Struct) are rejected at DDL time with
-    # `DELTA_CLUSTERING_COLUMNS_DATATYPE_NOT_SUPPORTED`, so they must never be
-    # chosen as clustering keys. `CharType`/`VarcharType` are string-like and
-    # eligible (Delta materialises them as string).
-    return isinstance(
-        dtype,
-        (
-            sp.NumericType,
-            sp.DateType,
-            sp.TimestampType,
-            sp.TimestampNTZType,
-            sp.StringType,
-            sp.CharType,
-            sp.VarcharType,
-        ),
-    )
+    return isinstance(dtype, _DELTA_SKIPPING_ELIGIBLE_TYPES)
 
 
 def sample_from_dict(d: dict[str, Parameter], sample: int) -> dict[str, Parameter]:
