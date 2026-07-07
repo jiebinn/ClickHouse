@@ -6,7 +6,7 @@
 #include <snappy.h>
 #include <crc32c/crc32c.h>
 
-#include <IO/SnappyWriteBuffer.h>
+#include <IO/SnappyFramedWriteBuffer.h>
 
 namespace DB
 {
@@ -36,13 +36,13 @@ uint32_t maskedCrc32c(const char * data, size_t size)
 
 }
 
-void SnappyWriteBuffer::writeStreamIdentifier()
+void SnappyFramedWriteBuffer::writeStreamIdentifier()
 {
     out->write(reinterpret_cast<const char *>(STREAM_IDENTIFIER), sizeof(STREAM_IDENTIFIER));
     header_written = true;
 }
 
-void SnappyWriteBuffer::writeCompressedChunk(const char * data, size_t size)
+void SnappyFramedWriteBuffer::writeCompressedChunk(const char * data, size_t size)
 {
     /// Compress the data.
     compress_buffer.resize(snappy::MaxCompressedLength(size));
@@ -91,7 +91,7 @@ void SnappyWriteBuffer::writeCompressedChunk(const char * data, size_t size)
     out->write(payload, payload_size);
 }
 
-void SnappyWriteBuffer::nextImpl()
+void SnappyFramedWriteBuffer::nextImpl()
 {
     if (!offset())
         return;
@@ -112,7 +112,7 @@ void SnappyWriteBuffer::nextImpl()
     }
 }
 
-void SnappyWriteBuffer::finalFlushBefore()
+void SnappyFramedWriteBuffer::finalFlushBefore()
 {
     next();
     /// Don't emit anything when no data was ever written and compress_empty is false

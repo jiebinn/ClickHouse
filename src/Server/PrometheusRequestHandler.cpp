@@ -20,12 +20,10 @@
 #include <Common/CurrentThread.h>
 #include <Common/StringUtils.h>
 #include <Common/QueryScope.h>
-#include <IO/SnappyReadBuffer.h>
-#if USE_SNAPPY
-#include <snappy.h>
-#include <snappy-sinksource.h>
-#endif
+#include <IO/SnappyBasicReadBuffer.h>
+#include <IO/SnappyBasicWriteBuffer.h>
 #include <IO/Protobuf/ProtobufZeroCopyInputStreamFromReadBuffer.h>
+#include <IO/Protobuf/ProtobufZeroCopyOutputStreamFromWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/Session.h>
@@ -55,25 +53,6 @@ namespace ErrorCodes
     extern const int SUPPORT_IS_DISABLED;
     extern const int NOT_IMPLEMENTED;
 }
-
-#if USE_SNAPPY
-namespace
-{
-
-/// A `snappy::Sink` that forwards compressed bytes directly into a `WriteBuffer`.
-/// Avoids materializing a full-size compressed buffer for raw-block snappy outputs
-/// (used by Prometheus remote-read responses).
-class WriteBufferSnappySink : public snappy::Sink
-{
-public:
-    explicit WriteBufferSnappySink(WriteBuffer & out_) : out(out_) {}
-    void Append(const char * bytes, size_t n) override { out.write(bytes, n); }
-private:
-    WriteBuffer & out;
-};
-
-}
-#endif
 
 /// Base implementation of a prometheus protocol.
 class PrometheusRequestHandler::Impl
@@ -331,7 +310,7 @@ public:
 
         {
             ProtobufZeroCopyInputStreamFromReadBuffer zero_copy_input_stream{
-                std::make_unique<SnappyReadBuffer>(wrapReadBufferPointer(request.getStream()))};
+                std::make_unique<SnappyBasicReadBuffer>(wrapReadBufferPointer(request.getStream()))};
 
             if (!write_request.ParsePartialFromZeroCopyStream(&zero_copy_input_stream))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot parse WriteRequest");
@@ -378,22 +357,22 @@ public:
 
         {
             ProtobufZeroCopyInputStreamFromReadBuffer zero_copy_input_stream{
-                std::make_unique<SnappyReadBuffer>(wrapReadBufferPointer(request.getStream()))};
+                std::make_unique<SnappyBasicReadBuffer>(wrapReadBufferPointer(request.getStream()))};
 
             if (!read_request.ParseFromZeroCopyStream(&zero_copy_input_stream))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot parse ReadRequest");
         }
 
         /// Prometheus remote-read uses raw snappy block compression (not the snappy framing format
-        /// used by `SnappyWriteBuffer` for HTTP `Content-Encoding`). The wire format is
-        /// `varint(uncompressed_total) || compressed_payload`, where the public snappy API only
-        /// compresses a complete buffer (always emitting the varint prefix). True chunked streaming
-        /// would require either threading or snappy's private `internal::CompressFragment`, neither
-        /// of which is justified here. Instead, we drop the `prometheus::ReadResponse` object tree
-        /// before running compression so only the serialized wire-format buffer is held during
-        /// `snappy::Compress`, then forward compressed chunks straight into the response
-        /// `WriteBuffer` through a `snappy::Sink`.
-        String serialized;
+        /// used by `SnappyFramedWriteBuffer` for HTTP `Content-Encoding`). Serialize the response
+        /// straight into the compression buffer, then drop the `prometheus::ReadResponse` object
+        /// tree before finalizing `SnappyBasicWriteBuffer`, so only the accumulated serialized data
+        /// (not the object tree) is held while it is compressed into a single raw snappy block.
+        response.setContentType("application/x-protobuf");
+        response.set("Content-Encoding", "snappy");
+
+        auto & out = getOutputStream(response);
+        SnappyBasicWriteBuffer snappy_out(&out);
         {
             prometheus::ReadResponse read_response;
 
@@ -414,17 +393,14 @@ public:
             LOG_DEBUG(log, "ReadResponse = {}", read_response.DebugString());
 #    endif
 
-            read_response.SerializeToString(&serialized);
+            /// The zero-copy stream is intentionally not finalized here: finalizing it would flush
+            /// and compress `snappy_out` while the object tree is still alive. Serialization leaves
+            /// all bytes buffered in `snappy_out`; compression happens in `snappy_out.finalize()`
+            /// below, after the object tree has been released.
+            ProtobufZeroCopyOutputStreamFromWriteBuffer zero_copy_output_stream{snappy_out};
+            read_response.SerializeToZeroCopyStream(&zero_copy_output_stream);
         }
-
-        response.setContentType("application/x-protobuf");
-        response.set("Content-Encoding", "snappy");
-
-        auto & out = getOutputStream(response);
-        snappy::ByteArraySource source(serialized.data(), serialized.size());
-        WriteBufferSnappySink sink(out);
-        snappy::Compress(&source, &sink);
-        out.finalize();
+        snappy_out.finalize();
 
 #else
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Prometheus remote read protocol is disabled");

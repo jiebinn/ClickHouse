@@ -16,11 +16,13 @@ namespace DB
 ///
 /// Each nextImpl call compresses the accumulated input as one snappy frame,
 /// so memory usage is bounded by the buffer size (default DBMS_DEFAULT_BUFFER_SIZE).
-class SnappyWriteBuffer : public WriteBufferWithOwnMemoryDecorator
+///
+/// This is the inverse of `SnappyFramedReadBuffer`.
+class SnappyFramedWriteBuffer : public WriteBufferWithOwnMemoryDecorator
 {
 public:
     template <typename WriteBufferT>
-    explicit SnappyWriteBuffer(
+    explicit SnappyFramedWriteBuffer(
         WriteBufferT && out_,
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr, /// NOLINT(readability-non-const-parameter)

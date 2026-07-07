@@ -17,7 +17,7 @@
 #include <IO/HadoopSnappyReadBuffer.h>
 #include <IO/HadoopSnappyWriteBuffer.h>
 #include <IO/SnappyFramedReadBuffer.h>
-#include <IO/SnappyWriteBuffer.h>
+#include <IO/SnappyFramedWriteBuffer.h>
 
 #include "config.h"
 
@@ -203,7 +203,7 @@ std::unique_ptr<WriteBuffer> createWriteCompressedWrapper(
     if (method == CompressionMethod::Snappy)
     {
         if (snappy_mode == SnappyMode::Framed)
-            return std::make_unique<SnappyWriteBuffer>(std::forward<WriteBufferT>(nested), buf_size, existing_memory, alignment, compress_empty);
+            return std::make_unique<SnappyFramedWriteBuffer>(std::forward<WriteBufferT>(nested), buf_size, existing_memory, alignment, compress_empty);
         return std::make_unique<HadoopSnappyWriteBuffer>(std::forward<WriteBufferT>(nested), buf_size, existing_memory, alignment, compress_empty);
     }
 #endif

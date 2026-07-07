@@ -12,7 +12,7 @@ namespace DB
 /// (see https://github.com/google/snappy/blob/main/framing_format.txt)
 /// and returns decompressed data to the caller.
 ///
-/// This is the inverse of SnappyWriteBuffer.
+/// This is the inverse of `SnappyFramedWriteBuffer`.
 class SnappyFramedReadBuffer : public CompressedReadBufferWrapper
 {
 public:
