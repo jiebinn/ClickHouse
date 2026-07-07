@@ -5172,11 +5172,10 @@ function addTab() {
 function duplicateTab(id, guard_paste = false) {
     const src = tabs.find(t => t.id === id);
     if (!src) return;
-    /// Flush any in-progress inline title rename first. The editor writes back to `tab.title`
-    /// only on `blur`, but this path rerenders the tab bar (destroying the editable span), and a
-    /// middle click also suppresses that automatic `blur` (its `mousedown` calls `preventDefault`).
-    /// Without an explicit commit, renaming one tab and then duplicating another silently reverts
-    /// the rename. Committing works whichever tab is being duplicated (the editor is the active tab).
+    /// Flush any in-progress inline title rename here, before `duplicateTitle(src.title)` reads the
+    /// title below, so a copy of the tab being renamed reflects the new name rather than the stale
+    /// one. `renderTabBar` also flushes on every rebuild, but that runs later (via `activateTab`),
+    /// after the title has already been read. The editor is always the active tab.
     if (activeTitleCommit) activeTitleCommit(true);
     markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
     /// Fold live editor edits into the (possibly source) tab first, so the copy reflects them.
@@ -5262,6 +5261,14 @@ function startTitleEdit(tab, titleEl) {
 
 /// Rebuild the whole tab bar. Cheap (few nodes) so we never diff.
 function renderTabBar() {
+    /// Flush any in-progress inline title rename before we rebuild and destroy its editable span.
+    /// The editor writes back to `tab.title` only on `blur`, but many paths rerender the bar without
+    /// a blur first — a slow query completing calls `writeHistoryEntry` -> `renderTabBar`, closing a
+    /// tab or navigating rerenders too, and a middle click suppresses the blur — each of which would
+    /// otherwise silently drop the pending rename. Committing here, the single rerender chokepoint,
+    /// covers every path (not just `duplicateTab`). Safe against re-entry: `commit` clears
+    /// `activeTitleCommit` before it calls back into `renderTabBar`, so this becomes a no-op.
+    if (activeTitleCommit) activeTitleCommit(true);
     const active = getActiveTab();
     /// Hidden when there is a single tab that has never produced a result from a genuine
     /// run, so the page looks exactly as before tabs existed. Keying off `result.ran`
