@@ -138,28 +138,35 @@ endif ()
 
 include (cmake/add_warning.cmake)
 
-# -gz=zlib support depends on the compiler's zlib linkage, not its version: a no-zlib clang accepts
-# -gz but emits *uncompressed* output (it only warns). So verify the effect - compile a source with
-# debug info both ways and check the object shrank. Fail-safe: a no-zlib clang emits identical-size
-# output either way -> off, regardless of warning/-Werror behavior. Before the probe ban below.
-set (COMPILER_SUPPORTS_GZ_ZLIB OFF)
+# -gz support depends on each compiler's zlib linkage (a no-zlib clang accepts -gz but emits
+# *uncompressed* output, only warning), and the C/C++ compilers can come from different installs
+# with different linkage - so probe by effect, per compiler: the object must actually shrink under
+# -gz. The C compiler also assembles .S files. (Before block_build_time_checks.cmake's probe ban.)
+set (COMPILER_SUPPORTS_GZ_ZLIB ON)
 set (_gz_probe "${CMAKE_BINARY_DIR}/gz_support_probe.cpp")
 file (WRITE "${_gz_probe}" "template <long N> struct T { long v[8]; T<N - 1> next; long sum() const { return v[N & 7] + next.sum(); } };
 template <> struct T<0> { long v[8]; long sum() const { return v[0]; } };
 long g(const T<40> & t) { return t.sum(); }
 int main() { T<40> t{}; return (int)g(t); }
 ")
-execute_process (COMMAND "${CMAKE_CXX_COMPILER}" -g -c "${_gz_probe}" -o "${_gz_probe}.o"
-                 RESULT_VARIABLE _gz_rc1 OUTPUT_QUIET ERROR_QUIET)
-execute_process (COMMAND "${CMAKE_CXX_COMPILER}" -g -gz=zlib -c "${_gz_probe}" -o "${_gz_probe}.gz.o"
-                 RESULT_VARIABLE _gz_rc2 OUTPUT_QUIET ERROR_QUIET)
-if (_gz_rc1 EQUAL 0 AND _gz_rc2 EQUAL 0)
-    file (SIZE "${_gz_probe}.o" _gz_plain)
-    file (SIZE "${_gz_probe}.gz.o" _gz_comp)
-    if (_gz_comp LESS _gz_plain)
-        set (COMPILER_SUPPORTS_GZ_ZLIB ON)
+foreach (_gz_compiler IN ITEMS "${CMAKE_C_COMPILER}" "${CMAKE_CXX_COMPILER}")
+    execute_process (COMMAND "${_gz_compiler}" -g -c "${_gz_probe}" -o "${_gz_probe}.o"
+                     RESULT_VARIABLE _gz_rc1 OUTPUT_QUIET ERROR_QUIET)
+    execute_process (COMMAND "${_gz_compiler}" -g -gz=zlib -c "${_gz_probe}" -o "${_gz_probe}.gz.o"
+                     RESULT_VARIABLE _gz_rc2 OUTPUT_QUIET ERROR_QUIET)
+    set (_gz_ok OFF)
+    if (_gz_rc1 EQUAL 0 AND _gz_rc2 EQUAL 0)
+        file (SIZE "${_gz_probe}.o" _gz_plain)
+        file (SIZE "${_gz_probe}.gz.o" _gz_comp)
+        if (_gz_comp LESS _gz_plain)
+            set (_gz_ok ON)
+        endif ()
     endif ()
-endif ()
+    message (STATUS "Compiler ${_gz_compiler} compresses debug sections (-gz=zlib): ${_gz_ok}")
+    if (NOT _gz_ok)
+        set (COMPILER_SUPPORTS_GZ_ZLIB OFF)
+    endif ()
+endforeach ()
 
 # Block build-time CMake probes (check_*, try_compile, try_run) project-wide. Compiler and
 # toolchain are fixed (see cmake/tools.cmake), so feature detection is unnecessary - any
