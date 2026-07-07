@@ -298,15 +298,22 @@ Three complementary sources, cheapest first:
 
   This surfaces PRs that **closed** the issue and any fix named in comments — but **not** a PR that
   merely cross-references it (`Related #<issue>`) without closing it. The issue timeline would show
-  those, but the investigate profile denies `gh api` (it can POST). So find them with a read-only
-  **PR search by issue number**, which catches closing *and* non-closing references regardless of
-  whether the PR mentions the failing test:
+  those, but the investigate profile denies `gh api` (it can POST). So look for them with a
+  read-only **PR search by issue number** — scoped to title/body, and treated as **candidates
+  only**:
 
   ```bash
   .claude/tools/gh-ro.sh pr list --repo ClickHouse/ClickHouse --state all --limit 20 \
-    --search "<issue-number>" \
+    --search "<issue-number> in:title,body" \
     --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
   ```
+
+  **A bare number is ambiguous — every hit is a candidate, never a confirmed fix.** GitHub matches
+  the number as free text, so this returns PRs that merely *mention* it (e.g. searching `75982`
+  returns this docs PR, which only cites `#75982`). Before using any hit in the `Fix` column,
+  **verify it genuinely references this issue** — its body has a `Closes/Fixes/Related #<issue-number>`
+  (not the number in prose), or it plainly addresses the same failing test/symptom. Discard mentions
+  that don't. Never emit `WIP`/`merged` from an unverified number match.
 
   Do **not** rely on the by-test-name search below to catch cross-references — a fix PR that
   references the issue but never names the test is invisible to it, which would emit a false
