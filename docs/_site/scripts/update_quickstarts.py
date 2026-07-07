@@ -337,9 +337,21 @@ def main():
         english_by_id = {qs['id']: qs for qs in quickstarts}
         for entry in locale_quickstarts:
             english = english_by_id.get(entry['id'])
-            if english:
-                entry['useCases'] = english['useCases']
-                entry['products'] = english['products']
+            if english is None:
+                # A localized page whose id has no English counterpart cannot
+                # inherit canonical tags, so it would keep its own translated
+                # useCases/products — which slugify_tag collapses to "" for
+                # non-Latin text, shipping a card with an unfilterable tag.
+                # Fail closed rather than emit broken explorer data (the
+                # non-zero failure count below blocks all writes).
+                print(f"  ✗ {locale}/{entry['id']}: no English quickstart with "
+                      "this id; the localized tags cannot be made canonical. "
+                      "Rename this page to match its English counterpart, or "
+                      "add the missing English page.")
+                failures += 1
+                continue
+            entry['useCases'] = english['useCases']
+            entry['products'] = english['products']
         locale_output = (project_root / 'snippets' / locale / 'components'
                          / 'QuickStartsGrid' / 'quickstarts-data.jsx')
         staged[locale_output] = render_data_module(locale_quickstarts)
