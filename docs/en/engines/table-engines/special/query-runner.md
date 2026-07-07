@@ -77,7 +77,7 @@ Without the `cluster` setting, the queries are executed on the local server.
 The user under whom they run is determined by the `SQL SECURITY` clause:
 
 - `INVOKER` (default): the queries run on behalf of the user who performed the INSERT.
-- `DEFINER`: the queries run on behalf of the specified `DEFINER` user.
+- `DEFINER`: the queries run on behalf of the specified `DEFINER` user. Because the inserted queries are arbitrary, granting `INSERT` on such a table delegates all privileges of the definer.
 - `NONE`: the queries run with full access, without a user. Requires the `ALLOW_SQL_SECURITY_NONE` grant at table creation.
 
 ## Cluster mode {#cluster-mode}
