@@ -1295,13 +1295,13 @@ size_t CachedOnDiskReadBufferFromFile::readFromFileSegment(
 #endif
 
     auto do_download = state.read_type == ReadType::REMOTE_FS_READ_AND_PUT_IN_CACHE;
-    if (do_download != file_segment.isDownloader())
-    {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Incorrect segment state. Having read type: {}, file segment info: {}",
-            toString(state.read_type), file_segment.getInfoForLog());
-    }
+    /// Debug-only check to avoid taking the file segment lock on the hot cache-hit path.
+    /// In release builds FileSegment::write and FileSegment::reserve still throw
+    /// if the caller is not the downloader.
+    chassert(
+        do_download == file_segment.isDownloader(),
+        fmt::format("Incorrect segment state. Having read type: {}, file segment info: {}",
+                    toString(state.read_type), file_segment.getInfoForLog()));
 
     if (!size)
     {
