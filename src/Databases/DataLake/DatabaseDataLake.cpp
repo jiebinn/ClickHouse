@@ -154,10 +154,10 @@ DatabaseDataLake::DatabaseDataLake(
     , db_uuid(uuid)
 {
     validateSettings();
-    /// On ATTACH (server startup / restore / user `ATTACH DATABASE`) defer catalog construction to first use:
-    /// building it can perform network I/O or credential validation that must not block startup. On CREATE
-    /// build eagerly so misconfiguration (including a restricted server-credential catalog) is reported
-    /// immediately.
+    /// On ATTACH (server startup / user `ATTACH DATABASE`) or internal creates (restore),
+    //  defer catalog construction to first use: building it can perform network I/O or credential validation
+    //  that must not block startup. On CREATE build eagerly so misconfiguration (including a restricted
+    //  server-credential catalog) is reported immediately.
     if (!lazy_init)
     {
         std::lock_guard lock(catalog_mutex);
@@ -1282,7 +1282,9 @@ void registerDatabaseDataLake(DatabaseFactory & factory)
             args.uuid,
             allow_server_credentials_in_user_queries,
             is_loading_from_existing_metadata,
-            /*lazy_init=*/args.create_query.attach);
+            /// Internal creates (`RESTORE DATABASE`) shouldn't do network I/O.
+            /// We don't want an unreachable or unauthorized catalog to block replica startup.
+            /*lazy_init=*/args.create_query.attach || args.is_internal);
     };
     /// TODO: DataLakeCatalog is polymorphic — underlying source (S3, Azure, HDFS, etc.) depends
     /// on the catalog type chosen at runtime. Consider adding source_access_type once a mechanism
