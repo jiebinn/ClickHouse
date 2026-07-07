@@ -16,6 +16,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <csignal>
 #include <limits>
 
@@ -484,11 +485,20 @@ bool ShellCommand::tryReapWithoutStatusCheck()
     /// A child that has closed stdout (so the pipeline is complete) but has only
     /// just called `_exit` is not yet a reapable zombie the instant cleanup runs, so
     /// a single non-blocking `wait4(WNOHANG)` can miss it and lose its `rusage` — the
-    /// CPU counters would then read zero. Poll for a short bounded budget so a
+    /// CPU counters would then read zero. Poll for a bounded budget so a
     /// promptly-exiting child is reaped and its usage captured. A child that keeps
     /// running past the budget is still left to `~ShellCommand`'s bounded
     /// `command_termination_timeout` + SIGTERM teardown, so cleanup never hangs.
-    static constexpr UInt64 reap_poll_budget_ms = 1000;
+    ///
+    /// The budget follows the same `command_termination_timeout` contract as the
+    /// destructor's wait: it is `wait_for_normal_exit_before_termination_seconds`.
+    /// This way a child that exits naturally anywhere inside the configured teardown
+    /// window is reaped here (with its `rusage`) rather than by the destructor's
+    /// `waitForPid`, which does not collect usage. A configured timeout of 0 means
+    /// "do not wait" — a single non-blocking reap, so this path never stalls a query
+    /// beyond what the configuration allows.
+    const UInt64 reap_poll_budget_ms
+        = config.terminate_in_destructor_strategy.wait_for_normal_exit_before_termination_seconds * 1000ULL;
     static constexpr UInt64 reap_poll_step_ms = 5;
 
     UInt64 waited_ms = 0;
@@ -498,7 +508,7 @@ bool ShellCommand::tryReapWithoutStatusCheck()
             return true;
         if (waited_ms >= reap_poll_budget_ms)
             return false;
-        sleepForMilliseconds(reap_poll_step_ms);
+        sleepForMilliseconds(std::min(reap_poll_step_ms, reap_poll_budget_ms - waited_ms));
         waited_ms += reap_poll_step_ms;
     }
 }
