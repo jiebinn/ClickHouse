@@ -16,6 +16,7 @@ namespace ProfileEvents
     extern const Event ReaderExecutorCachePopulateRequests;
     extern const Event ReaderExecutorIncompleteConnections;
     extern const Event ReaderExecutorWorkMicroseconds;
+    extern const Event ReaderExecutorDecryptMicroseconds;
     extern const Event ReaderExecutorModeledCostMicroseconds;
     extern const Event ReaderExecutorLongConnectionOpened;
     extern const Event ReaderExecutorLongConnectionHits;
@@ -93,6 +94,9 @@ void ReaderExecutor::Stats::add(Counter c, UInt64 value)
             break;
         case WorkMicroseconds:
             ProfileEvents::increment(ProfileEvents::ReaderExecutorWorkMicroseconds, value);
+            break;
+        case DecryptMicroseconds:
+            ProfileEvents::increment(ProfileEvents::ReaderExecutorDecryptMicroseconds, value);
             break;
         case LongConnectionOpened:
             ProfileEvents::increment(ProfileEvents::ReaderExecutorLongConnectionOpened, value);
@@ -323,6 +327,88 @@ void ReaderExecutor::dropLongConnection()
     long_conn.reset();
 }
 
+size_t ReaderExecutor::totalSize() const
+{
+    const size_t physical = offset_map.totalSize();
+    return physical > data_start_offset ? physical - data_start_offset : 0;
+}
+
+void ReaderExecutor::addDecryptionLayer(
+    [[maybe_unused]] String path,
+    [[maybe_unused]] size_t buffer_size,
+    [[maybe_unused]] KeyFinderFunc key_finder)
+{
+#if USE_SSL
+    decryptor.addLayer(std::move(path), buffer_size, std::move(key_finder));
+    data_start_offset = decryptor.headerBytes();
+    LOG_DEBUG(log, "Added decryption layer, data_start_offset={}", data_start_offset);
+#endif
+}
+
+void ReaderExecutor::initDecryption()
+{
+#if USE_SSL
+    if (decryptor.initialized() || decryptor.empty())
+        return;
+
+    const size_t total_source_size = offset_map.totalSize();
+
+    /// An empty underlying source (e.g. DiskObjectStorage's empty-file fallback for paths with no
+    /// storage objects) has no encryption header. Skip — subsequent reads return 0 bytes, matching
+    /// reading an empty file on an unencrypted disk.
+    if (total_source_size == 0)
+    {
+        LOG_DEBUG(log, "initDecryption: source is empty, skipping");
+        return;
+    }
+
+    /// Source exists but is smaller than the header(s) — corrupted.
+    if (total_source_size < data_start_offset)
+        throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
+            "Encrypted source has {} bytes, less than header size {}",
+            total_source_size, data_start_offset);
+
+    LOG_DEBUG(log, "initDecryption: reading headers ({} bytes)", data_start_offset);
+
+    /// The headers sit at the front of the first object. Read them once with a plain one-shot
+    /// source read — they are tiny and read a single time per executor, so no long connection.
+    size_t object_start_offset = 0;
+    const StoredObject * object = offset_map.findObjectAt(0, &object_start_offset);
+    if (!object)
+        return;
+
+    auto block = std::make_shared<OwnedChainedBuffer>(data_start_offset);
+    const size_t got = readOneShot(*object, /*object_offset=*/0, data_start_offset, block->data());
+
+    /// Under size-unknown sources a short read means EOF rather than an error, so 0 bytes is an
+    /// empty object (same as the size-known empty branch above) and a partial read is corruption.
+    if (offset_map.hasUnknownSize() && got == 0)
+    {
+        LOG_DEBUG(log, "initDecryption: unknown-size source returned 0 bytes (empty object), skipping");
+        return;
+    }
+    if (got != data_start_offset)
+        throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
+            "Encrypted source returned {} header bytes, expected {} (corrupted/truncated)",
+            got, data_start_offset);
+
+    ChainedBuffers header_chain;
+    header_chain.append(ChainedBufferNode{std::move(block), 0, got, 0});
+    decryptor.parseHeaders(header_chain);
+#endif
+}
+
+void ReaderExecutor::decryptInPlace(
+    [[maybe_unused]] char * data, [[maybe_unused]] size_t size, [[maybe_unused]] size_t logical_offset)
+{
+#if USE_SSL
+    if (decryptor.empty() || size == 0)
+        return;
+    StatTimer decrypt_scope(stats, Stats::DecryptMicroseconds);
+    decryptor.decrypt(data, size, logical_offset);
+#endif
+}
+
 ChainedBuffers ReaderExecutor::readNextWindow()
 {
     StatTimer work_timer(stats, Stats::WorkMicroseconds);
@@ -330,15 +416,20 @@ ChainedBuffers ReaderExecutor::readNextWindow()
     if (atEnd())
         return {};
 
-    size_t object_logical_start_offset = 0;
-    const StoredObject * object = offset_map.findObjectAt(position, &object_logical_start_offset);
+    /// The offset map and object sizes are physical; logical `position` maps to physical
+    /// `position + data_start_offset` (the encryption headers sit at the file front, and
+    /// `data_start_offset` is 0 without encryption). All source I/O below is physical; the
+    /// served payload is decrypted back to plaintext at its logical offset before it leaves.
+    const size_t position_phys = position + data_start_offset;
+    size_t object_phys_start_offset = 0;
+    const StoredObject * object = offset_map.findObjectAt(position_phys, &object_phys_start_offset);
     if (!object)
     {
         reached_eof = true;
         return {};
     }
 
-    const size_t object_offset = position - object_logical_start_offset;
+    const size_t object_offset = position_phys - object_phys_start_offset;
 
     /// Clamp the block to the object boundary so a window never straddles two
     /// objects; the next call continues in the next object. Unknown total size
@@ -407,6 +498,11 @@ ChainedBuffers ReaderExecutor::readNextWindow()
     }
 
     continuity_tracker.recordReadRange(position, got);
+
+    /// Decrypt the freshly-read, uniquely-owned block in place at its logical offset. CTR is
+    /// position-addressable, so decrypting only the consumed window is exact — read-ahead served
+    /// later is decrypted on its own window. No-op when there is no encryption.
+    decryptInPlace(block->data(), got, position);
 
     ChainedBuffers chain;
     chain.append(ChainedBufferNode{std::move(block), 0, got, position});

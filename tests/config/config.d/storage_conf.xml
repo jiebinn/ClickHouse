@@ -124,6 +124,13 @@
                 <disk>s3_cache</disk>
                 <key>1234567812345678</key>
             </s3_cache_encrypted>
+            <!-- Encryption over raw object storage with NO filesystem cache: lets the ReaderExecutor
+                 engage on an encrypted disk (a cache would force the legacy fallback). -->
+            <s3_no_cache_encrypted>
+                <type>encrypted</type>
+                <disk>s3_no_cache</disk>
+                <key>1234567812345678</key>
+            </s3_no_cache_encrypted>
         </disks>
         <policies>
             <local_remote>
@@ -167,6 +174,13 @@
                     </main>
                 </volumes>
             </s3_cache_encrypted>
+            <s3_no_cache_encrypted>
+                <volumes>
+                    <main>
+                        <disk>s3_no_cache_encrypted</disk>
+                    </main>
+                </volumes>
+            </s3_no_cache_encrypted>
         </policies>
     </storage_configuration>
     <!-- Allow data-lake table engines (Iceberg, Delta, Hudi) to use these disks via
