@@ -294,17 +294,28 @@ void DirectoryWatcherBase::watchFunc()
     };
 
     /// Pre-existing files are loaded by StorageFileLog's own directory scan; the watcher, like
-    /// inotify, reports only subsequent changes. So seed the snapshot without emitting events.
+    /// inotify, reports only subsequent changes. So seed the snapshot without emitting events. A
+    /// transient failure here (e.g. the directory being briefly recreated) must not permanently kill
+    /// this one-shot task, so we log and retry rather than return - StorageFileLog::loadFiles has
+    /// already captured the initial file set, and retrying keeps the baseline correct (seeding from an
+    /// empty snapshot would re-emit every pre-existing file as ADDED and re-read it from offset 0).
     std::map<std::string, FileState> snapshot;
-    try
+    while (!stopped)
     {
-        scan(snapshot);
+        try
+        {
+            scan(snapshot);
+            break;
+        }
+        catch (const std::exception & e)
+        {
+            LOG_WARNING(getLogger("FileLogDirectoryWatcher"), "Failed to seed watched directory {}, will retry: {}", path, e.what());
+            pollfd stop_wait{.fd = event_pipe.fds_rw[0], .events = POLLIN, .revents = 0};
+            poll(&stop_wait, 1, static_cast<int>(milliseconds_to_wait)); /// interruptible wait before retrying
+        }
     }
-    catch (const std::exception & e)
-    {
-        owner.onError(Exception(ErrorCodes::IO_SETUP_ERROR, "Watch directory {} failed: {}", path, e.what()));
+    if (stopped)
         return;
-    }
     sync_file_watches(snapshot);
 
     pollfd pfds[2];
