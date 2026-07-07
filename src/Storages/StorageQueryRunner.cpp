@@ -338,16 +338,22 @@ public:
         job.seq = pending.issue();
         const auto batch = job.batch;
         const UInt64 seq = job.seq;
-        if (!queue.tryPush(std::move(job)))
+        try
         {
-            if (queue.isFinished())
-                LOG_WARNING(log, "The table is shutting down, discarding the query");
-            else
-                LOG_ERROR(LogFrequencyLimiter(log, 5), "The queue is full (max_queue_size = {}), discarding the query", max_queue_size);
-            if (batch)
-                batch->countDown();
-            pending.retire(seq);
+            if (queue.tryPush(std::move(job)))
+                return;
         }
+        catch (...)
+        {
+            finishJob(batch, seq);
+            throw;
+        }
+
+        if (queue.isFinished())
+            LOG_WARNING(log, "The table is shutting down, discarding the query");
+        else
+            LOG_ERROR(LogFrequencyLimiter(log, 5), "The queue is full (max_queue_size = {}), discarding the query", max_queue_size);
+        finishJob(batch, seq);
     }
 
     void waitForAllPending(const QueryStatusPtr & query_status)
@@ -369,17 +375,20 @@ public:
 
         QueryRunnerJob job;
         while (queue.tryPop(job))
-        {
-            if (job.batch)
-                job.batch->countDown();
-            pending.retire(job.seq);
-        }
+            finishJob(job.batch, job.seq);
 
         cluster_executors.cancelAll();
         pool.wait();
     }
 
 private:
+    void finishJob(const std::shared_ptr<CountDownLatch> & batch, UInt64 seq)
+    {
+        if (batch)
+            batch->countDown();
+        pending.retire(seq);
+    }
+
     void workerLoop()
     {
         setThreadName(ThreadName::QUERY_RUNNER);
@@ -387,11 +396,16 @@ private:
         QueryRunnerJob job;
         while (queue.pop(job))
         {
-            executeJob(job);
+            try
+            {
+                executeJob(job);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, "Failed to execute a query");
+            }
 
-            if (job.batch)
-                job.batch->countDown();
-            pending.retire(job.seq);
+            finishJob(job.batch, job.seq);
         }
     }
 
@@ -404,20 +418,13 @@ private:
                 return;
         }
 
-        try
-        {
-            auto job_context = makeJobContext(job);
-            QueryScope query_scope = QueryScope::create(job_context);
+        auto job_context = makeJobContext(job);
+        QueryScope query_scope = QueryScope::create(job_context);
 
-            if (cluster_name.empty())
-                executeLocally(job, job_context);
-            else
-                executeOnCluster(job, job_context);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Failed to execute a query");
-        }
+        if (cluster_name.empty())
+            executeLocally(job, job_context);
+        else
+            executeOnCluster(job, job_context);
     }
 
     ContextMutablePtr makeJobContext(const QueryRunnerJob & job) const
