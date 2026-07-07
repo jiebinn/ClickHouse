@@ -143,7 +143,11 @@ def test_cluster_insert_requires_remote():
     assert "ACCESS_DENIED" in node_query_runner.query_and_get_error(
         "INSERT INTO runner VALUES ('SELECT 1')", user="no_remote_user"
     )
-    node_query_runner.query("GRANT REMOTE ON *.* TO no_remote_user")
+    node_query_runner.query("GRANT READ ON REMOTE TO no_remote_user")
+    assert "ACCESS_DENIED" in node_query_runner.query_and_get_error(
+        "INSERT INTO runner VALUES ('SELECT 1')", user="no_remote_user"
+    )
+    node_query_runner.query("GRANT WRITE ON REMOTE TO no_remote_user")
     node_query_runner.query("INSERT INTO runner VALUES ('SELECT 1')", user="no_remote_user")
     node_query_runner.query("DROP USER no_remote_user")
 

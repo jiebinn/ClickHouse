@@ -820,7 +820,7 @@ SinkToStoragePtr StorageQueryRunner::write(const ASTPtr & /*query*/, const Stora
     std::shared_ptr<const QueryRunnerJobOrigin> origin;
     if (!metadata_snapshot->sql_security_type)
     {
-        local_context->checkAccess(AccessType::READ, toStringSource(AccessTypeObjects::Source::REMOTE));
+        local_context->checkAccess(AccessType::READ | AccessType::WRITE, toStringSource(AccessTypeObjects::Source::REMOTE));
         origin = std::make_shared<const QueryRunnerJobOrigin>(QueryRunnerJobOrigin{
             .user_id = {},
             .roles = {},
@@ -957,7 +957,7 @@ void registerStorageQueryRunner(StorageFactory & factory)
         }
         else if (args.mode <= LoadingStrictnessLevel::CREATE)
         {
-            args.getLocalContext()->checkAccess(AccessType::REMOTE);
+            args.getLocalContext()->checkAccess(AccessType::READ | AccessType::WRITE, toStringSource(AccessTypeObjects::Source::REMOTE));
             auto cluster = args.getContext()->getCluster(cluster_name);
             if (shard_selector.kind == ShardSelectorKind::Fixed && shard_selector.fixed_shard_num > cluster->getShardsInfo().size())
                 throw Exception(
