@@ -261,7 +261,7 @@ void QueryAnalyzer::resolve(QueryTreeNodePtr & node, const QueryTreeNodePtr & ta
     }
 
     validateCorrelatedSubqueries(node);
-    inlineMaterializedCTEIfNeeded(node, reused_materialized_cte, context);
+    inlineMaterializedCTEIfNeeded(node, context);
 }
 
 void QueryAnalyzer::resolveConstantExpression(QueryTreeNodePtr & node, const QueryTreeNodePtr & table_expression, ContextPtr context)
@@ -1287,13 +1287,6 @@ IdentifierResolveResult QueryAnalyzer::tryResolveIdentifierFromCTE(
         table_node->setAlias(full_name);
 
         cte_node = table_node;
-    }
-    else if (auto * table_node = cte_node->as<TableNode>())
-    {
-        if (table_node->isMaterializedCTE())
-        {
-            reused_materialized_cte.insert(table_node->getMaterializedCTE());
-        }
     }
 
     return { .resolved_identifier = cte_node, .resolve_place = IdentifierResolvePlace::CTE };
