@@ -984,6 +984,17 @@ class IcebergTableGenerator(LakeTableGenerator):
                     )
                 }
             )
+        # `write.metadata.delete-after-commit.enabled` deletes old `vN.metadata.json`
+        # files after each commit. That is safe with a real metastore catalog (Glue/Hive/
+        # REST/Nessie), which stores the current-metadata pointer externally, but it
+        # corrupts a Hadoop catalog: `HadoopTableOperations` tracks the current version via
+        # `version-hint.text` + `vN.metadata.json`, and on refresh it fails with
+        # "Metadata file for version N is missing" once those files are deleted (worse on
+        # object stores, which lack atomic rename). The Iceberg fallback catalog
+        # (`LakeCatalogs.NoCatalog`) is exactly the Hadoop catalog, so drop the property
+        # there to avoid self-corrupting the table.
+        if table.catalog == LakeCatalogs.NoCatalog:
+            next_properties.pop("write.metadata.delete-after-commit.enabled", None)
         return next_properties
 
     def get_snapshots(self, spark: SparkSession, table: SparkTable):
