@@ -138,7 +138,7 @@ std::optional<Float64> StatisticsUtils::interpolateLessLinear(
     return interpolateLessLinearTyped<Float64>(Field(*val_as_float), Field(*min_as_float), Field(*max_as_float), row_count);
 }
 
-/// Returns the first available uniq-style cardinality estimator (prefers Uniq over UniqV2).
+/// Returns the first available uniq-style cardinality estimator (prefers Uniq over UniqV2 because Uniq has better precision).
 static const IStatistics * findUniqStats(const ColumnStatistics::StatsMap & m)
 {
     if (auto it = m.find(StatisticsType::Uniq); it != m.end())
@@ -300,9 +300,9 @@ std::optional<Float64> ColumnStatistics::estimateEqual(const Field & val) const
         return stats.at(StatisticsType::CountMinSketch)->estimateEqual(val);
     }
 #endif
-    if (const IStatistics * us = findUniqStats(stats))
+    if (uniq_stats != nullptr)
     {
-        UInt64 cardinality = us->estimateCardinality();
+        UInt64 cardinality = uniq_stats->estimateCardinality();
         if (cardinality == 0 || rows == 0)
             return 0;
         /// Uniq ignores NULLs, so divide non-NULL row count by distinct values.
@@ -339,9 +339,9 @@ std::optional<Float64> ColumnStatistics::estimateRange(const Range & range) cons
 
 UInt64 ColumnStatistics::estimateCardinality() const
 {
-    if (const IStatistics * us = findUniqStats(stats))
+    if (const IStatistics * uniq_stats = findUniqStats(stats))
     {
-        return us->estimateCardinality();
+        return uniq_stats->estimateCardinality();
     }
     /// if we don't have uniq statistics, we use a mock one, assuming there are 90% different unique values.
     return UInt64(static_cast<Float64>(rows) * ConditionSelectivityEstimator::default_cardinality_ratio);
@@ -401,8 +401,8 @@ Estimate ColumnStatistics::getEstimate() const
     for (const auto & [type, _] : stats)
         info.types.insert(type);
 
-    if (const IStatistics * us = findUniqStats(stats))
-        info.estimated_cardinality = us->estimateCardinality();
+    if (const IStatistics * uniq_stats = findUniqStats(stats))
+        info.estimated_cardinality = uniq_stats->estimateCardinality();
 
     if (auto it = stats.find(StatisticsType::Basic); it != stats.end())
     {
