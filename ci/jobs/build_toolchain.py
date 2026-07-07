@@ -652,6 +652,15 @@ def main():
             shutil.copy2(ninja_log_saved, f"{ninja_log_dir}/ninja_log")
             print(f"Installed .ninja_log to {ninja_log_dir}/ninja_log")
 
+        # LLVM installs the versioned `clang-21` plus unversioned `clang++`->`clang`->`clang-21`,
+        # but not a versioned `clang++-21`. ClickHouse selects compilers by versioned name, so
+        # without this the C++ compiler resolves to whatever `clang++-21` is elsewhere on PATH (e.g.
+        # a distro one) while C/ASM use this toolchain - a silent mismatch. Add the missing symlink.
+        clangpp21 = f"{STAGE2_INSTALL_DIR}/bin/clang++-21"
+        if not os.path.lexists(clangpp21):
+            os.symlink("clang", clangpp21)
+            print(f"Created symlink {clangpp21} -> clang")
+
         # Strip ELF executables and shared libraries to reduce archive size
         # (relocations from --emit-relocs and LTO symbols are no longer needed).
         # Use "file" to skip scripts (Python, Perl, shell) that strip cannot handle.
