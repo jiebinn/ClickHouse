@@ -177,12 +177,9 @@ void applyParentNullMapToExtractedSubcolumn(
 
 DataTypePtr NullableSubcolumnCreator::create(const DataTypePtr & prev) const
 {
-    if (canExtractedSubcolumnsBeInsideNullable(prev))
-        return makeNullableSafe(prev);
-
-    /// A non-nullable `LowCardinality(T)` cannot be wrapped in `Nullable`, but it must still be able to
-    /// represent the outer column's NULLs, so promote it to `LowCardinality(Nullable(T))`. For every other
-    /// type this returns `prev` unchanged, matching the previous behaviour.
+    /// Wrap into `Nullable(...)` when possible, or `LowCardinality(Nullable(T))` for a non-nullable
+    /// `LowCardinality(T)` element (which cannot be wrapped in plain `Nullable`) so it can still
+    /// represent the outer column's NULLs. Returns `prev` unchanged for types that can do neither.
     return makeExtractedSubcolumnsNullableOrLowCardinalityNullableSafe(prev);
 }
 
