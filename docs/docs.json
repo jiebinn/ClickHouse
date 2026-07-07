@@ -2399,6 +2399,7 @@
                           },
                           {
                             "group": "ClickStack",
+                            "tag": "Beta",
                             "pages": [
                               "GET /v1/organizations/{organizationId}/services/{serviceId}/clickstack/dashboards",
                               "POST /v1/organizations/{organizationId}/services/{serviceId}/clickstack/dashboards",
@@ -2416,6 +2417,7 @@
                           },
                           {
                             "group": "Postgres",
+                            "tag": "Beta",
                             "pages": [
                               "POST /v1/organizations/{organizationId}/postgres",
                               "GET /v1/organizations/{organizationId}/postgres",
