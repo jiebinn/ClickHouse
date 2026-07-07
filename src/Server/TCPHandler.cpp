@@ -1705,6 +1705,16 @@ void TCPHandler::processTablesStatusRequest()
 
 void TCPHandler::processUnexpectedTablesStatusRequest()
 {
+    /// Consume the same wire prefix as processTablesStatusRequest: on a new-protocol
+    /// interserver connection the request body is preceded by the authentication hash.
+#if USE_SSL
+    if (is_interserver_mode && client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_TABLES_STATUS)
+    {
+        std::string skipped_hash;
+        readStringBinary(skipped_hash, *in, 32);
+    }
+#endif
+
     TablesStatusRequest skip_request;
     skip_request.read(*in, client_tcp_protocol_version);
 
