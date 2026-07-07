@@ -143,6 +143,16 @@ public:
         if (is_quantized && !WhichDataType(qbit->getElementType()).isInt8())
             return;
 
+        /// The Nullable(QBit) rewrite (reading the bit planes as Nullable(FixedString) so the column's per-row null map flows
+        /// through the distance function's default Nullable handling) is only exercised for the non-quantized transposed
+        /// functions in this change. The quantized variants dequantize the Int8 codes and handle the reference vector
+        /// differently (a Float reference is cast to Array(Float32), an Array(Int8) reference is dequantized like the QBit),
+        /// so their Nullable(QBit(Int8)) path needs its own focused coverage before it is optimized. Until that exists, leave
+        /// a Nullable quantized QBit column for the unoptimized function to handle. This only declines an optimization - the
+        /// unoptimized distance function is the ground truth and returns the same result - so it cannot change any query result.
+        if (is_quantized && is_nullable)
+            return;
+
         size_t data_width = qbit->getElementSize();
         UInt64 precision = precision_node->getValue().safeGet<UInt64>();
 

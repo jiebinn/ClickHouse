@@ -185,3 +185,47 @@ SELECT
   = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, NULL, 4) AS d FROM qbit_nullable_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
 
 DROP TABLE qbit_nullable_ref;
+
+
+-- The Nullable(QBit) rewrite is shared with the quantized transposed functions (L2DistanceTransposedQuantized /
+-- cosineDistanceTransposedQuantized / dotProductTransposedQuantized), but their reference handling differs: they dequantize
+-- the stored Int8 codes on the fly and cast a Float reference to Array(Float32) (or dequantize an Array(Int8) reference like
+-- the QBit) rather than casting to the QBit element type. That sibling path does not yet have focused Nullable(QBit(Int8))
+-- coverage, so the pass leaves a Nullable quantized QBit column for the unoptimized function to handle - it declines the
+-- optimization exactly like the Variant / Dynamic / NULL reference-vector cases above. Here we prove that all three quantized
+-- functions bail on a Nullable(QBit(Int8)) column (they read the whole vec column, not the vec.N planes), that the result type
+-- stays Nullable(Float64), that NULL rows stay NULL, and that the unoptimized result is unchanged whether the setting is on or
+-- off. The unoptimized quantized path itself is exercised by 04504_transposed_distance_quantized; here it must simply keep
+-- working for a Nullable column, which it does through the distance function's default Nullable handling.
+
+DROP TABLE IF EXISTS qbit_q_nullable;
+CREATE TABLE qbit_q_nullable (id UInt32, vec Nullable(QBit(Int8, 8))) ENGINE = Memory;
+INSERT INTO qbit_q_nullable
+SELECT id, codes::QBit(Int8, 8)
+FROM
+(
+    SELECT 1 AS id, arrayMap(x -> quantizeBFloat16ToInt8(x), [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(BFloat16)) AS codes
+    UNION ALL
+    SELECT 3 AS id, arrayMap(x -> quantizeBFloat16ToInt8(x), [0.42, -0.11, 0.88, -0.05, 0.15, -0.33, 0.60, -0.77]::Array(BFloat16)) AS codes
+)
+ORDER BY id;
+INSERT INTO qbit_q_nullable VALUES (2, NULL), (4, NULL);
+
+SELECT '-- quantized L2/cosine/dotProductTransposedQuantized on Nullable(QBit(Int8)): each bails, reading the whole vec column, not the vec.N planes (expect 0, 0, 0)';
+SELECT arrayUniq(extractAll(arrayStringConcat((SELECT groupArray(explain) FROM (EXPLAIN actions = 1 SELECT id, L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) FROM qbit_q_nullable SETTINGS optimize_qbit_distance_function_reads = 1)), ' '), 'vec\\.[0-9]+'));
+SELECT arrayUniq(extractAll(arrayStringConcat((SELECT groupArray(explain) FROM (EXPLAIN actions = 1 SELECT id, cosineDistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) FROM qbit_q_nullable SETTINGS optimize_qbit_distance_function_reads = 1)), ' '), 'vec\\.[0-9]+'));
+SELECT arrayUniq(extractAll(arrayStringConcat((SELECT groupArray(explain) FROM (EXPLAIN actions = 1 SELECT id, dotProductTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) FROM qbit_q_nullable SETTINGS optimize_qbit_distance_function_reads = 1)), ' '), 'vec\\.[0-9]+'));
+
+SELECT '-- quantized Nullable(QBit(Int8)): result type stays Nullable(Float64) with the optimization on and off';
+SELECT DISTINCT toTypeName(L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4)) FROM qbit_q_nullable SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT DISTINCT toTypeName(L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4)) FROM qbit_q_nullable SETTINGS optimize_qbit_distance_function_reads = 0;
+
+SELECT '-- quantized Nullable(QBit(Int8)): NULL rows (2, 4) stay NULL';
+SELECT id, L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) IS NULL FROM qbit_q_nullable ORDER BY id SETTINGS optimize_qbit_distance_function_reads = 1;
+
+SELECT '-- quantized Nullable(QBit(Int8)): optimization on == off, values and NULL mask (expect 1)';
+SELECT
+    toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) AS d FROM qbit_q_nullable ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 1))
+  = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposedQuantized(vec, [0.10, -0.50, 0.30, -0.20, 0.05, -0.90, 1.20, -1.50]::Array(Float32), 4) AS d FROM qbit_q_nullable ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
+
+DROP TABLE qbit_q_nullable;

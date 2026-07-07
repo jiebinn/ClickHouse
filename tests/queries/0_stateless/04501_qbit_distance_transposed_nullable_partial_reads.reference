@@ -74,3 +74,17 @@ Nullable(Nothing)
 Nullable(Nothing)
 -- NULL reference vector: optimization on == off, every row NULL (expect 1)
 1
+-- quantized L2/cosine/dotProductTransposedQuantized on Nullable(QBit(Int8)): each bails, reading the whole vec column, not the vec.N planes (expect 0, 0, 0)
+0
+0
+0
+-- quantized Nullable(QBit(Int8)): result type stays Nullable(Float64) with the optimization on and off
+Nullable(Float64)
+Nullable(Float64)
+-- quantized Nullable(QBit(Int8)): NULL rows (2, 4) stay NULL
+1	0
+2	1
+3	0
+4	1
+-- quantized Nullable(QBit(Int8)): optimization on == off, values and NULL mask (expect 1)
+1
