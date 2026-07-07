@@ -511,13 +511,15 @@ class IcebergTableGenerator(LakeTableGenerator):
         tpath = table.get_table_full_path()
 
         if next_operation <= 2:
-            # Add or drop a partition field, keeping `table.partition_fields` in sync so DROP
-            # always targets a field that actually exists (an empty spec has nothing to drop).
+            # Add or drop a partition field. Executed inline so the tracked state is updated only
+            # after the ALTER succeeds (the caller swallows ALTER errors, so mutating first would
+            # desync the model from Spark). DROP targets a field that exists.
             if table.partition_fields and random.randint(1, 2) == 1:
                 victim = random.choice(table.partition_fields)
+                spark.sql(f"ALTER TABLE {tpath} DROP PARTITION FIELD {victim}")
                 table.partition_fields.remove(victim)
                 table.partitioned = len(table.partition_fields) > 0
-                return f"ALTER TABLE {tpath} DROP PARTITION FIELD {victim}"
+                return ""
             # ADD a field not already in the spec (exact-string match; the random bucket/truncate
             # width makes two clauses on the same column distinct, which Iceberg allows).
             candidates = [
@@ -527,12 +529,13 @@ class IcebergTableGenerator(LakeTableGenerator):
             ]
             if candidates:
                 added = random.choice(candidates)
+                spark.sql(f"ALTER TABLE {tpath} ADD PARTITION FIELD {added}")
                 table.partition_fields.append(added)
                 table.partitioned = True
-                return f"ALTER TABLE {tpath} ADD PARTITION FIELD {added}"
+            return ""
         elif next_operation <= 4:
-            # Replace an existing partition field with a different one: old drawn from the active
-            # spec, new from the compatible remainder (so `old` exists and `new` != `old`).
+            # Replace an existing field (`old`) with a different one (`new`). Executed inline so
+            # the tracked spec is updated only after the ALTER succeeds (see ADD/DROP above).
             if table.partition_fields:
                 new_candidates = [
                     c
@@ -542,11 +545,12 @@ class IcebergTableGenerator(LakeTableGenerator):
                 if new_candidates:
                     old = random.choice(table.partition_fields)
                     new = random.choice(new_candidates)
-                    table.partition_fields.remove(old)
-                    table.partition_fields.append(new)
-                    return (
+                    spark.sql(
                         f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {old} WITH {new}"
                     )
+                    table.partition_fields.remove(old)
+                    table.partition_fields.append(new)
+            return ""
         elif next_operation <= 6:
             # Set ORDER BY
             if random.randint(1, 2) == 1:
