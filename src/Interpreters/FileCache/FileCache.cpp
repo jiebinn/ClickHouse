@@ -86,6 +86,7 @@ namespace FailPoints
     extern const char file_cache_stall_free_space_ratio_keeping_thread[];
     extern const char file_cache_pause_before_do_eviction[];
     extern const char file_cache_simulate_evicting_segment[];
+    extern const char file_cache_background_eviction_push_fail[];
 }
 
 namespace FileCacheSetting
@@ -1818,7 +1819,9 @@ void FileCache::freeSpaceRatioImpl(size_t & reschedule_ms)
             constexpr size_t push_timeout_ms = 10;
             constexpr size_t max_push_attempts = 1000;
             bool pushed = false;
-            for (size_t attempt = 0; !pushed && attempt < max_push_attempts; ++attempt)
+            bool force_push_fail = false;
+            fiu_do_on(FailPoints::file_cache_background_eviction_push_fail, { force_push_fail = true; });
+            for (size_t attempt = 0; !force_push_fail && !pushed && attempt < max_push_attempts; ++attempt)
             {
                 pushed = pending_eviction_queue.tryPush(batch, push_timeout_ms);
                 if (!pushed)

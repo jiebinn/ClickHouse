@@ -811,6 +811,71 @@ SETTINGS disk = disk(type = cache,
     )
 
 
+def test_keep_up_size_ratio_push_fail(cluster):
+    node = cluster.instances["node"]
+    max_elements = 100
+    cache_name = "keep_up_size_ratio_push_fail"
+    node.query(
+        f"""
+DROP TABLE IF EXISTS test_push_fail;
+
+CREATE TABLE test_push_fail (a String)
+ENGINE = MergeTree() ORDER BY tuple()
+SETTINGS disk = disk(type = cache,
+            name = {cache_name},
+            max_size = '10Mi',
+            max_elements = {max_elements},
+            max_file_segment_size = 10,
+            boundary_alignment = 10,
+            path = "test_keep_up_size_ratio_push_fail",
+            keep_free_space_size_ratio = 0.9,
+            keep_free_space_elements_ratio = 0.9,
+            keep_free_space_remove_batch = 2,
+            keep_free_space_eviction_threads = 3,
+            disk = hdd_blob),
+        min_bytes_for_wide_part = 10485760;
+    """
+    )
+
+    wait_for_cache_initialized(node, "test_keep_up_size_ratio_push_fail")
+
+    def elems():
+        return int(
+            node.query(
+                f"SELECT count() FROM system.filesystem_cache WHERE cache_name = '{cache_name}'"
+            )
+        )
+
+    node.query("SYSTEM ENABLE FAILPOINT file_cache_background_eviction_push_fail")
+
+    node.query(
+        "INSERT INTO test_push_fail SELECT randomString(1000) FROM numbers(2000);"
+    )
+    node.query("SELECT * FROM test_push_fail FORMAT Null")
+
+    blocked = elems()
+    time.sleep(15)
+    assert elems() == blocked
+
+    assert node.contains_in_log("Background eviction workers take too much time")
+
+    node.query("SYSTEM DISABLE FAILPOINT file_cache_background_eviction_push_fail")
+
+    for _ in range(60):
+        converged = elems()
+        if converged < blocked:
+            break
+        time.sleep(1)
+    assert converged < blocked
+
+    assert int(node.query("SELECT count() FROM test_push_fail")) == 2000
+    assert node.query(
+        "SELECT sum(cityHash64(a)) FROM test_push_fail"
+    ) == node.query(
+        "SELECT sum(cityHash64(a)) FROM test_push_fail SETTINGS enable_filesystem_cache = 0"
+    )
+
+
 def test_proactive_invalidated_entries_cleanup(cluster):
     node = cluster.instances["node"]
     cache_name = "proactive_invalidated_cleanup"
