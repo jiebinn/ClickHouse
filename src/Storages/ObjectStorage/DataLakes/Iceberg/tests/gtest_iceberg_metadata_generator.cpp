@@ -4,6 +4,7 @@
 
 #if USE_AVRO
 
+#include <Common/Exception.h>
 #include <IO/CompressionMethod.h>
 #include <Storages/ObjectStorage/DataLakes/Iceberg/Constant.h>
 #include <Storages/ObjectStorage/DataLakes/Iceberg/FileNamesGenerator.h>
@@ -11,6 +12,11 @@
 #include <Poco/JSON/Object.h>
 
 using namespace DB;
+
+namespace DB::ErrorCodes
+{
+    extern const int ICEBERG_SPECIFICATION_VIOLATION;
+}
 
 namespace
 {
@@ -38,7 +44,7 @@ Poco::JSON::Object::Ptr makeMinimalV2Metadata()
     return metadata;
 }
 
-void appendSnapshot(Poco::JSON::Object::Ptr metadata)
+void appendSnapshot(Poco::JSON::Object::Ptr metadata, Int64 parent_snapshot_id = -1)
 {
     FileNamesGenerator generator("s3://bucket/table", /*use_uuid_in_metadata=*/ false, CompressionMethod::None, "Parquet");
     generator.setVersion(1);
@@ -46,7 +52,7 @@ void appendSnapshot(Poco::JSON::Object::Ptr metadata)
     MetadataGenerator(metadata).generateNextMetadata(
         generator,
         metadata_info.path,
-        /*parent_snapshot_id=*/ -1,
+        parent_snapshot_id,
         /*added_files=*/ 1,
         /*added_records=*/ 1,
         /*added_files_size=*/ 100,
@@ -62,6 +68,11 @@ void appendSnapshot(Poco::JSON::Object::Ptr metadata)
 /// seed them rather than abort: a missing snapshots throws Poco::InvalidAccessException (empty
 /// Var extracted in getParentSnapshot), a missing log array dereferences a null Array::Ptr
 /// (Poco::NullPointerException, "Null pointer").
+///
+/// The exception is a missing `snapshots` combined with a live current snapshot: the commit
+/// preserves previous table contents by locating the parent snapshot's manifest list in
+/// `snapshots`, so seeding an empty list there would silently drop all previous data. Such
+/// self-contradictory metadata must keep failing, with a spec-violation error.
 
 TEST(IcebergMetadataGenerator, AppendsSnapshotWhenAllOptionalArraysPresent)
 {
@@ -101,6 +112,23 @@ TEST(IcebergMetadataGenerator, AppendsSnapshotWhenAllOptionalArraysMissing)
     metadata->remove(Iceberg::f_metadata_log);
     metadata->remove(Iceberg::f_snapshot_log);
     EXPECT_NO_THROW(appendSnapshot(metadata));
+}
+
+TEST(IcebergMetadataGenerator, ThrowsWhenSnapshotsArrayMissingButParentSnapshotExists)
+{
+    auto metadata = makeMinimalV2Metadata();
+    metadata->set(Iceberg::f_current_snapshot_id, 42);
+    metadata->remove(Iceberg::f_snapshots);
+    try
+    {
+        appendSnapshot(metadata, /*parent_snapshot_id=*/ 42);
+        FAIL() << "Expected ICEBERG_SPECIFICATION_VIOLATION";
+    }
+    catch (const DB::Exception & e)
+    {
+        EXPECT_EQ(e.code(), DB::ErrorCodes::ICEBERG_SPECIFICATION_VIOLATION);
+    }
+    EXPECT_FALSE(metadata->has(Iceberg::f_snapshots));
 }
 
 #endif
