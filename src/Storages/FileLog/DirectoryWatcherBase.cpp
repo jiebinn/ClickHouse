@@ -200,48 +200,85 @@ void DirectoryWatcherBase::watchFunc()
         }
     };
 
-    /// A kqueue is used only to wake up promptly. The directory fd fires on structural changes
-    /// (an entry added/removed/renamed) but not on appends/truncations to files already inside it,
-    /// so we additionally watch each file's own fd for content changes. If kqueue cannot be set up
-    /// we simply fall back to pure timed polling.
+    /// A kqueue wakes the loop promptly. The directory fd fires on structural changes (an entry
+    /// added/removed/renamed) but not on appends/truncations to files already inside it, so we also
+    /// watch each file's own fd for content changes and for the NOTE_DELETE that a snapshot diff
+    /// needs to tell a same-inode delete+recreate from a plain modification. Because that per-file
+    /// NOTE_DELETE is load-bearing, kqueue is required: we fail closed on any setup error (mirroring
+    /// the Linux watcher, which throws when inotify_init/inotify_add_watch fail) rather than degrade
+    /// to a polling mode that would silently keep stale read offsets.
+    struct WatchedFd
+    {
+        int fd;
+        UInt64 inode;
+    };
+    std::map<std::string, WatchedFd> watched_fds;
     int dir_fd = ::open(path.c_str(), O_EVTONLY);
-    int kq = kqueue();
-    std::map<std::string, int> watched_fds;
+    int kq = dir_fd == -1 ? -1 : kqueue();
 
     SCOPE_EXIT({
-        for (const auto & [name, fd] : watched_fds)
-            closeFileDescriptor(fd);
+        for (const auto & [name, watched] : watched_fds)
+            closeFileDescriptor(watched.fd);
         if (kq != -1)
             closeFileDescriptor(kq);
         if (dir_fd != -1)
             closeFileDescriptor(dir_fd);
     });
 
-    if (dir_fd != -1 && kq != -1)
+    auto fail = [&](std::string_view what)
+    {
+        owner.onError(Exception(ErrorCodes::IO_SETUP_ERROR, "{}: {}", what, path));
+        ErrnoException::throwFromPath(ErrorCodes::IO_SETUP_ERROR, path, "{}", what);
+    };
+
+    if (dir_fd == -1)
+        fail("Cannot open directory to watch");
+    if (kq == -1)
+        fail("Cannot create kqueue to watch directory");
+
     {
         struct kevent change{};
         EV_SET(&change, dir_fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
                NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_ATTRIB | NOTE_LINK, 0, nullptr);
-        kevent(kq, &change, 1, nullptr, 0, nullptr);
+        if (kevent(kq, &change, 1, nullptr, 0, nullptr) == -1)
+            fail("Cannot register directory watch");
     }
 
-    /// Keep the set of per-file kqueue watches in sync with the files currently present.
+    /// Keep the per-file kqueue watches in sync with the files currently present. A watch is keyed by
+    /// name but pinned to a specific inode: when a name is reused for a different inode (a rename plus
+    /// recreate of the same name), the stale fd is closed and a fresh one opened, so NOTE_DELETE is
+    /// always attributed to the file that currently owns the name.
     auto sync_file_watches = [&](const std::map<std::string, FileState> & files)
     {
-        if (kq == -1)
-            return;
         for (const auto & [name, state] : files)
         {
-            if (watched_fds.contains(name))
-                continue;
+            if (auto it = watched_fds.find(name); it != watched_fds.end())
+            {
+                if (it->second.inode == state.inode)
+                    continue;
+                /// Name now points to a different inode; drop the stale watch and reopen below.
+                closeFileDescriptor(it->second.fd);
+                watched_fds.erase(it);
+            }
             int fd = ::open((std::filesystem::path(path) / name).c_str(), O_EVTONLY);
             if (fd == -1)
-                continue;
+            {
+                /// The file may have vanished between the scan and here; that is handled as a removal
+                /// on the next scan. Any other failure (e.g. fd exhaustion) would leave a same-inode
+                /// recreate undetectable, so fail closed rather than read incorrectly.
+                if (errno == ENOENT)
+                    continue;
+                fail("Cannot open file to watch");
+            }
             struct kevent change{};
             EV_SET(&change, fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
                    NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_DELETE | NOTE_RENAME, 0, nullptr);
-            kevent(kq, &change, 1, nullptr, 0, nullptr);
-            watched_fds.emplace(name, fd);
+            if (kevent(kq, &change, 1, nullptr, 0, nullptr) == -1)
+            {
+                closeFileDescriptor(fd);
+                fail("Cannot register file watch");
+            }
+            watched_fds.emplace(name, WatchedFd{fd, state.inode});
         }
         for (auto it = watched_fds.begin(); it != watched_fds.end();)
         {
@@ -250,7 +287,7 @@ void DirectoryWatcherBase::watchFunc()
                 ++it;
                 continue;
             }
-            closeFileDescriptor(it->second); /// closing the fd removes it from the kqueue
+            closeFileDescriptor(it->second.fd); /// closing the fd removes it from the kqueue
             it = watched_fds.erase(it);
         }
     };
@@ -277,8 +314,7 @@ void DirectoryWatcherBase::watchFunc()
 
     while (!stopped)
     {
-        const nfds_t nfds = kq != -1 ? 2 : 1;
-        if (poll(pfds, nfds, static_cast<int>(milliseconds_to_wait)) < 0 && errno != EINTR)
+        if (poll(pfds, 2, static_cast<int>(milliseconds_to_wait)) < 0 && errno != EINTR)
             break;
         if (stopped)
             break;
@@ -289,7 +325,7 @@ void DirectoryWatcherBase::watchFunc()
         /// NOTE_DELETE to force an identity reset (REMOVED + ADDED) instead of MODIFIED, which would
         /// otherwise keep a stale read offset - matching what inotify's IN_DELETE + IN_CREATE gives.
         std::set<std::string> deleted;
-        if (kq != -1 && (pfds[1].revents & POLLIN))
+        if (pfds[1].revents & POLLIN)
         {
             struct kevent evs[16];
             struct timespec no_wait{0, 0};
@@ -303,12 +339,12 @@ void DirectoryWatcherBase::watchFunc()
                     const int event_fd = static_cast<int>(evs[i].ident);
                     for (auto it = watched_fds.begin(); it != watched_fds.end(); ++it)
                     {
-                        if (it->second != event_fd)
+                        if (it->second.fd != event_fd)
                             continue;
                         deleted.insert(it->first);
                         /// The name's identity ended; drop its now-stale fd so sync_file_watches
                         /// reopens a fresh one if the name is recreated.
-                        closeFileDescriptor(it->second);
+                        closeFileDescriptor(it->second.fd);
                         watched_fds.erase(it);
                         break;
                     }
