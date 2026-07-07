@@ -1946,7 +1946,7 @@ TEST_F(ALPTest, CompressProducesCorrectHeader)
     }
 }
 
-static UInt8 alpAutoFloat64MetaByte(const std::vector<Float64> & values)
+UInt8 alpAutoFloat64MetaByte(const std::vector<Float64> & values)
 {
     auto codec = makeCodec("ALP(AUTO)", std::make_shared<DataTypeFloat64>());
 
