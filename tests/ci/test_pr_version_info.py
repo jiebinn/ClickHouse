@@ -41,21 +41,29 @@ class TestRenderSection(unittest.TestCase):
             "- Backported to: `25.12.1.100`, `25.8.1.200`",
         )
 
-    def test_merged_into_ref_names_the_branch(self):
+    def test_default_branch_version_names_the_first_release(self):
         # An original PR's version comes from the default branch's commit
-        # counter (master's `26.2.1.1291` is not a `release/26.2` build), so
-        # the branch is named next to the version.
+        # counter (master's `26.2.1.1291` is not a `release/26.2` build); it
+        # means the change landed before the `release/26.2` branch was cut,
+        # so the release series that first includes it is spelled out.
         self.assertEqual(
-            render_section("26.2.1.1291", [], "master"),
-            "### Version info\n- Merged into: `26.2.1.1291` (master)",
+            render_section("26.2.1.1291", [], from_default_branch=True),
+            "### Version info\n"
+            "- Merged into: `26.2.1.1291` (included in `26.2` and later)",
         )
 
-    def test_merged_into_ref_with_backports(self):
+    def test_default_branch_version_with_backports(self):
         self.assertEqual(
-            render_section("26.2.1.1291", ["26.2.1.500"], "master"),
+            render_section("26.2.1.1291", ["25.8.1.500"], from_default_branch=True),
             "### Version info\n"
-            "- Merged into: `26.2.1.1291` (master)\n"
-            "- Backported to: `26.2.1.500`",
+            "- Merged into: `26.2.1.1291` (included in `26.2` and later)\n"
+            "- Backported to: `25.8.1.500`",
+        )
+
+    def test_unparseable_version_gets_no_annotation(self):
+        self.assertEqual(
+            render_section("not-a-version", [], from_default_branch=True),
+            "### Version info\n- Merged into: `not-a-version`",
         )
 
     def test_backported_only(self):
