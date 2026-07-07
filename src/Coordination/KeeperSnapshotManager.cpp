@@ -581,7 +581,7 @@ void KeeperStorageSnapshot::deserialize(
             storage.container_paths.insert(std::string{path});
             storage.committed_container_nodes.fetch_add(1);
         }
-        else if (ephemeral_owner != 0)
+        else if (node.stats.isEphemeral())
         {
             storage.committed_ephemerals[ephemeral_owner].insert(std::string{path});
             ++storage.committed_ephemeral_nodes;
