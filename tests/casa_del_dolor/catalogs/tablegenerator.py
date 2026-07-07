@@ -22,6 +22,29 @@ Parameter = typing.Callable[[], int | float | str]
 true_false_lambda = lambda: random.choice(["false", "true"])
 
 
+def delta_skipping_eligible(dtype) -> bool:
+    # Delta liquid clustering (CLUSTER BY) and data skipping only support scalar
+    # types Delta collects min/max statistics for: numeric, date, timestamp
+    # (including TimestampNTZ) and string. This mirrors Delta's
+    # `SkippingEligibleDataType`. Boolean, binary and container types
+    # (Array/Map/Struct) are rejected at DDL time with
+    # `DELTA_CLUSTERING_COLUMNS_DATATYPE_NOT_SUPPORTED`, so they must never be
+    # chosen as clustering keys. `CharType`/`VarcharType` are string-like and
+    # eligible (Delta materialises them as string).
+    return isinstance(
+        dtype,
+        (
+            sp.NumericType,
+            sp.DateType,
+            sp.TimestampType,
+            sp.TimestampNTZType,
+            sp.StringType,
+            sp.CharType,
+            sp.VarcharType,
+        ),
+    )
+
+
 def sample_from_dict(d: dict[str, Parameter], sample: int) -> dict[str, Parameter]:
     items = random.sample(list(d.items()), sample)
     return dict(items)
@@ -364,14 +387,16 @@ class LakeTableGenerator:
         # PARTITIONED BY and is Delta-only. It takes up to 4 keys, each a
         # stats-eligible scalar leaf - top-level or a nested struct field by
         # dotted path (same flattened, backtick-quoted form the Iceberg
-        # transforms use). Excludes container leaves (Array/Map/Struct) and any
-        # column produced by a generated expression.
+        # transforms use). Only data-skipping-eligible scalar leaves qualify
+        # (see `delta_skipping_eligible`); this excludes container leaves
+        # (Array/Map/Struct), Boolean and Binary, plus any column produced by a
+        # generated expression.
         clustered = False
         if self.get_format() == "delta" and random.randint(1, 5) == 1:
             cluster_cols = [
                 path
                 for path, dtype in res.flat_columns().items()
-                if not isinstance(dtype, (sp.ArrayType, sp.MapType, sp.StructType))
+                if delta_skipping_eligible(dtype)
                 and not columns_spark[path.split(".", 1)[0]].generated
             ]
             if cluster_cols:
@@ -1450,7 +1475,7 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
                 cluster_cols = [
                     path
                     for path, dtype in table.flat_columns().items()
-                    if not isinstance(dtype, (sp.ArrayType, sp.MapType, sp.StructType))
+                    if delta_skipping_eligible(dtype)
                     and not table.columns[path.split(".", 1)[0]].generated
                 ]
                 if not cluster_cols:
