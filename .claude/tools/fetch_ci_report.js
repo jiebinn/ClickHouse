@@ -200,9 +200,14 @@ function parseTestResults(jsonData) {
         // Nested results
         extractTests(result.results, prefix ? `${prefix}/${result.name}` : result.name);
       } else {
-        // Leaf result - this is a test or build step
+        // Leaf result - this is a test or build step.
+        // Use the leaf's own name, NOT the ancestor-prefixed path: the leaf name is exactly the
+        // `checks.test_name` value (e.g. "Server died", "test_dns_cache/test.py::..."), whereas a
+        // prefixed form like "Tests/Server died" matches no `checks` row and would break the
+        // history query and issue matching in steps 2-3. The `prefix` (grouping nodes such as
+        // "Tests") is intra-report context already conveyed by the report header.
         const test = {
-          name: prefix ? `${prefix}/${result.name}` : result.name,
+          name: result.name,
           status: result.status || 'UNKNOWN',
           duration: result.duration || 0
         };
@@ -497,10 +502,15 @@ async function fetchReport(inputUrl, options = {}) {
           const passed = testResults.filter(t => t.status === 'success' || t.status === 'OK');
           const skipped = testResults.filter(t => t.status === 'skipped' || t.status === 'SKIPPED');
 
-          totalTests += testResults.length;
-          totalPassed += passed.length;
-          totalFailed += failed.length;
-          totalSkipped += skipped.length;
+          // Don't let the top-level PR report contribute to the totals when nested per-job reports
+          // are also present — it aggregates the same failures, so counting both double-counts.
+          // (When the PR report is the only one, onlyPRLevel is true and it does count.)
+          if (!result.isPRLevel || onlyPRLevel) {
+            totalTests += testResults.length;
+            totalPassed += passed.length;
+            totalFailed += failed.length;
+            totalSkipped += skipped.length;
+          }
 
           const status = failed.length > 0 ? '❌' : '✅';
           console.log(`[${result.index}] ${status} ${result.jobName}`);
