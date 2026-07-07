@@ -138,6 +138,13 @@ endif ()
 
 include (cmake/add_warning.cmake)
 
+# -gz=zlib support depends on the compiler's zlib linkage (LLVM_ENABLE_ZLIB), not its version, so it
+# must be probed - intentionally before block_build_time_checks.cmake below bans compile probes.
+include (CheckCXXSourceCompiles)
+set (CMAKE_REQUIRED_FLAGS "-gz=zlib -g")
+check_cxx_source_compiles ("int main() { return 0; }" COMPILER_SUPPORTS_GZ_ZLIB)
+unset (CMAKE_REQUIRED_FLAGS)
+
 # Block build-time CMake probes (check_*, try_compile, try_run) project-wide. Compiler and
 # toolchain are fixed (see cmake/tools.cmake), so feature detection is unnecessary - any
 # version-dependent behaviour must be gated on CMAKE_CXX_COMPILER_VERSION explicitly.
@@ -394,26 +401,10 @@ if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE")
     set(DEBUG_INFO_FLAGS "${DEBUG_INFO_FLAGS} -gdwarf-aranges")
 endif ()
 
-# Optionally compress the DWARF debug sections (`.debug_*`) with zlib (`-gz`) in object files to
-# reduce build-directory size - the debug info dominates a Debug build's disk usage. This is a
-# compile-only flag: the linker decompresses the sections on input and emits uncompressed binaries,
-# so the runtime symbolizer (`src/Common/Dwarf.cpp`) reads them normally, with no decompression cost
-# and no change to that code. `-gz` is added via `add_compile_options` (not the `*_FLAGS` variables)
-# precisely so it does not reach the link line and re-compress the output.
-#
-# OFF by default: ClickHouse's own LLVM toolchain is built without zlib (`LLVM_ENABLE_ZLIB=OFF` -
-# see `ci/jobs/build_toolchain.py`), so its clang rejects `-gz` with `cannot compress debug sections
-# (zlib not enabled)`. Enable only with a zlib-enabled compiler (for example a distribution's system
-# clang). Configure-time compile probes are forbidden (`cmake/block_build_time_checks.cmake`), so
-# the capability cannot be auto-detected; it is opt-in.
-option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections in object files with zlib (-gz); requires a zlib-enabled compiler" OFF)
-
-if (COMPRESS_DEBUG_SECTIONS AND (NOT OS_LINUX OR DISABLE_ALL_DEBUG_SYMBOLS))
-    # -gz only compresses debug sections, so it is inert without debug info and off Linux. Force the
-    # option back off (as ENABLE_XRAY does) so the cache never advertises a feature that has no effect.
-    message (STATUS "Not compressing debug sections: requires OS_LINUX and debug symbols enabled")
-    set (COMPRESS_DEBUG_SECTIONS 0)
-endif ()
+# Compress DWARF debug sections (`.debug_*`) in object files with -gz=zlib to shrink the build dir
+# (debug info dominates it). Compile-only via add_compile_options, so binaries stay uncompressed and
+# the symbolizer is unaffected. Defaults on where the compiler supports it (probed above).
+option (COMPRESS_DEBUG_SECTIONS "Compress DWARF debug sections in object files with zlib (-gz)" ${COMPILER_SUPPORTS_GZ_ZLIB})
 
 if (COMPRESS_DEBUG_SECTIONS)
     # Only C/C++ (and GNU-style ASM handled by clang) understand -gz; scope it away from other
