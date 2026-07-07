@@ -1,8 +1,10 @@
 #pragma once
 
+#include <base/BFloat16.h>
 #include <base/types.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iterator>
 
@@ -111,6 +113,77 @@ inline Int8 quantize(Float32 x)
 inline Float32 dequantize(Int8 code)
 {
     return LEVELS[static_cast<size_t>(static_cast<Int16>(code) + 128)];
+}
+
+/// Direct lookup table keyed by the raw BFloat16 bit pattern. BFloat16 has only 65536 possible
+/// values, so the whole quantizer is precomputed once: at runtime quantization is a single load
+/// indexed by the bits, with no Float32 conversion or boundary search. Built lazily on first use.
+inline const std::array<Int8, 65536> & quantizeCodeLUT()
+{
+    static const std::array<Int8, 65536> lut = []
+    {
+        std::array<Int8, 65536> table{};
+        for (UInt32 bits = 0; bits <= 0xFFFFu; ++bits)
+        {
+            const Float32 x = static_cast<Float32>(BFloat16::fromBits(static_cast<UInt16>(bits)));
+            size_t index = 0;
+            if (std::isnan(x))
+                index = 128;
+            else if (x == 0.0f)
+                /// The central decision boundary is exactly 0; break the tie by sign so the sign
+                /// bit always matches the input (+0 -> positive central cell, -0 -> negative).
+                index = std::signbit(x) ? 127 : 128;
+            else
+                index = static_cast<size_t>(std::lower_bound(std::begin(BOUNDARIES), std::end(BOUNDARIES), x) - std::begin(BOUNDARIES));
+            table[bits] = static_cast<Int8>(static_cast<Int16>(index) - 128);
+        }
+        return table;
+    }();
+    return lut;
+}
+
+/// Precomputed BFloat16 reconstruction levels (the bf16 representations of the 256 Lloyd-Max levels).
+/// Dequantization is then a direct BFloat16 (i.e. UInt16) copy from this table, with no Float32
+/// conversion at runtime. Built lazily on first use.
+inline const std::array<BFloat16, 256> & dequantizeLevels()
+{
+    static const std::array<BFloat16, 256> levels = []
+    {
+        std::array<BFloat16, 256> table{};
+        for (size_t i = 0; i < 256; ++i)
+            table[i] = BFloat16(LEVELS[i]);
+        return table;
+    }();
+    return levels;
+}
+
+/// Reconstruction levels, as `Float32`, keyed directly by the raw code byte (the untransposed `QBit(Int8)` byte, which is
+/// `index XOR 0x80`), for every precision `1..8`. Used by the `...TransposedQuantized` distance functions to dequantize a
+/// `QBit(Int8)` on the fly. Row `p` reconstructs a code truncated to its top `p` bits (a `2^p`-level embedded quantizer):
+/// the low `8 - p` bits are zero, and the missing bits are filled to the coarse cell's centre so that a lower precision
+/// still reconstructs a representative value rather than the cell's lower edge. Row `8` is the exact per-cell level and
+/// equals `toFloat32(dequantizeInt8ToBFloat16(code))`. Row `0` is unused (precision `0` is invalid). Built lazily on first use.
+inline const std::array<std::array<Float32, 256>, 9> & transposedDequantLUT()
+{
+    static const std::array<std::array<Float32, 256>, 9> lut = []
+    {
+        std::array<std::array<Float32, 256>, 9> table{};
+        for (size_t precision = 1; precision <= 8; ++precision)
+        {
+            for (size_t raw = 0; raw < 256; ++raw)
+            {
+                /// Keep the top `precision` bits of the code byte; drop the rest.
+                const auto top = static_cast<uint8_t>(raw & (0xFFu << (8 - precision)));
+                /// Round to the centre of the coarse cell by setting the most significant dropped bit (a no-op at precision 8).
+                const auto centre = static_cast<uint8_t>(precision < 8 ? (top | (1u << (7 - precision))) : top);
+                /// The raw code byte is `index XOR 0x80`, so recover the level index by flipping the top bit back.
+                const auto index = static_cast<uint8_t>(centre ^ 0x80u);
+                table[precision][raw] = static_cast<Float32>(BFloat16(LEVELS[index]));
+            }
+        }
+        return table;
+    }();
+    return lut;
 }
 
 }

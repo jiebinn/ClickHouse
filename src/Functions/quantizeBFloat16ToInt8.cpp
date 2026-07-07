@@ -1,7 +1,6 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-#include <Functions/LloydMaxQuantization.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnQBit.h>
@@ -49,36 +48,6 @@ namespace ErrorCodes
 
 namespace
 {
-
-/// Direct lookup table keyed by the raw BFloat16 bit pattern. BFloat16 has only 65536 possible
-/// values, so the whole quantizer is precomputed once: at runtime quantization is a single load
-/// indexed by the bits, with no Float32 conversion or boundary search. Built lazily on first use.
-const std::array<Int8, 65536> & quantizeCodeLUT()
-{
-    static const std::array<Int8, 65536> lut = []
-    {
-        std::array<Int8, 65536> table{};
-        for (UInt32 bits = 0; bits <= 0xFFFFu; ++bits)
-            table[bits] = LloydMax::quantize(static_cast<Float32>(BFloat16::fromBits(static_cast<UInt16>(bits))));
-        return table;
-    }();
-    return lut;
-}
-
-/// Precomputed BFloat16 reconstruction levels (the bf16 representations of the 256 Lloyd-Max levels).
-/// Dequantization is then a direct BFloat16 (i.e. UInt16) copy from this table, with no Float32
-/// conversion at runtime. Built lazily on first use.
-const std::array<BFloat16, 256> & dequantizeLevels()
-{
-    static const std::array<BFloat16, 256> levels = []
-    {
-        std::array<BFloat16, 256> table{};
-        for (size_t i = 0; i < 256; ++i)
-            table[i] = BFloat16(LloydMax::LEVELS[i]);
-        return table;
-    }();
-    return levels;
-}
 
 /// Apply an elementwise codec to every element of an Array column, preserving the offsets.
 template <typename SrcColumn, typename DstColumn, typename MapFunc>
