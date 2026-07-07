@@ -188,8 +188,10 @@ TEST(PlayByteOffsetToCharIndex, TwoAndThreeByteCodePoints)
 {
     /// Cyrillic small letter yu (U+044E) is two UTF-8 bytes but one UTF-16 unit.
     EXPECT_EQ(byteOffsetToCharIndex(u"ю", 2), 1u);
-    /// `a<ю>b`: the byte offset of `b` (3) maps back to UTF-16 index 2.
-    EXPECT_EQ(byteOffsetToCharIndex(u"aюb", 3), 2u);
+    /// `a<ю>b`: the byte offset of `b` (3) maps back to UTF-16 index 2. The Cyrillic letter is
+    /// written with the `\u044E` escape (the same U+044E as on the line above) so it is not adjacent
+    /// to a Latin letter in the source — the style check forbids Cyrillic characters hiding in Latin.
+    EXPECT_EQ(byteOffsetToCharIndex(u"a\u044Eb", 3), 2u);
     /// CJK ideograph (U+4E2D) is three UTF-8 bytes, one UTF-16 unit.
     EXPECT_EQ(byteOffsetToCharIndex(u"中", 3), 1u);
     EXPECT_EQ(byteOffsetToCharIndex(u"a中b", 4), 2u);
