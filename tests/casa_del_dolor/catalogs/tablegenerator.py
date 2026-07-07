@@ -423,6 +423,10 @@ class LakeTableGenerator:
                 )
                 ddl += f" PARTITIONED BY ({','.join(random_subset)})"
                 res.partitioned = True
+                # Iceberg: remember the active partition-transform clauses so ALTER
+                # DROP/REPLACE PARTITION FIELD can target a field that actually exists.
+                if self.get_format() == "iceberg":
+                    res.partition_fields = list(random_subset)
                 # Remember plain partition columns for Delta OPTIMIZE ... WHERE (which only
                 # accepts partition predicates). Non-Delta formats emit transform expressions
                 # here (e.g. bucket(n, col)), which are not usable as a WHERE column, so keep
@@ -487,23 +491,40 @@ class IcebergTableGenerator(LakeTableGenerator):
         tpath = table.get_table_full_path()
 
         if next_operation <= 2:
-            # Add or drop partition field
-            partition_clauses = self.add_partition_clauses(table)
-            if partition_clauses:
-                op = random.choice(["ADD", "DROP"])
-                if op == "ADD":
-                    # A newly added partition field makes the table partitioned. DROP is
-                    # deliberately not reset here: we can't cheaply tell whether it removed
-                    # the last field, and over-reporting partitioned only skips the
-                    # unpartitioned-only ops (equality deletes / add_files), which is safe.
-                    table.partitioned = True
-                return f"ALTER TABLE {tpath} {op} PARTITION FIELD {random.choice(partition_clauses)}"
-        elif next_operation <= 4:
-            # Replace partition field
-            partition_clauses = self.add_partition_clauses(table)
-            if partition_clauses:
+            # Add or drop a partition field, keeping `table.partition_fields` in sync so DROP
+            # always targets a field that actually exists (an empty spec has nothing to drop).
+            if table.partition_fields and random.randint(1, 2) == 1:
+                victim = random.choice(table.partition_fields)
+                table.partition_fields.remove(victim)
+                table.partitioned = len(table.partition_fields) > 0
+                return f"ALTER TABLE {tpath} DROP PARTITION FIELD {victim}"
+            # ADD a field not already in the spec (exact-string match; the random bucket/truncate
+            # width makes two clauses on the same column distinct, which Iceberg allows).
+            candidates = [
+                c
+                for c in self.add_partition_clauses(table)
+                if c not in table.partition_fields
+            ]
+            if candidates:
+                added = random.choice(candidates)
+                table.partition_fields.append(added)
                 table.partitioned = True
-                return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {random.choice(partition_clauses)} WITH {random.choice(partition_clauses)}"
+                return f"ALTER TABLE {tpath} ADD PARTITION FIELD {added}"
+        elif next_operation <= 4:
+            # Replace an existing partition field with a different one: old drawn from the active
+            # spec, new from the compatible remainder (so `old` exists and `new` != `old`).
+            if table.partition_fields:
+                new_candidates = [
+                    c
+                    for c in self.add_partition_clauses(table)
+                    if c not in table.partition_fields
+                ]
+                if new_candidates:
+                    old = random.choice(table.partition_fields)
+                    new = random.choice(new_candidates)
+                    table.partition_fields.remove(old)
+                    table.partition_fields.append(new)
+                    return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {old} WITH {new}"
         elif next_operation <= 6:
             # Set ORDER BY
             if random.randint(1, 2) == 1:
@@ -642,13 +663,15 @@ class IcebergTableGenerator(LakeTableGenerator):
 
         if random.randint(1, 2) == 1:
             nproperties.update(self.generate_table_properties(table))
-        npartition_spec = self.type_mapper.generate_random_iceberg_partition_spec(
-            nschema
+        npartition_spec, npartition_clauses = (
+            self.type_mapper.generate_random_iceberg_partition_spec(nschema)
         )
         # This catalog path never populates partition_keys (those are plain SQL DDL
-        # partition columns); track partitioned-vs-unpartitioned separately so
-        # operations that assume an unpartitioned table gate correctly.
-        table.partitioned = len(npartition_spec.fields) > 0
+        # partition columns); track the active partition fields (as Spark clauses) and the
+        # partitioned flag so ALTER DROP/REPLACE and the unpartitioned-only operations gate
+        # correctly.
+        table.partition_fields = npartition_clauses
+        table.partitioned = len(npartition_clauses) > 0
         ctable = catalog_impl.create_table(
             identifier=("test", table.table_name),
             location=f"s3{'a' if table.catalog == LakeCatalogs.Hive else ''}://warehouse-{'rest' if table.catalog == LakeCatalogs.REST else ('hms' if table.catalog == LakeCatalogs.Hive else 'glue')}/data",

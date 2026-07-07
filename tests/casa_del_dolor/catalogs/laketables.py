@@ -150,6 +150,11 @@ class SparkTable:
         # PartitionSpec). Operations that assume no partition tuple / partition filter
         # (e.g. Iceberg equality deletes, add_files) must gate on this, not partition_keys.
         self.partitioned: bool = False
+        # Active Iceberg partition-transform clauses, exactly as they appear in Spark SQL
+        # (e.g. `bucket(16, c0)`, `year(c1)`, `c2`). Kept in sync at CREATE and by
+        # ALTER ... ADD/DROP/REPLACE PARTITION FIELD so DROP/REPLACE can target a field that
+        # actually exists. Iceberg-only; empty for Delta/Paimon.
+        self.partition_fields: list[str] = []
 
     def get_namespace_path(self) -> str:
         return f"test.{self.table_name}"

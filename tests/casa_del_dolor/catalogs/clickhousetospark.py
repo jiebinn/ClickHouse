@@ -961,9 +961,29 @@ class ClickHouseTypeMapper:
             transforms.extend([VoidTransform()])
         return random.choice(transforms)
 
+    def _iceberg_transform_to_spark_clause(self, transform, col: str) -> str:
+        """Spark SQL partition-transform clause equivalent to an Iceberg transform on `col`
+        (e.g. `bucket(16, c0)`), so DROP/REPLACE PARTITION FIELD can reference the exact field."""
+        if isinstance(transform, BucketTransform):
+            return f"bucket({transform.num_buckets}, {col})"
+        if isinstance(transform, TruncateTransform):
+            return f"truncate({transform.width}, {col})"
+        if isinstance(transform, YearTransform):
+            return f"year({col})"
+        if isinstance(transform, MonthTransform):
+            return f"month({col})"
+        if isinstance(transform, DayTransform):
+            return f"day({col})"
+        if isinstance(transform, HourTransform):
+            return f"hour({col})"
+        if isinstance(transform, VoidTransform):
+            return f"void({col})"
+        # IdentityTransform (and any unrecognised transform) partitions by the bare column.
+        return col
+
     def generate_random_iceberg_partition_spec(
         self, schema: Schema, max_partitions: int = 3
-    ) -> PartitionSpec:
+    ) -> tuple[PartitionSpec, list[str]]:
         """
         Generate a random PartitionSpec from a schema.
 
@@ -972,20 +992,22 @@ class ClickHouseTypeMapper:
             max_partitions: Maximum number of partition fields to create
 
         Returns:
-            A random PartitionSpec
+            The PartitionSpec and the equivalent Spark SQL partition-transform clauses (one per
+            field, in spec order) for tracking the active partition fields on the table model.
         """
         # Get all fields from schema
         available_fields = list(schema.fields)
         if not available_fields or random.randint(1, 5) != 5:
-            return PartitionSpec()
+            return PartitionSpec(), []
         # Randomly decide how many partitions to create (0 to max_partitions)
         num_partitions = random.randint(0, min(max_partitions, len(available_fields)))
         if num_partitions == 0:
-            return PartitionSpec()  # Unpartitioned table
+            return PartitionSpec(), []  # Unpartitioned table
 
         # Randomly select fields to partition on
         partition_fields_list = random.sample(available_fields, num_partitions)
         partition_fields = []
+        clauses: list[str] = []
         partition_field_id = 1000  # Start partition field IDs at 1000
         for field in partition_fields_list:
             # Choose appropriate transform based on field type
@@ -998,8 +1020,9 @@ class ClickHouseTypeMapper:
                 name=f"{field.name}_{transform}",
             )
             partition_fields.append(partition_field)
+            clauses.append(self._iceberg_transform_to_spark_clause(transform, field.name))
             partition_field_id += 1
-        return PartitionSpec(*partition_fields)
+        return PartitionSpec(*partition_fields), clauses
 
     def generate_random_iceberg_sort_order(
         self, schema: Schema, max_sort_fields: int = 3

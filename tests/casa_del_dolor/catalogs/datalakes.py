@@ -892,15 +892,20 @@ logger.jetty.level = warn
                 pass  # already exists
         else:
             with self.spark_lock:
-                next_session = self.get_next_session(
-                    cluster, catalog_name, next_storage, next_lake, next_catalog
-                )
+                next_session = None
                 try:
+                    next_session = self.get_next_session(
+                        cluster, catalog_name, next_storage, next_lake, next_catalog
+                    )
                     self.create_database(next_session, catalog_name)
                 except Exception as e:
                     saved_exception = e
-                next_session.stop()
+                finally:
+                    if next_session is not None:
+                        next_session.stop()
             if saved_exception is not None:
+                with self.catalogs_lock:
+                    self.catalogs.pop(catalog_name, None)
                 raise saved_exception
         return True
 
@@ -933,19 +938,24 @@ logger.jetty.level = warn
             self.catalogs_lock.release()
             saved_exception = None
             with self.spark_lock:
-                next_session = self.get_next_session(
-                    cluster,
-                    catalog_name,
-                    next_storage,
-                    next_lake,
-                    LakeCatalogs.NoCatalog,
-                )
+                next_session = None
                 try:
+                    next_session = self.get_next_session(
+                        cluster,
+                        catalog_name,
+                        next_storage,
+                        next_lake,
+                        LakeCatalogs.NoCatalog,
+                    )
                     self.create_database(next_session, catalog_name)
                 except Exception as e:
                     saved_exception = e
-                next_session.stop()
+                finally:
+                    if next_session is not None:
+                        next_session.stop()
             if saved_exception is not None:
+                with self.catalogs_lock:
+                    self.catalogs.pop(catalog_name, None)
                 raise saved_exception
         else:
             catalog_type = self.catalogs[catalog_name].catalog_type
