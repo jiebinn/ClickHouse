@@ -113,7 +113,6 @@ namespace ServerSetting
     extern const ServerSettingsBool memory_worker_correct_memory_tracker;
     extern const ServerSettingsBool memory_worker_use_cgroup;
     extern const ServerSettingsUInt64 memory_worker_decay_adjustment_period_ms;
-    extern const ServerSettingsBool os_collect_psi_metrics;
 }
 
 Poco::Net::SocketAddress Keeper::socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure) const
@@ -456,8 +455,7 @@ try
             return metrics;
         },
         /*update_jemalloc_epoch_=*/memory_worker.getSource() != MemoryWorker::MemoryUsageSource::Jemalloc,
-        /*update_rss_=*/memory_worker.getSource() == MemoryWorker::MemoryUsageSource::None,
-        /*collect_psi_metrics_=*/server_settings[ServerSetting::os_collect_psi_metrics]);
+        /*update_rss_=*/memory_worker.getSource() == MemoryWorker::MemoryUsageSource::None);
 
     std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
 

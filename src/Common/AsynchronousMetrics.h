@@ -78,7 +78,6 @@ public:
         const ProtocolServerMetricsFunc & protocol_server_metrics_func_,
         bool update_jemalloc_epoch_,
         bool update_rss_,
-        bool collect_psi_metrics_,
         const ContextPtr & context_);
 
     virtual ~AsynchronousMetrics();

@@ -357,7 +357,6 @@ namespace ServerSetting
     extern const ServerSettingsBool memory_worker_use_cgroup;
     extern const ServerSettingsDouble memory_worker_rss_speculative_reserve_ratio;
     extern const ServerSettingsBool memory_worker_dynamic_hard_limit;
-    extern const ServerSettingsBool os_collect_psi_metrics;
     extern const ServerSettingsUInt64 merges_mutations_memory_usage_soft_limit;
     extern const ServerSettingsDouble merges_mutations_memory_usage_to_ram_ratio;
     extern const ServerSettingsString merge_workload;
@@ -1574,8 +1573,7 @@ try
             async_metrics_update_period_s,
             asynchronous_metrics_protocol_server_metrics_func,
             async_metrics_update_jemalloc_epoch,
-            async_metrics_update_rss,
-            server_settings[ServerSetting::os_collect_psi_metrics]
+            async_metrics_update_rss
         );
     }
     else
@@ -1588,8 +1586,7 @@ try
             server_settings[ServerSetting::asynchronous_heavy_metrics_update_period_s],
             asynchronous_metrics_protocol_server_metrics_func,
             async_metrics_update_jemalloc_epoch,
-            async_metrics_update_rss,
-            server_settings[ServerSetting::os_collect_psi_metrics]
+            async_metrics_update_rss
         );
     }
 

@@ -122,14 +122,12 @@ KeeperAsynchronousMetrics::KeeperAsynchronousMetrics(
     unsigned update_period_seconds,
     const ProtocolServerMetricsFunc & protocol_server_metrics_func_,
     bool update_jemalloc_epoch_,
-    bool update_rss_,
-    bool collect_psi_metrics_)
+    bool update_rss_)
     : AsynchronousMetrics(
         update_period_seconds,
         protocol_server_metrics_func_,
         update_jemalloc_epoch_,
         update_rss_,
-        collect_psi_metrics_,
         context_)
     , context(std::move(context_))
 {
