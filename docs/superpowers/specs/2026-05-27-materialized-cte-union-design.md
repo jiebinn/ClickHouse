@@ -1,8 +1,55 @@
 # Design: Deduplicate materialized CTEs across UNION branches
 
-Status: Approved (brainstorm), pending plan.
+Status: Implemented (with amendments); see Amendments section below.
 Owner: Dmitry Novik (branch `fix-mat-cte`).
-Date: 2026-05-27.
+Date: 2026-05-27. Amended: 2026-07-07.
+
+## Amendments (2026-07-07)
+
+The implementation (commits `d48b43495a0`, `a7b517a25c1`, `250a40b6444`,
+`24e8fbc743d`) diverges from the original plan below in several ways. Rather
+than silently rewriting the plan, the affected passages are kept and marked
+`~~struck through~~` with an inline `*Amended: ...*` note explaining what
+was actually built instead. Summary of the divergences:
+
+1. **Merge key is `(cte_name, subquery hash)`, not body-only.** The
+   "Note on scope" decision to deliberately merge identical bodies under
+   different `cte_name`s was reversed. `.ignore_cte = true` is still used
+   for the subquery hash/`isEqual`, but `cte_name` is a separate, required
+   key component - different names never merge, even with identical bodies.
+2. **Steps A and B are one fused, single-pass post-order traversal**,
+   not a collect-then-sort-then-group pass followed by a separate
+   counting pass. Canonical selection is "first encountered in traversal
+   order" rather than "lexicographically smallest `temporary_table_name`
+   after a descending-depth sort".
+3. **Only definition-bearing `TableNode`s participate.** `TableNode`s that
+   merely inherited a `MaterializedCTE` pointer from an already-materialized
+   `StorageMemory` (via `TableNode::extractCTE`, e.g. on shard-side
+   re-analysis of a `Distributed` query) are skipped entirely - they are
+   neither merge candidates/canonicals nor counted towards reuse. Counting
+   them caused `TABLE_ALREADY_EXISTS` on shards
+   (`04043_materialized_cte_serialize_query_plan`).
+4. **The schema gate moved and became non-throwing before adoption.**
+   `verifyMaterializedCTESubqueryMatchesStorage` moved to
+   `Analyzer/Utils.{h,cpp}`, returns `bool`, and takes a
+   `throw_on_mismatch` parameter; the merge path calls it with `false` and
+   simply skips merging on mismatch instead of throwing. Adoption itself
+   is `TableNode::adoptMaterializedCTE`, a new method.
+5. **The registration guard is now real.** Reused CTEs are registered via
+   `addExternalTable` only when `table_holder.has_value()`; a bug in
+   `MaterializedCTE::extractTableHolder` (it moved out of `table_holder`
+   without resetting the `std::optional`) was fixed so `has_value()`
+   reliably reports whether the holder was already extracted.
+6. **`IQueryTreeNode::CompareOptions` has no `compare_types` field.** Places
+   below that say `compare_types = true` are wrong; column types are
+   compared unconditionally via `verifyMaterializedCTESubqueryMatchesStorage`,
+   which checks the subquery's projection column types against the
+   canonical's storage columns - not via `isEqual`/`CompareOptions`.
+7. **Tests** landed as `tests/queries/0_stateless/04507_materialized_cte_union_merge.sql`
+   (the planned `04045_materialized_cte_union_dedup.sql` name was not used).
+   Its case for "different `cte_name`, identical body" now asserts the
+   opposite of the original plan: it must **not** merge (two
+   `MaterializingCTE` steps), matching amendment 1.
 
 ## Problem
 
@@ -91,14 +138,21 @@ approach at the analyzer level for materialized CTEs.
   WITH definitions are physically present in each branch's AST; a
   scope-climb resolution would touch much more surface.
 
-Note on scope: the dedup uses `.ignore_cte = true` on the subquery
+~~Note on scope: the dedup uses `.ignore_cte = true` on the subquery
 hash, so it will *also* collapse two materialized CTEs that happen to
 have identical bodies under different `cte_name`s (e.g.
 `WITH x AS MATERIALIZED (SELECT 1), y AS MATERIALIZED (SELECT 1)
 SELECT * FROM x, y`). This is a deliberate side-effect, parallel to
 how `CollectSets` already deduplicates structurally-equal sets
 regardless of source naming. Duplicate work is duplicate work; merging
-them is a net win. Column aliases inside the body still keep CTEs
+them is a net win.~~ *Amended: this decision was reversed by the owner
+before implementation. The merge key is `(cte_name, subquery hash)`,
+so `x` and `y` above do **not** merge even though their bodies are
+identical - only same-named CTEs with equal bodies merge.
+`.ignore_cte = true` is still used, but only to strip the `is_cte`/
+`cte_name`/`is_materialized` binding metadata out of the subquery hash
+itself; the name is compared separately as its own key component. See
+"Amendments" above.* Column aliases inside the body still keep CTEs
 separate via `compare_aliases = true`, so `SELECT 1 AS a` vs
 `SELECT 1 AS b` does not merge.
 
@@ -156,7 +210,14 @@ keeping the member and the line-1302 insert as a redundant
 pre-population would just be dead work that risks future readers
 treating it as load-bearing.
 
-### Step A - `deduplicateMaterializedCTEs(node, context)` (file-local static)
+### ~~Step A - `deduplicateMaterializedCTEs(node, context)` (file-local static)~~ *(superseded)*
+
+*Amended: Steps A and B below were fused into a single post-order pass in
+the implementation; see "Step A+B (as implemented)" further down for what
+actually shipped. The plan in this subsection - collect entries with
+depth, stable-sort descending, group by hash into buckets, pick the
+lexicographically-smallest `temporary_table_name` as canonical - is kept
+verbatim for historical context but does not describe the merged code.*
 
 1. Walk the tree with `traverseQueryTree(node, Everything{}, enter, leave)`
    mirroring the depth-tracking shape of `collectMaterializedCTEs`
@@ -217,7 +278,11 @@ treating it as load-bearing.
    `MaterializedCTEWeakPtr` (`src/Storages/StorageMemory.h:129/149`)
    so no cycle. Clean handoff.
 
-### Step B - `collectReusedMaterializedCTEs(node) -> ReusedMaterializedCTEs` (file-local static)
+### ~~Step B - `collectReusedMaterializedCTEs(node) -> ReusedMaterializedCTEs` (file-local static)~~ *(superseded)*
+
+*Amended: this separate walk was never built as its own pass. The
+use-count map it describes is instead produced as a side output of the
+fused Step A+B pass below. Kept verbatim for historical context.*
 
 The set is built fresh from the deduped tree:
 
@@ -234,16 +299,104 @@ they hit distinct pointers. The set lives only for the remaining
 duration of `inlineMaterializedCTEIfNeeded`; nothing outside the
 function depends on it.
 
+### Step A+B (as implemented) - `mergeDuplicateMaterializedCTEs(node, context)` (file-local static)
+
+What actually shipped, in `src/Analyzer/inlineMaterializedCTEIfNeeded.cpp`:
+a single post-order traversal via `traverseQueryTree(node, Everything{}, NoOp{}, leave)`
+that merges duplicates *and* builds the use-count map in the same pass, keyed
+by a `MergeKey{cte_name, subquery_hash}` struct (not just the subquery hash).
+
+1. On the leave callback for each `TableNode`: skip immediately unless
+   `getMaterializedCTE()` is non-null *and* `isMaterializedCTE()` is true.
+   The latter check excludes non-definition-bearing occurrences - a
+   `TableNode` can carry a non-null `MaterializedCTE` purely because
+   `TableNode::extractCTE` read it off an already-materialized
+   `StorageMemory` resolved as an ordinary table (e.g. a nested
+   re-resolve of a `Distributed` table's shard-local plan, where the
+   CTE's temporary table name was substituted for the original CTE
+   reference). Counting or merging those threw `TABLE_ALREADY_EXISTS`
+   on shards, reproduced by
+   `04043_materialized_cte_serialize_query_plan`.
+
+2. Because the traversal acts on *leave*, any inner materialized CTE
+   nested inside the current node's subquery has already been merged by
+   the time the current node is processed - so its `TableNode`s carry
+   canonical, stable `temporary_table_name`s, and the current subquery's
+   `getTreeHash` is stable across UNION-branch clones. This replaces the
+   depth-tracking-plus-descending-sort of the original plan with a
+   simpler invariant: post-order traversal order already guarantees
+   inner-before-outer.
+
+3. Compute `MergeKey{table_node->getMaterializedCTE()->cte_name, subquery->getTreeHash({.compare_aliases = true, .ignore_cte = true})}`
+   and look it up in a `std::unordered_map<MergeKey, std::vector<TableNode *>, MergeKeyHash>`.
+   `IQueryTreeNode::CompareOptions` has only two fields, `compare_aliases`
+   and `ignore_cte` - there is no `compare_types`; see the third bullet
+   below for how column types are actually checked. Within the bucket,
+   each existing candidate is checked with
+   `subquery->isEqual(*candidate->getMaterializedCTESubquery(), compare_options)`
+   *and* a schema gate (next bullet); the first candidate that passes
+   both is the canonical for this node. Hash collisions never collapse
+   semantically distinct CTEs because of the `isEqual` check.
+
+4. Schema gate: `verifyMaterializedCTESubqueryMatchesStorage` (moved to
+   `Analyzer/Utils.{h,cpp}`, returning `bool` and taking a
+   `throw_on_mismatch` parameter) is called with `throw_on_mismatch =
+   false`. It compares the candidate node's projection columns (name
+   count and types) against the canonical's storage columns; this is
+   where column types are actually compared - unconditionally, not
+   gated by any `CompareOptions` flag. On mismatch (should be impossible
+   past the `isEqual` gate, but the check is defensive) the node simply
+   does not merge with that candidate and stays a separate
+   materialization; it does not throw.
+
+5. If no candidate qualifies, the current node becomes the canonical for
+   its `MergeKey` (first encountered in traversal order = canonical;
+   deterministic per tree, unlike the original plan's
+   lexicographically-smallest-name rule). Otherwise, if the canonical's
+   `MaterializedCTE` pointer differs from this node's, the node calls
+   `TableNode::adoptMaterializedCTE(canonical_cte, context)` - a new
+   method that sets `materialized_cte`, `temporary_table_name`, and
+   calls `updateStorage` in one step (functionally the same handoff the
+   original plan described inline). If the pointers already match (the
+   in-branch repeat-reference case), adoption is a no-op.
+
+6. The per-`MaterializedCTEPtr` use count is incremented *after*
+   adoption, on `table_node->getMaterializedCTE()` - so both in-branch
+   shared-pointer repeats and cross-branch merged repeats accumulate on
+   the same canonical pointer. The function returns the finished
+   `std::unordered_map<MaterializedCTEPtr, size_t>` directly; the driver
+   (`inlineMaterializedCTEIfNeeded`) fast-exits if the map is empty
+   (no materialized CTEs at all - skips the second traversal and
+   `cloneAndReplace` entirely), and otherwise derives the reused set as
+   every pointer with count >= 2.
+
+Orphan lifecycle is unchanged from the original plan: the non-canonical
+`TableNode` releases its old `MaterializedCTE` shared_ptr (last strong
+ref); orphan destructs, orphan's `TemporaryTableHolder` destructs
+(unregistering its external-table row), orphan `StorageMemory` destructs.
+The back-ref from `StorageMemory` to `MaterializedCTE` is
+`MaterializedCTEWeakPtr` (`src/Storages/StorageMemory.h:129/149`) so no
+cycle.
+
 ### Step C - existing `InlineMaterializedCTEsVisitor` (unchanged behavior)
 
-Driven by the set returned from Step B. CTEs that survived dedup with
-multiple references stay materialized; CTEs that genuinely have a
-single use get inlined as today.
+Driven by the use-count-derived reused set from Step A+B. CTEs that
+survived merging with multiple references stay materialized; CTEs that
+genuinely have a single use get inlined as today.
 
 The existing `addExternalTable` loop in `inlineMaterializedCTEIfNeeded`
 runs over the locally-built set; each `temporary_table_name` is
 registered exactly once because the set contains only canonical
-pointers.
+pointers. *Amended: the loop additionally guards each registration with
+`materialized_cte->table_holder.has_value()`, skipping a CTE whose
+holder was already extracted by an earlier pass - `inlineViewSubqueryIfNeeded`
+runs a nested `QueryAnalyzer::resolve` on a view subtree, which can
+register a reused CTE before the outer resolve reaches this loop again.
+This guard only became reliable after fixing
+`MaterializedCTE::extractTableHolder`, which moved out of `table_holder`
+without calling `reset()` on the `std::optional` - a moved-from
+`std::optional` still reports `has_value() == true`, so the stale value
+let a second registration attempt through and threw `TABLE_ALREADY_EXISTS`.*
 
 ## Edge cases
 
@@ -252,13 +405,19 @@ pointers.
 | Recursive WITH containing MATERIALIZED | Already throws `UNSUPPORTED_METHOD` at `src/Analyzer/QueryTreeBuilder.cpp:354-356`. Dedup never runs. |
 | Self-cycle (`WITH a AS MATERIALIZED (SELECT FROM b), b AS MATERIALIZED (SELECT FROM a)`) | Already throws `UNKNOWN_TABLE` during resolution (`tests/queries/0_stateless/04044_materialized_cte_cycle.sql`). Dedup never runs. |
 | Subquery (`SelectQueryOptions::is_subquery == true`) | Dedup runs (analyzer always runs); Planner-side `collectMaterializedCTEs` early-returns unless `force_materialize_cte` is set (`src/Planner/CollectMaterializedCTE.cpp:25`). Dedup is a no-op cost here, no behavior change. |
-| Distributed query | The initiator's analyzed tree is already deduped. The receiving node re-parses + re-analyzes from the AST/serialized form, runs `inlineMaterializedCTEIfNeeded` again, applies the same dedup. Outcome by construction is identical. |
+| Distributed query | The initiator's analyzed tree is already deduped. The receiving node re-parses + re-analyzes from the AST/serialized form, runs `inlineMaterializedCTEIfNeeded` again, applies the same dedup. Outcome by construction is identical. *Amended: a shard-side re-analysis (`TableNode::extractCTE` re-reading a `MaterializedCTE` off an already-materialized `StorageMemory`, seen when a `Distributed` query has a materialized CTE referenced twice inside a `WHERE ... IN (...)` shape) is a non-definition-bearing occurrence and must be excluded from merge candidacy and reuse counting; otherwise it throws `TABLE_ALREADY_EXISTS`. Reproduced by `04043_materialized_cte_serialize_query_plan` and fixed as described in "Amendments" point 3.* |
 | Parallel replicas | Same as distributed. Replica-side rebuild from query tree (e.g. `src/Storages/buildQueryTreeForShard.cpp`) operates on already-deduped state from the initiator and re-analyzes deduped state on each replica. |
-| Two materialized CTEs with identical bodies, different `cte_name` | *Do* dedup. `ignore_cte = true` hides the outer-node binding metadata so the bucket sees one logical body. See "Non-goals" note. Test #5 pins this behavior. |
-| Two materialized CTEs with same body but different column aliases (`SELECT 1 AS a` vs `SELECT 1 AS b`) | Stay separate. Inner aliases participate in the hash because `compare_aliases = true`. Test #2 pins this. |
+| Two materialized CTEs with identical bodies, different `cte_name` | ~~*Do* dedup. `ignore_cte = true` hides the outer-node binding metadata so the bucket sees one logical body. See "Non-goals" note. Test #5 pins this behavior.~~ *Amended: does **not** merge. `cte_name` is part of the merge key, so distinctly-named CTEs stay separate regardless of body equality. Pinned by case 3 of `04507_materialized_cte_union_merge.sql`.* |
+| Two materialized CTEs with same body but different column aliases (`SELECT 1 AS a` vs `SELECT 1 AS b`) | Stay separate. Inner aliases participate in the hash because `compare_aliases = true`. |
 | In-branch repeat reference (`SELECT FROM x JOIN x`) within a single SELECT | Already deduped by `tryResolveIdentifierFromCTE`'s pointer-reuse path (line 1302). Dedup is a no-op; the bucket sees only one entry per branch. |
 
 ## Testing
+
+### ~~Original test plan~~ *(superseded)*
+
+*Amended: none of the file name, prefix, or case list below match what was
+actually implemented. Kept verbatim for historical context; see
+"Testing (as implemented)" further down for the real test file and cases.*
 
 New test file: `tests/queries/0_stateless/04045_materialized_cte_union_dedup.sql`
 (use `./tests/queries/0_stateless/add-test 04045_materialized_cte_union_dedup`
@@ -282,23 +441,80 @@ to allocate the prefix).
 
 9. **Negative: CTE referenced once total (no UNION)** - assert it still inlines (the analyzer's existing behavior).
 
+### Testing (as implemented)
+
+What actually landed is `tests/queries/0_stateless/04507_materialized_cte_union_merge.sql`
+(the `04045` prefix above was not used - by the time this test was added,
+`04045` had already been allocated elsewhere). Since `EXPLAIN` output
+includes the random `temporary_table_name`, none of the merged cases pin
+raw `EXPLAIN` text directly; instead every case counts `MaterializingCTE
+(Materializing CTE:` lines in the plan. Cases, in file order:
+
+1. Two-branch `UNION ALL`, same CTE, referenced once per branch: one
+   `MaterializingCTE` step. A companion query uses `rand()` plus
+   `uniqExact` to pin functionally that both branches observe the same
+   materialization (not just that the plan shape looks right).
+2. Three-branch `UNION ALL`, same CTE: still one `MaterializingCTE`
+   step.
+3. Two differently-named CTEs with an identical body, each used twice
+   across a four-way `UNION ALL`: **two** `MaterializingCTE` steps - this
+   is the amended replacement for the old test #5, now pinning that
+   different names do **not** merge (see "Amendments" point 1 and the
+   "Non-goals" note above).
+4. Same CTE name, different body, in two sibling scopes (each
+   parenthesized subquery defines and doubles its own `t`): two
+   `MaterializingCTE` steps, plus a data assertion that each sibling's
+   values stay independent.
+5. Nested materialized CTE under `UNION ALL` (`outer_cte` references
+   `inner_cte`, and `outer_cte` is referenced from both branches): two
+   `MaterializingCTE` steps (one per logical CTE), pinning the
+   inner-before-outer post-order invariant, plus a data assertion.
+6. Single-use materialized CTE, no `UNION`: zero `MaterializingCTE`
+   steps (still inlined).
+7. One `UNION ALL` branch plus an `IN`-subquery branch referencing the
+   same CTE: one `MaterializingCTE` step across all three usages, plus a
+   data assertion.
+
+The `04507_...` commit (`24e8fbc743d`) also regenerated
+`04077_materialized_cte_union.reference`, whose old content had gone stale
+for reasons unrelated to this change (master's switch of
+`explain_query_plan_default` from `legacy` to `pretty`, plus a pre-existing
+per-branch safety-net `MaterializingCTEs` planner step that now renders as
+an empty wrapper once the union-level step claims the CTE).
+
 ## Risks
 
-- **Aliasing or storage-locking surprises in `updateStorage`.** The
-  primitive is exercised by the analyzer's existing in-branch
-  repeat-reference path, so we know it works under at least that
-  shape. The dedup pass uses it more broadly. Tests #1, #7, and #8
-  exercise the new shape (single UNION, three-branch UNION, and
-  distributed read).
+- **Aliasing or storage-locking surprises in `updateStorage`
+  (via `TableNode::adoptMaterializedCTE`).** The primitive is exercised
+  by the analyzer's existing in-branch repeat-reference path, so we know
+  it works under at least that shape. The merge pass uses it more
+  broadly. *Amended: cases 1, 2, and 7 of `04507_materialized_cte_union_merge.sql`
+  exercise the new shape (two-branch UNION, three-branch UNION, and a
+  UNION branch plus an `IN`-subquery branch); the distributed shape is
+  covered separately by `04043_materialized_cte_serialize_query_plan`,
+  not by a case in this file.*
 - **Hash collisions.** Defended against by structural `isEqual` check
   inside each bucket.
-- **`reused_materialized_cte` rebuild misses a case.** Tests #2 and #3
-  pin the negative: distinct CTEs that should *not* dedup still get
-  materialized.
-- **Surprise dedup of same-body different-name CTEs.** Pinned by test
+- **`reused_materialized_cte` rebuild misses a case.** Pinned by the
+  negative cases in `04507_materialized_cte_union_merge.sql` (case 4:
+  same name, different body, in sibling scopes must not merge; case 6:
+  a genuinely single-use CTE must still inline).
+- ~~**Surprise dedup of same-body different-name CTEs.** Pinned by test
   #5. If this side-effect is judged unacceptable later, flip
   `.ignore_cte` to `false` in both the hash call and the `isEqual`
-  call (one-line change each); the rest of the design is unaffected.
+  call (one-line change each); the rest of the design is unaffected.~~
+  *Amended: moot. The owner decision was reversed before implementation
+  - `cte_name` is a required merge-key component, so same-body,
+  different-name CTEs never merge in the first place. Pinned by case 3
+  of `04507_materialized_cte_union_merge.sql`. There is no `.ignore_cte`
+  escape hatch to flip because there is nothing to escape from.*
+- **Non-definition-bearing `TableNode`s polluting merge/reuse
+  counting.** A risk not anticipated by the original plan: shard-side
+  re-analysis of a `Distributed` query can produce a `TableNode` that
+  reports a non-null `getMaterializedCTE()` without being a CTE
+  reference site (see the amended "Distributed query" edge case).
+  Guarded by the `isMaterializedCTE()` check in `mergeDuplicateMaterializedCTEs`;
+  regression-pinned by `04043_materialized_cte_serialize_query_plan`.
 
 ## Out of scope (future work)
 
