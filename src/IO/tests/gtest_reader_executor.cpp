@@ -1,5 +1,6 @@
 #include <IO/ReaderExecutor.h>
 #include <IO/LocalSourceReader.h>
+#include <Interpreters/Cache/EncryptionHeaderCache.h>
 #include <IO/LongConnectionLimit.h>
 #include <IO/PipelineReadBuffer.h>
 #include <IO/ReadBufferFromFileBase.h>
@@ -936,6 +937,36 @@ TEST_F(ReaderExecutorTest, EncryptedEofReleasesLongConnectionSlot)
     ASSERT_EQ(out.size(), plaintext.size());
     EXPECT_EQ(String(out.begin(), out.end()), plaintext);
     EXPECT_EQ(limit->getActiveCount(), 0u);
+}
+
+TEST_F(ReaderExecutorTest, EncryptionHeaderCacheServesRepeatedOpens)
+{
+    /// With a shared header cache, the first open populates it and the second serves the header
+    /// from the cache (skipping the source read); both must decrypt to the same plaintext.
+    String key(16, 'c');
+    FileEncryption::InitVector iv(UInt128{0x1234abcdULL});
+    const String plaintext(5000, 'Z');
+    StoredObjects objects{writeBytesObject(tmp_dir, "cached.enc", makeEncryptedFile(key, iv, plaintext))};
+
+    auto cache = std::make_shared<EncryptionHeaderCache>("SLRU", 1 << 20, 0.5);
+    auto key_finder = [&](UInt128, const String &) { return key; };
+
+    auto read_once = [&]
+    {
+        ReaderExecutor ex(std::make_shared<LocalSourceReader>(), objects,
+            ReaderExecutor::Options{.block_size = 4096, .encryption_header_cache = cache});
+        ex.addDecryptionLayer("/c", 0, key_finder);
+        ex.initDecryption();
+        auto out = drain(ex);
+        return String(out.begin(), out.end());
+    };
+
+    /// First open: cache miss -> reads, parses, populates.
+    EXPECT_EQ(read_once(), plaintext);
+    /// The header bytes are now cached under the object's storage path.
+    EXPECT_TRUE(cache->read(objects.front().remote_path).has_value());
+    /// Second open: cache hit -> header served from cache, still decrypts correctly.
+    EXPECT_EQ(read_once(), plaintext);
 }
 
 TEST(ReaderExecutorDecryptor, ConcurrentDecryptIsReentrant)

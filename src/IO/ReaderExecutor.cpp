@@ -1,11 +1,13 @@
 #include <IO/ReaderExecutor.h>
 #include <IO/ReadBufferFromFileBase.h>
+#include <Interpreters/Cache/EncryptionHeaderCache.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/logger_useful.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace ProfileEvents
 {
@@ -123,6 +125,7 @@ ReaderExecutor::ReaderExecutor(
     , block_size(options.block_size ? options.block_size : DEFAULT_BLOCK_SIZE)
     , continuity_tracker(ReadContinuityTracker::Options{.bridgeable_gap = options.min_bytes_for_seek})
     , long_connection_limit(std::move(options.long_connection_limit))
+    , encryption_header_cache(std::move(options.encryption_header_cache))
     , min_bytes_for_seek(options.min_bytes_for_seek)
     , max_tail_for_drain(options.max_tail_for_drain)
     , active_metric(CurrentMetrics::ReaderExecutorActive)
@@ -368,15 +371,34 @@ void ReaderExecutor::initDecryption()
             "Encrypted source has {} bytes, less than header size {}",
             total_source_size, data_start_offset);
 
-    LOG_DEBUG(log, "initDecryption: reading headers ({} bytes)", data_start_offset);
-
-    /// The headers sit at the front of the first object. Read them once with a plain one-shot
-    /// source read — they are tiny and read a single time per executor, so no long connection.
+    /// The headers sit at the front of the first object; identify it (its `remote_path` is the
+    /// stable cache key for disk files).
     size_t object_start_offset = 0;
     const StoredObject * object = offset_map.findObjectAt(0, &object_start_offset);
     if (!object)
         return;
 
+    /// Cache hit: parse the header bytes straight from the global cache and skip the source read.
+    /// A cached size mismatch means the path was reused for a different layer layout, so treat it
+    /// as a miss and re-read rather than trust stale bytes.
+    if (encryption_header_cache)
+    {
+        if (auto cached = encryption_header_cache->read(object->remote_path);
+            cached && cached->size() == data_start_offset)
+        {
+            auto cached_block = std::make_shared<OwnedChainedBuffer>(data_start_offset);
+            std::memcpy(cached_block->data(), cached->data(), data_start_offset);
+            ChainedBuffers header_chain;
+            header_chain.append(ChainedBufferNode{std::move(cached_block), 0, data_start_offset, 0});
+            decryptor.parseHeaders(header_chain);
+            return;
+        }
+    }
+
+    LOG_DEBUG(log, "initDecryption: reading headers ({} bytes)", data_start_offset);
+
+    /// Miss: read the headers once with a plain one-shot source read — they are tiny and read a
+    /// single time per executor, so no long connection.
     auto block = std::make_shared<OwnedChainedBuffer>(data_start_offset);
     const size_t got = readOneShot(*object, /*object_offset=*/0, data_start_offset, block->data());
 
@@ -393,8 +415,12 @@ void ReaderExecutor::initDecryption()
             got, data_start_offset);
 
     ChainedBuffers header_chain;
-    header_chain.append(ChainedBufferNode{std::move(block), 0, got, 0});
+    header_chain.append(ChainedBufferNode{block, 0, got, 0});
     decryptor.parseHeaders(header_chain);
+
+    /// Populate the cache so the next open of this file skips the header read.
+    if (encryption_header_cache)
+        encryption_header_cache->write(object->remote_path, String(block->data(), got));
 #endif
 }
 

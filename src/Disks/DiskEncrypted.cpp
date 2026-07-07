@@ -445,6 +445,10 @@ void DiskEncrypted::prepareRead(
         {
             return encryption_settings->findKeyByFingerprint(key_fingerprint, path_for_logs);
         });
+
+    /// A disk file has a stable, engine-managed storage path, so its encryption headers are safe to
+    /// cache; url / external reads never call this and so are never cached.
+    pipeline.allowEncryptionHeaderCache();
 }
 
 size_t DiskEncrypted::getFileSize(const String & path) const

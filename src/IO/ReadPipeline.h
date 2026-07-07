@@ -166,6 +166,11 @@ public:
     /// (the executor takes the stateless one-shot path when it is unset).
     void needLongConnectionLimit(std::shared_ptr<LongConnectionLimit> limit);
 
+    /// Permit the `ReaderExecutor` to cache this file's encryption headers in the global
+    /// encryption-header cache. Set only by disk reads (whose paths are stable); url / external
+    /// reads never set it, so their headers are never cached even if encrypted.
+    void allowEncryptionHeaderCache() { allow_encryption_header_cache = true; }
+
     /// -- Build the final ReadBuffer chain --
     /// Uses the ReadSettings stored in the source stage.
     std::unique_ptr<ReadBufferFromFileBase> build() const;
@@ -234,6 +239,8 @@ private:
     std::optional<DistributedCacheStage> distributed_cache;
     std::optional<AsyncPrefetchStage> async_prefetch;
     VectorWithMemoryTracking<DecryptionStage> decryption_stages;
+    /// Whether the executor may cache this file's encryption headers (disk reads only).
+    bool allow_encryption_header_cache = false;
 
     LoggerPtr log = getLogger("ReadPipeline");
 

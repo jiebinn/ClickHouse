@@ -258,7 +258,9 @@ std::unique_ptr<ReadBufferFromFileBase> ReadPipeline::tryBuildReaderExecutor() c
             .min_bytes_for_seek = settings.reader_executor.min_bytes_for_seek,
             .block_size = block_size,
             .max_tail_for_drain = settings.reader_executor.max_tail_for_drain,
-            .long_connection_limit = long_connection_limit});
+            .long_connection_limit = long_connection_limit,
+            /// Only disk reads (stable paths) may cache their headers; url / external reads pass null.
+            .encryption_header_cache = allow_encryption_header_cache ? settings.encryption_header_cache : nullptr});
 
     /// Feed the decryption layers (if any): the executor owns decryption internally and serves
     /// plaintext, so it replaces the legacy `ReadBufferFromEncryptedFile` wrapping. `initDecryption`
