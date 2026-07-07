@@ -208,6 +208,7 @@ def test_definer_dependency():
     )
     assert "HAVE_DEPENDENT_OBJECTS" in node_query_runner.query_and_get_error("DROP USER query_runner_definer")
     node_query_runner.query("DETACH TABLE qr_definer_db.runner")
+    assert "HAVE_DEPENDENT_OBJECTS" in node_query_runner.query_and_get_error("DROP USER query_runner_definer")
     node_query_runner.query("ATTACH TABLE qr_definer_db.runner")
     assert "HAVE_DEPENDENT_OBJECTS" in node_query_runner.query_and_get_error("DROP USER query_runner_definer")
     node_query_runner.query("RENAME TABLE qr_definer_db.runner TO qr_definer_db.runner_renamed")
@@ -217,6 +218,18 @@ def test_definer_dependency():
     node_query_runner.query("DROP TABLE qr_definer_db_renamed.runner_renamed SYNC")
     node_query_runner.query("DROP USER query_runner_definer")
     node_query_runner.query("DROP DATABASE qr_definer_db_renamed")
+
+
+def test_definer_not_tracked_without_table_uuid():
+    node_query_runner.query("CREATE USER nil_definer")
+    node_query_runner.query("CREATE DATABASE qr_nil_db ENGINE = Memory")
+    node_query_runner.query(
+        "CREATE TABLE qr_nil_db.runner (query String) ENGINE = QueryRunner "
+        "SETTINGS mode = 'synchronous' DEFINER = nil_definer SQL SECURITY DEFINER"
+    )
+    node_query_runner.query("CREATE VIEW qr_nil_db.v DEFINER = nil_definer SQL SECURITY DEFINER AS SELECT 1")
+    node_query_runner.query("DROP USER nil_definer")
+    node_query_runner.query("DROP DATABASE qr_nil_db")
 
 
 def test_wait_query_runner():

@@ -9,6 +9,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/removeOnClusterClauseIfNeeded.h>
+#include <IO/WriteHelpers.h>
 #include <Parsers/Access/ASTDropAccessEntityQuery.h>
 #include <Parsers/Access/ASTRowPolicyName.h>
 #include <Storages/IStorage.h>
@@ -69,6 +70,8 @@ BlockIO InterpreterDropAccessEntityQuery::execute()
             {
                 if (const auto table = DatabaseCatalog::instance().tryGetByUUID(uuid).second)
                     objects.push_back(table->getStorageID().getNameForLogs());
+                else
+                    objects.push_back(toString(uuid));
             }
             if (!objects.empty())
                 throw Exception(ErrorCodes::HAVE_DEPENDENT_OBJECTS, "User `{}` is used as a definer of {}.", name, toString(objects));

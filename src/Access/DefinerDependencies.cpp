@@ -2,6 +2,7 @@
 #include <Access/DefinerDependencies.h>
 #include <Access/User.h>
 #include <Interpreters/Context.h>
+#include <Common/logger_useful.h>
 
 #include <mutex>
 
@@ -24,6 +25,16 @@ DefinerDependencies & DefinerDependencies::instance()
 
 void DefinerDependencies::addDependency(const String & definer, const StorageID & object_id)
 {
+    if (object_id.uuid == UUIDHelpers::Nil)
+    {
+        LOG_WARNING(
+            getLogger("DefinerDependencies"),
+            "Not tracking the dependency of {} on definer `{}` because the object has no UUID: "
+            "the definer can be dropped while the object still exists",
+            object_id.getNameForLogs(), definer);
+        return;
+    }
+
     std::lock_guard lock(mutex);
     definer_to_objects[definer].insert(object_id.uuid);
     object_to_definer[object_id.uuid] = definer;
