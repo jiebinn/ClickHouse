@@ -360,13 +360,17 @@ async function getCIReportsFromPR(prUrl) {
       throw new Error('No CI bot comment found');
     }
 
-    // Search through all bot comments for CI report URLs (not just the latest)
-    const reportUrlPattern = /https:\/\/s3\.amazonaws\.com\/clickhouse-test-reports\/json\.html\?[^\s)]+/g;
+    // Search through all bot comments for CI report URLs (not just the latest). Exclude backtick and
+    // quote chars so a URL quoted in markdown (e.g. inside the AI-review text) is not captured with
+    // trailing junk, strip trailing punctuation, and dedupe -- otherwise the same report is fetched
+    // twice and the summary is doubled.
+    const reportUrlPattern = /https:\/\/s3\.amazonaws\.com\/clickhouse-test-reports\/json\.html\?[^\s)`'"]+/g;
     for (const comment of comments) {
       if (!comment.body) continue;
-      const urls = comment.body.match(reportUrlPattern);
+      let urls = comment.body.match(reportUrlPattern);
       if (urls && urls.length > 0) {
-        return urls;
+        urls = urls.map(u => u.replace(/[.,;]+$/, ''));
+        return [...new Set(urls)];
       }
     }
 
@@ -396,6 +400,29 @@ async function fetchReport(inputUrl, options = {}) {
     if (isGitHubPR) {
       // GitHub PR URL - extract CI report URLs
       const ciUrls = await getCIReportsFromPR(inputUrl);
+
+      // If the bot comment exposed only the top-level `PR` report (name_0=PR, no name_1), treat it
+      // as an INDEX: its leaves are job/check names, not test cases, so descend into each FAILED
+      // job by synthesizing its per-job report URL (json.html?...&name_1=<job>, the same form the
+      // loop below already fetches). Without this, a failing PR URL would yield only failed job
+      // names -- no test names, labels, or CIDB links for steps 2-3.
+      const hasNested = ciUrls.some(u => /[?&]name_1=/.test(u));
+      const topLevelUrl = ciUrls.find(u => /[?&]name_0=/.test(u) && !/[?&]name_1=/.test(u));
+      if (!hasNested && topLevelUrl) {
+        try {
+          const top = await fetchReport(topLevelUrl, { ...options, isSingleReport: true });
+          const failedJobs = (top.testResults || []).filter(t => isFailureStatus(t.status));
+          for (const job of failedJobs) {
+            const childUrl = topLevelUrl.replace(/&name_1=[^&]*/, '') + `&name_1=${encodeURIComponent(job.name)}`;
+            if (!ciUrls.includes(childUrl)) ciUrls.push(childUrl);
+          }
+          if (failedJobs.length > 0) {
+            console.log(`Top-level PR report is an index — descending into ${failedJobs.length} failed job report(s).`);
+          }
+        } catch (e) {
+          console.log(`Note: could not expand the top-level PR report into job reports (${e.message}); showing job-level failures only.`);
+        }
+      }
 
       console.log(`Found ${ciUrls.length} CI report(s)\n`);
 
