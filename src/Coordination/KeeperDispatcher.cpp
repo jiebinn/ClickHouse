@@ -222,12 +222,13 @@ void KeeperDispatcher::shutdown(bool closed_all_connections)
 
             LOG_DEBUG(log, "Shutting down storage dispatcher");
 
-            /// `shutdown_called` is now set (via setShutdownCalled() above); wake the
-            /// container GC thread so it observes it instead of sleeping out its tick.
+            /// `shutdown_called` is now set (via setShutdownCalled() above); wake every
+            /// background loop from its inter-tick wait so it observes shutdown instead of
+            /// sleeping out its tick.
             {
-                std::lock_guard lock(container_gc_wait_mutex);
+                std::lock_guard lock(background_wait_mutex);
             }
-            container_gc_wait_cv.notify_all();
+            background_wait_cv.notify_all();
 
             const auto & feature_flags = keeper_context->getFeatureFlags();
             if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL) && ttl_garbage_collector_thread.joinable())
@@ -349,8 +350,8 @@ void KeeperDispatcher::garbageCollectorThread(size_t batch_size)
         }
         if (isShuttingDown())
             return;
-        sleepForMilliseconds(std::chrono::milliseconds(
-            keeper_context->getCoordinationSettings()[CoordinationSetting::ttl_gc_period_ms].totalMilliseconds()).count());
+        interruptibleSleep(std::chrono::milliseconds(
+            keeper_context->getCoordinationSettings()[CoordinationSetting::ttl_gc_period_ms].totalMilliseconds()));
     }
 
 }
@@ -406,18 +407,28 @@ void KeeperDispatcher::containerGarbageCollectorThread(size_t batch_size, UInt64
         if (isShuttingDown())
             return;
 
-        /// Interruptible wait: unlike a raw sleep, this returns immediately once
-        /// shutdown is requested, so joining this thread never blocks for a full
-        /// `container_gc_period_ms` (60s by default).
-        {
-            const auto period_ms = keeper_context->getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
-            std::unique_lock lock(container_gc_wait_mutex);
-            container_gc_wait_cv.wait_for(
-                lock,
-                std::chrono::milliseconds(period_ms),
-                [&] { return shutdown_called || isShuttingDown(); });
-        }
+        interruptibleSleep(std::chrono::milliseconds(
+            keeper_context->getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds()));
     }
+}
+
+void KeeperDispatcher::interruptibleSleep(std::chrono::milliseconds period)
+{
+    const auto & shutdown_called = keeper_context->isShutdownCalled();
+    std::unique_lock lock(background_wait_mutex);
+    background_wait_cv.wait_for(lock, period, [&] { return shutdown_called || isShuttingDown(); });
+}
+
+void KeeperDispatcher::signalShutdown()
+{
+    shutting_down.store(true, std::memory_order_relaxed);
+    /// Wake the background loops from their inter-tick wait so they observe the shutdown
+    /// signal without sleeping out the rest of the tick. Take the mutex briefly to avoid
+    /// racing with a thread that is about to start waiting (lost wakeup).
+    {
+        std::lock_guard lock(background_wait_mutex);
+    }
+    background_wait_cv.notify_all();
 }
 
 bool KeeperDispatcher::putRequest(const Coordination::ZooKeeperRequestPtr & request, int64_t session_id, bool use_xid_64)
@@ -456,7 +467,10 @@ void KeeperDispatcher::sessionCleanerTask()
     ///       the previous attempt.
     while (true)
     {
-        if (shutdown_called)
+        /// `interruptibleSleep` returns as soon as either shutdown signal is set, so this loop
+        /// must treat both as terminal — otherwise it would busy-spin during the window between
+        /// `signalShutdown` (sets shutting_down) and `shutdown` (sets shutdown_called).
+        if (shutdown_called || isShuttingDown())
             return;
 
         try
@@ -491,8 +505,8 @@ void KeeperDispatcher::sessionCleanerTask()
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
 
-        auto time_to_sleep = keeper_context->getCoordinationSettings()[CoordinationSetting::dead_session_check_period_ms].totalMilliseconds();
-        std::this_thread::sleep_for(std::chrono::milliseconds(time_to_sleep));
+        interruptibleSleep(std::chrono::milliseconds(
+            keeper_context->getCoordinationSettings()[CoordinationSetting::dead_session_check_period_ms].totalMilliseconds()));
     }
 }
 
@@ -584,21 +598,24 @@ int64_t KeeperDispatcher::getSessionID(int64_t session_timeout_ms)
 void KeeperDispatcher::clusterUpdateWithReconfigDisabledThread()
 {
     const auto & shutdown_called = keeper_context->isShutdownCalled();
-    while (!shutdown_called)
+    /// `isShuttingDown()` is terminal too: `interruptibleSleep` returns immediately once it is set,
+    /// so without checking it here the `interruptibleSleep + continue` branches below would busy-spin
+    /// during the window between `signalShutdown` and `shutdown`.
+    while (!shutdown_called && !isShuttingDown())
     {
         try
         {
             if (!server->checkInit())
             {
                 LOG_INFO(log, "Server still not initialized, will not apply configuration until initialization finished");
-                std::this_thread::sleep_for(5000ms);
+                interruptibleSleep(5000ms);
                 continue;
             }
 
             if (server->isRecovering())
             {
                 LOG_INFO(log, "Server is recovering, will not apply configuration until recovery is finished");
-                std::this_thread::sleep_for(5000ms);
+                interruptibleSleep(5000ms);
                 continue;
             }
 
@@ -639,7 +656,9 @@ void KeeperDispatcher::clusterUpdateThread()
     using enum KeeperServer::ConfigUpdateState;
     bool last_command_was_leader_change = false;
     const auto & shutdown_called = keeper_context->isShutdownCalled();
-    while (!shutdown_called)
+    /// `isShuttingDown()` is terminal too, so the backoff `interruptibleSleep` below does not
+    /// busy-spin during the window between `signalShutdown` and `shutdown`.
+    while (!shutdown_called && !isShuttingDown())
     {
         ClusterUpdateAction action;
         if (!cluster_update_queue.pop(action))
@@ -654,9 +673,9 @@ void KeeperDispatcher::clusterUpdateThread()
             (void)cluster_update_queue.pushFront(action);
             LOG_DEBUG(log, "Processing config update {}: declined, backoff", action);
 
-            std::this_thread::sleep_for(last_command_was_leader_change
+            interruptibleSleep(last_command_was_leader_change
                 ? std::chrono::milliseconds(keeper_context->getCoordinationSettings()[CoordinationSetting::sleep_before_leader_change_ms].totalMilliseconds())
-                : 50ms);
+                : std::chrono::milliseconds(50));
         }
     }
 }

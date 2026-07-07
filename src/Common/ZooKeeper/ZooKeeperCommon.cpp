@@ -330,14 +330,17 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "CreateTTL opnum and create-mode flag disagree on TTL");
 
-    /// Same for containers: opnum CreateContainer must be paired with the CONTAINER create
-    /// mode and nothing else. Otherwise a malformed packet (e.g. opnum CreateContainer with a
-    /// PERSISTENT_SEQUENTIAL flag) would survive as both container and sequential, and the
-    /// leader would append a sequence suffix while followers replay a plain container path,
-    /// diverging the Raft log.
-    if (from_create_container_opnum != is_container)
+    /// Container semantics are driven by the CONTAINER create-mode flag, matching Apache
+    /// ZooKeeper's org.apache.zookeeper.server.PrepRequestProcessor.pRequest2TxnCreate, which
+    /// derives the mode from CreateMode.fromFlag(flags) and only consults the opnum to pick the
+    /// transaction record. So a plain OpNum::Create carrying a CONTAINER flag is a valid wire
+    /// form and is normalized to a container here (is_container is already set from the flag).
+    /// The only illegal combination is the inverse: an OpNum::CreateContainer packet whose flag
+    /// is not CONTAINER — that would let the opnum claim a container while the flag makes the
+    /// node sequential/ephemeral, so the leader and followers could disagree on the stored path.
+    if (from_create_container_opnum && !is_container)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
-            "CreateContainer opnum and create-mode flag disagree on container");
+            "CreateContainer opnum requires the CONTAINER create-mode flag");
 
     /// Create2 sets include_stats; that must not coexist with a TTL create mode.
     if (include_stats && include_ttl)
@@ -353,10 +356,12 @@ std::string ZooKeeperCreateRequest::toStringImpl(bool /*short_format*/) const
     return fmt::format(
         "path = {}\n"
         "is_ephemeral = {}\n"
-        "is_sequential = {}",
+        "is_sequential = {}\n"
+        "is_container = {}",
         path,
         is_ephemeral,
-        is_sequential);
+        is_sequential,
+        is_container);
 }
 
 void ZooKeeperCreateResponse::readImpl(ReadBuffer & in)
@@ -372,6 +377,14 @@ void ZooKeeperCreateResponse::writeImpl(WriteBuffer & out) const
 size_t ZooKeeperCreateResponse::sizeImpl() const
 {
     return Coordination::size(path_created);
+}
+
+void ZooKeeperCreate2Response::readImpl(ReadBuffer & in)
+{
+    /// Mirror writeImpl: the base ZooKeeperCreateResponse::readImpl reads only path_created and
+    /// would leave zstat default and the buffer mid-stream for Create2/CreateTTL/CreateContainer.
+    Coordination::read(path_created, in);
+    Coordination::read(zstat, in);
 }
 
 void ZooKeeperCreate2Response::writeImpl(WriteBuffer & out) const

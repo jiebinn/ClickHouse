@@ -8,6 +8,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -80,11 +81,17 @@ private:
     /// Set before the full shutdown() to allow handlers to exit promptly.
     std::atomic<bool> shutting_down{false};
 
-    /// Wakes the container garbage collector thread from its inter-tick wait, so
-    /// shutdown does not have to block for a full `container_gc_period_ms` (60s by
-    /// default). The unrelated TTL GC loop uses a short period and does not need this.
-    std::mutex container_gc_wait_mutex;
-    std::condition_variable container_gc_wait_cv;
+    /// Shared wait state for the periodic background loops (session cleaner, TTL GC,
+    /// container GC, cluster update). Each loop sleeps between ticks on this condition
+    /// variable via `interruptibleSleep`, so a shutdown request wakes them immediately
+    /// instead of blocking a join for a full tick (up to `container_gc_period_ms`, 60s
+    /// by default). Woken from both `signalShutdown` and `shutdown`.
+    std::mutex background_wait_mutex;
+    std::condition_variable background_wait_cv;
+
+    /// Sleep for `period` between background-loop ticks, returning early once shutdown is
+    /// requested (via either `signalShutdown` or `shutdown`).
+    void interruptibleSleep(std::chrono::milliseconds period);
 
     /// Thread clean disconnected sessions from memory
     void sessionCleanerTask();
@@ -134,8 +141,9 @@ public:
     /// Process reconfiguration 4LW command: rcfg, it's another option to update cluster configuration
     Poco::JSON::Object::Ptr reconfigureClusterFromReconfigureCommand(Poco::JSON::Object::Ptr reconfig_command);
 
-    /// Signal TCP handlers to close connections before the full shutdown.
-    void signalShutdown() { shutting_down.store(true, std::memory_order_relaxed); }
+    /// Signal TCP handlers to close connections before the full shutdown, and wake the
+    /// background loops from their inter-tick wait so they exit promptly.
+    void signalShutdown();
 
     /// Returns true if signalShutdown() was called.
     bool isShuttingDown() const { return shutting_down.load(std::memory_order_relaxed); }

@@ -177,6 +177,30 @@ TYPED_TEST(CoordinationTest, ContainerCreateModeMismatchRejected)
     EXPECT_THROW(request_read->readImpl(rbuf), Coordination::Exception);
 }
 
+TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
+{
+    /// Apache ZooKeeper derives container semantics from the CONTAINER create-mode flag and only
+    /// uses the opnum to pick the transaction record, so a plain OpNum::Create carrying a
+    /// CONTAINER flag is a valid wire form. It must be accepted and normalized to a container
+    /// rather than rejected as an opnum/flag mismatch.
+    DB::WriteBufferFromNuraftBuffer wbuf;
+    Coordination::write(std::string{"/container"}, wbuf); /// path
+    Coordination::write(std::string{}, wbuf);             /// data
+    Coordination::write(Coordination::ACLs{}, wbuf);      /// acls
+    Coordination::write(static_cast<int32_t>(4), wbuf);   /// CreateMode::CONTAINER
+
+    auto request_read = Coordination::ZooKeeperRequestFactory::instance().get(Coordination::OpNum::Create);
+    DB::ReadBufferFromNuraftBuffer rbuf(wbuf.getBuffer());
+    request_read->readImpl(rbuf);
+    auto & create_read = dynamic_cast<Coordination::ZooKeeperCreateRequest &>(*request_read);
+    EXPECT_TRUE(create_read.is_container);
+    EXPECT_FALSE(create_read.is_sequential);
+    EXPECT_FALSE(create_read.is_ephemeral);
+    EXPECT_FALSE(create_read.include_ttl);
+    /// Normalized to a container: getOpNum now reports CreateContainer regardless of the wire opnum.
+    EXPECT_EQ(create_read.getOpNum(), Coordination::OpNum::CreateContainer);
+}
+
 template <typename StateMachine>
 struct SimpliestRaftServer
 {

@@ -465,6 +465,12 @@ Coordination::ZooKeeperRequestPtr deserializeTxnImpl(ReadBuffer & in, bool subtx
         case 19:
             result = deserializeCreateContainerTxn(in);
             break;
+        /// OpCode.deleteContainer: ZooKeeper logs container deletions (GC-driven or explicit)
+        /// with a dedicated txn type but an ordinary DeleteTxn payload (just the path), so the
+        /// delete deserializer applies unchanged.
+        case 20:
+            result = deserializeDeleteTxn(in);
+            break;
         case 5:
             result = deserializeSetTxn(in);
             break;

@@ -964,7 +964,11 @@ void KeeperStorage::UncommittedState::rollback(std::list<Delta> rollback_deltas)
                     }
                     else if constexpr (std::same_as<DeltaType, RemoveNodeDelta>)
                     {
-                        if (operation.stat.ephemeralOwner() != 0)
+                        /// Re-register only genuinely ephemeral nodes. ephemeralOwner() returns the
+                        /// INT64_MIN container sentinel for container nodes, so an ephemeralOwner() != 0
+                        /// test would wrongly insert a rolled-back container into ephemerals[INT64_MIN]
+                        /// (a phantom session that never expires and leaks the entry).
+                        if (operation.stat.isEphemeral())
                             storage.uncommitted_state.ephemerals[operation.stat.ephemeralOwner()].emplace(delta.path);
                     }
                 },
@@ -1687,9 +1691,22 @@ static Coordination::ZooKeeperResponsePtr process(const Coordination::ZooKeeperC
     if (create_delta_it != deltas.end())
     {
         created_path = create_delta_it->path;
-        if (response->getOpNum() == Coordination::OpNum::Create2 || response->getOpNum() == Coordination::OpNum::CreateTTL
-            || response->getOpNum() == Coordination::OpNum::CreateContainer)
-            static_cast<Coordination::ZooKeeperCreate2Response &>(*response).zstat = std::get<CreateNodeDelta>(create_delta_it->operation).stat;
+        /// A container create uses ZooKeeperCreate2Response (getOpNum() == Create2), so Create2 and
+        /// CreateTTL are the only response op-nums that carry a zstat; the container case is gated
+        /// below on create_delta.is_container rather than the response op-num.
+        if (response->getOpNum() == Coordination::OpNum::Create2 || response->getOpNum() == Coordination::OpNum::CreateTTL)
+        {
+            const auto & create_delta = std::get<CreateNodeDelta>(create_delta_it->operation);
+            auto & zstat = static_cast<Coordination::ZooKeeperCreate2Response &>(*response).zstat;
+            zstat = create_delta.stat;
+            /// The delta stat carries ephemeralOwner == 0 for containers (a nonzero value there
+            /// would make copyStats mark the stored node ephemeral). Container nodes are reported
+            /// with the ZooKeeper CONTAINER_EPHEMERAL_OWNER sentinel by get, so patch the
+            /// client-visible response stat to match — otherwise the create reply and every later
+            /// read would disagree about the same node's type.
+            if (create_delta.is_container)
+                zstat.ephemeralOwner = std::numeric_limits<int64_t>::min();
+        }
     }
     if (const auto result = storage.commit(std::move(deltas)); result != Coordination::Error::ZOK)
     {
