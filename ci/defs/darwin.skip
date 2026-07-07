@@ -6,14 +6,6 @@
 
 # ─────────────────────────── macOS platform gaps (keep skipped) ───────────────────────────
 
-# Float/double precision: on Apple arm64 'long double' == 'double', so extended-precision math
-# functions cannot reproduce x86/glibc results.
-01302_polygons_distance
-02705_projection_and_ast_optimizations_bug
-03269_bf16
-03702_geometry_functions
-03976_geometry_functions_accept_subtypes
-
 # SSD cache dictionaries: the SSD_CACHE layout is Linux/FreeBSD-only (uses O_DIRECT and Linux
 # native AIO io_submit/io_getevents); not built on macOS. Needs an I/O-layer port to enable.
 01684_ssd_cache_dictionary_simple_key
