@@ -201,6 +201,75 @@ TEST(TestKeeperTest, Create2DuplicateReturnsZNodeExists)
     }
 }
 
+TEST(TestKeeperTest, DuplicateCreateIfNotExistsReportsPathCreated)
+{
+    TestKeeper keeper = makeKeeper();
+
+    create(keeper, "/node", "data", /* is_ephemeral */ false);
+
+    // A plain CreateIfNotExists (not_exists=true, no stats/ttl) on an existing node
+    // must succeed with ZOK and still report the requested path in path_created,
+    // mirroring KeeperStorage::process.
+    auto req = std::make_shared<CreateRequest>();
+    req->path = "/node";
+    req->data = "data2";
+    req->not_exists = true;
+
+    std::promise<MultiResponse> sink;
+    std::future<MultiResponse> future = sink.get_future();
+    keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+    MultiResponse multi = future.get();
+    ASSERT_EQ(multi.error, Error::ZOK);
+    ASSERT_EQ(multi.responses.size(), 1u);
+
+    const auto * create = dynamic_cast<const CreateResponse *>(multi.responses[0].get());
+    ASSERT_NE(create, nullptr);
+    EXPECT_EQ(create->error, Error::ZOK);
+    EXPECT_EQ(create->path_created, "/node");
+}
+
+TEST(TestKeeperTest, InvalidTTLCreateReturnsBadArguments)
+{
+    TestKeeper keeper = makeKeeper();
+
+    // CreateTTL requests that real Keeper rejects with ZBADARGUMENTS must be rejected
+    // by TestKeeper too, and must not create the node.
+    auto try_ttl_create = [&](const String & path, int64_t ttl, bool is_ephemeral)
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = path;
+        req->data = "data";
+        req->is_ephemeral = is_ephemeral;
+        req->include_ttl = true;
+        req->ttl = ttl;
+
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+        return future.get().responses[0]->error;
+    };
+
+    // TTL is incompatible with ephemeral nodes.
+    EXPECT_EQ(try_ttl_create("/ttl_ephemeral", 10000, /* is_ephemeral */ true), Error::ZBADARGUMENTS);
+    // Non-positive TTL is rejected.
+    EXPECT_EQ(try_ttl_create("/ttl_zero", 0, /* is_ephemeral */ false), Error::ZBADARGUMENTS);
+    EXPECT_EQ(try_ttl_create("/ttl_negative", -1, /* is_ephemeral */ false), Error::ZBADARGUMENTS);
+    // TTL beyond the maximum bound is rejected.
+    EXPECT_EQ(try_ttl_create("/ttl_too_large", MAX_TESTKEEPER_TTL_MS + 1, /* is_ephemeral */ false), Error::ZBADARGUMENTS);
+
+    // None of the rejected requests must have created a node.
+    ASSERT_FALSE(exists(keeper, "/ttl_ephemeral"));
+    ASSERT_FALSE(exists(keeper, "/ttl_zero"));
+    ASSERT_FALSE(exists(keeper, "/ttl_negative"));
+    ASSERT_FALSE(exists(keeper, "/ttl_too_large"));
+
+    // A valid TTL create at the maximum bound must succeed.
+    EXPECT_EQ(try_ttl_create("/ttl_ok", MAX_TESTKEEPER_TTL_MS, /* is_ephemeral */ false), Error::ZOK);
+    ASSERT_TRUE(exists(keeper, "/ttl_ok"));
+}
+
 TEST(TestKeeperTest, FilteredListWithoutStatsAndData)
 {
     TestKeeper keeper = makeKeeper();

@@ -16,6 +16,11 @@
 namespace Coordination
 {
 
+/// Mirror of MAX_KEEPER_TTL_MS from KeeperConstants.h. TestKeeper lives in the
+/// Common/ZooKeeper layer and must not depend on the Coordination layer, so the
+/// bound is duplicated here to keep TTL validation consistent with real Keeper.
+inline constexpr int64_t MAX_TESTKEEPER_TTL_MS = 0x00FFFFFFFFFFFFFFLL;
+
 struct TestKeeperRequest;
 using TestKeeperRequestPtr = std::shared_ptr<TestKeeperRequest>;
 

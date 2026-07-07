@@ -311,7 +311,13 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
         // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
         // mirroring ZooKeeperCreateRequest::getOpNum precedence in real Keeper.
         if (not_exists && !include_stats && !include_ttl)
+        {
             base_response.error = Error::ZOK;
+            /// Mirror KeeperStorage::process: a duplicate CreateIfNotExists still
+            /// reports the requested path in path_created, so consumers reading
+            /// path_created (e.g. from multi) behave the same as against real Keeper.
+            base_response.path_created = path;
+        }
         else
             base_response.error = Error::ZNODEEXISTS;
     }
@@ -326,6 +332,18 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
         else if (it->second.is_ephemeral)
         {
             base_response.error = Error::ZNOCHILDRENFOREPHEMERALS;
+        }
+        else if (it->second.is_ttl)
+        {
+            /// A TTL node cannot have children, matching KeeperStorage::preprocess.
+            base_response.error = Error::ZBADARGUMENTS;
+        }
+        else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
+        {
+            /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
+            /// TTL is incompatible with ephemeral, and the ttl must be positive and
+            /// bounded (prevents time + ttl overflow when computing destroy_time).
+            base_response.error = Error::ZBADARGUMENTS;
         }
         else
         {
