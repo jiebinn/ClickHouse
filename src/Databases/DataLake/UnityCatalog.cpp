@@ -38,11 +38,8 @@ static const auto TEMPORARY_CREDENTIALS_ENDPOINT = "temporary-table-credentials"
 static const std::unordered_set<std::string> READABLE_TABLES = {"TABLE_DELTA", "TABLE_DELTA_EXTERNAL"};
 static const auto READABLE_DATA_SOURCE_FORMAT = "DELTA";
 
-/// A Unity table is readable by ClickHouse only if it is a DeltaLake table. The
-/// `securable_kind`, `data_source_format` and `storage_location` fields are present in
-/// both the bulk tables listing and the per-table response, so this single check keeps
-/// the listing (`getTablesForSchema`) consistent with `tryGetTableMetadata`, which marks
-/// non-Delta tables (views, foreign tables, ...) as not readable.
+/// A Unity table is readable only if it is a DeltaLake table. `securable_kind`,
+/// `data_source_format` and `storage_location` are in the bulk listing, so this matches `tryGetTableMetadata`.
 static bool isReadableUnityTable(const Poco::JSON::Object::Ptr & table)
 {
     if (!hasValueAndItsNotNone("storage_location", table))

@@ -95,11 +95,8 @@ namespace DataLake
 namespace
 {
 
-/// A Glue table is readable by ClickHouse only if it is an Iceberg table. The
-/// `table_type` parameter is present in both the bulk `GetTables` listing and
-/// the per-table `GetTable` response, so this single check keeps the listing
-/// (`getTablesForDatabase`) consistent with `tryGetTableMetadata`, which marks
-/// non-Iceberg tables (Delta Lake tables, raw data files, ...) as not readable.
+/// A Glue table is readable only if it is an Iceberg table. `table_type` is available in
+/// both the bulk `GetTables` listing and `tryGetTableMetadata`, so the two stay consistent.
 bool isReadableGlueTable(const Aws::Glue::Model::Table & table)
 {
     const auto & parameters = table.GetParameters();

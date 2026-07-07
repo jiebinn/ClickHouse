@@ -785,9 +785,8 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIterator(
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
 
-    /// Skip tables ClickHouse cannot read (e.g. Delta Lake tables or raw data files in
-    /// mixed-format catalogs like Glue/Unity) and apply the requested name filter once,
-    /// so this stays consistent with getLightweightTablesIterator (used for SHOW TABLES).
+    /// Skip tables ClickHouse cannot read (Delta/raw files in mixed catalogs like Glue/Unity)
+    /// and apply the name filter once, matching getLightweightTablesIterator (SHOW TABLES).
     DB::Names iceberg_tables;
     for (const auto & catalog_table : catalog_tables)
     {
@@ -888,9 +887,8 @@ std::vector<LightWeightTableDetails> DatabaseDataLake::getLightweightTablesItera
 
     for (const auto & catalog_table : catalog_tables)
     {
-        /// Skip tables ClickHouse cannot read (e.g. Delta Lake tables or raw data files in
-        /// mixed-format catalogs like Glue/Unity), so SHOW TABLES / system.tables stay
-        /// consistent with getTablesIterator without a per-table metadata fetch.
+        /// Skip tables ClickHouse cannot read, so SHOW TABLES stays consistent with the
+        /// full getTablesIterator path without a per-table metadata fetch.
         if (!catalog_table.is_readable)
             continue;
         if (filter_by_table_name && !filter_by_table_name(catalog_table.name))

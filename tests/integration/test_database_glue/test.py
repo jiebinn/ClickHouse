@@ -397,9 +397,19 @@ def clean_catalog(started_cluster):
     # created so the catalog stays bounded to the running test.
     yield
     catalog = load_catalog_impl(started_cluster)
+    glue_client = boto3.client(
+        "glue", region_name="us-east-1", endpoint_url=get_glue_local_url(started_cluster)
+    )
     for namespace in catalog.list_namespaces():
+        # Drop Iceberg tables via pyiceberg so their data and metadata are removed too.
         for table in catalog.list_tables(namespace):
             catalog.drop_table(table)
+        # Drop any remaining tables registered directly in Glue (e.g. non-Iceberg tables
+        # such as Delta Lake tables or raw data files). pyiceberg's list_tables ignores
+        # them, and drop_namespace refuses to drop a namespace that still contains them.
+        database_name = ".".join(namespace)
+        for table in glue_client.get_tables(DatabaseName=database_name).get("TableList", []):
+            glue_client.delete_table(DatabaseName=database_name, Name=table["Name"])
         catalog.drop_namespace(namespace)
 
 
