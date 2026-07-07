@@ -23,27 +23,6 @@ String MarkInCompressedFile::toStringWithRows(size_t rows_num) const
         + DB::toString(rows_num) + ")";
 }
 
-// Write a range of bits in a bit-packed array.
-// The array must be overallocated by one element.
-// The bit range must be pre-filled with zeros.
-static void writeBits(UInt64 * dest, size_t bit_offset, UInt64 value)
-{
-    size_t mod = bit_offset % 64;
-    dest[bit_offset / 64] |= value << mod;
-    if (mod)
-        dest[bit_offset / 64 + 1] |= value >> (64 - mod);
-}
-
-// The array must be overallocated by one element.
-static UInt64 readBits(const UInt64 * src, size_t bit_offset, size_t num_bits)
-{
-    size_t mod = bit_offset % 64;
-    UInt64 value = src[bit_offset / 64] >> mod;
-    if (mod)
-        value |= src[bit_offset / 64 + 1] << (64 - mod);
-    return value & maskLowBits<UInt64>(static_cast<unsigned char>(num_bits));
-}
-
 std::shared_ptr<MarksInCompressedFile> MarksInCompressedFile::create(const PlainArray & marks)
 {
     Builder builder(marks.size());
@@ -60,8 +39,8 @@ MarkInCompressedFile MarksInCompressedFile::get(size_t idx) const
             idx, num_marks);
 
     auto [block, offset] = lookUpMark(idx);
-    size_t x = block->min_x + readBits(packed.data(), offset, block->bits_for_x);
-    size_t y = block->min_y + (readBits(packed.data(), offset + block->bits_for_x, block->bits_for_y) << block->trailing_zero_bits_in_y);
+    size_t x = block->min_x + readBitsPacked64(packed.data(), offset, block->bits_for_x);
+    size_t y = block->min_y + (readBitsPacked64(packed.data(), offset + block->bits_for_x, block->bits_for_y) << block->trailing_zero_bits_in_y);
     return MarkInCompressedFile{.offset_in_compressed_file = x, .offset_in_decompressed_block = y};
 }
 
@@ -165,7 +144,7 @@ void MarksInCompressedFile::Builder::flushBlock(const MarkInCompressedFile * dat
     block.bits_for_y
         = static_cast<UInt8>(sizeof(size_t) * 8 - getLeadingZeroBits((max_y - block.min_y) >> block.trailing_zero_bits_in_y));
 
-    /// Grow packed array to fit new bits + 1 overallocation element for writeBits safety.
+    /// Grow packed array to fit new bits + 1 overallocation element for writeBitsPacked64 safety.
     size_t new_bits = count * (block.bits_for_x + block.bits_for_y);
     size_t new_packed_length = (packed_bits + new_bits + 63) / 64 + 1;
     if (new_packed_length > packed.size())
@@ -175,8 +154,8 @@ void MarksInCompressedFile::Builder::flushBlock(const MarkInCompressedFile * dat
     size_t bit_offset = packed_bits;
     for (size_t i = 0; i < count; ++i)
     {
-        writeBits(packed.data(), bit_offset, data[i].offset_in_compressed_file - block.min_x);
-        writeBits(
+        writeBitsPacked64(packed.data(), bit_offset, data[i].offset_in_compressed_file - block.min_x);
+        writeBitsPacked64(
             packed.data(),
             bit_offset + block.bits_for_x,
             (data[i].offset_in_decompressed_block - block.min_y) >> block.trailing_zero_bits_in_y);
@@ -198,7 +177,7 @@ std::shared_ptr<MarksInCompressedFile> MarksInCompressedFile::Builder::finish()
 
     chassert(marks_flushed == total_marks);
 
-    /// +1 overallocation element is needed by readBits, but only for non-empty marks.
+    /// +1 overallocation element is needed by readBitsPacked64, but only for non-empty marks.
     size_t required_length = total_marks == 0 ? 0 : (packed_bits + 63) / 64 + 1;
     if (packed.size() < required_length)
         packed.resize_fill(required_length);
