@@ -1015,7 +1015,7 @@ IntervalKind::Kind timeUnitToIntervalKind(int unit)
 }
 
 DataTypePtr fieldToCHType(
-    const ArrowField & field, [[maybe_unused]] const FormatSettings & settings, bool make_nullable, bool allow_null_type)
+    const ArrowField & field, const FormatSettings & settings, bool make_nullable, bool allow_null_type)
 {
     const ArrowType & type = field.type;
     DataTypePtr result;
@@ -1156,7 +1156,14 @@ DataTypePtr fieldToCHType(
         throw Exception(ErrorCodes::UNKNOWN_TYPE, "Could not map Arrow field '{}' to a ClickHouse type", field.name);
 
     if (make_nullable && result->canBeInsideNullable())
-        result = std::make_shared<DataTypeNullable>(result);
+    {
+        /// A Tuple (from an Arrow Struct) is wrapped in Nullable only when `allow_experimental_nullable_tuple_type`
+        /// is enabled; otherwise schema inference would return a `Nullable(Tuple)` that `CREATE TABLE` rejects.
+        /// Without it the struct is read as a plain Tuple (its null map is dropped), as before `Nullable(Tuple)`
+        /// was supported. The decode path applies the same gate.
+        if (!WhichDataType(result).isTuple() || settings.schema_inference_allow_nullable_tuple_type)
+            result = std::make_shared<DataTypeNullable>(result);
+    }
 
     return result;
 }

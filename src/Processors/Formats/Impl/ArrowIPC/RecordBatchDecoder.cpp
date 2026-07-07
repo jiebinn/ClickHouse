@@ -1050,9 +1050,13 @@ ColumnPtr RecordBatchDecoder::decodeField(
 
     ColumnPtr inner = decodeInner(field, rows, target_hint, path);
 
-    /// Only wrap in Nullable when the type allows it; Array/Map/Tuple cannot be inside Nullable in
-    /// ClickHouse, so (matching the Apache Arrow library reader) their outer validity is dropped.
-    if (field.nullable && inner->canBeInsideNullable())
+    /// Only wrap in Nullable when the type allows it; Array/Map cannot be inside Nullable in ClickHouse, so
+    /// (matching the Apache Arrow library reader) their outer validity is dropped. A Struct (Tuple) is only
+    /// wrapped when `allow_experimental_nullable_tuple_type` is enabled (matching `fieldToCHType` and the
+    /// library); otherwise it is read as a plain Tuple, dropping the struct-level null map.
+    const bool struct_not_allowed_nullable
+        = field.type.kind == TypeKind::Struct && !settings.schema_inference_allow_nullable_tuple_type;
+    if (field.nullable && inner->canBeInsideNullable() && !struct_not_allowed_nullable)
     {
         ColumnPtr null_map = buildNullMap(validity, rows, node.null_count());
         return ColumnNullable::create(inner, null_map);
