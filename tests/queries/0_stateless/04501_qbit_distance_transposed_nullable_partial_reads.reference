@@ -67,3 +67,12 @@ Nullable(Float64)
 1
 -- Constant NULL Variant reference vector: unoptimized path is NULL for every row; on == off (expect 1)
 1
+-- Nullable reference vector: the optimization must bail, reading the whole vec column, not the vec.N planes (expect 0)
+0
+-- Nullable reference vector: result type stays Nullable(Float64) with the optimization on and off
+Nullable(Float64)
+Nullable(Float64)
+-- Nullable reference vector (present vec + NULL ref row + NULL vec rows): optimization on == off, values and NULL mask (expect 1)
+1
+-- Constant NULL Nullable(Array) reference vector: unoptimized path is NULL for every row; on == off (expect 1)
+1

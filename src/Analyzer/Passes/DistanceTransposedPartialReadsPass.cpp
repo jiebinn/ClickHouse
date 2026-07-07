@@ -84,6 +84,16 @@ public:
         if (isVariant(ref_vec_type) || isDynamic(ref_vec_type))
             return;
 
+        /// A Nullable reference vector cannot go through the optimization either. The rewrite casts the reference vector to a
+        /// plain Array(element_type) with an internal (non keep_nullable) _CAST, which does not preserve the reference-side
+        /// null map: casting Nullable(Array(...)) to Array(...) throws `Cannot convert NULL value to non-Nullable type` at
+        /// runtime as soon as a reference row is NULL, whereas the unoptimized distance function returns NULL for that row
+        /// through its default Nullable handling. Leave such a call for the unoptimized function to handle. This is
+        /// independent of the QBit column's own nullability - the trap here is the reference-side null map (the QBit
+        /// column's null map still flows through the Nullable bit-plane subcolumns when the optimization does apply).
+        if (ref_vec_type->isNullable())
+            return;
+
         /// Optional fourth argument: the number of dimensions to read (Matryoshka-style partial-dimension search).
         const ConstantNode * used_dims_node = nullptr;
         if (function_arguments_nodes.size() == 4)

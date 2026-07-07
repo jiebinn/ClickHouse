@@ -159,3 +159,40 @@ SELECT
   = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, CAST(NULL, 'Variant(Array(Float32), UInt8)'), 4) AS d FROM qbit_variant_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
 
 DROP TABLE qbit_variant_ref;
+
+
+-- A Nullable reference vector is another case the optimization must decline, and it is a correctness trap rather than an
+-- exception-while-building one. The rewrite casts the reference vector to a plain Array with an internal (non keep_nullable)
+-- _CAST, which does not preserve the reference-side null map: casting Nullable(Array(...)) to Array(...) throws
+-- `Cannot convert NULL value to non-Nullable type` on a NULL reference row, whereas the unoptimized distance function
+-- returns NULL for that row. The pass must therefore leave a Nullable reference vector unoptimized. This is independent of
+-- the QBit column's own nullability - the trap is the reference-side null map (row 2 below has a present vec and a NULL ref,
+-- the exact row that used to throw with the optimization on).
+
+DROP TABLE IF EXISTS qbit_nullable_ref;
+CREATE TABLE qbit_nullable_ref (id UInt32, vec Nullable(QBit(Float32, 4)), ref Nullable(Array(Float32))) ENGINE = Memory;
+INSERT INTO qbit_nullable_ref VALUES
+    (1, [1, 2, 3, 4],         [1, 2, 3, 4]),
+    (2, [9, 8, 7, 6],         NULL),
+    (3, [0.5, 0.5, 0.5, 0.5], [4, 3, 2, 1]),
+    (4, NULL,                 [1, 1, 1, 1]),
+    (5, NULL,                 NULL);
+
+SELECT '-- Nullable reference vector: the optimization must bail, reading the whole vec column, not the vec.N planes (expect 0)';
+SELECT arrayUniq(extractAll(arrayStringConcat((SELECT groupArray(explain) FROM (EXPLAIN actions = 1 SELECT id, L2DistanceTransposed(vec, ref, 4) FROM qbit_nullable_ref SETTINGS optimize_qbit_distance_function_reads = 1)), ' '), 'vec\\.[0-9]+'));
+
+SELECT '-- Nullable reference vector: result type stays Nullable(Float64) with the optimization on and off';
+SELECT DISTINCT toTypeName(L2DistanceTransposed(vec, ref, 4)) FROM qbit_nullable_ref SETTINGS optimize_qbit_distance_function_reads = 1;
+SELECT DISTINCT toTypeName(L2DistanceTransposed(vec, ref, 4)) FROM qbit_nullable_ref SETTINGS optimize_qbit_distance_function_reads = 0;
+
+SELECT '-- Nullable reference vector (present vec + NULL ref row + NULL vec rows): optimization on == off, values and NULL mask (expect 1)';
+SELECT
+    toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, ref, 4) AS d FROM qbit_nullable_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 1))
+  = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, ref, 4) AS d FROM qbit_nullable_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
+
+SELECT '-- Constant NULL Nullable(Array) reference vector: unoptimized path is NULL for every row; on == off (expect 1)';
+SELECT
+    toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, CAST(NULL, 'Nullable(Array(Float32))'), 4) AS d FROM qbit_nullable_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 1))
+  = toString((SELECT groupArray((id, d)) FROM (SELECT id, L2DistanceTransposed(vec, CAST(NULL, 'Nullable(Array(Float32))'), 4) AS d FROM qbit_nullable_ref ORDER BY id) SETTINGS optimize_qbit_distance_function_reads = 0));
+
+DROP TABLE qbit_nullable_ref;
