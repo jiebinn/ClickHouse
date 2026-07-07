@@ -2157,7 +2157,10 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
                     if (exact_ranges && !result.can_be_false)
                     {
-                        if (exact_ranges->empty() || range.begin - exact_ranges->back().end > min_marks_for_seek)
+                        /// Unlike `res`, exact ranges must never absorb the gap between two accepted ranges:
+                        /// every mark of an exact range has to fully match the condition, while the skipped
+                        /// marks in between do not. `min_marks_for_seek` applies only to the ranges we read.
+                        if (exact_ranges->empty() || range.begin != exact_ranges->back().end)
                             exact_ranges->push_back(range);
                         else
                             exact_ranges->back().end = range.end;
