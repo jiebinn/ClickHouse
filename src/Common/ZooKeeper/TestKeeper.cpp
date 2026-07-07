@@ -306,9 +306,11 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
     Undo undo;
 
     /// Mirror the check order of KeeperStorage::preprocess: parent existence/kind first,
-    /// then the is_sequential + not_exists combination, then the node-existence (duplicate)
-    /// check, then TTL validation. Keeping the same order makes TestKeeper return the same
-    /// error code as real Keeper for the same request.
+    /// then the is_sequential + not_exists combination, then compute the effective path
+    /// (appending the sequence suffix for sequential creates), then the node-existence
+    /// (duplicate) check against that effective path, then TTL validation. Keeping the
+    /// same order makes TestKeeper return the same error code as real Keeper for the
+    /// same request.
     auto parent_it = container.find(parentPath(path));
 
     if (parent_it == container.end())
@@ -334,69 +336,78 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
         /// under implementation=testkeeper instead of silently creating a node.
         base_response.error = Error::ZBADARGUMENTS;
     }
-    else if (container.contains(path))
-    {
-        // Create2 / CreateTTL take precedence over CreateIfNotExists: a duplicate node
-        // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
-        // mirroring ZooKeeperCreateRequest::getOpNum precedence in real Keeper.
-        if (not_exists && !include_stats && !include_ttl)
-        {
-            base_response.error = Error::ZOK;
-            /// Mirror KeeperStorage::process: a duplicate CreateIfNotExists still
-            /// reports the requested path in path_created, so consumers reading
-            /// path_created (e.g. from multi) behave the same as against real Keeper.
-            base_response.path_created = path;
-        }
-        else
-            base_response.error = Error::ZNODEEXISTS;
-    }
-    else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
-    {
-        /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
-        /// TTL is incompatible with ephemeral, and the ttl must be positive and
-        /// bounded (prevents time + ttl overflow when computing destroy_time).
-        base_response.error = Error::ZBADARGUMENTS;
-    }
     else
     {
-        TestKeeper::Node created_node;
-        created_node.seq_num = 0;
-        created_node.stat.czxid = zxid;
-        created_node.stat.mzxid = zxid;
-        created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
-        created_node.stat.mtime = created_node.stat.ctime;
-        created_node.stat.numChildren = 0;
-        created_node.stat.dataLength = static_cast<int>(data.length());
-        created_node.stat.ephemeralOwner = is_ephemeral ? 1 : 0;
-        created_node.data = data;
-        created_node.is_ephemeral = is_ephemeral;
-        created_node.is_sequental = is_sequential;
-        created_node.is_ttl = include_ttl;
-        created_node.ttl = include_ttl ? ttl : 0;
+        /// KeeperStorage::preprocess appends the sequence suffix to path_created before
+        /// checking for a duplicate node, so a sequential create can still succeed even
+        /// when the unsuffixed prefix already exists (e.g. a literal "/p/log-" node must
+        /// not block "/p/log-0000000003" from being created). Mirror that by computing
+        /// the effective path up front and checking existence against it, not the raw path.
         std::string path_created = path;
-
         if (is_sequential)
             path_created += fmt::format("{:0>10}", parent_it->second.seq_num);
 
-        /// Increment sequential number even if node is not sequential
-        ++parent_it->second.seq_num;
-
-        base_response.path_created = path_created;
-        container.emplace(path_created, std::move(created_node));
-
-        undo = [&container, path_created, parent_path = parent_it->first]
+        if (container.contains(path_created))
         {
-            container.erase(path_created);
-            auto & undo_parent = container.at(parent_path);
-            --undo_parent.stat.cversion;
-            --undo_parent.stat.numChildren;
-            --undo_parent.seq_num;
-        };
+            // Create2 / CreateTTL take precedence over CreateIfNotExists: a duplicate node
+            // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
+            // mirroring ZooKeeperCreateRequest::getOpNum precedence in real Keeper.
+            if (not_exists && !include_stats && !include_ttl)
+            {
+                base_response.error = Error::ZOK;
+                /// Mirror KeeperStorage::process: a duplicate CreateIfNotExists still
+                /// reports the requested path in path_created, so consumers reading
+                /// path_created (e.g. from multi) behave the same as against real Keeper.
+                /// (is_sequential is guaranteed false here, so path_created == path.)
+                base_response.path_created = path_created;
+            }
+            else
+                base_response.error = Error::ZNODEEXISTS;
+        }
+        else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
+        {
+            /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
+            /// TTL is incompatible with ephemeral, and the ttl must be positive and
+            /// bounded (prevents time + ttl overflow when computing destroy_time).
+            base_response.error = Error::ZBADARGUMENTS;
+        }
+        else
+        {
+            TestKeeper::Node created_node;
+            created_node.seq_num = 0;
+            created_node.stat.czxid = zxid;
+            created_node.stat.mzxid = zxid;
+            created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
+            created_node.stat.mtime = created_node.stat.ctime;
+            created_node.stat.numChildren = 0;
+            created_node.stat.dataLength = static_cast<int>(data.length());
+            created_node.stat.ephemeralOwner = is_ephemeral ? 1 : 0;
+            created_node.data = data;
+            created_node.is_ephemeral = is_ephemeral;
+            created_node.is_sequental = is_sequential;
+            created_node.is_ttl = include_ttl;
+            created_node.ttl = include_ttl ? ttl : 0;
 
-        ++parent_it->second.stat.cversion;
-        ++parent_it->second.stat.numChildren;
+            /// Increment sequential number even if node is not sequential
+            ++parent_it->second.seq_num;
 
-        base_response.error = Error::ZOK;
+            base_response.path_created = path_created;
+            container.emplace(path_created, std::move(created_node));
+
+            undo = [&container, path_created, parent_path = parent_it->first]
+            {
+                container.erase(path_created);
+                auto & undo_parent = container.at(parent_path);
+                --undo_parent.stat.cversion;
+                --undo_parent.stat.numChildren;
+                --undo_parent.seq_num;
+            };
+
+            ++parent_it->second.stat.cversion;
+            ++parent_it->second.stat.numChildren;
+
+            base_response.error = Error::ZOK;
+        }
     }
 
     if (include_stats || include_ttl)

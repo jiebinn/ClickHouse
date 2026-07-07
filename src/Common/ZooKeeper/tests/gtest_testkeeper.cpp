@@ -313,6 +313,37 @@ TEST(TestKeeperTest, SequentialCreateIfNotExistsReturnsBadArguments)
     EXPECT_EQ(try_seq_create_if_not_exists("/parent/existing"), Error::ZBADARGUMENTS);
 }
 
+TEST(TestKeeperTest, SequentialCreateSucceedsWhenUnsuffixedPrefixExists)
+{
+    TestKeeper keeper = makeKeeper();
+
+    create(keeper, "/parent", "", /* is_ephemeral */ false);
+    // A literal node at the bare prefix must not block a sequential create on that
+    // same prefix: KeeperStorage::preprocess appends the sequence suffix to path_created
+    // before checking for a duplicate, so "/parent/log-" existing does not collide with
+    // the freshly-suffixed "/parent/log-0000000000".
+    create(keeper, "/parent/log-", "existing", /* is_ephemeral */ false);
+
+    auto req = std::make_shared<CreateRequest>();
+    req->path = "/parent/log-";
+    req->data = "data";
+    req->is_sequential = true;
+
+    std::promise<MultiResponse> sink;
+    std::future<MultiResponse> future = sink.get_future();
+    keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+    MultiResponse multi = future.get();
+    ASSERT_EQ(multi.error, Error::ZOK);
+    ASSERT_EQ(multi.responses.size(), 1u);
+
+    const auto * create_response = dynamic_cast<const CreateResponse *>(multi.responses[0].get());
+    ASSERT_NE(create_response, nullptr);
+    EXPECT_EQ(create_response->error, Error::ZOK);
+    EXPECT_EQ(create_response->path_created, "/parent/log-0000000000");
+    ASSERT_TRUE(exists(keeper, "/parent/log-0000000000"));
+}
+
 TEST(TestKeeperTest, FilteredListWithoutStatsAndData)
 {
     TestKeeper keeper = makeKeeper();
