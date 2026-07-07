@@ -19,6 +19,9 @@ SET max_parallel_replicas = 3;
 SET cluster_for_parallel_replicas = 'test_cluster_one_shard_three_replicas_localhost';
 SET parallel_replicas_plan_based = 1;
 SET parallel_replicas_local_plan = 1;
+-- Pin the manual mode: otherwise CI's randomized automatic_parallel_replicas_mode can cost-decide
+-- against parallel replicas, so the plan-based split (and the header code path) does not engage.
+SET automatic_parallel_replicas_mode = 0;
 
 -- Expression above the split: the marker is pushed above `a % 7`.
 SELECT a % 7 AS x FROM t_pr_split_header WHERE a = 12345;
