@@ -250,14 +250,14 @@ namespace
         {
             int64_t seq_num = 0;
             readBinary(seq_num, in);
-            if (ephemeral_owner == 0)
+            if (!node.stats.isEphemeral())
                 node.stats.setSeqNum(seq_num);
         }
         else
         {
             int32_t seq_num = 0;
             readBinary(seq_num, in);
-            if (ephemeral_owner == 0)
+            if (!node.stats.isEphemeral())
                 node.stats.setSeqNum(seq_num);
         }
 
