@@ -38,7 +38,6 @@ CORE_BLOCKING_JOB_NAMES = [
 STYLE_AND_FAST_TESTS = [
     JobNames.STYLE_CHECK,
     JobNames.FAST_TEST,
-    JobNames.CI_TESTS,
     *[j.name for j in JobConfigs.tidy_build_arm_jobs],
 ]
 
@@ -63,7 +62,7 @@ workflow = Workflow.Config(
         JobConfigs.docs_job,
         JobConfigs.docs_job_mintlify,
         JobConfigs.fast_test,
-        JobConfigs.ci_tests,
+        JobConfigs.ci_tests.set_run_after(CORE_BLOCKING_JOB_NAMES),
         *JobConfigs.darwin_fast_test_jobs,
         *JobConfigs.tidy_build_arm_jobs,
         *[job.set_run_after(STYLE_AND_FAST_TESTS) for job in JobConfigs.build_jobs],
@@ -93,8 +92,14 @@ workflow = Workflow.Config(
         # `allow_failure=True` so an individual FAIL doesn't block PR merge -
         # the aggregate decision (validate iff at least one arch passed) lives
         # in the `new_tests_check.py` workflow post-hook below.
-        *JobConfigs.bugfix_validation_ft_pr_jobs,
-        *JobConfigs.bugfix_validation_it_jobs,
+        *[
+            job.set_run_after(CORE_BLOCKING_JOB_NAMES)
+            for job in JobConfigs.bugfix_validation_ft_pr_jobs
+        ],
+        *[
+            job.set_run_after(CORE_BLOCKING_JOB_NAMES)
+            for job in JobConfigs.bugfix_validation_it_jobs
+        ],
         *[
             j.set_run_after(
                 CORE_BLOCKING_JOB_NAMES
