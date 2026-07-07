@@ -12,6 +12,7 @@
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
 #include <Storages/MergeTree/MergeTreeIndexMinMax.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/GenericExclusionSearch.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeSelectProcessor.h>
@@ -71,6 +72,7 @@ extern const Event FilteringMarksWithPrimaryKeyMicroseconds;
 extern const Event FilteringMarksWithSecondaryKeysMicroseconds;
 extern const Event IndexBinarySearchAlgorithm;
 extern const Event IndexGenericExclusionSearchAlgorithm;
+extern const Event IndexGenericExclusionSearchStepLimitReached;
 extern const Event FilterPartsByVirtualColumnsMicroseconds;
 }
 
@@ -87,7 +89,7 @@ namespace Setting
     extern const SettingsUInt64 max_threads_for_indexes;
     extern const SettingsNonZeroUInt64 max_parallel_replicas;
     extern const SettingsUInt64 merge_tree_coarse_index_granularity;
-    extern const SettingsUInt64 merge_tree_exclusion_search_max_steps;
+    extern const SettingsUInt64 merge_tree_generic_exclusion_search_max_steps;
     extern const SettingsUInt64 merge_tree_min_bytes_for_seek;
     extern const SettingsUInt64 merge_tree_min_rows_for_seek;
     extern const SettingsBool use_lightweight_primary_key_index_analysis;
@@ -178,14 +180,12 @@ size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
         pk_to_minmax_slot = buildPrimaryKeyToMinMaxSlotMapping(metadata_snapshot, parts.front().data_part->storage.getSettings());
     const auto * pk_to_minmax_slot_ptr = pk_to_minmax_slot.empty() ? nullptr : &pk_to_minmax_slot;
 
-    MarkRanges exact_ranges;
     for (const auto & part : parts)
     {
-        MarkRanges part_ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, {}, {}, &exact_ranges, pk_to_minmax_slot_ptr, settings, log);
+        MarkRanges part_ranges = markRangesFromPKRange(part, metadata_snapshot, key_condition, {}, {}, /*exact_ranges=*/nullptr, pk_to_minmax_slot_ptr, settings, log);
         for (const auto & range : part_ranges)
             rows_count += part.data_part->index_granularity->getRowsCountInRange(range);
     }
-    UNUSED(exact_ranges);
 
     return rows_count;
 }
@@ -2109,106 +2109,34 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
             part->index_granularity_info.fixed_index_granularity,
             part->index_granularity_info.index_granularity_bytes);
 
-        size_t steps = 0;
-        auto has_step_limit = settings[Setting::merge_tree_exclusion_search_max_steps] > 0;
-        auto reached_step_limit = false;
-
-        for (const auto & part_range : part_with_ranges.ranges)
+        GenericExclusionSearchSettings search_settings
         {
-            size_t previous_res_size = res.size();
-            std::deque<MarkRange> ranges_to_process = {part_range};
-            while (!ranges_to_process.empty())
-            {
-                MarkRange range;
-                if (has_step_limit)
-                {
-                    /// Use the deque as a queue. With a step limit, it is better to evaluate ranges
-                    /// breadth-first in order to prune the largest ranges first. The ranges will be
-                    /// re-sorted and merged since they can be inserted out of order.
-                    range = ranges_to_process.front();
-                    ranges_to_process.pop_front();
-                }
-                else
-                {
-                    /// Use the deque as a stack. There will always be disjoint suspicious segments
-                    /// on the stack, the leftmost one at the top (back).
-                    /// At each step, take the left segment and check if it fits.
-                    /// If fits, split it into smaller ones and put them on the stack. If not, discard it.
-                    /// If the segment is already of one mark length, add it to response and discard it.
-                    range = ranges_to_process.back();
-                    ranges_to_process.pop_back();
-                }
+            .coarse_index_granularity = settings[Setting::merge_tree_coarse_index_granularity],
+            .max_steps = settings[Setting::merge_tree_generic_exclusion_search_max_steps],
+            .min_marks_for_seek = min_marks_for_seek,
+        };
 
-                ++steps;
-                if (has_step_limit && steps == settings[Setting::merge_tree_exclusion_search_max_steps])
-                    reached_step_limit = true;
+        auto search_result = genericExclusionSearch(
+            part_with_ranges.ranges,
+            [&](const MarkRange & mark_range) { return check_in_range(mark_range, BoolMask()); },
+            search_settings,
+            exact_ranges != nullptr);
 
-                auto result = check_in_range(range, BoolMask());
-                if (!result.can_be_true)
-                    continue;
-
-                if (!result.can_be_false || range.end == range.begin + 1 || reached_step_limit)
-                {
-                    /// We saw a useful gap between neighboring marks. Either add it to the last range, or start a new range.
-                    if (res.empty() || range.begin - res.back().end > min_marks_for_seek)
-                        res.push_back(range);
-                    else
-                        res.back().end = range.end;
-
-                    if (exact_ranges && !result.can_be_false)
-                    {
-                        /// Unlike `res`, exact ranges must never absorb the gap between two accepted ranges:
-                        /// every mark of an exact range has to fully match the condition, while the skipped
-                        /// marks in between do not. `min_marks_for_seek` applies only to the ranges we read.
-                        if (exact_ranges->empty() || range.begin != exact_ranges->back().end)
-                            exact_ranges->push_back(range);
-                        else
-                            exact_ranges->back().end = range.end;
-                    }
-                }
-                else
-                {
-                    /// Break the segment and put the result in the deque from right to left.
-                    size_t step = (range.end - range.begin - 1) / settings[Setting::merge_tree_coarse_index_granularity] + 1;
-                    size_t end = 0;
-
-                    for (end = range.end; end > range.begin + step; end -= step)
-                        ranges_to_process.emplace_back(end - step, end);
-
-                    ranges_to_process.emplace_back(range.begin, end);
-                }
-            }
-
-            if (has_step_limit)
-            {
-                /// When there is a step limit, ranges are processed breadth-first, and may not have
-                /// been inserted in sorted order, so here we re-sort and merge them beore returning.
-                std::sort(res.begin() + previous_res_size, res.end());
-                size_t write = previous_res_size;
-                for (size_t read = previous_res_size; read != res.size(); ++read)
-                {
-                    if (res[read].begin <= res[write].end + 1)
-                    {
-                        res[write].end = res[read].end;
-                    }
-                    else
-                    {
-                        ++write;
-                        res[write] = res[read];
-                    }
-                }
-                res.resize(write + 1);
-            }
-        }
+        res = std::move(search_result.ranges);
+        if (exact_ranges)
+            *exact_ranges = std::move(search_result.exact_ranges);
 
         res.search_algorithm = MarkRanges::SearchAlgorithm::GenericExclusionSearch;
         ProfileEvents::increment(ProfileEvents::IndexGenericExclusionSearchAlgorithm);
+        if (search_result.reached_step_limit)
+            ProfileEvents::increment(ProfileEvents::IndexGenericExclusionSearchStepLimitReached);
         LOG_TRACE(
             log,
-            "Used generic exclusion search {}over index for part {} with {} steps",
+            "Used generic exclusion search {}over index for part {} with {} steps{}",
             exact_ranges ? "with exact ranges " : "",
             part_name,
-            steps);
+            search_result.num_steps,
+            search_result.reached_step_limit ? " (step limit reached, remaining ranges were accepted without further splitting)" : "");
     }
     else
     {
