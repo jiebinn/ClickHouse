@@ -7,17 +7,13 @@
 # ─────────────────────────── macOS platform gaps (keep skipped) ───────────────────────────
 
 # Float/double precision: on Apple arm64 'long double' == 'double', so extended-precision math
-# functions and the fast float parser (precise_float_parsing=0) cannot reproduce x86/glibc results.
-# Parsing tests now pass since precise_float_parsing defaults to true; what remains is math/dtoa and
-# tests that explicitly exercise precise_float_parsing=0.
+# functions cannot reproduce x86/glibc results.
 01302_polygons_distance
 02705_projection_and_ast_optimizations_bug
-02813_float_parsing
 03269_bf16
 03457_numeric_indexed_vector_build
 03702_geometry_functions
 03976_geometry_functions_accept_subtypes
-04402_float_parsing_corner_cases
 
 # SSD cache dictionaries: the SSD_CACHE layout is Linux/FreeBSD-only (uses O_DIRECT and Linux
 # native AIO io_submit/io_getevents); not built on macOS. Needs an I/O-layer port to enable.
