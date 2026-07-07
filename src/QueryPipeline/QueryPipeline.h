@@ -125,7 +125,7 @@ public:
     void setLimitsAndQuota(const StreamLocalLimits & limits, std::shared_ptr<const EnabledQuota> quota_);
     bool tryGetResultRowsAndBytes(UInt64 & result_rows, UInt64 & result_bytes) const;
 
-    void setStepWallClocksRegistry(StepWallClockRegistryPtr step_wall_clock_registry_);
+    void setStepWallClockRegistry(StepWallClockRegistryPtr step_wall_clock_registry_);
     StepWallClockRegistry * getStepClocks() const { return step_wall_clock_registry.get(); }
 
     void writeResultIntoQueryResultCache(std::shared_ptr<QueryResultCacheWriter> query_result_cache_writer);

@@ -131,8 +131,6 @@ bool ExecutionThreadContext::executeTask()
     {
         UInt64 elapsed_ns = execution_time_watch->elapsedNanoseconds();
         node->processor()->elapsed_ns += elapsed_ns;
-        /// Once processor can be in two groups. See AggregatingTransform as an example
-        node->processor()->addElapsedNs(group, elapsed_ns);
         if (trace_processors)
             span->addAttribute("execution_time_ms", elapsed_ns / 1000U);
     }

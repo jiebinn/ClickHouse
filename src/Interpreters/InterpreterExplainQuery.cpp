@@ -77,10 +77,7 @@ namespace Setting
     extern const SettingsBool allow_experimental_analyzer;
     extern const SettingsBool format_display_secrets_in_show_and_select;
     extern const SettingsUInt64 query_plan_max_step_description_length;
-    extern const SettingsUInt64 max_result_bytes;
-    extern const SettingsUInt64 max_result_rows;
     extern const SettingsUInt64 interactive_delay;
-    extern const SettingsOverflowMode result_overflow_mode;
     extern const SettingsBool make_distributed_plan;
     extern const SettingsBool use_concurrency_control;
 }
@@ -461,20 +458,21 @@ struct QueryPipelineSettings
 };
 
 struct QueryAnalyzeSettings
-{
-    /// ANALYZE renders the same plan tree as EXPLAIN PLAN; defaults match the
-    /// recommended baseline for analyze (pretty=1, compact=1, actions=1).
-    ExplainPlanOptions query_plan_options{
-        .actions = true,
-        .indexes = true,
-        .compact = true,
-        .pretty = true,
-    };
+{ 
+    ExplainPlanOptions query_plan_options
+    {.actions = true,
+    .indexes = true,
+    .compact = true,
+    .pretty = true};
 
     constexpr static char name[] = "ANALYZE";
 
     std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
     {
+        {"actions", query_plan_options.actions},
+        {"indexes", query_plan_options.indexes},
+        {"compact", query_plan_options.compact},
+        {"pretty", query_plan_options.pretty},
         {"header", query_plan_options.header},
         {"description", query_plan_options.description},
         {"projections", query_plan_options.projections},
@@ -705,8 +703,7 @@ static void formatHeaderExplainAnalyze(
     }
     out << "\n";
 
-    if (peak_memory >= 0)
-        out << "  Peak memory: " << formatReadableSizeWithBinarySuffix(static_cast<double>(peak_memory)) << "\n";
+    out << "  Peak memory: " << formatReadableSizeWithBinarySuffix(static_cast<double>(peak_memory)) << "\n";
 
     out << "\n";
 }
@@ -1106,7 +1103,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
         case DB::ASTExplainQuery::Analyze:
         {
             if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
-                throw Exception(ErrorCodes::INCORRECT_QUERY, "Only SELECT is currently supported for EXPLAIN ANALYZE query");
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only SELECT is currently supported for EXPLAIN ANALYZE query");
 
             /// Distributed query planning rewrites the plan into exchange/remote steps, which EXPLAIN ANALYZE cannot execute here.
             if (query_context->getSettingsRef()[Setting::make_distributed_plan])
@@ -1156,18 +1153,11 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
             auto to_complete = options.to_stage == QueryProcessingStage::Complete;
             auto quota = (!inner_ignore_quota && to_complete) ? context->getQuota() : nullptr;
 
-            if (!inner_ignore_limits)
+            /// setLimitsAndQuota attaches a transform, so it must run before the pipeline is completed below.
+            if (!inner_ignore_limits && to_complete)
             {
-                StreamLocalLimits limits;
-
-                limits.mode = LimitsMode::LIMITS_CURRENT;
-                const auto & query_settings = context->getSettingsRef();
-                limits.size_limits = SizeLimits(
-                                query_settings[Setting::max_result_rows],
-                                query_settings[Setting::max_result_bytes],
-                                query_settings[Setting::result_overflow_mode]);
-                if (to_complete)
-                    pipeline.setLimitsAndQuota(limits, quota);
+                auto limits = StreamLocalLimits::forQueryResult(context->getSettingsRef());
+                pipeline.setLimitsAndQuota(limits, quota);
             }
 
             if (quota)
@@ -1192,7 +1182,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
 
             auto step_wall_clock_registry = std::make_unique<StepWallClockRegistry>();
             step_wall_clock_registry->populateFromPlan(plan);
-            pipeline.setStepWallClocksRegistry(std::move(step_wall_clock_registry));
+            pipeline.setStepWallClockRegistry(std::move(step_wall_clock_registry));
 
             CompletedPipelineExecutor executor(pipeline);
 
@@ -1201,36 +1191,25 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
                     std::move(cancel_callback),
                     query_context->getSettingsRef()[Setting::interactive_delay] / 1000);
 
-            ThreadGroupPtr analyze_thread_group;
-            if (auto outer_thread_group = CurrentThread::getGroup())
-            {
-                analyze_thread_group = std::make_shared<ThreadGroup>(outer_thread_group);
-                analyze_thread_group->memory_tracker.setDescription("EXPLAIN ANALYZE");
-            }
+            auto outer_thread_group = CurrentThread::getGroup();
+            if (!outer_thread_group)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "EXPLAIN ANALYZE: current thread is not attached to a thread group");
+
+            auto analyze_thread_group = std::make_shared<ThreadGroup>(outer_thread_group);
+            analyze_thread_group->memory_tracker.setDescription("EXPLAIN ANALYZE");
 
             watch.restart();
             {
-                std::optional<ThreadGroupSwitcher> switcher;
-                if (analyze_thread_group)
-                    switcher.emplace(analyze_thread_group, ThreadName::COMPLETED_PIPELINE_EXECUTOR, /*allow_existing_group=*/true);
+                ThreadGroupSwitcher switcher(analyze_thread_group, ThreadName::COMPLETED_PIPELINE_EXECUTOR, /*allow_existing_group=*/true);
                 executor.execute();
             }
             UInt64 execute_ns = watch.elapsed();
 
             UInt64 total_time_ns = planning_ns + execute_ns;
 
-            UInt64 read_rows = 0;
-            UInt64 read_bytes = 0;
-            /// No thread group means the pipeline's resource usage cannot be attributed, so the peak is
-            /// omitted from the header (see formatHeaderExplainAnalyze, which skips it for negative values).
-            Int64  peak_memory = -1;
-
-            if (analyze_thread_group)
-            {
-                read_rows   = analyze_thread_group->performance_counters[ProfileEvents::SelectedRows];
-                read_bytes  = analyze_thread_group->performance_counters[ProfileEvents::SelectedBytes];
-                peak_memory = analyze_thread_group->memory_tracker.getPeak();
-            }
+            UInt64 read_rows   = analyze_thread_group->performance_counters[ProfileEvents::SelectedRows];
+            UInt64 read_bytes  = analyze_thread_group->performance_counters[ProfileEvents::SelectedBytes];
+            Int64  peak_memory = analyze_thread_group->memory_tracker.getPeak();
 
             AnalyzeStepsStats steps_to_stats(pipeline, execute_ns);
 

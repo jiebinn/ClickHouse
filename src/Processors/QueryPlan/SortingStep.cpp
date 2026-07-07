@@ -257,7 +257,7 @@ SortingStep::SortingStep(
     const Settings & settings_,
     UInt64 limit_,
     bool always_read_till_end_)
-    : ITransformingStep(input_header, input_header, getTraits(limit_), false)
+    : ITransformingStep(input_header, input_header, getTraits(limit_), /*collect_processors*/ false)
     , type(Type::MergingSorted)
     , result_description(std::move(sort_description_))
     , limit(limit_)

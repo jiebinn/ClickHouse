@@ -660,7 +660,7 @@ bool QueryPipeline::tryGetResultRowsAndBytes(UInt64 & result_rows, UInt64 & resu
     return true;
 }
 
-void QueryPipeline::setStepWallClocksRegistry(StepWallClockRegistryPtr step_wall_clock_registry_)
+void QueryPipeline::setStepWallClockRegistry(StepWallClockRegistryPtr step_wall_clock_registry_)
 {
     step_wall_clock_registry = std::move(step_wall_clock_registry_);
 }

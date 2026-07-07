@@ -22,8 +22,8 @@ public:
 
     enum class AggregatingStage : size_t
     {
-        Grouping = 0,
-        Merging = 1,
+        PartialAggregation = 0,
+        FinalAggregation = 1,
         Scatter = 2,
         AggregatingSharded = 3,
     };

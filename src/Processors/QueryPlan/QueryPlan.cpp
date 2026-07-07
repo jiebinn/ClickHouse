@@ -399,7 +399,7 @@ static void explainStep(
     IQueryPlanStep::FormatSettings & settings,
     const ExplainPlanOptions & options,
     size_t max_description_length,
-    const AnalyzeStepsStats * steps_to_stats= nullptr)
+    const AnalyzeStepsStats * steps_to_stats = nullptr)
 {
 
     settings.out << settings.header_prefix << step.getName();
