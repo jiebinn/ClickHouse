@@ -249,8 +249,12 @@ void DirectoryWatcherBase::watchFunc()
     /// name but pinned to a specific inode: when a name is reused for a different inode (a rename plus
     /// recreate of the same name), the stale fd is closed and a fresh one opened, so NOTE_DELETE is
     /// always attributed to the file that currently owns the name.
-    auto sync_file_watches = [&](const std::map<std::string, FileState> & files)
+    /// Returns after either watching every file in `files` or throwing; on ENOENT it drops the file
+    /// from `files` (see below). The caller runs this BEFORE emitting any events, so a throw here just
+    /// retries the whole pass with nothing queued - it can never strand events or kill the watcher.
+    auto sync_file_watches = [&](std::map<std::string, FileState> & files)
     {
+        std::vector<std::string> vanished;
         for (const auto & [name, state] : files)
         {
             if (auto it = watched_fds.find(name); it != watched_fds.end())
@@ -264,23 +268,35 @@ void DirectoryWatcherBase::watchFunc()
             int fd = ::open((std::filesystem::path(path) / name).c_str(), O_EVTONLY);
             if (fd == -1)
             {
-                /// The file may have vanished between the scan and here; that is handled as a removal
-                /// on the next scan. Any other failure (e.g. fd exhaustion) would leave a same-inode
-                /// recreate undetectable, so fail closed rather than read incorrectly.
+                /// The file vanished between the scan and here (a delete, or a delete+recreate race
+                /// like 04342). We cannot install a watch, so we must not keep it in the snapshot as a
+                /// trusted same-inode entry - otherwise a same-inode recreate would be invisible and
+                /// StorageFileLog would reuse a stale offset. Drop it: the next scan re-observes it as
+                /// ADDED (re-read from 0), erring toward re-reading rather than silently skipping data.
                 if (errno == ENOENT)
+                {
+                    vanished.push_back(name);
                     continue;
-                fail("Cannot open file to watch");
+                }
+                /// Any other failure (e.g. EMFILE under fd pressure) is transient. Throw so the caller
+                /// retries the whole pass; do NOT surface it via owner.onError, which would leave a
+                /// stale error to be reported once ingestion recovers.
+                ErrnoException::throwFromPath(ErrorCodes::IO_SETUP_ERROR, path, "Cannot open file to watch");
             }
             struct kevent change{};
             EV_SET(&change, fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
                    NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_DELETE | NOTE_RENAME, 0, nullptr);
             if (kevent(kq, &change, 1, nullptr, 0, nullptr) == -1)
             {
+                const int saved_errno = errno;
                 closeFileDescriptor(fd);
-                fail("Cannot register file watch");
+                errno = saved_errno;
+                ErrnoException::throwFromPath(ErrorCodes::IO_SETUP_ERROR, path, "Cannot register file watch");
             }
             watched_fds.emplace(name, WatchedFd{fd, state.inode});
         }
+        for (const auto & name : vanished)
+            files.erase(name);
         for (auto it = watched_fds.begin(); it != watched_fds.end();)
         {
             if (files.contains(it->first))
@@ -305,6 +321,7 @@ void DirectoryWatcherBase::watchFunc()
         try
         {
             scan(snapshot);
+            sync_file_watches(snapshot);
             break;
         }
         catch (const std::exception & e)
@@ -316,7 +333,6 @@ void DirectoryWatcherBase::watchFunc()
     }
     if (stopped)
         return;
-    sync_file_watches(snapshot);
 
     pollfd pfds[2];
     pfds[0].fd = event_pipe.fds_rw[0];
@@ -324,6 +340,11 @@ void DirectoryWatcherBase::watchFunc()
     pfds[1].fd = kq;
     pfds[1].events = POLLIN;
 
+    /// Names whose watched inode was unlinked (NOTE_DELETE), accumulated across drains. Kept outside
+    /// the loop so a pass that is retried (e.g. a transient scan/watch failure) does not lose the
+    /// deletes it already drained - EV_CLEAR makes the kqueue events edge-triggered, so a dropped
+    /// NOTE_DELETE would never be re-reported and a same-inode recreate would slip through as MODIFIED.
+    std::set<std::string> deleted;
     while (!stopped)
     {
         if (poll(pfds, 2, static_cast<int>(milliseconds_to_wait)) < 0 && errno != EINTR)
@@ -336,7 +357,6 @@ void DirectoryWatcherBase::watchFunc()
         /// identical to a plain modification in a snapshot diff, so we rely on the per-file
         /// NOTE_DELETE to force an identity reset (REMOVED + ADDED) instead of MODIFIED, which would
         /// otherwise keep a stale read offset - matching what inotify's IN_DELETE + IN_CREATE gives.
-        std::set<std::string> deleted;
         if (pfds[1].revents & POLLIN)
         {
             struct kevent evs[16];
@@ -370,12 +390,18 @@ void DirectoryWatcherBase::watchFunc()
         try
         {
             scan(current);
+            /// Install/refresh the per-file watches for the new set BEFORE emitting any events. A
+            /// transient failure here (e.g. EMFILE) then just retries the whole pass with nothing
+            /// queued and StorageFileLog left untouched, instead of stranding a half-emitted batch
+            /// behind a dead watcher. It also drops any file that vanished mid-scan from `current`.
+            sync_file_watches(current);
         }
         catch (const std::exception & e)
         {
-            /// The directory can be transiently unavailable (e.g. while being recreated); this is not
-            /// expected during normal operation, so log it and retry on the next tick.
-            LOG_WARNING(getLogger("FileLogDirectoryWatcher"), "Failed to scan watched directory {}, will retry: {}", path, e.what());
+            /// The directory can be transiently unavailable (e.g. while being recreated) and watch
+            /// installation can transiently fail; neither is expected during normal operation, so log
+            /// it and retry on the next tick. The drained `deleted` set is preserved for that retry.
+            LOG_WARNING(getLogger("FileLogDirectoryWatcher"), "Failed to scan/watch directory {}, will retry: {}", path, e.what());
             continue;
         }
 
@@ -538,7 +564,9 @@ void DirectoryWatcherBase::watchFunc()
         }
 
         snapshot.swap(current);
-        sync_file_watches(snapshot);
+        /// This pass committed successfully, so its drained deletes have been applied; start the next
+        /// pass with a clean set. (On a retried pass we skip this via `continue`, keeping them.)
+        deleted.clear();
 
         if (changed)
         {
