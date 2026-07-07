@@ -441,9 +441,10 @@ void registerArrowSchemaReader(FormatFactory & factory)
     factory.registerAdditionalInfoForSchemaCacheGetter("Arrow", [](const FormatSettings & settings)
     {
         return fmt::format(
-            "schema_inference_make_columns_nullable={};use_native_reader={};"
-            "skip_columns_with_unsupported_types={};allow_geoparquet_parser={}",
+            "schema_inference_make_columns_nullable={};schema_inference_allow_nullable_tuple_type={};"
+            "use_native_reader={};skip_columns_with_unsupported_types={};allow_geoparquet_parser={}",
             settings.schema_inference_make_columns_nullable,
+            settings.schema_inference_allow_nullable_tuple_type,
             settings.arrow.input_use_native_reader,
             settings.arrow.skip_columns_with_unsupported_types_in_schema_inference,
             settings.parquet.allow_geoparquet_parser);
@@ -460,9 +461,10 @@ void registerArrowSchemaReader(FormatFactory & factory)
     factory.registerAdditionalInfoForSchemaCacheGetter("ArrowStream", [](const FormatSettings & settings)
     {
         return fmt::format(
-            "schema_inference_make_columns_nullable={};use_native_reader={};"
-            "skip_columns_with_unsupported_types={};allow_geoparquet_parser={}",
+            "schema_inference_make_columns_nullable={};schema_inference_allow_nullable_tuple_type={};"
+            "use_native_reader={};skip_columns_with_unsupported_types={};allow_geoparquet_parser={}",
             settings.schema_inference_make_columns_nullable,
+            settings.schema_inference_allow_nullable_tuple_type,
             settings.arrow.input_use_native_reader,
             settings.arrow.skip_columns_with_unsupported_types_in_schema_inference,
             settings.parquet.allow_geoparquet_parser);
