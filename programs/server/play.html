@@ -7906,13 +7906,16 @@ async function reconcileStartup() {
         const ordered = [];
         for (const id of order) if (byId.has(id)) { ordered.push(byId.get(id)); byId.delete(id); }
         for (const r of byId.values()) ordered.push(r);
-        /// Do not restore tabs whose query is empty (blank scratch tabs left over from a
-        /// previous session): on reload they would reappear as empty tabs the user never asked
-        /// to keep. Dropping them here lets the workspace fall back to a single fresh tab when
-        /// every saved tab was empty (as on a first-ever visit), and the trailing `persist`
-        /// prunes them from storage.
+        /// Do not restore blank scratch tabs left over from a previous session: on reload they
+        /// would reappear as empty tabs the user never asked to keep. A tab counts as blank only
+        /// when its query is empty AND it carries no genuine run result: a tab whose editor was
+        /// cleared after a run still holds a `result.ran` snapshot, which `renderTabBar` treats as
+        /// meaningful persisted state, so it must be preserved (dropping it would silently erase a
+        /// run-backed tab from `IndexedDB`). Dropping the truly-blank tabs here lets the workspace
+        /// fall back to a single fresh tab when every saved tab was blank (as on a first-ever
+        /// visit), and the trailing `persist` prunes them from storage.
         savedTabs = ordered
-            .filter(r => (r.query || '').trim() !== '')
+            .filter(r => (r.query || '').trim() !== '' || (r.result && r.result.ran))
             .map(r => ({
                 id: r.id, title: r.title, query: r.query || '',
                 params: r.params || {}, result: r.result || null, lastSavedQuery: r.lastSavedQuery,
