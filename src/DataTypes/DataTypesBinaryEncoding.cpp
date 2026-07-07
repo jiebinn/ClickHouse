@@ -695,7 +695,7 @@ static DataTypePtr decodeDataTypeImpl(ReadBuffer & buf, size_t & complexity, siz
         }
         case BinaryTypeIndex::QBitWithStride:
         {
-            auto element_type = decodeDataType(buf, complexity);
+            auto element_type = decodeDataTypeImpl(buf, complexity, max_complexity);
             size_t dimension = 0;
             readVarUInt(dimension, buf);
             size_t stride = 0;
