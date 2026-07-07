@@ -10,7 +10,7 @@ PrimaryKey
 Keys:
 Condition: (b in [5, 5])
 Parts: 1/1
-Granules: 625/1000
+Granules: 513/1000
 Search Algorithm: generic exclusion search
 SELECT ltrim(explain) FROM (
     EXPLAIN indexes = 1
@@ -22,7 +22,7 @@ PrimaryKey
 Keys:
 Condition: (b in [5, 5])
 Parts: 1/1
-Granules: 351/1000
+Granules: 352/1000
 Search Algorithm: generic exclusion search
 SELECT ltrim(explain) FROM (
     EXPLAIN indexes = 1

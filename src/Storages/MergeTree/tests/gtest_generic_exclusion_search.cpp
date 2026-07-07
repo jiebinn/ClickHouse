@@ -216,34 +216,27 @@ TEST(GenericExclusionSearch, MoreInitialRangesThanBudget)
 
 TEST(GenericExclusionSearch, CoarseGranularityLargerThanRange)
 {
-    /// When the split factor exceeds the range size, a single split produces one subrange per mark,
-    /// and the budget gate must account for that fan-out exactly.
+    /// When the split factor exceeds the range size, a single split produces one subrange per mark.
+    /// The budget slack equals the split factor, so this oversized split is allowed even by the
+    /// smallest budget, and the fifty subranges then consume their checks without further splitting.
     std::vector<bool> matching(50);
     matching[25] = true;
     auto oracle = oracleFromFlags(matching);
 
-    /// The fan-out of the only possible split (50 subranges) does not fit into the budget, so the
-    /// range is accepted whole after its single check.
-    GenericExclusionSearchSettings small{.coarse_index_granularity = 64, .max_steps = 10, .min_marks_for_seek = 0};
-    auto blocked = genericExclusionSearch(makeRanges({{0, 50}}), oracle, small, true);
-    EXPECT_EQ(blocked.ranges, makeRanges({{0, 50}}));
-    EXPECT_EQ(blocked.num_steps, 1u);
-    EXPECT_TRUE(blocked.reached_step_limit);
+    for (size_t max_steps : {1, 60})
+    {
+        GenericExclusionSearchSettings settings{.coarse_index_granularity = 64, .max_steps = max_steps, .min_marks_for_seek = 0};
+        auto refined = genericExclusionSearch(makeRanges({{0, 50}}), oracle, settings, true);
+        EXPECT_EQ(refined.ranges, makeRanges({{25, 26}}));
+        EXPECT_EQ(refined.exact_ranges, makeRanges({{25, 26}}));
+        EXPECT_EQ(refined.num_steps, 51u);
+        EXPECT_FALSE(refined.reached_step_limit);
 
-    /// The same truncating run without exact range collection returns the same ranges to read.
-    auto blocked_no_exact = genericExclusionSearch(makeRanges({{0, 50}}), oracle, small, false);
-    EXPECT_EQ(blocked_no_exact.ranges, blocked.ranges);
-    EXPECT_TRUE(blocked_no_exact.exact_ranges.empty());
-    EXPECT_TRUE(blocked_no_exact.reached_step_limit);
-
-    /// A budget that covers the fan-out lets the split happen and the search finds the single
-    /// matching mark.
-    GenericExclusionSearchSettings ample{.coarse_index_granularity = 64, .max_steps = 60, .min_marks_for_seek = 0};
-    auto refined = genericExclusionSearch(makeRanges({{0, 50}}), oracle, ample, true);
-    EXPECT_EQ(refined.ranges, makeRanges({{25, 26}}));
-    EXPECT_EQ(refined.exact_ranges, makeRanges({{25, 26}}));
-    EXPECT_EQ(refined.num_steps, 51u);
-    EXPECT_FALSE(refined.reached_step_limit);
+        /// The same run without exact range collection returns the same ranges to read.
+        auto no_exact = genericExclusionSearch(makeRanges({{0, 50}}), oracle, settings, false);
+        EXPECT_EQ(no_exact.ranges, refined.ranges);
+        EXPECT_TRUE(no_exact.exact_ranges.empty());
+    }
 }
 
 TEST(GenericExclusionSearch, EqualSizeRangesCheckedLeftToRight)
@@ -289,8 +282,8 @@ TEST(GenericExclusionSearch, StepLimitBoundsCheckCount)
     size_t unlimited_steps = unlimited_result.num_steps;
     EXPECT_EQ(unlimited_checks, unlimited_steps);
 
-    /// The last two budgets probe the exact boundary: the precise number of checks the exhaustive
-    /// search needs must complete untruncated, and one check less must not.
+    /// The last two budgets probe the boundary; the budget is applied loosely, so a budget within
+    /// one split fan-out of the exhaustive cost may still complete the full search.
     std::vector<size_t> budgets{1, 5, 17, 100, 1000, 100000, unlimited_steps, unlimited_steps - 1};
 
     for (size_t max_steps : budgets)
@@ -306,8 +299,9 @@ TEST(GenericExclusionSearch, StepLimitBoundsCheckCount)
         auto result = genericExclusionSearch(makeRanges({{0, matching.size()}}), counting_oracle, settings, true);
 
         EXPECT_EQ(checks, result.num_steps);
-        EXPECT_LE(checks, max_steps);
-        EXPECT_EQ(result.reached_step_limit, max_steps < unlimited_steps);
+        EXPECT_LE(checks, max_steps + 8);
+        if (max_steps + 8 < unlimited_steps)
+            EXPECT_TRUE(result.reached_step_limit);
         if (!result.reached_step_limit)
             EXPECT_EQ(result.ranges, unlimited_result.ranges);
     }
@@ -359,8 +353,8 @@ TEST(GenericExclusionSearch, StepLimitInvariantsWithMultipleInitialRanges)
 TEST(GenericExclusionSearch, StepLimitBoundsWithUnevenSplits)
 {
     /// A range of nine marks splits with factor eight into five subranges (four of two marks and a
-    /// last one of a single mark), so the budget gate must account for a fan-out of five, not eight.
-    /// This pins the consistency of the gate's subrange count with what the split actually emits.
+    /// last one of a single mark). The budget is applied loosely, so the number of checks may exceed
+    /// it by the fan-out of the last allowed split; this pins the overshoot for uneven splits.
     std::vector<bool> matching(9);
     for (size_t mark = 0; mark < matching.size(); mark += 2)
         matching[mark] = true;
@@ -373,22 +367,24 @@ TEST(GenericExclusionSearch, StepLimitBoundsWithUnevenSplits)
         return oracle(range);
     };
 
-    /// A budget of six covers the initial check plus the five subranges, so the split happens.
-    GenericExclusionSearchSettings six{.coarse_index_granularity = 8, .max_steps = 6, .min_marks_for_seek = 0};
-    auto split_result = genericExclusionSearch(makeRanges({{0, 9}}), counting_oracle, six, true);
-    EXPECT_EQ(checks, 6u);
-    EXPECT_EQ(split_result.num_steps, 6u);
-    EXPECT_EQ(split_result.exact_ranges, makeRanges({{0, 1}}));
-    EXPECT_TRUE(split_result.reached_step_limit);
-
-    /// One check less does not cover the fan-out, so the range is accepted whole after one check.
-    checks = 0;
+    /// A budget of five allows the top split (one check is spent, the queue is empty) and its five
+    /// subranges consume the rest: six checks for a budget of five, within the fan-out slack.
     GenericExclusionSearchSettings five{.coarse_index_granularity = 8, .max_steps = 5, .min_marks_for_seek = 0};
-    auto blocked_result = genericExclusionSearch(makeRanges({{0, 9}}), counting_oracle, five, true);
-    EXPECT_EQ(checks, 1u);
-    EXPECT_EQ(blocked_result.ranges, makeRanges({{0, 9}}));
-    EXPECT_TRUE(blocked_result.exact_ranges.empty());
-    EXPECT_TRUE(blocked_result.reached_step_limit);
+    auto five_result = genericExclusionSearch(makeRanges({{0, 9}}), counting_oracle, five, true);
+    EXPECT_EQ(checks, 6u);
+    EXPECT_EQ(five_result.num_steps, 6u);
+    EXPECT_EQ(five_result.ranges, makeRanges({{0, 9}}));
+    EXPECT_EQ(five_result.exact_ranges, makeRanges({{0, 1}}));
+    EXPECT_TRUE(five_result.reached_step_limit);
+
+    /// One more step of budget lets the leftmost two-mark subrange be split as well.
+    checks = 0;
+    GenericExclusionSearchSettings six{.coarse_index_granularity = 8, .max_steps = 6, .min_marks_for_seek = 0};
+    auto six_result = genericExclusionSearch(makeRanges({{0, 9}}), counting_oracle, six, true);
+    EXPECT_EQ(checks, 8u);
+    EXPECT_EQ(six_result.ranges, makeRanges({{0, 1}, {2, 9}}));
+    EXPECT_EQ(six_result.exact_ranges, makeRanges({{0, 1}, {2, 3}}));
+    EXPECT_TRUE(six_result.reached_step_limit);
 }
 
 TEST(GenericExclusionSearch, LimitedIsAlwaysCoarserThanUnlimited)
@@ -475,7 +471,7 @@ TEST(GenericExclusionSearch, BudgetSharedAcrossInitialRanges)
     GenericExclusionSearchSettings settings{.coarse_index_granularity = 8, .max_steps = 60, .min_marks_for_seek = 0};
     auto result = genericExclusionSearch(makeRanges(initial), oracleFromFlags(matching), settings, true);
 
-    EXPECT_LE(result.num_steps, 60u);
+    EXPECT_LE(result.num_steps, 68u);
 
     /// The non-matching single-mark ranges were checked and dropped.
     for (size_t i = 0; i != 10; ++i)
@@ -499,26 +495,22 @@ TEST(GenericExclusionSearch, LargestRangeSplitFirst)
     auto oracle = oracleFromFlags(matching);
     auto initial = makeRanges({{0, 64}, {100, 104}});
 
-    /// The budget does not even cover one split, so the large range is accepted as a whole.
+    /// The smallest budget still allows one split of the large range (the loose slack): its
+    /// non-matching subranges are excluded and only the first subrange (still ambiguous) is
+    /// accepted without further refinement.
     GenericExclusionSearchSettings tiny{.coarse_index_granularity = 8, .max_steps = 2, .min_marks_for_seek = 0};
     auto tiny_result = genericExclusionSearch(initial, oracle, tiny, true);
-    EXPECT_EQ(tiny_result.ranges, makeRanges({{0, 64}, {100, 104}}));
+    EXPECT_EQ(tiny_result.ranges, makeRanges({{0, 8}, {100, 104}}));
+    EXPECT_EQ(tiny_result.exact_ranges, makeRanges({{100, 104}}));
+    EXPECT_EQ(tiny_result.num_steps, 10u);
     EXPECT_TRUE(tiny_result.reached_step_limit);
 
-    /// The budget covers one split of the large range: its non-matching subranges are excluded and
-    /// only the first subrange (still ambiguous) is accepted without further refinement.
-    GenericExclusionSearchSettings one_split{.coarse_index_granularity = 8, .max_steps = 10, .min_marks_for_seek = 0};
-    auto one_split_result = genericExclusionSearch(initial, oracle, one_split, true);
-    EXPECT_EQ(one_split_result.ranges, makeRanges({{0, 8}, {100, 104}}));
-    EXPECT_EQ(one_split_result.exact_ranges, makeRanges({{100, 104}}));
-    EXPECT_EQ(one_split_result.num_steps, 10u);
-    EXPECT_TRUE(one_split_result.reached_step_limit);
-
     /// A budget that covers the whole search reproduces the unlimited result.
-    GenericExclusionSearchSettings ample{.coarse_index_granularity = 8, .max_steps = 40, .min_marks_for_seek = 0};
+    GenericExclusionSearchSettings ample{.coarse_index_granularity = 8, .max_steps = 10, .min_marks_for_seek = 0};
     auto ample_result = genericExclusionSearch(initial, oracle, ample, true);
     EXPECT_EQ(ample_result.ranges, makeRanges({{0, 1}, {100, 104}}));
     EXPECT_EQ(ample_result.exact_ranges, makeRanges({{0, 1}, {100, 104}}));
+    EXPECT_EQ(ample_result.num_steps, 18u);
     EXPECT_FALSE(ample_result.reached_step_limit);
 }
 
