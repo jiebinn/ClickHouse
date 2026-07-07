@@ -64,11 +64,12 @@ private:
     /// dictionaries used only by unrequested columns. Requires `arrow_schema` and the requested-fields set.
     void computeReachableDictionaryIds();
     Chunk buildChunk(ArrowIPC::RecordBatchDecoder::DecodedColumns & decoded, size_t num_rows);
-    /// Reinterprets a decoded fixed_size_binary column as UUID / big integer in place when the requested
-    /// header type asks for it (the raw 16/32 bytes are reinterpreted rather than text-parsed by a cast).
-    static void reinterpretFixedSizeBinary(ColumnWithTypeAndName & column, const DataTypePtr & to_type);
+    /// Reinterprets the raw bytes of decoded fixed_size_binary / binary leaves as UUID / IPv6 / big integer
+    /// in place when the requested header type asks for it (recursing through Nullable/Array/Tuple/Map), so
+    /// the raw 16/32 bytes are reinterpreted rather than text-parsed by the subsequent cast.
+    static void reinterpretRawByteColumns(ColumnWithTypeAndName & column, const DataTypePtr & to_type);
     /// Parses the WKB/WKT binary values of a decoded (possibly Nullable) String column into a geo column.
-    static ColumnPtr decodeGeoColumn(const ColumnPtr & source, const GeoColumnMetadata & geo_metadata);
+    static ColumnPtr decodeGeoColumn(const ColumnPtr & source, const GeoColumnMetadata & geo_metadata, bool precise_float_parsing);
     Chunk readStream();
     Chunk readFile();
 

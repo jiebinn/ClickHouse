@@ -16,9 +16,12 @@
 #include <Core/Block.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnMap.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnTuple.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -469,99 +472,236 @@ void ArrowIPCBlockInputFormat::prepareFileReader()
     }
 }
 
-void ArrowIPCBlockInputFormat::reinterpretFixedSizeBinary(ColumnWithTypeAndName & column, const DataTypePtr & to_type)
+namespace
 {
-    const DataTypePtr target_no_null = removeNullable(to_type);
-    const WhichDataType target(target_no_null);
-    const ColumnPtr & src = column.column;
 
-    /// A fixed_size_binary(16) read into a UUID column (e.g. an external file without the arrow.uuid
-    /// extension): reinterpret the 16 bytes with the same half-reversal the library import uses.
-    if (target.isUUID())
+/// Reinterpret the raw bytes of a fixed_size_binary column (`ColumnFixedString`) as a UUID, IPv6, or big
+/// integer, matching the ClickHouse Arrow writer (which stores those types as fixed_size_binary) and the
+/// library reader. Returns nullptr when `to_no_null` is not one of those types. Throws on a width mismatch:
+/// a wrong-width value is corrupt for these fixed-width targets (the library reader rejects it too), and
+/// letting it fall through to `castColumn` would text-parse the bytes.
+MutableColumnPtr reinterpretFixedStringLeaf(const ColumnFixedString & fixed, const DataTypePtr & to_no_null)
+{
+    const WhichDataType which(to_no_null);
+    const size_t n = fixed.getN();
+    const size_t rows = fixed.size();
+
+    auto require = [&](size_t width)
     {
-        const ColumnPtr nested = src->isNullable()
-            ? assert_cast<const ColumnNullable &>(*src).getNestedColumnPtr() : src;
-        if (const auto * fixed = typeid_cast<const ColumnFixedString *>(nested.get()))
+        if (n != width)
+            throw Exception(
+                ErrorCodes::INCORRECT_DATA,
+                "Arrow fixed_size_binary of width {} cannot be read as {} (expected {})",
+                n, to_no_null->getName(), width);
+    };
+
+    if (which.isUUID())
+    {
+        require(16);
+        auto out = ColumnVector<UUID>::create(rows);
+        for (size_t i = 0; i < rows; ++i)
         {
-            /// A fixed_size_binary read as UUID must be exactly 16 bytes wide. Reject any other width before
-            /// the UUID column is reserved: the per-row reinterpret reads 16 bytes regardless of the source
-            /// stride (a heap over-read for a narrower width), and reserving `sizeof(UUID)` per row for a
-            /// forged-huge row count would otherwise hit the memory limit instead of being recognised as
-            /// corrupt data (matching the library reader's `byte_width` check).
-            if (fixed->getN() != 16)
-                throw Exception(
-                    ErrorCodes::INCORRECT_DATA,
-                    "Arrow fixed_size_binary of width {} cannot be read as UUID (expected 16)", fixed->getN());
-            const size_t rows = fixed->size();
-            auto uuids = ColumnVector<UUID>::create(rows);
-            for (size_t i = 0; i < rows; ++i)
-            {
-                auto * dst = reinterpret_cast<uint8_t *>(&uuids->getData()[i]);
-                memcpy(dst, &fixed->getChars()[i * 16], 16);
-                std::reverse(dst, dst + 8);
-                std::reverse(dst + 8, dst + 16);
-            }
-            ColumnPtr result = std::move(uuids);
-            DataTypePtr result_type = target_no_null;
-            if (src->isNullable())
-            {
-                result = ColumnNullable::create(result, assert_cast<const ColumnNullable &>(*src).getNullMapColumnPtr());
-                result_type = std::make_shared<DataTypeNullable>(target_no_null);
-            }
-            column.column = std::move(result);
-            column.type = std::move(result_type);
+            auto * dst = reinterpret_cast<uint8_t *>(&out->getData()[i]);
+            memcpy(dst, &fixed.getChars()[i * 16], 16);
+            std::reverse(dst, dst + 8);
+            std::reverse(dst + 8, dst + 16);
         }
-        return;
+        return out;
     }
 
-    /// Big integers are decoded as FixedString (their Arrow fixed_size_binary representation); castColumn
-    /// would try to parse them as text, so reinterpret the raw little-endian bytes instead.
-    const bool target_is_big_int = target.isInt128() || target.isUInt128() || target.isInt256() || target.isUInt256();
-    if (target_is_big_int)
-    {
-        ColumnPtr null_map;
-        const ColumnPtr nested = src->isNullable()
-            ? assert_cast<const ColumnNullable &>(*src).getNestedColumnPtr()
-            : src;
-        if (src->isNullable())
-            null_map = assert_cast<const ColumnNullable &>(*src).getNullMapColumnPtr();
+    size_t width = 0;
+    if (which.isIPv6() || which.isInt128() || which.isUInt128())
+        width = 16;
+    else if (which.isInt256() || which.isUInt256())
+        width = 32;
+    else
+        return nullptr;
 
-        if (const auto * fixed = typeid_cast<const ColumnFixedString *>(nested.get()))
-        {
-            const size_t width = target.isInt256() || target.isUInt256() ? 32 : 16;
-            /// Reject a fixed_size_binary whose width does not match the target integer (matching the library
-            /// reader's `fixed_len != sizeof(ValueType)` check). Otherwise the wrong-width FixedString falls
-            /// through to `castColumn`, which parses its raw bytes as text (e.g. a fixed_size_binary(1)
-            /// holding ASCII '1' would be accepted as Int128(1)).
-            if (fixed->getN() != width)
-                throw Exception(
-                    ErrorCodes::INCORRECT_DATA,
-                    "Arrow fixed_size_binary of width {} cannot be read as {} (expected {})",
-                    fixed->getN(), target_no_null->getName(), width);
-            const size_t rows = fixed->size();
-            auto ints = target_no_null->createColumn();
-            auto copy = [&](auto & data) { data.resize(rows); if (rows) memcpy(data.data(), fixed->getChars().data(), rows * width); };
-            switch (target.idx)
-            {
-                case TypeIndex::Int128: copy(assert_cast<ColumnVector<Int128> &>(*ints).getData()); break;
-                case TypeIndex::UInt128: copy(assert_cast<ColumnVector<UInt128> &>(*ints).getData()); break;
-                case TypeIndex::Int256: copy(assert_cast<ColumnVector<Int256> &>(*ints).getData()); break;
-                default: copy(assert_cast<ColumnVector<UInt256> &>(*ints).getData()); break;
-            }
-            ColumnPtr result = std::move(ints);
-            DataTypePtr result_type = target_no_null;
-            if (null_map)
-            {
-                result = ColumnNullable::create(result, null_map);
-                result_type = std::make_shared<DataTypeNullable>(target_no_null);
-            }
-            column.column = std::move(result);
-            column.type = std::move(result_type);
-        }
+    require(width);
+    auto out = to_no_null->createColumn();
+    auto copy = [&](auto & data) { data.resize(rows); if (rows) memcpy(data.data(), fixed.getChars().data(), rows * width); };
+    switch (which.idx)
+    {
+        case TypeIndex::IPv6: copy(assert_cast<ColumnVector<IPv6> &>(*out).getData()); break;
+        case TypeIndex::Int128: copy(assert_cast<ColumnVector<Int128> &>(*out).getData()); break;
+        case TypeIndex::UInt128: copy(assert_cast<ColumnVector<UInt128> &>(*out).getData()); break;
+        case TypeIndex::Int256: copy(assert_cast<ColumnVector<Int256> &>(*out).getData()); break;
+        default: copy(assert_cast<ColumnVector<UInt256> &>(*out).getData()); break;
     }
+    return out;
 }
 
-ColumnPtr ArrowIPCBlockInputFormat::decodeGeoColumn(const ColumnPtr & source, const GeoColumnMetadata & geo_metadata)
+/// Reinterpret the raw bytes of a variable-width binary column (`ColumnString`) as an IPv6 or big integer,
+/// matching the library reader's `readIPv6ColumnFromBinaryData` / `readColumnWithBigNumberFromBinaryData`.
+/// `null_map` (may be null) marks rows skipped in the width check and defaulted in the output. Returns
+/// nullptr when the target is not one of those types, or when any non-null row is not exactly the target
+/// width - in that case the column is left as String for the subsequent cast (matching the library, which
+/// falls back to text parsing rather than failing).
+MutableColumnPtr reinterpretStringLeaf(const ColumnString & str, const NullMap * null_map, const DataTypePtr & to_no_null)
+{
+    const WhichDataType which(to_no_null);
+    size_t width = 0;
+    if (which.isIPv6() || which.isInt128() || which.isUInt128())
+        width = 16;
+    else if (which.isInt256() || which.isUInt256())
+        width = 32;
+    else
+        return nullptr;
+
+    const size_t rows = str.size();
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (null_map && (*null_map)[i])
+            continue;
+        if (str.getDataAt(i).size() != width)
+            return nullptr;
+    }
+
+    auto out = to_no_null->createColumn();
+    out->reserve(rows);
+    for (size_t i = 0; i < rows; ++i)
+    {
+        if (null_map && (*null_map)[i])
+        {
+            out->insertDefault();
+            continue;
+        }
+        const auto ref = str.getDataAt(i);
+        out->insertData(ref.data(), ref.size());
+    }
+    return out;
+}
+
+/// Recursively rewrite the raw-byte leaves (fixed_size_binary / binary) of a decoded column into the
+/// UUID / IPv6 / big-integer types the requested `to_type` asks for, descending through Nullable, Array,
+/// Tuple and Map so nested shapes convert too. Anything not recognised is returned unchanged for the
+/// subsequent `castColumn`. Returns the (possibly rewritten) column and its new type.
+std::pair<ColumnPtr, DataTypePtr> reinterpretRawBytes(
+    const ColumnPtr & col, const DataTypePtr & from_type, const DataTypePtr & to_type)
+{
+    const DataTypePtr to_no_null = removeNullable(to_type);
+    const DataTypePtr from_no_null = removeNullable(from_type);
+
+    /// Schema inference can wrap a composite in Nullable (e.g. `Nullable(Tuple(...))`). The composite
+    /// recursion below matches on the unwrapped column, so peel a Nullable column wrapper here first and
+    /// restore it afterwards (dropping it if the reinterpreted composite cannot itself be Nullable).
+    const bool composite_target = typeid_cast<const DataTypeArray *>(to_no_null.get())
+        || typeid_cast<const DataTypeTuple *>(to_no_null.get())
+        || typeid_cast<const DataTypeMap *>(to_no_null.get());
+    if (composite_target)
+    {
+        if (const auto * col_nullable = typeid_cast<const ColumnNullable *>(col.get()))
+        {
+            auto [new_nested, new_nested_type] = reinterpretRawBytes(col_nullable->getNestedColumnPtr(), from_no_null, to_no_null);
+            if (new_nested.get() == col_nullable->getNestedColumnPtr().get())
+                return {col, from_type};
+            if (new_nested->canBeInsideNullable())
+                return {ColumnNullable::create(new_nested, col_nullable->getNullMapColumnPtr()),
+                        std::make_shared<DataTypeNullable>(new_nested_type)};
+            return {std::move(new_nested), std::move(new_nested_type)};
+        }
+    }
+
+    if (const auto * to_arr = typeid_cast<const DataTypeArray *>(to_no_null.get()))
+    {
+        const auto * from_arr = typeid_cast<const DataTypeArray *>(from_no_null.get());
+        const auto * col_arr = typeid_cast<const ColumnArray *>(col.get());
+        if (!from_arr || !col_arr)
+            return {col, from_type};
+        auto [new_data, new_data_type] = reinterpretRawBytes(col_arr->getDataPtr(), from_arr->getNestedType(), to_arr->getNestedType());
+        if (new_data.get() == col_arr->getDataPtr().get())
+            return {col, from_type};
+        auto new_arr = ColumnArray::create(IColumn::mutate(std::move(new_data)), IColumn::mutate(col_arr->getOffsetsPtr()));
+        return {std::move(new_arr), std::make_shared<DataTypeArray>(new_data_type)};
+    }
+
+    if (const auto * to_tup = typeid_cast<const DataTypeTuple *>(to_no_null.get()))
+    {
+        const auto * from_tup = typeid_cast<const DataTypeTuple *>(from_no_null.get());
+        const auto * col_tup = typeid_cast<const ColumnTuple *>(col.get());
+        if (!from_tup || !col_tup)
+            return {col, from_type};
+        const auto & to_elems = to_tup->getElements();
+        const auto & from_elems = from_tup->getElements();
+        if (to_elems.size() != from_elems.size() || col_tup->tupleSize() != to_elems.size())
+            return {col, from_type};
+        Columns new_cols(to_elems.size());
+        DataTypes new_types(to_elems.size());
+        bool changed = false;
+        for (size_t i = 0; i < to_elems.size(); ++i)
+        {
+            auto [c, t] = reinterpretRawBytes(col_tup->getColumnPtr(i), from_elems[i], to_elems[i]);
+            if (c.get() != col_tup->getColumnPtr(i).get())
+                changed = true;
+            new_cols[i] = std::move(c);
+            new_types[i] = std::move(t);
+        }
+        if (!changed)
+            return {col, from_type};
+        DataTypePtr new_tuple_type = from_tup->hasExplicitNames()
+            ? std::make_shared<DataTypeTuple>(new_types, from_tup->getElementNames())
+            : std::make_shared<DataTypeTuple>(new_types);
+        return {ColumnTuple::create(new_cols), std::move(new_tuple_type)};
+    }
+
+    if (const auto * to_map = typeid_cast<const DataTypeMap *>(to_no_null.get()))
+    {
+        const auto * from_map = typeid_cast<const DataTypeMap *>(from_no_null.get());
+        const auto * col_map = typeid_cast<const ColumnMap *>(col.get());
+        if (!from_map || !col_map)
+            return {col, from_type};
+        /// A Map is physically an Array(Tuple(key, value)); recurse into that shape so raw-byte keys/values
+        /// convert, then rewrap.
+        auto from_nested = std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{from_map->getKeyType(), from_map->getValueType()}));
+        auto to_nested = std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{to_map->getKeyType(), to_map->getValueType()}));
+        auto [new_nested, new_nested_type] = reinterpretRawBytes(col_map->getNestedColumnPtr(), from_nested, to_nested);
+        if (new_nested.get() == col_map->getNestedColumnPtr().get())
+            return {col, from_type};
+        const auto & new_tuple = assert_cast<const DataTypeTuple &>(*assert_cast<const DataTypeArray &>(*new_nested_type).getNestedType());
+        auto new_map_type = std::make_shared<DataTypeMap>(new_tuple.getElement(0), new_tuple.getElement(1));
+        return {ColumnMap::create(new_nested), std::move(new_map_type)};
+    }
+
+    const WhichDataType which(to_no_null);
+    const bool raw_target = which.isUUID() || which.isIPv6()
+        || which.isInt128() || which.isUInt128() || which.isInt256() || which.isUInt256();
+    if (!raw_target)
+        return {col, from_type};
+
+    const auto * nullable = typeid_cast<const ColumnNullable *>(col.get());
+    const IColumn & nested = nullable ? nullable->getNestedColumn() : *col;
+    const NullMap * null_map = nullable ? &nullable->getNullMapData() : nullptr;
+
+    MutableColumnPtr typed;
+    if (const auto * fixed = typeid_cast<const ColumnFixedString *>(&nested))
+        typed = reinterpretFixedStringLeaf(*fixed, to_no_null);
+    else if (const auto * str = typeid_cast<const ColumnString *>(&nested))
+        typed = reinterpretStringLeaf(*str, null_map, to_no_null);
+    if (!typed)
+        return {col, from_type};
+
+    ColumnPtr result = std::move(typed);
+    DataTypePtr result_type = to_no_null;
+    if (nullable)
+    {
+        result = ColumnNullable::create(result, nullable->getNullMapColumnPtr());
+        result_type = std::make_shared<DataTypeNullable>(to_no_null);
+    }
+    return {std::move(result), std::move(result_type)};
+}
+
+}
+
+void ArrowIPCBlockInputFormat::reinterpretRawByteColumns(ColumnWithTypeAndName & column, const DataTypePtr & to_type)
+{
+    auto [new_column, new_type] = reinterpretRawBytes(column.column, column.type, to_type);
+    column.column = std::move(new_column);
+    column.type = std::move(new_type);
+}
+
+ColumnPtr ArrowIPCBlockInputFormat::decodeGeoColumn(const ColumnPtr & source, const GeoColumnMetadata & geo_metadata, bool precise_float_parsing)
 {
     DataTypePtr type = getGeoDataType(geo_metadata.type);
     MutableColumnPtr column = type->createColumn();
@@ -595,7 +735,7 @@ ColumnPtr ArrowIPCBlockInputFormat::decodeGeoColumn(const ColumnPtr & source, co
         const std::string_view ref = strings.getDataAt(i);
         ReadBuffer in_buffer(const_cast<char *>(ref.data()), ref.size(), 0);
         GeometricObject object = geo_metadata.encoding == GeoEncoding::WKB
-            ? parseWKBFormat(in_buffer) : parseWKTFormat(in_buffer);
+            ? parseWKBFormat(in_buffer) : parseWKTFormat(in_buffer, precise_float_parsing);
         appendObjectToGeoColumn(object, geo_metadata.type, *column);
     }
     return column;
@@ -728,18 +868,18 @@ Chunk ArrowIPCBlockInputFormat::buildChunk(ArrowIPC::RecordBatchDecoder::Decoded
         auto geo_it = geo_columns.find(header_column.name);
         if (geo_it != geo_columns.end())
         {
-            column.column = decodeGeoColumn(column.column, geo_it->second);
+            column.column = decodeGeoColumn(column.column, geo_it->second, format_settings.precise_float_parsing);
             column.type = getGeoDataType(geo_it->second.type);
         }
         else if (format_settings.parquet.allow_geoparquet_parser && header_column.type->getName() == "Geometry")
         {
             const GeoColumnMetadata mixed{GeoEncoding::WKB, GeoType::Mixed};
-            column.column = decodeGeoColumn(column.column, mixed);
+            column.column = decodeGeoColumn(column.column, mixed, format_settings.precise_float_parsing);
             column.type = getGeoDataType(GeoType::Mixed);
         }
         else
         {
-            reinterpretFixedSizeBinary(column, header_column.type);
+            reinterpretRawByteColumns(column, header_column.type);
 
             /// Replace nulls coming from a nullable Arrow column with the type default and mark the missing
             /// positions, so the engine later applies the column DEFAULT expression. Handles nested cases too.
