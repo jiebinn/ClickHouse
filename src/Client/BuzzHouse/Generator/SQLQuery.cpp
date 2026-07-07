@@ -1144,13 +1144,13 @@ StatementGenerator::FromSourceInfo StatementGenerator::joinedTableOrFunction(
             sql += " FROM `" + escapeSQLString(tt.getDatabaseName(), '`') + "`.`" + escapeSQLString(tt.name, '`') + "`";
             if (rg.nextMediumNumber() < 91)
             {
-                sql += " FORMAT " + iinf;
+                sql += " FORMAT " + outf;
             }
             url += getNextHTTPURL(rg, rg.nextSmallNumber() < 4) + "query=" + urlEncodeQueryParam(sql);
             ufunc->set_uurl(std::move(url));
             if (rg.nextMediumNumber() < 91)
             {
-                ufunc->set_format(outf);
+                ufunc->set_format(iinf);
             }
             ufunc->mutable_structure()->mutable_lit_val()->set_string_lit(std::move(buf));
             addRandomHTTPHeaders(rg, tf);
