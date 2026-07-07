@@ -147,11 +147,11 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        auto arguments_to_execute = arguments;
         if constexpr (requires { Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count); })
         {
             if (auto result = Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count))
                 return result;
+            auto arguments_to_execute = arguments;
             if (convertLowCardinalityColumnsToFull(arguments_to_execute))
             {
                 /// Re-enter the function through the framework so that the default implementations
@@ -161,7 +161,7 @@ public:
             }
         }
 
-        auto nested_arguments = arguments_to_execute;
+        auto nested_arguments = arguments;
         Adapter::extractNestedTypesAndColumns(nested_arguments);
 
         if constexpr (preserve_nested_low_cardinality)
