@@ -225,9 +225,6 @@ possible_properties = {
     "index_uncompressed_cache_policy": lambda: random.choice(["LRU", "SLRU"]),
     "index_uncompressed_cache_size": threshold_generator(0.2, 0.2, 0, 5368709120),
     "index_uncompressed_cache_size_ratio": threshold_generator(0.2, 0.2, 0.0, 1.0),
-    "insert_deduplication_version": lambda: random.choice(
-        ["old_separate_hashes", "compatible_double_hashes", "new_unified_hashes"]
-    ),
     "io_thread_pool_queue_size": threshold_generator(0.2, 0.2, 0, 1000),
     "jemalloc_collect_global_profile_samples_in_trace_log": true_false_lambda,
     "jemalloc_enable_background_threads": true_false_lambda,

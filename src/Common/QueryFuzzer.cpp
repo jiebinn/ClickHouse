@@ -1273,6 +1273,7 @@ void QueryFuzzer::fuzzTableStorage(ASTStorage & storage)
            "allow_experimental_replacing_merge_with_cleanup",
            "allow_experimental_text_index_positions",
            "allow_floating_point_partition_key",
+           "allow_minmax_index_for_json",
            "allow_nullable_key",
            "allow_summing_columns_in_partition_or_order_key",
            "allow_suspicious_indices",
