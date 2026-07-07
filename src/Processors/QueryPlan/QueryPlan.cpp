@@ -644,11 +644,10 @@ void QueryPlan::explainPlan(
     };
 
     auto skip_expressions = [&](Node * node) -> Node * {
-
         if (steps_to_stats)
             return node;
 
-        while (settings.compact && node->step->getName() == "Expression" && !node->children.empty())
+        while (options.actions && settings.compact && node->step->getName() == "Expression" && !node->children.empty())
             node = node->children[0];
         return node;
     };

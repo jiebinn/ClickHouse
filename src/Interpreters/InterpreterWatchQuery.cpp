@@ -51,6 +51,7 @@ BlockIO InterpreterWatchQuery::execute()
 
         StreamLocalLimits limits = StreamLocalLimits::forQueryResult(settings);
 
+        res.pipeline.setNormalizedQueryHash(getContext()->getNormalizedQueryHash());
         res.pipeline.setLimitsAndQuota(limits, getContext()->getQuota());
     }
 

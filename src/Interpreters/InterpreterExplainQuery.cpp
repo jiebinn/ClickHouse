@@ -1,4 +1,4 @@
-#include <memory>
+#include <Core/SettingsEnums.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterExplainQuery.h>
 
@@ -80,6 +80,7 @@ namespace Setting
     extern const SettingsUInt64 interactive_delay;
     extern const SettingsBool make_distributed_plan;
     extern const SettingsBool use_concurrency_control;
+    extern const SettingsExplainQueryPlanDefault explain_query_plan_default;
 }
 
 namespace ErrorCodes
@@ -406,7 +407,12 @@ struct QueryTreeSettings
 
 struct QueryPlanSettings
 {
-    ExplainPlanOptions query_plan_options;
+    ExplainPlanOptions query_plan_options
+    {.actions = true,
+        .indexes = true,
+        .compact = true,
+        .pretty = true
+    };
 
     /// Apply query plan optimizations.
     bool optimize = true;
@@ -567,12 +573,26 @@ struct QuerySyntaxSettings
 };
 
 template <typename Settings>
-ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
+ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings, bool set_default_pretty_explain_settings = true)
 {
-    if (!ast_settings)
-        return {};
-
     ExplainSettings<Settings> settings;
+
+    /// These lines are needed to impose the default settings for EXPLAIN PLAN
+    /// We set them here instead of QueryPlanSettings, because internally
+    /// we sometimes use EXPLAIN PLAN output for logging
+    if constexpr (std::is_same_v<Settings, QueryPlanSettings>)
+    {
+        if (set_default_pretty_explain_settings)
+        {
+            settings.query_plan_options.actions = true;
+            settings.query_plan_options.compact = true;
+            settings.query_plan_options.pretty  = true;
+        }
+    }
+
+    if (!ast_settings)
+        return settings;
+
     const auto & set_query = ast_settings->as<ASTSetQuery &>();
 
     for (const auto & change : set_query.changes)
@@ -910,7 +930,21 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
             if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Only SELECT is supported for EXPLAIN query");
 
-            auto settings = checkAndGetSettings<QueryPlanSettings>(ast.getSettings());
+            bool pretty_version = query_context->getSettingsRef()[Setting::explain_query_plan_default] == ExplainQueryPlanDefault::PRETTY;
+
+            auto ast_settings = ast.getSettings();
+
+            if (ast_settings)
+                for (const auto & change : ast_settings->as<ASTSetQuery &>().changes)
+                {
+                    if (change.name != "json" && change.name != "distributed")
+                        continue;
+                    if (change.value.getType() == Field::Types::UInt64 && change.value.safeGet<UInt64>() != 0)
+                        pretty_version = false;
+                }
+
+            auto settings = checkAndGetSettings<QueryPlanSettings>(ast_settings, pretty_version);
+
             QueryPlan plan;
 
             ContextPtr context;
