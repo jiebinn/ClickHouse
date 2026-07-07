@@ -5280,6 +5280,9 @@ function renderTabBar() {
 
         el.addEventListener('click', (e) => {
             if (e.target === closeEl) { e.stopPropagation(); closeTab(tab.id); return; }
+            /// While the title is being edited inline, let clicks act on the editor (cursor placement,
+            /// selection) rather than duplicating from the not-yet-committed title.
+            if (e.target === titleEl && titleEl.isContentEditable) return;
             /// Ctrl/Shift/Cmd+click on the title duplicates the tab (browser "open in new tab" gesture).
             if (e.target === titleEl && (e.ctrlKey || e.shiftKey || e.metaKey)) { e.preventDefault(); duplicateTab(tab.id); return; }
             if (tab.id === activeTabId) {
@@ -5291,11 +5294,12 @@ function renderTabBar() {
         /// Middle-click does not raise a `click` event; it comes through as `auxclick` (button 1).
         /// A genuine middle click needs the X11 PRIMARY paste guard (see `suppress_middleclick_paste`).
         el.addEventListener('auxclick', (e) => {
-            if (e.button === 1 && e.target === titleEl) { e.preventDefault(); duplicateTab(tab.id, true); }
+            /// Skip while editing so a middle click pastes the X11 PRIMARY selection into the title instead.
+            if (e.button === 1 && e.target === titleEl && !titleEl.isContentEditable) { e.preventDefault(); duplicateTab(tab.id, true); }
         });
-        /// Suppress the middle-click autoscroll cursor over the title.
+        /// Suppress the middle-click autoscroll cursor over the title (but not while editing, so PRIMARY paste works).
         el.addEventListener('mousedown', (e) => {
-            if (e.button === 1 && e.target === titleEl) e.preventDefault();
+            if (e.button === 1 && e.target === titleEl && !titleEl.isContentEditable) e.preventDefault();
         });
         el.addEventListener('keydown', (e) => {
             /// Ignore keys coming from the inline title editor (so Space/Enter type normally).
