@@ -540,6 +540,12 @@ bool applyTrivialCountWithSparsityFilterIfPossible(
     if (!count_func)
         return false;
 
+    /// Only zero-argument `count()` / `count(*)` counts rows. `count(expr)` counts non-null
+    /// argument values, which the rewrite (which seeds the state with a row count derived from
+    /// the per-column `num_defaults`) does not preserve for Nullable/expression counts.
+    if (!function_node.getArguments().getNodes().empty())
+        return false;
+
     auto classified = classifySparsityPredicate(main_query_node.getWhere(), table_expression_node);
     if (!classified)
         return false;
