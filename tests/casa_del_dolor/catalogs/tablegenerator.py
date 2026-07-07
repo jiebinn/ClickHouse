@@ -45,6 +45,26 @@ def delta_skipping_eligible(dtype) -> bool:
     return isinstance(dtype, _DELTA_SKIPPING_ELIGIBLE_TYPES)
 
 
+_TEMPORAL_TYPES = (sp.DateType, sp.TimestampType) + (
+    (sp.TimestampNTZType,) if hasattr(sp, "TimestampNTZType") else ()
+)
+_STRINGY_TYPES = (sp.StringType, sp.CharType, sp.VarcharType)
+
+
+def spark_scalar_castable(src: sp.DataType, dst: sp.DataType) -> bool:
+    """Conservative analysis-time validity of ``CAST(src AS dst)`` for the scalar leaf
+    types a Delta generated column may use. A generated-column expression must both match
+    the declared column type AND be a legal cast from its source, otherwise CREATE fails
+    (e.g. Spark rejects `boolean -> date` at analysis time)."""
+    if isinstance(dst, _STRINGY_TYPES):
+        return True  # any scalar casts to string
+    if isinstance(dst, (sp.NumericType, sp.BooleanType)):
+        return isinstance(src, (sp.NumericType, sp.BooleanType) + _STRINGY_TYPES)
+    if isinstance(dst, _TEMPORAL_TYPES):
+        return isinstance(src, _TEMPORAL_TYPES + _STRINGY_TYPES)
+    return type(src) is type(dst)
+
+
 def sample_from_dict(d: dict[str, Parameter], sample: int) -> dict[str, Parameter]:
     items = random.sample(list(d.items()), sample)
     return dict(items)
@@ -524,7 +544,9 @@ class IcebergTableGenerator(LakeTableGenerator):
                     new = random.choice(new_candidates)
                     table.partition_fields.remove(old)
                     table.partition_fields.append(new)
-                    return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {old} WITH {new}"
+                    return (
+                        f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {old} WITH {new}"
+                    )
         elif next_operation <= 6:
             # Set ORDER BY
             if random.randint(1, 2) == 1:
@@ -1254,21 +1276,46 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
     def add_generated_col(
         self, columns: dict[str, SparkColumn], col: sp.DataType
     ) -> str:
+        # IDENTITY is valid only on BIGINT (Long) columns.
         if isinstance(col, sp.LongType) and random.randint(1, 10) < 3:
             return f" GENERATED {random.choice(['ALWAYS', 'BY DEFAULT'])} AS IDENTITY"
-        if len(columns) > 0 and random.randint(1, 10) < 3:
-            flattened = {}
-            for _, val in columns.items():
-                val.flat_column(flattened)
-            if (
-                isinstance(
-                    col, (sp.ByteType, sp.ShortType, sp.IntegerType, sp.LongType)
-                )
-                and random.randint(1, 2) == 1
-            ):
-                return f" GENERATED ALWAYS AS ({random.choice(['year', 'month', 'day', 'hour'])}({random.choice(list(flattened.keys()))}))"
-            return f" GENERATED ALWAYS AS (CAST({random.choice(list(flattened.keys()))} AS {self.type_mapper.generate_random_spark_sql_type()}))"
-        return ""
+        if len(columns) == 0 or random.randint(1, 10) >= 3:
+            return ""
+        # A Delta generated column may reference only already-defined, NON-generated,
+        # scalar TOP-LEVEL columns (never Array/Map/Struct, nested paths, or another
+        # generated column), and its expression's result type must EXACTLY match the
+        # declared column type -- otherwise CREATE TABLE fails.
+        scalar = {
+            name: sc.spark_type
+            for name, sc in columns.items()
+            if not sc.generated
+            and not isinstance(sc.spark_type, (sp.ArrayType, sp.MapType, sp.StructType))
+        }
+        if not scalar:
+            return ""
+        # year/month/day/hour return INT and require a DATE/TIMESTAMP argument (hour needs
+        # a TIMESTAMP). Only usable when this column is exactly INT and a temporal source
+        # exists -- applying them to a non-temporal column or a non-INT target both fail.
+        if isinstance(col, sp.IntegerType):
+            dates = [n for n, t in scalar.items() if isinstance(t, sp.DateType)]
+            stamps = [
+                n
+                for n, t in scalar.items()
+                if isinstance(t, _TEMPORAL_TYPES) and not isinstance(t, sp.DateType)
+            ]
+            kinds = ([("date", dates)] if dates else []) + (
+                [("ts", stamps)] if stamps else []
+            )
+            if kinds and random.randint(1, 2) == 1:
+                kind, srcs = random.choice(kinds)
+                fns = ["year", "month", "day"] + (["hour"] if kind == "ts" else [])
+                return f" GENERATED ALWAYS AS ({random.choice(fns)}({random.choice(srcs)}))"
+        # Otherwise CAST a scalar source to THIS column's own type: the target must equal
+        # the declared type, and the source must be castable to it.
+        castable = [n for n, t in scalar.items() if spark_scalar_castable(t, col)]
+        if not castable:
+            return ""
+        return f" GENERATED ALWAYS AS (CAST({random.choice(castable)} AS {col.simpleString()}))"
 
     def create_catalog_table(
         self,

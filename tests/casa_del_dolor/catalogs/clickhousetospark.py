@@ -963,7 +963,8 @@ class ClickHouseTypeMapper:
 
     def _iceberg_transform_to_spark_clause(self, transform, col: str) -> str:
         """Spark SQL partition-transform clause equivalent to an Iceberg transform on `col`
-        (e.g. `bucket(16, c0)`), so DROP/REPLACE PARTITION FIELD can reference the exact field."""
+        (e.g. `bucket(16, c0)`), so DROP/REPLACE PARTITION FIELD can reference the exact field.
+        """
         if isinstance(transform, BucketTransform):
             return f"bucket({transform.num_buckets}, {col})"
         if isinstance(transform, TruncateTransform):
@@ -1020,7 +1021,9 @@ class ClickHouseTypeMapper:
                 name=f"{field.name}_{transform}",
             )
             partition_fields.append(partition_field)
-            clauses.append(self._iceberg_transform_to_spark_clause(transform, field.name))
+            clauses.append(
+                self._iceberg_transform_to_spark_clause(transform, field.name)
+            )
             partition_field_id += 1
         return PartitionSpec(*partition_fields), clauses
 
