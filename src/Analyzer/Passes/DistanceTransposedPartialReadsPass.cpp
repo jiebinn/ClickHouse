@@ -18,14 +18,14 @@
 namespace DB
 {
 
-namespace Setting
-{
-extern const SettingsBool optimize_qbit_distance_function_reads;
-}
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+}
+
+namespace Setting
+{
+extern const SettingsBool optimize_qbit_distance_function_reads;
 }
 
 namespace
