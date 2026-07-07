@@ -11,9 +11,9 @@ namespace DB
 {
 
 /// Recogniser for `WHERE` predicates that exactly partition a column into its
-/// type-default vs non-default subsets. Pruning consumers use this to decide
-/// whether the per-column `num_defaults` recorded in `serialization.json` is
-/// enough to drop parts / granules without reading data.
+/// type-default vs non-default subsets. The trivial-count-with-sparsity-filter
+/// rewrite uses this to decide whether it can serve `SELECT count()` from the
+/// per-column `num_defaults` recorded in `serialization.json` without a scan.
 ///
 /// A wrong `num_defaults` would produce wrong results, so trust the recorded
 /// value only when the producer marked it with `exact_num_defaults: true`.
@@ -48,15 +48,5 @@ struct RecognisedSparsityPredicate
 ///                    not(col)                       -> MatchesDefault
 std::optional<RecognisedSparsityPredicate>
 classifySparsityPredicate(const QueryTreeNodePtr & predicate, const QueryTreeNodePtr & table_expression_node);
-
-/// Flatten top-level `AND(...)` into the classifiable conjuncts within. Pruning
-/// consumers can drop a part / granule when any one conjunct rules it out. The
-/// count-rewrite path does NOT use this: it needs exact row counts and an
-/// unclassified sibling conjunct could remove rows that the recognised one keeps.
-///
-/// `OR` is treated as unclassifiable: safe pruning would require classifying every
-/// branch, which we don't attempt.
-std::vector<RecognisedSparsityPredicate>
-collectSparsityConjuncts(const QueryTreeNodePtr & predicate, const QueryTreeNodePtr & table_expression_node);
 
 }
