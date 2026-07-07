@@ -67,9 +67,9 @@ A function resolves the named collection to use from, in order:
 If neither is set, the call fails. The text and embedding functions use separate default settings because a chat-completions endpoint and model differ from an embeddings one.
 
 ```sql
-SET ai_function_text_default_credentials = 'ai_credentials';
+SET ai_function_text_default_credentials = 'ai_text_credentials';
 
--- Uses ai_credentials from the setting:
+-- Uses ai_text_credentials from the setting:
 SELECT aiGenerate('What is 2 + 2? Reply with just the number.');
 
 -- Overrides the default for this call:
