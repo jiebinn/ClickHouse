@@ -340,7 +340,16 @@ Three complementary sources, cheapest first:
 - **By symptom:** for a `REAL`/`UNCERTAIN` failure, once step 5 names the suspect `file:line`,
   search PRs touching that file or the error string the same way.
 
-For each candidate fix PR, classify its **status** — this is what goes in the report's Fix column:
+**Every search here (by issue number, by test name, by symptom) returns candidates only.** GitHub
+matches the term as free text, so a PR that merely *mentions* the test/symptom comes back too — e.g.
+searching `test_dns_cache` returns this very docs PR because its text names that test. Before a hit
+may fill the `Fix` column you must **confirm it actually addresses this failure**: open its diff
+(`.claude/tools/gh-ro.sh pr diff <pr>`) and check the change targets the failing test/code, not just
+a passing mention. **Ignore the PR under investigation itself** (the `$0` PR) unless its own diff
+genuinely fixes the failure. Discard unconfirmed hits — a `none` is correct when nothing verifiably
+addresses the failure; never emit `WIP`/`merged` from an unverified name/symptom match.
+
+For each **verified** fix PR, classify its **status** — this is what goes in the report's Fix column:
 
 - **WIP** — open PR. Note draft vs in-review (`isDraft`). Not yet protecting any run.
 - **Merged** — `state == MERGED`, with a `mergeCommit`. Then decide **whether it is already in the
