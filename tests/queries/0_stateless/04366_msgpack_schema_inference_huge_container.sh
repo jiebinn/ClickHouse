@@ -57,3 +57,18 @@ printf '\x93\x01\x02\x03' \
 python3 -c "import sys,struct; n=2*1024*1024; sys.stdout.buffer.write(b'\xdb'+struct.pack('>I',n)+b'z'*n)" \
     | $CLICKHOUSE_LOCAL --input-format MsgPack --input_format_msgpack_number_of_columns=1 \
         -q "SELECT toTypeName(c1), length(c1) FROM table"
+
+# Nesting depth is bounded too: max_parser_depth is threaded into msgpack::unpack, so a deeply nested
+# header is rejected while the DOM tree is being built (before getDataType walks it). 0x91 is a fixarray
+# of length 1, so a chain of them nests one level per byte. max_parser_depth is set above the SQL
+# parser's own needs so that only the msgpack depth limit fires: a chain deeper than the limit is
+# rejected as TOO_DEEP_RECURSION.
+python3 -c "import sys; sys.stdout.buffer.write(b'\x91'*100 + b'\x01')" \
+    | $CLICKHOUSE_LOCAL --input-format MsgPack --input_format_msgpack_number_of_columns=1 --max_parser_depth=42 \
+        -q "SELECT toTypeName(c1) FROM table" 2>&1 \
+    | expect_contains "deep" TOO_DEEP_RECURSION
+
+# A chain within the limit still infers normally (the bound must not reject legitimate nesting).
+python3 -c "import sys; sys.stdout.buffer.write(b'\x91'*10 + b'\x01')" \
+    | $CLICKHOUSE_LOCAL --input-format MsgPack --input_format_msgpack_number_of_columns=1 --max_parser_depth=42 \
+        -q "SELECT toTypeName(c1) FROM table"

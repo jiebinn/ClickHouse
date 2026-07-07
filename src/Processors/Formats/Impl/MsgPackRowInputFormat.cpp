@@ -637,13 +637,29 @@ msgpack::object_handle MsgPackSchemaReader::readObject()
         /// handled below exactly like insufficient_bytes (grow and retry, reject once the whole input is
         /// buffered and it still does not fit).
         const size_t available = buf.buffer().end() - buf.position();
-        const msgpack::unpack_limit limit(available, available, available, available, available);
+        /// Also bound the nesting depth. msgpack::unpack builds the DOM tree eagerly, so a deeply nested
+        /// header (arrays/maps nested many levels deep) would allocate the whole deep tree before
+        /// getDataType gets to enforce max_parser_depth. Thread the setting through so unpack rejects it
+        /// while building. max_parser_depth == 0 means unlimited (matching getDataType and the SQL parser);
+        /// msgpack spells unlimited as 0xffffffff.
+        const size_t depth_limit = format_settings.max_parser_depth ? format_settings.max_parser_depth : 0xffffffff;
+        const msgpack::unpack_limit limit(available, available, available, available, available, depth_limit);
         try
         {
             object_handle = msgpack::unpack(
                 buf.position(), available, offset,
                 msgpackReferenceEmptyData, nullptr, limit);
             need_more_data = false;
+        }
+        catch (msgpack::depth_size_overflow &)
+        {
+            /// depth_size_overflow derives from size_overflow, so this catch must precede it. Deep nesting
+            /// is not a "need more data" condition: reject with the same message getDataType uses.
+            throw Exception(
+                ErrorCodes::TOO_DEEP_RECURSION,
+                "Too deep recursion while inferring the MsgPack schema: the nesting depth exceeds the limit ({}). "
+                "It can be raised with the setting 'max_parser_depth', but a very deep schema is rarely intentional",
+                format_settings.max_parser_depth);
         }
         catch (msgpack::insufficient_bytes &)
         {
