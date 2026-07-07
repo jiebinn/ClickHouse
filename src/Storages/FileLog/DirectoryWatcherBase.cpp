@@ -31,7 +31,6 @@ namespace ErrorCodes
     extern const int FILE_DOESNT_EXIST;
     extern const int BAD_FILE_TYPE;
     extern const int IO_SETUP_ERROR;
-    extern const int NOT_IMPLEMENTED;
 }
 
 namespace FileLogSetting
@@ -412,17 +411,17 @@ void DirectoryWatcherBase::watchFunc()
             return it != other.end() && it->second.inode == inode;
         };
 
-        /// Decide the order of rename targets (MOVED_TO) BEFORE emitting anything this pass. A target
-        /// whose OLD inode is itself being moved elsewhere must be emitted AFTER the MOVED_TO that
-        /// relocates that old inode, otherwise reusing the name erases the still-live inode's meta and
-        /// it is re-read from offset 0 (e.g. a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). A
-        /// topological sort over "target T follows the target that receives T's old inode" recovers
-        /// that chronological order. The only unsatisfiable shape is a rename cycle (e.g. an `a <-> b`
-        /// swap via a temporary name, coalesced into one scan): no order preserves every offset, and
-        /// unlike inotify we cannot observe the intermediate temporary-name events that would break it.
-        /// We fail closed on such a cycle, and crucially do it here, before any event of this pass is
-        /// queued, so StorageFileLog never drains a half-applied batch (orphaned MOVED_FROMs without
-        /// their matching MOVED_TO would otherwise be consumed as real removals of still-present files).
+        /// Order the rename targets (MOVED_TO). A target whose OLD inode is itself being moved
+        /// elsewhere must be emitted AFTER the MOVED_TO that relocates that old inode, otherwise
+        /// reusing the name erases the still-live inode's meta and it is re-read from offset 0 (e.g.
+        /// a logrotate chain `a.1 -> a.2`, `a -> a.1`, new `a`). A topological sort over "target T
+        /// follows the target that receives T's old inode" recovers that chronological order.
+        ///
+        /// The only unorderable shape is a rename cycle (e.g. an `a <-> b` swap coalesced into one
+        /// scan): no order preserves every offset, and unlike inotify we cannot observe the
+        /// intermediate temporary-name events that would break it. We cannot do better from a
+        /// directory snapshot, so, like the Linux inotify watcher which applies whatever events it
+        /// receives, we emit the leftovers best-effort; StorageFileLog then re-reads one rotated file.
         std::vector<std::string> move_targets;
         for (const auto & [name, state] : current)
         {
@@ -465,21 +464,17 @@ void DirectoryWatcherBase::watchFunc()
                 }
             }
 
-            if (ordered_moves.size() != move_targets.size())
+            /// Leftovers form a rename cycle; append them in a deterministic order (best effort).
+            for (const auto & name : move_targets)
             {
-                auto e = Exception(
-                    ErrorCodes::NOT_IMPLEMENTED,
-                    "Cannot preserve read offsets across a rename cycle observed in a single batch in directory {}",
-                    path);
-                owner.onError(e);
-                throw e;
+                if (!ordered_set.contains(name))
+                    ordered_moves.push_back(name);
             }
         }
 
-        /// From here on nothing throws, so the whole batch is queued atomically. Emit in the order
-        /// StorageFileLog expects: MOVED_FROM/REMOVED, then MOVED_TO, then ADDED, then MODIFIED. In
-        /// particular MOVED_TO precedes the ADDED of a recreated source name so the moved inode's meta
-        /// is renamed before the fresh file resets it.
+        /// Emit in the order StorageFileLog expects: MOVED_FROM/REMOVED, then MOVED_TO, then ADDED,
+        /// then MODIFIED. In particular MOVED_TO precedes the ADDED of a recreated source name so the
+        /// moved inode's meta is renamed before the fresh file resets it.
 
         /// Departed identities (name gone, or its inode replaced at that name).
         for (const auto & [name, state] : snapshot)
