@@ -520,7 +520,7 @@
     <input type="submit" id="mass-editor-confirm" class="edit-confirm" value="Apply">
 </div>
 <div id="metrics-editor">
-    <textarea id="metrics-editor-textarea" spellcheck="false" data-gramm="false" placeholder="Paste C++ code or documentation with profile events or current metrics, for example:&#10;&#10;extern const Event RejectedInserts;&#10;extern const Metric DelayedInserts;&#10;M(FreezePartThreads, &quot;Number of threads in the threadpool for freezing data parts.&quot;)&#10;M(DelayedInsertsMilliseconds, &quot;Total number of milliseconds spent while the INSERT was throttled.&quot;, ValueType::Milliseconds)&#10;&#10;One chart is added per metric, with the first chart of the dashboard as a query template."></textarea>
+    <textarea id="metrics-editor-textarea" spellcheck="false" data-gramm="false" placeholder="Paste C++ code or documentation with profile events, current metrics or asynchronous metrics, for example:&#10;&#10;extern const Event RejectedInserts;&#10;extern const Metric DelayedInserts;&#10;M(FreezePartThreads, &quot;Number of threads in the threadpool for freezing data parts.&quot;)&#10;M(DelayedInsertsMilliseconds, &quot;Total number of milliseconds spent while the INSERT was throttled.&quot;, ValueType::Milliseconds)&#10;new_values[&quot;CGroupUserTimeNormalized&quot;] = { value, &quot;Description&quot; };&#10;&#10;One chart is added per metric, with matching charts of the dashboard as query templates."></textarea>
     <span id="metrics-editor-message">&nbsp;</span>
     <input type="submit" id="metrics-editor-cancel" class="edit-cancel" value="Cancel">
     <input type="submit" id="metrics-editor-confirm" class="edit-confirm" value="Add charts" disabled>
@@ -1082,17 +1082,18 @@ document.getElementById('mass-editor-textarea').addEventListener('input', e => {
 
 let metrics_editor_active = false;
 const metric_column_regex = /\b(?:ProfileEvent|CurrentMetric)_[A-Za-z0-9_]+\b/;
+const async_metric_condition_regex = /\bmetric\s*=\s*'[^']+'/;
 
-/// Extracts an ordered list of {kind, name, description} from a pasted text. Recognized formats:
-/// - declarations `extern const Event RejectedInserts;` and `extern const Metric DelayedInserts;`,
-///   possibly inside a `namespace ProfileEvents` / `namespace CurrentMetrics` block
-///   (the keyword `Event` or `Metric` alone determines the kind, unrelated lines are ignored);
-/// - registry macros from src/Common/ProfileEvents.cpp: `M(Name, "description", ValueType::...)`;
-/// - registry macros from src/Common/CurrentMetrics.cpp: `M(Name, "description")`.
+/// Extracts an ordered list of {kind, name} from a pasted text, ignoring unrecognized lines. Accepted lines:
+///     extern const Event RejectedInserts;
+///     extern const Metric DelayedInserts;
+///     M(RejectedInserts, "description", ValueType::Number)
+///     M(DelayedInserts, "description")
+///     new_values["AsynchronousMetricName"] = { value, "description" };
 function parseMetricsInput(text) {
     const extern_regex = /\bextern\s+const\s+(Event|Metric)\s+([A-Za-z_][A-Za-z0-9_]*)/;
     const macro_regex = /\bM\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,/;
-    const description_regex = /,\s*"((?:[^"\\]|\\.)*)"/;
+    const async_regex = /\[\s*"([^"]+)"\s*\]/;
 
     let result = [];
     let seen = new Set();
@@ -1101,7 +1102,6 @@ function parseMetricsInput(text) {
 
         let kind = null;
         let name = null;
-        let description = null;
         let match = null;
 
         if (match === null && (match = line.match(extern_regex))) {
@@ -1110,13 +1110,13 @@ function parseMetricsInput(text) {
         }
 
         if (match === null && (match = line.match(macro_regex))) {
-            /// The profile events registry passes a third `ValueType::...` argument, the current metrics one does not.
             kind = line.includes('ValueType::') ? 'ProfileEvent' : 'CurrentMetric';
             name = match[1];
-            const description_match = line.match(description_regex);
-            if (description_match) {
-                description = description_match[1].replace(/\\(.)/g, '$1');
-            }
+        }
+
+        if (match === null && (match = line.match(async_regex))) {
+            kind = 'AsyncMetric';
+            name = match[1];
         }
 
         if (match !== null) {
@@ -1125,36 +1125,63 @@ function parseMetricsInput(text) {
                 continue;
             }
             seen.add(key);
-            result.push({kind: kind, name: name, description: description});
+            result.push({kind: kind, name: name});
         }
     }
 
     return result;
 }
 
-function metricChartTemplate() {
-    if (queries.length > 0 && queries[0].query && metric_column_regex.test(queries[0].query)) {
-        return queries[0].query;
+/// Templates for the generated charts, taken from the current dashboard, by metric kind
+function metricChartTemplates() {
+    let templates = {ProfileEvent: null, CurrentMetric: null, AsyncMetric: null};
+
+    for (const q of queries) {
+        if (!q.query) {
+            continue;
+        }
+
+        if (templates.ProfileEvent === null && q.query.includes('metric_log') && metric_column_regex.test(q.query)) {
+            templates.ProfileEvent = q.query;
+            templates.CurrentMetric = q.query;
+        }
+
+        if (templates.AsyncMetric === null && q.query.includes('asynchronous_metric_log') && async_metric_condition_regex.test(q.query)) {
+            templates.AsyncMetric = q.query;
+        }
     }
-    return null;
+
+    return templates;
 }
 
 function buildQueryFromTemplate(template, kind, name) {
+    if (kind == 'AsyncMetric') {
+        const token = template.match(async_metric_condition_regex)[0];
+        const escaped_name = name.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+        return template.replaceAll(token, `metric = '${escaped_name}'`);
+    }
+
     const token = template.match(metric_column_regex)[0];
     return template.replaceAll(token, `${kind}_${name}`);
 }
 
 function metricsEditorParse() {
+    const empty = {new_charts: [], skipped: 0, events: 0, metrics: 0, asyncs: 0, error: null};
     const parsed = parseMetricsInput(document.getElementById('metrics-editor-textarea').value);
     if (parsed.length == 0) {
-        return {new_charts: [], skipped: 0, events: 0, metrics: 0, error: null};
+        return empty;
     }
 
-    const template = metricChartTemplate();
-    if (template === null) {
-        return {new_charts: [], skipped: 0, events: 0, metrics: 0,
-            error: 'The query of the first chart does not reference a ProfileEvent_* or CurrentMetric_* column'
-                + ' and cannot be used as a template. Make the first chart of the dashboard a metric chart first.'};
+    const templates = metricChartTemplates();
+    let missing = [];
+    if (parsed.some(m => m.kind != 'AsyncMetric') && templates.ProfileEvent === null) {
+        missing.push('with a ProfileEvent_* or CurrentMetric_* column over metric_log (for profile events and current metrics)');
+    }
+    if (parsed.some(m => m.kind == 'AsyncMetric') && templates.AsyncMetric === null) {
+        missing.push("with a metric = '...' condition over asynchronous_metric_log (for asynchronous metrics)");
+    }
+    if (missing.length > 0) {
+        return {...empty, error: `No chart to use as a template: the dashboard needs a chart ${missing.join(' and a chart ')}.`};
     }
 
     const existing = new Set(queries.map(q => q.query));
@@ -1162,31 +1189,30 @@ function metricsEditorParse() {
     let skipped = 0;
     let events = 0;
     let metrics = 0;
+    let asyncs = 0;
     for (const metric of parsed) {
-        const query = buildQueryFromTemplate(template, metric.kind, metric.name);
+        const query = buildQueryFromTemplate(templates[metric.kind], metric.kind, metric.name);
         if (existing.has(query)) {
             ++skipped;
             continue;
         }
 
         existing.add(query);
-        metric.kind == 'ProfileEvent' ? ++events : ++metrics;
+        if (metric.kind == 'ProfileEvent') { ++events; }
+        else if (metric.kind == 'CurrentMetric') { ++metrics; }
+        else { ++asyncs; }
 
-        let new_chart = {title: metric.name, query: query};
-        if (metric.description) {
-            new_chart.description = metric.description;
-        }
-
-        new_charts.push(new_chart);
+        new_charts.push({title: metric.name, query: query});
     }
-    return {new_charts: new_charts, skipped: skipped, events: events, metrics: metrics, error: null};
+
+    return {new_charts: new_charts, skipped: skipped, events: events, metrics: metrics, asyncs: asyncs, error: null};
 }
 
 function metricsEditorUpdateMessage() {
     const message_span = document.getElementById('metrics-editor-message');
     const confirm = document.getElementById('metrics-editor-confirm');
     const text = document.getElementById('metrics-editor-textarea').value;
-    const {new_charts, skipped, events, metrics, error} = metricsEditorParse();
+    const {new_charts, skipped, events, metrics, asyncs, error} = metricsEditorParse();
 
     confirm.disabled = new_charts.length == 0;
     confirm.value = new_charts.length > 0 ? `Add ${new_charts.length} chart${new_charts.length > 1 ? 's' : ''}` : 'Add charts';
@@ -1197,13 +1223,15 @@ function metricsEditorUpdateMessage() {
     } else if (text.trim() == '') {
         message_span.firstChild.data = '\xa0';
     } else if (new_charts.length == 0 && skipped == 0) {
-        message_span.firstChild.data = 'Found no profile events or current metrics.';
+        message_span.firstChild.data = 'Found no profile events, current metrics or asynchronous metrics.';
     } else {
         const plural = (n, word) => `${n} ${word}${n == 1 ? '' : 's'}`;
         let parts = [];
         if (events) { parts.push(plural(events, 'profile event')); }
         if (metrics) { parts.push(plural(metrics, 'current metric')); }
-        let note = parts.length ? `Found ${parts.join(' and ')}.` : '';
+        if (asyncs) { parts.push(plural(asyncs, 'asynchronous metric')); }
+        const listing = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0];
+        let note = parts.length ? `Found ${listing}.` : '';
         if (skipped) { note += ` ${plural(skipped, 'chart')} already on the dashboard, skipped.`; }
         message_span.firstChild.data = note.trim();
     }
@@ -1511,7 +1539,6 @@ async function draw(idx, chart, url_params, query) {
     /// Set title before handling errors so it is visible even when the query fails
     const title = queries[idx] && queries[idx].title ? queries[idx].title.replaceAll(/\{(\w+)\}/g, (_, name) => params[name] ) : '';
     title_div.firstChild.data = title;
-    title_div.title = queries[idx] && queries[idx].description ? queries[idx].description : '';
     title_div.style.display = 'block';
 
     if (error) {
