@@ -10,6 +10,10 @@
 #include <Common/threadPoolCallbackRunner.h>
 
 #include <Access/AccessControl.h>
+#if CLICKHOUSE_CLOUD
+#include <Access/EnabledMaskingPolicies.h>
+#include <Access/MaskingPolicy.h>
+#endif
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <Analyzer/QueryTreeBuilder.h>
 #include <Analyzer/Utils.h>
@@ -10578,11 +10582,36 @@ bool MergeTreeData::canUsePolymorphicParts(const MergeTreeSettings & settings, S
 AlterConversionsPtr MergeTreeData::getAlterConversionsForPart(
     const MergeTreeDataPartPtr & part,
     const MutationsSnapshotPtr & mutations,
-    const ContextPtr & query_context)
+    const ContextPtr & query_context
+#if CLICKHOUSE_CLOUD
+    , const EnabledMaskingPoliciesPtr & enabled_masking_policies
+#endif
+    )
 {
     auto commands = mutations->getOnFlyMutationCommandsForPart(part);
     auto patches = mutations->getPatchesForPart(part);
     PatchPartsForReader patches_for_reader;
+
+    /// Apply masking policies to the part
+#if CLICKHOUSE_CLOUD
+    if (enabled_masking_policies)
+    {
+        auto alter_commands = enabled_masking_policies->getAlterCommands(
+            part->storage.getStorageID().database_name,
+            part->storage.getStorageID().table_name);
+
+        /// Convert each ALTER command to a MutationCommand
+        for (const auto & alter_command_ast : alter_commands)
+        {
+            if (auto mutation_command_opt = MutationCommand::parse(*alter_command_ast))
+            {
+                commands.push_back(*mutation_command_opt);
+            }
+            else
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to parse MutationCommand produced by masking policy rule");
+        }
+    }
+#endif
 
     for (auto & patch : patches)
     {
