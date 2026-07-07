@@ -1284,7 +1284,7 @@ void registerDatabaseDataLake(DatabaseFactory & factory)
             is_loading_from_existing_metadata,
             /// Internal creates (`RESTORE DATABASE`) shouldn't do network I/O.
             /// We don't want an unreachable or unauthorized catalog to block replica startup.
-            /*lazy_init=*/args.create_query.attach || args.is_internal);
+            /*lazy_init=*/args.create_query.attach || args.internal);
     };
     /// TODO: DataLakeCatalog is polymorphic — underlying source (S3, Azure, HDFS, etc.) depends
     /// on the catalog type chosen at runtime. Consider adding source_access_type once a mechanism
