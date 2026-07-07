@@ -750,17 +750,7 @@ tar -czf ./ci/tmp/logs.tar.gz \
                 # TODO: reduce scope to modified test cases instead of entire modules
                 changed_files = info.get_changed_files()
                 for file in changed_files:
-                    if (
-                        file.startswith("tests/integration/test")
-                        # e2e tests require external credentials/backends and are
-                        # excluded from the default pytest run via the `e2e`
-                        # marker. Skip them so a mixed PR (both e2e and regular
-                        # integration tests changed) does not try to run them.
-                        and not file.startswith("tests/integration/test_e2e_")
-                        and Path(file).name.startswith("test")
-                        and file.endswith(".py")
-                        and Path(file).is_file()
-                    ):
+                    if Targeting.is_integration_test_file(file):
                         changed_test_modules.append(
                             file.removeprefix("tests/integration/")
                         )
@@ -863,6 +853,42 @@ tar -czf ./ci/tmp/logs.tar.gz \
             no_strict=is_targeted_check or is_flaky_check,  # targeted check might want to run test that was removed on a merge-commit; flaky check might pick up a changed test filtered out by SKIP_LIST in the private fork
         )
     )
+
+    # If this PR only touches test files (no production/config code changed),
+    # each batch only needs the changed integration test modules that were
+    # actually assigned to it - other batches would produce identical results
+    # to master and can be skipped outright.
+    if (
+        total_batches > 1
+        and not is_flaky_check
+        and not is_targeted_check
+        and not is_bugfix_validation
+        and not is_llvm_coverage
+        and not args.test
+    ):
+        changed_files = info.get_changed_files()
+        if changed_files and all(
+            Targeting.is_functional_test_file(f)
+            or Targeting.is_integration_test_file(f)
+            or Targeting.is_ci_job_script(f)
+            for f in changed_files
+        ):
+            changed_integration_modules = {
+                f.removeprefix("tests/integration/")
+                for f in changed_files
+                if Targeting.is_integration_test_file(f)
+            }
+            if not changed_integration_modules:
+                Result.create_from(
+                    status=Result.Status.SKIPPED,
+                    info="Only non-integration test files changed in this PR - nothing for this job to run",
+                ).complete_job()
+            batch_modules = set(parallel_test_modules) | set(sequential_test_modules)
+            if not (changed_integration_modules & batch_modules):
+                Result.create_from(
+                    status=Result.Status.SKIPPED,
+                    info="Only test files changed in this PR and none of the changed test modules fall into this batch",
+                ).complete_job()
 
     if is_flaky_check or is_targeted_check:
         # The flaky/targeted parallel bucket runs `--dist=each`: every worker runs

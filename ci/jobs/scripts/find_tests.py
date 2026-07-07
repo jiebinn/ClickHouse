@@ -105,6 +105,57 @@ class Targeting:
                     return candidate
         return None
 
+    @staticmethod
+    def is_functional_test_file(fpath: str) -> bool:
+        """A changed path that is itself a stateless functional test source file."""
+        fpath = fpath.removeprefix("./")
+        return fpath.startswith("tests/queries/0_stateless/") and Path(fpath).is_file()
+
+    @staticmethod
+    def is_integration_test_file(fpath: str) -> bool:
+        """A changed path that is itself an integration test module."""
+        fpath = fpath.removeprefix("./")
+        return (
+            fpath.startswith("tests/integration/test_")
+            and not fpath.startswith("tests/integration/test_e2e_")
+            and Path(fpath).name.startswith("test")
+            and fpath.endswith(".py")
+            and Path(fpath).is_file()
+        )
+
+    @staticmethod
+    def is_ci_job_script(fpath: str) -> bool:
+        """A changed path under the CI job scripts themselves.
+
+        Tolerated alongside test-file changes by the batch-skip check in
+        `functional_tests.py` / `integration_test_job.py`: such a change is
+        exercised identically by every batch, so a batch that does not
+        contain the changed test file is still a valid check of the
+        (possibly changed) job script.
+        """
+        fpath = fpath.removeprefix("./")
+        return fpath.startswith("ci/jobs/") and Path(fpath).is_file()
+
+    @classmethod
+    def functional_test_hash_batch_file(cls, fpath: str):
+        """Return the on-disk stateless test filename (with extension) that
+        `clickhouse-test --run-by-hash-*` uses to bucket the given changed path,
+        or `None` if it cannot be resolved to a concrete test source file (e.g.
+        an orphan data file with no sibling test).
+        """
+        fname = os.path.basename(fpath)
+        for ext in cls._TEST_FILE_EXTENSIONS:
+            if fname.endswith(ext):
+                return fname
+        base_name = cls._derive_test_name(fpath)
+        if base_name is None:
+            return None
+        test_dir = Path("tests/queries/0_stateless")
+        for ext in cls._TEST_FILE_EXTENSIONS:
+            if (test_dir / f"{base_name}{ext}").is_file():
+                return f"{base_name}{ext}"
+        return None
+
     def get_changed_tests(self):
         # TODO: add support for integration tests
         result = set()
