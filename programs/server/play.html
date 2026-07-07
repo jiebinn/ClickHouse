@@ -3367,6 +3367,7 @@ let tabs = [];           /// array of tab objects; display order == array order
 let activeTabId = null;
 let tabSeq = 0;          /// monotonic counter for synthetic, stable tab ids
 let tabTitleSeq = 0;     /// counter for default titles "Query A", "Query B", ...
+let activeTitleCommit = null;  /// commit fn of the open inline title editor, or null; lets other paths flush a pending rename
 let dbReady = null;      /// Promise<IDBDatabase|null>; null result means persistence is unavailable
 
 /// The page is interactive from first paint (the bootstrap tab holds the URL query, if any),
@@ -5171,6 +5172,12 @@ function addTab() {
 function duplicateTab(id, guard_paste = false) {
     const src = tabs.find(t => t.id === id);
     if (!src) return;
+    /// Flush any in-progress inline title rename first. The editor writes back to `tab.title`
+    /// only on `blur`, but this path rerenders the tab bar (destroying the editable span), and a
+    /// middle click also suppresses that automatic `blur` (its `mousedown` calls `preventDefault`).
+    /// Without an explicit commit, renaming one tab and then duplicating another silently reverts
+    /// the rename. Committing works whichever tab is being duplicated (the editor is the active tab).
+    if (activeTitleCommit) activeTitleCommit(true);
     markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
     /// Fold live editor edits into the (possibly source) tab first, so the copy reflects them.
     captureActiveTab();
@@ -5229,6 +5236,7 @@ function startTitleEdit(tab, titleEl) {
     const commit = (save) => {
         if (done) return;
         done = true;
+        if (activeTitleCommit === commit) activeTitleCommit = null;
         if (save) {
             /// Collapse any pasted newlines/runs of whitespace into single spaces.
             const v = titleEl.textContent.replace(/\s+/g, ' ').trim();
@@ -5240,6 +5248,9 @@ function startTitleEdit(tab, titleEl) {
         syncHistory();
         scheduleSave();
     };
+    /// Expose the commit so paths that rerender the tab bar (e.g. duplicating another tab)
+    /// can flush this pending rename first — the editor otherwise only writes back on `blur`.
+    activeTitleCommit = commit;
     titleEl.addEventListener('keydown', (e) => {
         /// Keep keys (Space/Enter) from reaching the tab-level switch handler.
         e.stopPropagation();
