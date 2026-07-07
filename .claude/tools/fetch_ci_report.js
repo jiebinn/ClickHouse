@@ -452,6 +452,12 @@ async function fetchReport(inputUrl, options = {}) {
         let totalFailed = 0;
         let totalSkipped = 0;
 
+        // Per-failure detail is normally suppressed for the top-level PR report to avoid
+        // duplicating the nested per-job reports. But when the PR report is the ONLY report
+        // discovered (the bot comment exposed no nested job URLs), suppressing it would leave a
+        // PR URL with no failed leaves at all — so show them in that case.
+        const onlyPRLevel = allResults.every(r => r.error || r.isPRLevel);
+
         for (const result of allResults) {
           if (result.error) {
             console.log(`[${result.index}] ${result.jobName}`);
@@ -473,13 +479,15 @@ async function fetchReport(inputUrl, options = {}) {
           console.log(`[${result.index}] ${status} ${result.jobName}`);
           console.log(`    Total: ${testResults.length} | ✅ Passed: ${passed.length} | ❌ Failed: ${failed.length} | ⏭️  Skipped: ${skipped.length}`);
 
-          // For nested reports with failures, show the HTML link
-          if (!result.isPRLevel && failed.length > 0 && result.url) {
+          // For reports with failures, show the HTML link (also for the PR report when it's the
+          // only one, so the investigator can drill in).
+          if ((!result.isPRLevel || onlyPRLevel) && failed.length > 0 && result.url) {
             console.log(`    🔗 Report: ${result.url}`);
           }
 
-          // Skip showing individual test failures for PR-level reports to avoid duplication
-          if (failed.length > 0 && options.failedOnly && !result.isPRLevel) {
+          // Show individual failures for nested reports; for the PR-level report only when it is
+          // the sole report (otherwise skip it to avoid duplicating the nested job reports).
+          if (failed.length > 0 && options.failedOnly && (!result.isPRLevel || onlyPRLevel)) {
             for (const test of failed) {
               console.log(`      ❌ FAIL: ${test.name}`);
               if (test.labels && test.labels.length > 0) {

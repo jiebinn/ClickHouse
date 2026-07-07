@@ -311,9 +311,11 @@ Three complementary sources, cheapest first:
   **A bare number is ambiguous — every hit is a candidate, never a confirmed fix.** GitHub matches
   the number as free text, so this returns PRs that merely *mention* it (e.g. searching `75982`
   returns this docs PR, which only cites `#75982`). Before using any hit in the `Fix` column,
-  **verify it genuinely references this issue** — its body has a `Closes/Fixes/Related #<issue-number>`
-  (not the number in prose), or it plainly addresses the same failing test/symptom. Discard mentions
-  that don't. Never emit `WIP`/`merged` from an unverified number match.
+  **verify it genuinely references this issue** — its body has a relationship line naming the issue,
+  in **either** ClickHouse's full-URL convention (`Closes:`/`Fixes:`/`Related:`
+  `https://github.com/ClickHouse/ClickHouse/issues/<n>` — the form repo PRs are supposed to use) or
+  the short `Closes/Fixes/Related #<n>` form, or it plainly addresses the same failing test/symptom.
+  Discard bare prose mentions that don't. Never emit `WIP`/`merged` from an unverified number match.
 
   Do **not** rely on the by-test-name search below to catch cross-references — a fix PR that
   references the issue but never names the test is invisible to it, which would emit a false
