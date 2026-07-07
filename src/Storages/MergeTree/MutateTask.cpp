@@ -1026,56 +1026,25 @@ static std::unordered_map<String, size_t> getStreamCounts(
 
     for (const auto & column_name : column_names)
     {
-        /// For columns with a dynamic structure (Dynamic, JSON, ...) enumerateStreams below is called
-        /// without a deserialization state, so SerializationDynamic::enumerateStreams stops after the
-        /// `dynamic_structure` substream and never reports the data-dependent substreams (e.g.
-        /// `variant_discr`). That makes the stream accounting incomplete and such streams can be
-        /// mishandled during mutation (e.g. a `variant_discr` stream that is neither rewritten nor
-        /// hardlinked into the new part, leaving it broken). Use the substreams recorded in
-        /// columns_substreams.txt, which are the ground truth of what exists in the part, for such columns.
-        /// The check is `hasDynamicStructure` (only `Dynamic`/`JSON` make state-less enumeration
-        /// incomplete), not the broader `hasDynamicSubcolumns` which also matches a plain `Map`/`Variant`
-        /// whose streams are fully enumerable without a state.
-        auto column = data_part->tryGetColumn(column_name);
-        const std::vector<String> * recorded_substreams = nullptr;
-        if (column && column->type->hasDynamicStructure())
-            recorded_substreams = columns_substreams.tryGetColumnSubstreams(column_name);
+        /// When columns_substreams.txt is available, prefer its recorded substreams over
+        /// enumerateStreams. The file is the ground truth of what streams exist on disk, and
+        /// for columns with a data-dependent dynamic structure (Dynamic, JSON) a state-less
+        /// enumerateStreams is incomplete: it stops after `dynamic_structure` and never reports
+        /// data-dependent substreams like `variant_discr`.
+        const auto * recorded_substreams = columns_substreams.tryGetColumnSubstreams(column_name);
 
-        if (recorded_substreams)
+        /// A not-yet-written column in a new part carries only a single placeholder substream
+        /// (see getColumnsForNewDataPart). It has no real streams on disk yet, so we fall back
+        /// to enumerateStreams to preserve correct shared-stream accounting for regular columns
+        /// (e.g. Nested array sizes).
+        if (recorded_substreams && !(recorded_substreams->size() == 1 && (*recorded_substreams)[0] == NOT_YET_WRITTEN_COLUMN_SUBSTREAM_PLACEHOLDER))
         {
-            std::vector<String> resolved;
-            resolved.reserve(recorded_substreams->size());
-            bool resolved_all = !recorded_substreams->empty();
             for (const auto & substream : *recorded_substreams)
             {
-                /// A not-yet-written column in a new part carries only the placeholder substream
-                /// (see getColumnsForNewDataPart). It is not a real stream, and it must not be
-                /// resolved against the source checksums: a part may contain an unrelated column
-                /// whose name happens to collide with the placeholder, and resolving it would mark
-                /// that unchanged stream as skipped, dropping it from the new part. Fall back to
-                /// enumeration in that case to preserve the previous behaviour.
-                if (substream == NOT_YET_WRITTEN_COLUMN_SUBSTREAM_PLACEHOLDER)
-                {
-                    resolved_all = false;
-                    break;
-                }
-
-                /// Other substreams that don't resolve (e.g. placeholders of old parts) also fall back.
                 if (auto stream_name = IMergeTreeDataPart::getStreamNameOrHash(substream, ".bin", source_part_checksums))
-                    resolved.push_back(std::move(*stream_name));
-                else
-                {
-                    resolved_all = false;
-                    break;
-                }
+                    ++stream_counts[*stream_name];
             }
-
-            if (resolved_all)
-            {
-                for (auto & stream_name : resolved)
-                    ++stream_counts[stream_name];
-                continue;
-            }
+            continue;
         }
 
         if (auto serialization = data_part->tryGetSerialization(column_name))
