@@ -84,13 +84,16 @@ public:
         if (isVariant(ref_vec_type) || isDynamic(ref_vec_type))
             return;
 
-        /// A Nullable reference vector cannot go through the optimization either. The rewrite casts the reference vector to a
-        /// plain Array(element_type) with an internal (non keep_nullable) _CAST, which does not preserve the reference-side
-        /// null map: casting Nullable(Array(...)) to Array(...) throws `Cannot convert NULL value to non-Nullable type` at
-        /// runtime as soon as a reference row is NULL, whereas the unoptimized distance function returns NULL for that row
-        /// through its default Nullable handling. Leave such a call for the unoptimized function to handle. This is
-        /// independent of the QBit column's own nullability - the trap here is the reference-side null map (the QBit
-        /// column's null map still flows through the Nullable bit-plane subcolumns when the optimization does apply).
+        /// A Nullable reference vector must be left unoptimized as well. The rewrite casts the reference vector to a plain
+        /// Array(element_type) with an internal (non keep_nullable) _CAST, and _CAST of a NULL to a non-Nullable type throws
+        /// `Cannot convert NULL to a non-nullable type` while the rewrite is being built. In practice the only Nullable
+        /// reference vector that can occur is a bare NULL constant (type Nullable(Nothing)) - Nullable(Array(...)) is not a
+        /// constructible type in ClickHouse - and that constant-NULL case is also caught by the "result type is only NULL"
+        /// guard further down. Rejecting any Nullable reference vector here, next to the Variant/Dynamic guard, keeps the
+        /// "special reference vectors are not optimized" contract explicit and robust. The unoptimized distance function
+        /// returns NULL for such a reference through its default Nullable handling. This is independent of the QBit column's
+        /// own nullability: the column's null map still flows through the Nullable bit-plane subcolumns when the optimization
+        /// does apply.
         if (ref_vec_type->isNullable())
             return;
 
