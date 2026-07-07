@@ -56,11 +56,12 @@ public:
         auto * original_split_node = current_node;
         const auto * parent_step = parent_node->step.get();
 
-        if (typeid_cast<const ExpressionStep *>(parent_step) || typeid_cast<const FilterStep *>(parent_step)
-            || typeid_cast<const BuildRuntimeFilterStep *>(parent_step))
+        if (typeid_cast<const ExpressionStep *>(parent_step) || typeid_cast<const FilterStep *>(parent_step))
         {
-            /// swap steps
+            /// Move the split step above the expression/filter step and update its header to match
+            /// the new child, since the split step just passes data through.
             std::swap(current_node->step, parent_node->step);
+            parent_node->step->updateInputHeader(current_node->step->getOutputHeader());
             return;
         }
 
