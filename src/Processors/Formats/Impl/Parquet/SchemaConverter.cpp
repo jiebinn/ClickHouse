@@ -606,13 +606,18 @@ void SchemaConverter::processSubtreeTuple(TraversalNode & node)
     /// The requested type may wrap the tuple in Nullable (e.g. `Nullable(Tuple(...))` is a legal
     /// type). Unwrap it, match elements against the inner Tuple, and let the outer wrapper be
     /// restored via outer_type_hint (needs_cast) in processSubtree.
-    /// Only do this for a REQUIRED group: the group is then always defined, so the outer Nullable
-    /// is always-non-null and the cast-based restore is lossless. For an OPTIONAL group the struct
-    /// level nulls come from parquet definition levels and are not yet propagated to the outer
-    /// Nullable, so keep the hint wrapped and let the check below reject it rather than silently
-    /// drop those nulls.
+    /// Only do this when the tuple is always defined, so the outer Nullable is always-non-null and
+    /// the cast-based restore is lossless. That requires the group itself to be REQUIRED and to
+    /// have no optional ancestor: an OPTIONAL ancestor still carries definition-level nulls (a
+    /// non-array level in the stack), which are not propagated to the outer Nullable, so accepting
+    /// the hint would silently drop those nulls. In those cases keep the hint wrapped and let the
+    /// check below reject it.
+    bool has_optional_ancestor = false;
+    for (const LevelInfo & l : levels)
+        has_optional_ancestor |= !l.is_array;
     if (node.type_hint && node.type_hint->isNullable()
-        && node.element->repetition_type == parq::FieldRepetitionType::REQUIRED)
+        && node.element->repetition_type == parq::FieldRepetitionType::REQUIRED
+        && !has_optional_ancestor)
         node.type_hint = assert_cast<const DataTypeNullable &>(*node.type_hint).getNestedType();
 
     const DataTypeTuple * tuple_type_hint = typeid_cast<const DataTypeTuple *>(node.type_hint.get());
