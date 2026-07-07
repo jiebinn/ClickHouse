@@ -14,7 +14,7 @@ CREATE TABLE quantize_bad (id UInt32, vec Array(Float32) CODEC(Quantized('rabitq
 CREATE TABLE quantize_bad (id UInt32, vec Array(Float32) CODEC(Quantized('turboquant', 60))) ENGINE = MergeTree ORDER BY id; -- { serverError ILLEGAL_CODEC_PARAMETER }
 
 -- An unknown method is rejected.
-CREATE TABLE quantize_bad (id UInt32, vec Array(Float32) CODEC(Quantized('nope', 64))) ENGINE = MergeTree ORDER BY id; -- { serverError ILLEGAL_CODEC_PARAMETER }
+CREATE TABLE quantize_bad (id UInt32, vec Array(Float32) CODEC(Quantized('nope', 64))) ENGINE = MergeTree ORDER BY id; -- { serverError INCORRECT_DATA }
 
 -- `mrl` requires the 4-argument form with a format of 'int8' or 'bf16'.
 CREATE TABLE quantize_bad (id UInt32, vec Array(Float32) CODEC(Quantized('mrl', 64, 32))) ENGINE = MergeTree ORDER BY id; -- { serverError ILLEGAL_SYNTAX_FOR_CODEC_TYPE }

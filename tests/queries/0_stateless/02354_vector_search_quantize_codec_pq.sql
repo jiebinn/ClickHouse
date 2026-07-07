@@ -3,7 +3,7 @@
 --  cannot hold there; the query still returns exact results in that case.)
 -- The `pq` (trained Product Quantization) method of the `Quantized(...)` column codec learns a per-part codebook with
 -- k-means and stores one m-byte code per vector, exposed as the readable subcolumn `<column>.quantized`, plus the
--- per-part codebook as the subcolumn `<column>.pq_codebook`. The full-precision data is stored verbatim, so reading the
+-- per-part codebook as the subcolumn `<column>.product_quantization_codebook`. The full-precision data is stored verbatim, so reading the
 -- vector itself (and the exact rescore) is unaffected. The codec is gated behind `allow_experimental_codecs`.
 -- Syntax: `Quantized('pq', dimensions, nbits, m)`.
 
@@ -39,8 +39,8 @@ SELECT 'codes_type', toTypeName(vec.quantized) FROM quantize_pq LIMIT 1;
 SELECT 'codes_length', length(vec.quantized) FROM quantize_pq GROUP BY length(vec.quantized);
 
 -- The codebook subcolumn is readable; it holds 2^nbits centroids of `dimensions` floats: 256 * 64 * 4 = 65536 bytes.
-SELECT 'codebook_type', toTypeName(vec.pq_codebook) FROM quantize_pq LIMIT 1;
-SELECT 'codebook_length', length(vec.pq_codebook) FROM quantize_pq GROUP BY length(vec.pq_codebook);
+SELECT 'codebook_type', toTypeName(vec.product_quantization_codebook) FROM quantize_pq LIMIT 1;
+SELECT 'codebook_length', length(vec.product_quantization_codebook) FROM quantize_pq GROUP BY length(vec.product_quantization_codebook);
 
 -- The full-precision vectors round-trip unchanged.
 SELECT 'full_precision_rows', count() FROM quantize_pq WHERE length(vec) = 64;

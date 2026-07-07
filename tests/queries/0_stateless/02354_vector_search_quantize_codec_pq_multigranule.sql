@@ -26,7 +26,7 @@ SELECT 'one_part', count() FROM system.parts WHERE database = currentDatabase() 
 
 -- Read the codebook subcolumn across many small blocks (each well below one granule): every row sees the same 65536-byte
 -- codebook, and the read does not fail. Comparing the length avoids materializing the broadcast blob.
-SELECT 'codebook_read_all_granules', countIf(length(vec.pq_codebook) = 65536), count() FROM quantize_pq_mg SETTINGS max_block_size = 1024;
+SELECT 'codebook_read_all_granules', countIf(length(vec.product_quantization_codebook) = 65536), count() FROM quantize_pq_mg SETTINGS max_block_size = 1024;
 
 -- The two-stage vector search reads codes and codebook across all granules and rescores exactly. The shortlist covers
 -- the whole table (multiplier 1000 * LIMIT 10 = 10000 rows), so the result equals the exact brute-force top-k.

@@ -27,13 +27,13 @@ FROM numbers(2000);
 
 SELECT 'parts_before', count() FROM system.parts WHERE database = currentDatabase() AND table = 'quantize_pq_merge' AND active;
 -- One distinct codebook per part.
-SELECT 'codebooks_before', uniqExact(vec.pq_codebook) FROM quantize_pq_merge;
+SELECT 'codebooks_before', uniqExact(vec.product_quantization_codebook) FROM quantize_pq_merge;
 
 OPTIMIZE TABLE quantize_pq_merge FINAL;
 
 SELECT 'parts_after', count() FROM system.parts WHERE database = currentDatabase() AND table = 'quantize_pq_merge' AND active;
 -- The merged part carries a single retrained codebook.
-SELECT 'codebooks_after', uniqExact(vec.pq_codebook) FROM quantize_pq_merge;
+SELECT 'codebooks_after', uniqExact(vec.product_quantization_codebook) FROM quantize_pq_merge;
 
 -- The two-stage search reproduces the exact brute-force top-k against the retrained codebook (shortlist covers all rows).
 WITH (SELECT vec FROM quantize_pq_merge WHERE id = 123) AS ref
