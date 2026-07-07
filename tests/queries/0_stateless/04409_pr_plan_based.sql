@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS t_pr_plan_based;
 CREATE TABLE t_pr_plan_based (a UInt64, b UInt64) ENGINE = MergeTree ORDER BY a;
 INSERT INTO t_pr_plan_based SELECT number, number % 10 FROM numbers(100000);
 
+SET enable_analyzer = 1;
 SET enable_parallel_replicas = 1;
 SET parallel_replicas_for_non_replicated_merge_tree = 1;
 SET max_parallel_replicas = 3;
@@ -41,4 +42,4 @@ SELECT
     countIf(explain LIKE '%ReadFromMergeTree%') > 0 AS has_local_read
 FROM (EXPLAIN pretty=0, description=0 SELECT sum(b) FROM t_pr_plan_based WHERE a > 5);
 
--- DROP TABLE t_pr_plan_based;
+DROP TABLE t_pr_plan_based;
