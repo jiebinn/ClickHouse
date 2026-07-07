@@ -796,7 +796,7 @@ TEST_F(ReaderExecutorTest, DecryptsSmallPayload)
     StoredObjects objects{writeBytesObject(tmp_dir, "small.enc", makeEncryptedFile(key, iv, plaintext))};
 
     ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects, ReaderExecutor::Options{});
-    executor.addDecryptionLayer("/t", 0, [&](UInt128, const String &) { return key; });
+    executor.addDecryptionLayer("/t", [&](UInt128, const String &) { return key; });
     executor.initDecryption();
 
     auto out = drain(executor);
@@ -822,7 +822,7 @@ TEST_F(ReaderExecutorTest, DecryptsAcrossManyWindows)
     /// A small block forces several windows (3 full + a partial tail).
     ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects,
         ReaderExecutor::Options{.block_size = 4096});
-    executor.addDecryptionLayer("/t", 0,
+    executor.addDecryptionLayer("/t",
         [&](UInt128 got_fp, const String &)
         {
             EXPECT_EQ(got_fp, FileEncryption::calculateKeyFingerprint(key));
@@ -892,8 +892,8 @@ TEST_F(ReaderExecutorTest, DecryptsMultiLayer)
         ReaderExecutor::Options{.block_size = 4096});
     /// Layers are added outermost-first, innermost-last -- the order the stacked-disk prepareRead
     /// chain produces (each layer recurses into its delegate before appending its `needDecryption`).
-    executor.addDecryptionLayer("/outer", 0, [&](UInt128, const String &) { return key_outer; });
-    executor.addDecryptionLayer("/inner", 0, [&](UInt128, const String &) { return key_inner; });
+    executor.addDecryptionLayer("/outer", [&](UInt128, const String &) { return key_outer; });
+    executor.addDecryptionLayer("/inner", [&](UInt128, const String &) { return key_inner; });
     executor.initDecryption();
 
     auto out = drain(executor);
@@ -909,8 +909,8 @@ TEST_F(ReaderExecutorTest, TotalSizeSaturatesOnUndersizedEncryptedFile)
     StoredObjects objects{makeFile("tiny.bin", 10)};
 
     ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects, ReaderExecutor::Options{});
-    executor.addDecryptionLayer("layer0", 64, [](UInt128, const String &) { return String{}; });
-    executor.addDecryptionLayer("layer1", 64, [](UInt128, const String &) { return String{}; });
+    executor.addDecryptionLayer("layer0", [](UInt128, const String &) { return String{}; });
+    executor.addDecryptionLayer("layer1", [](UInt128, const String &) { return String{}; });
 
     EXPECT_EQ(executor.totalSize(), 0u);
 }
@@ -930,7 +930,7 @@ TEST_F(ReaderExecutorTest, EncryptedEofReleasesLongConnectionSlot)
     auto limit = std::make_shared<LongConnectionLimit>(4);
     ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects,
         ReaderExecutor::Options{.min_bytes_for_seek = 64, .block_size = 512, .long_connection_limit = limit});
-    executor.addDecryptionLayer("/t", 0, [&](UInt128, const String &) { return key; });
+    executor.addDecryptionLayer("/t", [&](UInt128, const String &) { return key; });
     executor.initDecryption();
 
     auto out = drain(executor);
@@ -955,7 +955,7 @@ TEST_F(ReaderExecutorTest, EncryptionHeaderCacheServesRepeatedOpens)
     {
         ReaderExecutor ex(std::make_shared<LocalSourceReader>(), objects,
             ReaderExecutor::Options{.block_size = 4096, .encryption_header_cache = cache});
-        ex.addDecryptionLayer("/c", 0, key_finder);
+        ex.addDecryptionLayer("/c", key_finder);
         ex.initDecryption();
         auto out = drain(ex);
         return String(out.begin(), out.end());
@@ -1007,7 +1007,7 @@ TEST(ReaderExecutorDecryptor, ConcurrentDecryptIsReentrant)
     }
 
     ReaderExecutorDecryptor decryptor;
-    decryptor.addLayer("/r", 0, [&](UInt128 got_fp, const String &)
+    decryptor.addLayer("/r", [&](UInt128 got_fp, const String &)
     {
         EXPECT_EQ(got_fp, FileEncryption::calculateKeyFingerprint(key));
         return key;

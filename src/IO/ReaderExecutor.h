@@ -91,7 +91,7 @@ public:
 
     /// Add a decryption layer (callable multiple times for layered encryption).
     /// No-op without SSL. Call `initDecryption` once after all layers.
-    void addDecryptionLayer(String path, size_t buffer_size, KeyFinderFunc key_finder);
+    void addDecryptionLayer(String path, KeyFinderFunc key_finder);
 
     /// Read the encryption headers (one per layer) and resolve keys. Must run
     /// before any read; no-op when no layers / no SSL.

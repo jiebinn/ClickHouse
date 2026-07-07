@@ -338,11 +338,10 @@ size_t ReaderExecutor::totalSize() const
 
 void ReaderExecutor::addDecryptionLayer(
     [[maybe_unused]] String path,
-    [[maybe_unused]] size_t buffer_size,
     [[maybe_unused]] KeyFinderFunc key_finder)
 {
 #if USE_SSL
-    decryptor.addLayer(std::move(path), buffer_size, std::move(key_finder));
+    decryptor.addLayer(std::move(path), std::move(key_finder));
     data_start_offset = decryptor.headerBytes();
     LOG_DEBUG(log, "Added decryption layer, data_start_offset={}", data_start_offset);
 #endif

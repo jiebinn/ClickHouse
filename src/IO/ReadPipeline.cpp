@@ -266,7 +266,7 @@ std::unique_ptr<ReadBufferFromFileBase> ReadPipeline::tryBuildReaderExecutor() c
     /// plaintext, so it replaces the legacy `ReadBufferFromEncryptedFile` wrapping. `initDecryption`
     /// reads and parses the headers once, up front.
     for (const auto & dec : decryption_stages)
-        executor->addDecryptionLayer(dec.path, dec.buffer_size, dec.key_finder);
+        executor->addDecryptionLayer(dec.path, dec.key_finder);
     executor->initDecryption();
 
     return std::make_unique<PipelineReadBuffer>(std::move(executor));

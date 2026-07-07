@@ -31,7 +31,7 @@ public:
     using KeyFinderFunc = std::function<String(UInt128 key_fingerprint, const String & path_for_logs)>;
 
     /// Add a decryption layer. Call `parseHeaders` once after all layers.
-    void addLayer(String path, size_t buffer_size, KeyFinderFunc key_finder);
+    void addLayer(String path, KeyFinderFunc key_finder);
 
     /// No layers configured.
     bool empty() const { return layers.empty(); }
@@ -56,8 +56,8 @@ public:
 private:
     struct Layer
     {
+        /// Only used as the `path_for_logs` argument to `key_finder` (key-resolution diagnostics).
         String path;
-        size_t buffer_size = 0;
         KeyFinderFunc key_finder;
         /// Populated by `parseHeaders`.
         String key;

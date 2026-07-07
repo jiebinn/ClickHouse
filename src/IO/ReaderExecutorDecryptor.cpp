@@ -9,11 +9,10 @@
 namespace DB
 {
 
-void ReaderExecutorDecryptor::addLayer(String path, size_t buffer_size, KeyFinderFunc key_finder)
+void ReaderExecutorDecryptor::addLayer(String path, KeyFinderFunc key_finder)
 {
     layers.push_back(Layer{
         .path = std::move(path),
-        .buffer_size = buffer_size,
         .key_finder = std::move(key_finder),
         .key = {},
     });
