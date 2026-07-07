@@ -296,16 +296,26 @@ Three complementary sources, cheapest first:
   .claude/tools/gh-ro.sh issue view <issue-number> --repo ClickHouse/ClickHouse --json number,state,stateReason,closedByPullRequestsReferences,comments
   ```
 
-  This surfaces PRs that closed the issue and any fix mentioned in comments. A PR that only
-  cross-references the issue without closing it (a `Related #<issue>`) is not returned here — the
-  investigate profile denies `gh api` (it can POST), so do not reach for the issue timeline API;
-  the by-test-name PR search below catches those.
+  This surfaces PRs that **closed** the issue and any fix named in comments — but **not** a PR that
+  merely cross-references it (`Related #<issue>`) without closing it. The issue timeline would show
+  those, but the investigate profile denies `gh api` (it can POST). So find them with a read-only
+  **PR search by issue number**, which catches closing *and* non-closing references regardless of
+  whether the PR mentions the failing test:
 
-  **`closedByPullRequestsReferences` gives only `number`/`url` — not the fields you classify on.**
-  So for every PR discovered from the issue (references or comments), fetch the classification
-  fields explicitly before scoring the Fix column; do **not** rely on the by-name search to
-  re-find it (it often won't — e.g. issue #75982's fixer #80765 is not returned by searching
-  `test_dns_cache`):
+  ```bash
+  .claude/tools/gh-ro.sh pr list --repo ClickHouse/ClickHouse --state all --limit 20 \
+    --search "<issue-number>" \
+    --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
+  ```
+
+  Do **not** rely on the by-test-name search below to catch cross-references — a fix PR that
+  references the issue but never names the test is invisible to it, which would emit a false
+  `Fix: none`.
+
+  The by-issue-number `pr list` above already returns the classification fields. But
+  `closedByPullRequestsReferences` and comment mentions give only a PR **number/url** — so for any
+  fix PR you learned of only as a bare number (and that the search above did not already return),
+  fetch the classification fields explicitly before scoring the Fix column:
 
   ```bash
   .claude/tools/gh-ro.sh pr view <pr> --repo ClickHouse/ClickHouse --json number,title,state,isDraft,mergedAt,mergeCommit,headRefName,url
