@@ -138,12 +138,18 @@ endif ()
 
 include (cmake/add_warning.cmake)
 
-# -gz=zlib support depends on the compiler's zlib linkage (LLVM_ENABLE_ZLIB), not its version, so
-# probe it (before block_build_time_checks.cmake below bans compile probes). A clang without zlib
-# only *warns* on -gz=zlib, so -Werror on that warning is required or the probe false-positives.
+# -gz=zlib support depends on the compiler's zlib linkage, not its version: a no-zlib clang still
+# *accepts* -gz, it just warns "cannot compress" and emits uncompressed output. So FAIL_REGEX on that
+# warning, with a source whose debug info is large enough that the compiler actually attempts
+# compression (a trivial main is left uncompressed, so it never warns). Before the probe ban below.
 include (CheckCXXSourceCompiles)
-set (CMAKE_REQUIRED_FLAGS "-gz=zlib -g -Werror=debug-compression-unavailable")
-check_cxx_source_compiles ("int main() { return 0; }" COMPILER_SUPPORTS_GZ_ZLIB)
+set (CMAKE_REQUIRED_FLAGS "-gz=zlib -g")
+check_cxx_source_compiles ("
+template <class T> struct P { T a, b; T s() const { return a + b; } };
+struct V { long x, y, z, w; double d[4]; };
+long f(const V & v) { return v.x + v.y + v.z + v.w; }
+int main() { P<long> p{1, 2}; P<double> q{1.0, 2.0}; V v{}; return (int)(p.s() + (long)q.s() + f(v)); }
+" COMPILER_SUPPORTS_GZ_ZLIB FAIL_REGEX "cannot compress")
 unset (CMAKE_REQUIRED_FLAGS)
 
 # Block build-time CMake probes (check_*, try_compile, try_run) project-wide. Compiler and
