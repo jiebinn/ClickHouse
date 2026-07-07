@@ -270,6 +270,49 @@ TEST(TestKeeperTest, InvalidTTLCreateReturnsBadArguments)
     ASSERT_TRUE(exists(keeper, "/ttl_ok"));
 }
 
+TEST(TestKeeperTest, SequentialCreateIfNotExistsReturnsBadArguments)
+{
+    TestKeeper keeper = makeKeeper();
+
+    create(keeper, "/parent", "", /* is_ephemeral */ false);
+
+    // ZooKeeperCreateRequest::getOpNum maps not_exists to CreateIfNotExists, and real Keeper
+    // (KeeperStorage::preprocess) rejects a sequential CreateIfNotExists with ZBADARGUMENTS.
+    // TestKeeper must fail closed the same way, whether or not the target path already exists,
+    // and must not create a node — matching the behaviour of a request built via
+    // zkutil::makeCreateRequest(path, data, CreateMode::PersistentSequential, /*ignore_if_exists=*/ true).
+    auto try_seq_create_if_not_exists = [&](const String & path)
+    {
+        auto req = std::make_shared<CreateRequest>();
+        req->path = path;
+        req->data = "data";
+        req->is_sequential = true;
+        req->not_exists = true;
+
+        std::promise<MultiResponse> sink;
+        std::future<MultiResponse> future = sink.get_future();
+        keeper.multi(Requests{req}, [&](const MultiResponse & r) { sink.set_value(r); });
+
+        return future.get().responses[0]->error;
+    };
+
+    // Target path does not exist yet.
+    EXPECT_EQ(try_seq_create_if_not_exists("/parent/seq"), Error::ZBADARGUMENTS);
+    // The rejected request must not have created the bare (non-sequential) node ...
+    ASSERT_FALSE(exists(keeper, "/parent/seq"));
+    // ... nor a sequential node with the seq-num suffix.
+    {
+        ListResponse response = list(keeper, "/parent", ListRequestType::ALL, /* with_stat */ false, /* with_data */ false);
+        ASSERT_EQ(response.error, Error::ZOK);
+        EXPECT_TRUE(response.names.empty());
+    }
+
+    // Even when the bare path already exists, the illegal combination is still rejected
+    // (the check precedes the node-existence lookup in real Keeper).
+    create(keeper, "/parent/existing", "data", /* is_ephemeral */ false);
+    EXPECT_EQ(try_seq_create_if_not_exists("/parent/existing"), Error::ZBADARGUMENTS);
+}
+
 TEST(TestKeeperTest, FilteredListWithoutStatsAndData)
 {
     TestKeeper keeper = makeKeeper();

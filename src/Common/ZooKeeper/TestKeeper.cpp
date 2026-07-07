@@ -305,7 +305,36 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
     base_response.zxid = zxid;
     Undo undo;
 
-    if (container.contains(path))
+    /// Mirror the check order of KeeperStorage::preprocess: parent existence/kind first,
+    /// then the is_sequential + not_exists combination, then the node-existence (duplicate)
+    /// check, then TTL validation. Keeping the same order makes TestKeeper return the same
+    /// error code as real Keeper for the same request.
+    auto parent_it = container.find(parentPath(path));
+
+    if (parent_it == container.end())
+    {
+        base_response.error = Error::ZNONODE;
+    }
+    else if (parent_it->second.is_ephemeral)
+    {
+        base_response.error = Error::ZNOCHILDRENFOREPHEMERALS;
+    }
+    else if (parent_it->second.is_ttl)
+    {
+        /// A TTL node cannot have children, matching KeeperStorage::preprocess.
+        base_response.error = Error::ZBADARGUMENTS;
+    }
+    else if (is_sequential && not_exists)
+    {
+        /// ZooKeeperCreateRequest::getOpNum maps not_exists to CreateIfNotExists, and
+        /// KeeperStorage::preprocess rejects a sequential CreateIfNotExists with
+        /// ZBADARGUMENTS (the check precedes the node-existence lookup). Mirror it so a
+        /// request built via zkutil::makeCreateRequest(path, data,
+        /// CreateMode::PersistentSequential, /*ignore_if_exists=*/ true) fails closed
+        /// under implementation=testkeeper instead of silently creating a node.
+        base_response.error = Error::ZBADARGUMENTS;
+    }
+    else if (container.contains(path))
     {
         // Create2 / CreateTTL take precedence over CreateIfNotExists: a duplicate node
         // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
@@ -321,71 +350,53 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
         else
             base_response.error = Error::ZNODEEXISTS;
     }
+    else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
+    {
+        /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
+        /// TTL is incompatible with ephemeral, and the ttl must be positive and
+        /// bounded (prevents time + ttl overflow when computing destroy_time).
+        base_response.error = Error::ZBADARGUMENTS;
+    }
     else
     {
-        auto it = container.find(parentPath(path));
+        TestKeeper::Node created_node;
+        created_node.seq_num = 0;
+        created_node.stat.czxid = zxid;
+        created_node.stat.mzxid = zxid;
+        created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
+        created_node.stat.mtime = created_node.stat.ctime;
+        created_node.stat.numChildren = 0;
+        created_node.stat.dataLength = static_cast<int>(data.length());
+        created_node.stat.ephemeralOwner = is_ephemeral ? 1 : 0;
+        created_node.data = data;
+        created_node.is_ephemeral = is_ephemeral;
+        created_node.is_sequental = is_sequential;
+        created_node.is_ttl = include_ttl;
+        created_node.ttl = include_ttl ? ttl : 0;
+        std::string path_created = path;
 
-        if (it == container.end())
+        if (is_sequential)
+            path_created += fmt::format("{:0>10}", parent_it->second.seq_num);
+
+        /// Increment sequential number even if node is not sequential
+        ++parent_it->second.seq_num;
+
+        base_response.path_created = path_created;
+        container.emplace(path_created, std::move(created_node));
+
+        undo = [&container, path_created, parent_path = parent_it->first]
         {
-            base_response.error = Error::ZNONODE;
-        }
-        else if (it->second.is_ephemeral)
-        {
-            base_response.error = Error::ZNOCHILDRENFOREPHEMERALS;
-        }
-        else if (it->second.is_ttl)
-        {
-            /// A TTL node cannot have children, matching KeeperStorage::preprocess.
-            base_response.error = Error::ZBADARGUMENTS;
-        }
-        else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
-        {
-            /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
-            /// TTL is incompatible with ephemeral, and the ttl must be positive and
-            /// bounded (prevents time + ttl overflow when computing destroy_time).
-            base_response.error = Error::ZBADARGUMENTS;
-        }
-        else
-        {
-            TestKeeper::Node created_node;
-            created_node.seq_num = 0;
-            created_node.stat.czxid = zxid;
-            created_node.stat.mzxid = zxid;
-            created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
-            created_node.stat.mtime = created_node.stat.ctime;
-            created_node.stat.numChildren = 0;
-            created_node.stat.dataLength = static_cast<int>(data.length());
-            created_node.stat.ephemeralOwner = is_ephemeral ? 1 : 0;
-            created_node.data = data;
-            created_node.is_ephemeral = is_ephemeral;
-            created_node.is_sequental = is_sequential;
-            created_node.is_ttl = include_ttl;
-            created_node.ttl = include_ttl ? ttl : 0;
-            std::string path_created = path;
+            container.erase(path_created);
+            auto & undo_parent = container.at(parent_path);
+            --undo_parent.stat.cversion;
+            --undo_parent.stat.numChildren;
+            --undo_parent.seq_num;
+        };
 
-            if (is_sequential)
-                path_created += fmt::format("{:0>10}", it->second.seq_num);
+        ++parent_it->second.stat.cversion;
+        ++parent_it->second.stat.numChildren;
 
-            /// Increment sequential number even if node is not sequential
-            ++it->second.seq_num;
-
-            base_response.path_created = path_created;
-            container.emplace(path_created, std::move(created_node));
-
-            undo = [&container, path_created, parent_path = it->first]
-            {
-                container.erase(path_created);
-                auto & undo_parent = container.at(parent_path);
-                --undo_parent.stat.cversion;
-                --undo_parent.stat.numChildren;
-                --undo_parent.seq_num;
-            };
-
-            ++it->second.stat.cversion;
-            ++it->second.stat.numChildren;
-
-            base_response.error = Error::ZOK;
-        }
+        base_response.error = Error::ZOK;
     }
 
     if (include_stats || include_ttl)
