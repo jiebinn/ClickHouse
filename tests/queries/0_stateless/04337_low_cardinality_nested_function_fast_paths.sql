@@ -70,4 +70,27 @@ SELECT [[10, 2, 13, 15][toNullable(toLowCardinality(1))]][materialize(toLowCardi
 
 SELECT materialize(CAST(['x'], 'Array(LowCardinality(String))'))[0]; -- { serverError ZERO_ARRAY_OR_TUPLE_INDEX }
 
+SELECT 'low cardinality nullable arguments';
+SET allow_suspicious_low_cardinality_types = 1;
+SELECT materialize(CAST(['x'], 'Array(LowCardinality(String))'))[CAST(NULL, 'LowCardinality(Nullable(UInt8))')] AS v, toTypeName(v);
+SELECT materialize(CAST(['x'], 'Array(LowCardinality(String))'))[CAST(1, 'LowCardinality(Nullable(UInt8))')] AS v, toTypeName(v);
+SELECT materialize(CAST(['x'], 'Array(LowCardinality(String))'))[materialize(CAST(NULL, 'LowCardinality(Nullable(UInt8))'))] AS v, toTypeName(v);
+SELECT materialize(CAST(['x'], 'Array(LowCardinality(String))'))[materialize(CAST(1, 'LowCardinality(Nullable(UInt8))'))] AS v, toTypeName(v);
+SELECT arrayElementOrNull(materialize(CAST(['x'], 'Array(LowCardinality(String))')), CAST(NULL, 'LowCardinality(Nullable(UInt8))')) AS v, toTypeName(v);
+SELECT materialize(CAST(map('k', 'v'), 'Map(LowCardinality(String), String)'))[CAST('k', 'LowCardinality(Nullable(String))')] AS v, toTypeName(v);
+SELECT materialize(CAST(map('k', 'v'), 'Map(LowCardinality(String), String)'))[CAST(NULL, 'LowCardinality(Nullable(String))')] AS v, toTypeName(v);
+SELECT [10, 2, 13, 15][toNullable(toLowCardinality(1))] AS v, toTypeName(v);
+SELECT [[10, 2, 13, 15][toNullable(toLowCardinality(1))]][materialize(toLowCardinality(1))] AS v, toTypeName(v);
+
+SELECT 'low cardinality result types';
+SELECT CAST(['x'], 'Array(LowCardinality(String))')[materialize(toLowCardinality(1))] AS v, toTypeName(v);
+SELECT CAST(['x'], 'Array(String)')[materialize(CAST(1, 'LowCardinality(Nullable(UInt8))'))] AS v, toTypeName(v);
+
+SELECT 'low cardinality nullable patterns';
+SELECT mapContainsKeyLike(materialize(CAST(map('key1', 'v'), 'Map(LowCardinality(String), String)')), CAST('k%', 'LowCardinality(Nullable(String))')) AS v, toTypeName(v);
+SELECT mapContainsKeyLike(materialize(CAST(map('key1', 'v'), 'Map(LowCardinality(String), String)')), CAST(NULL, 'LowCardinality(Nullable(String))')) AS v, toTypeName(v);
+SELECT mapSort(mapExtractKeyLike(materialize(CAST(map('key1', 'v'), 'Map(LowCardinality(String), String)')), CAST('k%', 'LowCardinality(Nullable(String))'))) AS v, toTypeName(v);
+SELECT mapContainsValueLike(materialize(CAST(map('k', 'val1'), 'Map(String, LowCardinality(String))')), CAST('v%', 'LowCardinality(Nullable(String))')) AS v, toTypeName(v);
+SELECT mapSort(mapExtractValueLike(materialize(CAST(map('k', 'val1'), 'Map(String, LowCardinality(String))')), CAST('v%', 'LowCardinality(Nullable(String))'))) AS v, toTypeName(v);
+
 DROP TABLE t_nested_lc_fast_paths;

@@ -32,3 +32,22 @@ x	Nullable(String)
 1	{'k1':'alpha'}
 \N	{}
 10
+low cardinality nullable arguments
+\N	Nullable(String)
+x	Nullable(String)
+\N	Nullable(String)
+x	Nullable(String)
+\N	Nullable(String)
+v	Nullable(String)
+\N	Nullable(String)
+10	LowCardinality(Nullable(UInt8))
+10	LowCardinality(Nullable(UInt8))
+low cardinality result types
+x	LowCardinality(String)
+x	LowCardinality(Nullable(String))
+low cardinality nullable patterns
+1	Nullable(UInt8)
+\N	Nullable(UInt8)
+{'key1':'v'}	Map(String, String)
+1	Nullable(UInt8)
+{'k':'val1'}	Map(String, String)

@@ -54,7 +54,25 @@ class FunctionMapToArrayAdapter final : public IFunction
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapToArrayAdapter>(); }
+
+    /// A specialized LowCardinality execution path (if the adapter provides one) requires opting
+    /// out of the default LowCardinality implementation, so that executeImpl can see
+    /// LowCardinality columns. When the specialized path does not apply, both return type
+    /// deduction and execution delegate to an instance created with
+    /// `use_low_cardinality_fast_path = false`, which restores the default framework behavior
+    /// for LowCardinality arguments.
+    explicit FunctionMapToArrayAdapter(bool use_low_cardinality_fast_path_ = true)
+        : use_low_cardinality_fast_path(use_low_cardinality_fast_path_)
+    {
+    }
+
     String getName() const override { return name; }
+
+    static constexpr bool has_low_cardinality_specialization
+        = requires(const ColumnsWithTypeAndName & args, const DataTypePtr & type, size_t rows)
+        {
+            Adapter::executeWithLowCardinalityColumns(args, type, rows);
+        };
 
     /// Functions that return a Map by selecting or reordering the original key-value pairs
     /// (`mapFilter`, `mapSort` and its variants, `mapConcat`) must keep the exact key and value
@@ -71,13 +89,24 @@ public:
     bool useDefaultImplementationForNulls() const override { return impl.useDefaultImplementationForNulls(); }
     bool useDefaultImplementationForLowCardinalityColumns() const override
     {
-        if constexpr (requires { Adapter::use_default_implementation_for_low_cardinality_columns; })
-            return Adapter::use_default_implementation_for_low_cardinality_columns;
+        if constexpr (has_low_cardinality_specialization)
+            return !use_low_cardinality_fast_path;
         if constexpr (preserve_nested_low_cardinality)
             return false;
         return impl.useDefaultImplementationForLowCardinalityColumns();
     }
-    bool useDefaultImplementationForConstants() const override { return impl.useDefaultImplementationForConstants(); }
+    /// The default implementation for constants must stay disabled together with the default
+    /// LowCardinality implementation: it normally runs after it and would otherwise unwrap
+    /// constants that the delegated LowCardinality handling relies on (see executeImpl).
+    bool useDefaultImplementationForConstants() const override
+    {
+        if constexpr (has_low_cardinality_specialization)
+        {
+            if (use_low_cardinality_fast_path)
+                return false;
+        }
+        return impl.useDefaultImplementationForConstants();
+    }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo &) const override  { return false; }
 
     /// Reflect the SQL-level signature, not the internal `impl` plumbing.
@@ -100,6 +129,18 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
+        if constexpr (has_low_cardinality_specialization)
+        {
+            /// Opting out of the default LowCardinality implementation also disables the default
+            /// return type deduction for LowCardinality arguments (in particular, the nullability
+            /// of a LowCardinality(Nullable) pattern and the LowCardinality wrapping of the result
+            /// type). Delegate to an instance with the default implementation enabled, so that the
+            /// deduced type is exactly the same as if the specialized LowCardinality path did not exist.
+            if (use_low_cardinality_fast_path && hasLowCardinalityTypes(arguments))
+                return FunctionToOverloadResolverAdaptor(std::make_shared<FunctionMapToArrayAdapter>(/*use_low_cardinality_fast_path_=*/ false))
+                    .getReturnType(arguments);
+        }
+
         if (arguments.empty())
             throw Exception(
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
@@ -147,17 +188,24 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        if constexpr (requires { Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count); })
+        if constexpr (has_low_cardinality_specialization)
         {
-            if (auto result = Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count))
-                return result;
-            auto arguments_to_execute = arguments;
-            if (convertLowCardinalityColumnsToFull(arguments_to_execute))
+            if (use_low_cardinality_fast_path)
             {
-                /// Re-enter the function through the framework so that the default implementations
-                /// (in particular for Nullable arguments uncovered by removing LowCardinality) are applied.
-                return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionMapToArrayAdapter>())
-                    .execute(arguments_to_execute, result_type, input_rows_count, /*dry_run=*/ false);
+                if (auto result = Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count))
+                    return result;
+
+                if (hasLowCardinalityTypes(arguments) || allArgumentColumnsAreConstant(arguments))
+                {
+                    /// The specialized LowCardinality path does not apply. Re-enter the function
+                    /// through the framework with the default implementations (for LowCardinality
+                    /// and constant arguments) enabled, so that conversion of LowCardinality
+                    /// arguments or execution on the dictionary, constant unwrapping and Nullable
+                    /// handling are applied in the usual order, exactly as if the specialized path
+                    /// did not exist.
+                    return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionMapToArrayAdapter>(/*use_low_cardinality_fast_path_=*/ false))
+                        .execute(arguments, result_type, input_rows_count, /*dry_run=*/ false);
+                }
             }
         }
 
@@ -190,6 +238,7 @@ public:
 
 private:
     Impl impl;
+    bool use_low_cardinality_fast_path = true;
 };
 
 
@@ -406,10 +455,10 @@ struct MapLikeAdapter
     /// The SQL-level signature is `(Map, String pattern)`; the lambda is constructed internally,
     /// so the first user-facing argument is not a lambda.
     static constexpr bool first_argument_is_lambda = false;
-    static constexpr bool use_default_implementation_for_low_cardinality_columns = false;
 
     /// These functions match keys/values with `LIKE`, which is defined only for String/FixedString.
-    /// Their LowCardinality handling is left to the generic machinery (nested LowCardinality is not preserved).
+    /// Their LowCardinality handling is left to the generic machinery (nested LowCardinality is not
+    /// preserved), except for the specialized path in executeWithLowCardinalityColumns.
     static constexpr bool preserve_low_cardinality = false;
 
     static void checkTypes(const DataTypes & types)

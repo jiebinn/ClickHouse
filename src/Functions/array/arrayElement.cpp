@@ -62,14 +62,28 @@ public:
     static constexpr auto name = (mode == ArrayElementExceptionMode::Zero) ? "arrayElement" : "arrayElementOrNull";
     static FunctionPtr create(ContextPtr context_);
 
+    /// The specialized LowCardinality execution path requires opting out of the default
+    /// LowCardinality implementation, so that executeImpl can see LowCardinality columns.
+    /// When the specialized path does not apply, both return type deduction and execution
+    /// delegate to an instance created with `use_low_cardinality_fast_path = false`, which
+    /// restores the default framework behavior for LowCardinality arguments.
+    explicit FunctionArrayElement(bool use_low_cardinality_fast_path_ = true)
+        : use_low_cardinality_fast_path(use_low_cardinality_fast_path_)
+    {
+    }
+
     String getName() const override;
 
-    bool useDefaultImplementationForConstants() const override { return true; }
-    bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
+    /// The default implementation for constants must stay disabled together with the default
+    /// LowCardinality implementation: it normally runs after it and would otherwise unwrap
+    /// constants that the delegated LowCardinality handling relies on (see executeImpl).
+    bool useDefaultImplementationForConstants() const override { return !use_low_cardinality_fast_path; }
+    bool useDefaultImplementationForLowCardinalityColumns() const override { return !use_low_cardinality_fast_path; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
     size_t getNumberOfArguments() const override { return 2; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override;
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override;
 
     ColumnPtr
     executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override;
@@ -189,6 +203,8 @@ private:
     template <typename Matcher>
     static void
     executeMatchConstKeyToIndex(size_t num_rows, size_t num_values, PaddedPODArray<UInt64> & matched_idxs, const Matcher & matcher);
+
+    bool use_low_cardinality_fast_path = true;
 };
 
 
@@ -2178,14 +2194,36 @@ DataTypePtr FunctionArrayElement<mode>::getReturnTypeImpl(const DataTypes & argu
 }
 
 template <ArrayElementExceptionMode mode>
+DataTypePtr FunctionArrayElement<mode>::getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const
+{
+    /// Opting out of the default LowCardinality implementation also disables the default return
+    /// type deduction for LowCardinality arguments (in particular, the nullability of a
+    /// LowCardinality(Nullable) index and the LowCardinality wrapping of the result type).
+    /// Delegate to an instance with the default implementation enabled, so that the deduced type
+    /// is exactly the same as if the specialized LowCardinality path did not exist.
+    if (use_low_cardinality_fast_path && hasLowCardinalityTypes(arguments))
+        return FunctionToOverloadResolverAdaptor(std::make_shared<FunctionArrayElement<mode>>(/*use_low_cardinality_fast_path_=*/ false))
+            .getReturnType(arguments);
+
+    DataTypes data_types(arguments.size());
+    for (size_t i = 0; i < arguments.size(); ++i)
+        data_types[i] = arguments[i].type;
+
+    return getReturnTypeImpl(data_types);
+}
+
+template <ArrayElementExceptionMode mode>
 ColumnPtr FunctionArrayElement<mode>::executeLowCardinality(
     const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
 {
     if (arguments.size() != 2 || !isColumnConst(*arguments[1].column))
         return nullptr;
 
-    if (getNullPresense(arguments).has_nullable)
-        return nullptr;
+    /// Nullable and LowCardinality(Nullable) arguments make the result type Nullable,
+    /// which this path does not produce. Leave them to the default implementations.
+    for (const auto & argument : arguments)
+        if (isNullableOrLowCardinalityNullable(argument.type))
+            return nullptr;
 
     Field index = (*arguments[1].column)[0];
     if ((index.getType() == Field::Types::UInt64 && index.safeGet<UInt64>() == 0)
@@ -2229,16 +2267,21 @@ template <ArrayElementExceptionMode mode>
 ColumnPtr FunctionArrayElement<mode>::executeImpl(
     const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
 {
-    if (auto result = executeLowCardinality(arguments, result_type, input_rows_count))
-        return result;
-
-    auto arguments_without_low_cardinality = arguments;
-    if (convertLowCardinalityColumnsToFull(arguments_without_low_cardinality))
+    if (use_low_cardinality_fast_path)
     {
-        /// Re-enter the function through the framework so that the default implementations
-        /// (in particular for Nullable arguments uncovered by removing LowCardinality) are applied.
-        return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionArrayElement<mode>>())
-            .execute(arguments_without_low_cardinality, result_type, input_rows_count, /*dry_run=*/ false);
+        if (auto result = executeLowCardinality(arguments, result_type, input_rows_count))
+            return result;
+
+        if (hasLowCardinalityTypes(arguments) || allArgumentColumnsAreConstant(arguments))
+        {
+            /// The specialized LowCardinality path does not apply. Re-enter the function through
+            /// the framework with the default implementations (for LowCardinality and constant
+            /// arguments) enabled, so that conversion of LowCardinality arguments or execution on
+            /// the dictionary, constant unwrapping and Nullable handling are applied in the usual
+            /// order, exactly as if the specialized path did not exist.
+            return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionArrayElement<mode>>(/*use_low_cardinality_fast_path_=*/ false))
+                .execute(arguments, result_type, input_rows_count, /*dry_run=*/ false);
+        }
     }
 
     const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());

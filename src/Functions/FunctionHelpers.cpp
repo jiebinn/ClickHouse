@@ -466,6 +466,27 @@ bool isLowCardinalityType(const IDataType & type)
     return typeid_cast<const DataTypeLowCardinality *>(&type) != nullptr;
 }
 
+bool hasLowCardinalityTypes(const ColumnsWithTypeAndName & args)
+{
+    for (const auto & column : args)
+    {
+        /// recursiveRemoveLowCardinality returns the very same type object when nothing was removed.
+        if (column.type && recursiveRemoveLowCardinality(column.type).get() != column.type.get())
+            return true;
+    }
+    return false;
+}
+
+bool allArgumentColumnsAreConstant(const ColumnsWithTypeAndName & args)
+{
+    for (const auto & column : args)
+    {
+        if (!column.column || !isColumnConst(*column.column))
+            return false;
+    }
+    return true;
+}
+
 bool convertLowCardinalityColumnsToFull(ColumnsWithTypeAndName & args)
 {
     bool converted = false;
