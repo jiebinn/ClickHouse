@@ -8,10 +8,9 @@
 #include <cmath>
 #include <iterator>
 
-/// 256-level Gaussian Lloyd-Max scalar quantizer (the MSE-optimal scalar quantizer for a standard-normal source),
-/// shared by the `quantizeBFloat16ToInt8` SQL function and the `int8` vector quantization method. It is intended for
-/// values that are approximately N(0, 1) - e.g. a unit-norm embedding coordinate after a random orthogonal (randomized
-/// Hadamard) rotation, scaled by sqrt(dimensions) to reach unit variance.
+/// 256-level Gaussian Lloyd-Max scalar quantizer (the MSE-optimal scalar quantizer for a standard-normal source).
+/// It is intended for values that are approximately N(0, 1) - e.g. a unit-norm embedding coordinate after a random
+/// orthogonal (randomized Hadamard) rotation, scaled by sqrt(dimensions) to reach unit variance.
 ///
 /// The code is the index 0..255 of the Lloyd-Max cell, stored as Int8 (index - 128), so the sign bit equals the sign of
 /// the value (+0/-0 map to the positive/negative central cells) and the top `b` bits form a valid embedded 2^b-level

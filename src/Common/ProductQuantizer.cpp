@@ -1,8 +1,8 @@
 #include <Common/ProductQuantizer.h>
 
 #include <Common/Exception.h>
-#include <Common/TargetSpecific.h>
 
+#include <DataTypes/DataTypeFixedString.h>
 #include <base/defines.h>
 
 #include <algorithm>
@@ -20,7 +20,7 @@ namespace
 {
 
 /// Deterministic splitmix64 -> uniform size_t in [0, bound).
-inline UInt64 splitmix64(UInt64 & state)
+UInt64 splitmix64(UInt64 & state)
 {
     UInt64 z = (state += 0x9E3779B97F4A7C15ULL);
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
@@ -28,7 +28,7 @@ inline UInt64 splitmix64(UInt64 & state)
     return z ^ (z >> 31);
 }
 
-inline size_t randIndex(UInt64 & state, size_t bound)
+size_t randIndex(UInt64 & state, size_t bound)
 {
     return bound ? static_cast<size_t>(splitmix64(state) % bound) : 0;
 }
@@ -36,10 +36,10 @@ inline size_t randIndex(UInt64 & state, size_t bound)
 /// Scalar double nearest-centroid argmin over row-major centroids. Used only by k-means training (which runs on a
 /// bounded reservoir, not the hot per-row encode path): keeping it in double makes the learned codebook independent of
 /// the SIMD float encode kernel, so encoding stays a near-lossless re-expression of the same argmin.
-inline size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub);
+size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub);
 
 /// Squared L2 distance between two d-dim float vectors.
-inline double sqDist(const float * a, const float * b, size_t d)
+double sqDist(const float * a, const float * b, size_t d)
 {
     double s = 0.0;
     for (size_t i = 0; i < d; ++i)
@@ -50,7 +50,7 @@ inline double sqDist(const float * a, const float * b, size_t d)
     return s;
 }
 
-inline size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub)
+size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub)
 {
     size_t best = 0;
     double best_d = std::numeric_limits<double>::max();
@@ -68,7 +68,7 @@ inline size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_
 
 /// Squared norm ||c||^2 of each of the `k` centroids (each `d_sub` floats); double accumulation for stability. Computed
 /// once per codebook in `createEncoder`, so it stays off the hot per-vector path.
-inline void centroidSquaredNorms(const float * centroids, size_t k, size_t d_sub, float * out)
+void centroidSquaredNorms(const float * centroids, size_t k, size_t d_sub, float * out)
 {
     for (size_t c = 0; c < k; ++c)
     {
@@ -83,7 +83,7 @@ inline void centroidSquaredNorms(const float * centroids, size_t k, size_t d_sub
 /// Transpose one subspace's `k` centroids from row-major (centroid c at `src + c * d_sub`) to the column-major layout
 /// `dst[i * k + c]` (all centroids' coordinate i contiguous) that the nearest-centroid kernel scans across. Done once
 /// per codebook in `createEncoder`, so it stays off the hot per-vector path.
-inline void transposeCentroids(const float * src, size_t k, size_t d_sub, float * dst)
+void transposeCentroids(const float * src, size_t k, size_t d_sub, float * dst)
 {
     for (size_t c = 0; c < k; ++c)
         for (size_t i = 0; i < d_sub; ++i)
@@ -97,10 +97,7 @@ inline void transposeCentroids(const float * src, size_t k, size_t d_sub, float 
 /// horizontal reduction: each dimension i broadcasts `sub[i]` and does one fused-multiply-add across the k lanes. The
 /// target-specific build maps this onto AVX-512/AVX2. Centroid norms are precomputed in `cb_sqnorm`. `acc` is caller
 /// scratch of `k` floats. This is the hot per-row encode path.
-MULTITARGET_FUNCTION_X86_V4_V3(
-MULTITARGET_FUNCTION_HEADER(size_t NO_INLINE),
-nearestCentroidImpl,
-MULTITARGET_FUNCTION_BODY((
+size_t nearestCentroidImpl(
     const float * __restrict centroids_t,
     const float * __restrict cb_sqnorm,
     size_t k,
@@ -130,19 +127,12 @@ MULTITARGET_FUNCTION_BODY((
         }
     }
     return best;
-})
-)
+}
 
 /// Dispatch the nearest-centroid kernel to the widest supported ISA (decided per call; cheap relative to the k*d_sub work).
-inline size_t nearestCentroid(
+size_t nearestCentroid(
     const float * centroids_t, const float * cb_sqnorm, size_t k, size_t d_sub, const float * sub, float * acc)
 {
-#if USE_MULTITARGET_CODE
-    if (isArchSupported(TargetArch::x86_64_v4))
-        return nearestCentroidImpl_x86_64_v4(centroids_t, cb_sqnorm, k, d_sub, sub, acc);
-    if (isArchSupported(TargetArch::x86_64_v3))
-        return nearestCentroidImpl_x86_64_v3(centroids_t, cb_sqnorm, k, d_sub, sub, acc);
-#endif
     return nearestCentroidImpl(centroids_t, cb_sqnorm, k, d_sub, sub, acc);
 }
 
@@ -170,29 +160,31 @@ std::string ProductQuantizer::validateParams(size_t dimensions, size_t m, size_t
 {
     if (dimensions == 0)
         return "the number of dimensions must be greater than zero";
-    /// Bound the dimensions before any size arithmetic: `codebookFloats = 2^nbits * dimensions` and the per-vector code
-    /// size are derived from it, so an absurd value (e.g. a fuzzer passing 2^63) would overflow size_t and then trip a
-    /// std::length_error/bad_alloc deep inside a container. Cap well above any real embedding so the derived sizes stay
-    /// in range and the error is a clean exception here instead.
+
+    /// Sanity-check against absurd values generated by fuzzers
     static constexpr size_t MAX_DIMENSIONS = 1u << 20; /// 1,048,576
     if (dimensions > MAX_DIMENSIONS)
         return fmt::format("the number of dimensions ({}) exceeds the maximum {}", dimensions, MAX_DIMENSIONS);
+
     if (m == 0)
         return "the number of subspaces (m) must be greater than zero";
+
     if (dimensions % m != 0)
         return fmt::format("the number of dimensions ({}) must be a multiple of the number of subspaces m ({})", dimensions, m);
+
     if (nbits < 1 || nbits > 16)
         return fmt::format("nbits must be in the range [1, 16], got {}", nbits);
-    /// The per-part codebook is exposed as a `FixedString(codebookFloats * 4)`. Reject parameter combinations whose
-    /// codebook would exceed the FixedString size limit (`DataTypeFixedString`'s `MAX_FIXEDSTRING_SIZE`, 0xFFFFFF);
-    /// otherwise DDL passes this validator and only later fails with a generic "FixedString size is too large". The
-    /// product cannot overflow here: dimensions <= 2^20 and 2^nbits <= 2^16, so codebookFloats * 4 <= 2^38.
-    static constexpr size_t MAX_FIXEDSTRING_BYTES = 0xFFFFFF;
+
+    /// The codebook is exposed as a `FixedString(codebookFloats * 4)`. Reject parameter combinations whose
+    /// codebook would exceed the FixedString size limit, otherwise DDL passes this validator and only later fails with a generic
+    /// "FixedString size is too large". The product cannot overflow here: dimensions <= 2^20 and 2^nbits <= 2^16
+    /// so codebookFloats * 4 <= 2^38.
     const size_t codebook_bytes = codebookFloats(dimensions, m, nbits) * sizeof(float);
-    if (codebook_bytes > MAX_FIXEDSTRING_BYTES)
+    if (codebook_bytes > MAX_FIXEDSTRING_SIZE)
         return fmt::format(
             "the codebook for these parameters would be {} bytes, exceeding the maximum {} (reduce nbits or dimensions)",
-            codebook_bytes, MAX_FIXEDSTRING_BYTES);
+            codebook_bytes, MAX_FIXEDSTRING_SIZE);
+
     return {};
 }
 
@@ -316,8 +308,6 @@ void ProductQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
 
 void ProductQuantizer::encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst)
 {
-    /// Convenience one-shot for callers encoding a single vector; encoding many vectors against the same codebook
-    /// should `createEncoder` once and reuse it to amortize the per-codebook setup.
     auto encoder = createEncoder(codebook, dimensions, m, nbits);
     encode(*encoder, vec, dst);
 }
@@ -333,6 +323,8 @@ struct ProductQuantizer::Query
     float q_norm = 0.0f;          /// ||query|| (cosine only)
 };
 
+/// Distance is asymmetric: the query is kept full-precision; a per-subspace lookup table of query-to-centroid
+/// partial distances is precomputed once per (query, codebook), and each code is then `m` table lookups summed.
 std::shared_ptr<const ProductQuantizer::Query>
 ProductQuantizer::prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2)
 {

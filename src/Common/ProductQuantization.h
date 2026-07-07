@@ -6,11 +6,14 @@
 #include <memory>
 #include <vector>
 
-/// Product Quantization (PQ). A `dimensions`-element vector is split into `m` contiguous subspaces of
+/// Trained Product Quantization (PQ). A `dimensions`-element vector is split into `m` contiguous subspaces of
 /// `d_sub = dimensions / m` coordinates each; per subspace we learn `k = 2^nbits` centroids with Lloyd k-means and
 /// encode each sub-vector as the index of its nearest centroid. A vector becomes `m` codes (1 byte each when
 /// `nbits <= 8`, else 2). Unlike the data-independent methods in `VectorQuantization`, the codebook is TRAINED from the
-/// data.
+/// data, which is what gives PQ its recall on real datasets (e.g. SIFT).
+///
+/// Distance is asymmetric (ADC): the query is kept full-precision; a per-subspace lookup table of query-to-centroid
+/// partial distances is precomputed once per (query, codebook), and each code is then `m` table lookups summed.
 namespace DB
 {
 
@@ -25,7 +28,7 @@ struct ProductQuantizer
     /// Bytes per encoded vector: `m` code bytes (1 if nbits <= 8, else 2).
     static size_t bytesPerVector(size_t dimensions, size_t m, size_t nbits);
 
-    /// Returns a human-readable non-empty error if an invalid configuration is given, or an empty string if valid.
+    /// Validate (dimensions, m, nbits); returns an error message or empty string if valid.
     static std::string validateParams(size_t dimensions, size_t m, size_t nbits);
 
     /// Train `m` per-subspace codebooks (k = 2^nbits centroids of d_sub = dimensions/m coordinates each) from `n` sample
@@ -33,12 +36,17 @@ struct ProductQuantizer
     /// centroid k of subspace mm, coordinate i, is at `out[(mm * k_count + k) * d_sub + i]`.
     static std::vector<float> trainCodebook(const float * vectors, size_t n, size_t dimensions, size_t m, size_t nbits, UInt64 seed = 0);
 
+    /// Opaque prepared encoder (defined in the .cpp): the codebook in the kernel's column-major layout, the centroid
+    /// squared norms the reformulated nearest-centroid argmin reuses, and per-vector scratch. Build once per codebook with
+    /// `createEncoder` and reuse for every vector. Not thread-safe: it carries per-vector scratch, so one encoder serves
+    /// one writer thread.
     struct Encoder;
 
     /// Prepare an encoder for a codebook; the codebook is copied into the encoder, so it need not outlive the encoder.
     static std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits);
 
-    /// Encode one vector into `m` codes (exactly `bytesPerVector` bytes) with a prepared encoder. Use for bulk encoding.
+    /// Encode one vector into `m` codes (exactly `bytesPerVector` bytes) with a prepared encoder. Use this for bulk
+    /// encoding so the per-codebook setup is amortized across rows.
     static void encode(Encoder & encoder, const float * vec, char * dst);
 
     /// Encode one `dimensions`-element vector into `m` codes written to `dst` (exactly `bytesPerVector` bytes).
@@ -51,7 +59,7 @@ struct ProductQuantizer
     static std::shared_ptr<const Query>
     prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2);
 
-    /// Calculates the approximate distance between the prepared query and one encoded vector (`code` is `bytesPerVector` bytes).
+    /// Approximate distance between the prepared query and one encoded vector (`code` is `bytesPerVector` bytes).
     static float distance(const Query & query, const char * code);
 };
 

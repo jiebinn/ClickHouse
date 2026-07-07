@@ -51,7 +51,7 @@ namespace DB::QueryPlanOptimizations
 /// "Quantized-codes" brute-force vector search optimization.
 ///
 /// This is the brute-force counterpart of the vector-similarity-index optimization in useVectorSearch.cpp. It targets
-/// tables that do NOT have a vector similarity index but DO have a vector column carrying a `Quantize(...)` codec, which
+/// tables that do NOT have a vector similarity index but DO have a vector column carrying a `Quantized(...)` codec, which
 /// stores a compact quantized companion stream exposed as the subcolumn `<column>.quantized`. The codes are tiny (e.g.
 /// 12 bytes) compared to the full-precision vector (e.g. 960 * 4 bytes), so we can rank cheaply over the codes first and
 /// only read the heavy vector for the survivors.

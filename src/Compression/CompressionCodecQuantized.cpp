@@ -46,7 +46,6 @@ void CompressionCodecQuantized::updateHash(SipHash & hash) const
 
 UInt32 CompressionCodecQuantized::doCompressData(const char * source, UInt32 source_size, char * dest) const
 {
-    /// The full-precision data is stored verbatim (the codes live in a separate stream written by the serialization).
     memcpy(dest, source, source_size);
     return source_size;
 }
@@ -69,8 +68,7 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.size() < 2 || arguments->children.size() > 4)
         throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
-            "Codec Quantized requires 2 to 4 parameters: Quantized(method, dimensions[, bits[, m]]) "
-            "(the trained 'pq' method uses Quantized('pq', dimensions, nbits, m))");
+            "Codec Quantized requires 2 to 4 parameters: Quantized(method, dimensions[, bits[, m]]) ");
 
     const auto * method = arguments->children[0]->as<ASTLiteral>();
     if (!method || method->value.getType() != Field::Types::String)

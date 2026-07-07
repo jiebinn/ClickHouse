@@ -50,7 +50,7 @@ public:
 
 private:
     QuantizedCodecParams params;
-    bool is_product_quantization;                           /// trained Product Quantization (codebook + codes) vs data-independent codes
+    bool is_product_quantization;         /// trained Product Quantization (codebook + codes) vs data-independent codes
     size_t bytes_per_vector;
     DataTypePtr codes_type;               /// FixedString(bytes_per_vector)
     SerializationPtr codes_serialization; /// SerializationNamed(FixedString, "quantized", QuantizedCodes)

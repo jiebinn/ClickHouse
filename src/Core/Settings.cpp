@@ -7834,7 +7834,7 @@ If a vector search query has a WHERE clause, this setting determines if it is ev
 Multiply the number of fetched nearest neighbors from the vector similarity index by this number. Only applied for post-filtering with other predicates or if setting 'vector_search_with_rescoring = 1'.
 )", 0, vector_search_postfilter_multiplier) \
     DECLARE(Bool, vector_search_use_quantized_codes, false, R"(
-Enables a two-stage approximate vector search without index (brute force scan) over a `Quantized`-compressed column. When enabled, `ORDER BY L2Distance|cosineDistance(vec, reference) LIMIT k` against a column encoded with a `Quantize(...)` codec will
+Enables a two-stage approximate vector search without index (brute force scan) over a `Quantized`-compressed column. When enabled, `ORDER BY L2Distance|cosineDistance(vec, reference) LIMIT k` against a column encoded with a `Quantized(...)` codec will
 1. scan and filter the quantized vectors (this step produces `k * vector_search_index_fetch_multiplier` results), and
 2. rescore the found vectors against original, full-precision vectors.
 )", 0) \

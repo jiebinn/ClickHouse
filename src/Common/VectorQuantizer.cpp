@@ -6,10 +6,6 @@
 #include <Common/LloydMaxQuantizer.h>
 #include <Common/TargetSpecific.h>
 
-#if USE_MULTITARGET_CODE
-#include <immintrin.h>
-#endif
-
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -43,28 +39,6 @@ enum class QuantizationMethod : UInt8
     PrefixBf16 = 7,
 };
 
-/// For prefix quantization, `bits` is the number of leading dimensions kept (the prefix), not a bit width.
-size_t expectedFlatBytesPerVector(QuantizationMethod quantization, size_t dimensions, size_t bits)
-{
-    switch (quantization)
-    {
-        case QuantizationMethod::TurboQuant:
-            return dimensions / 4 + sizeof(float);
-        case QuantizationMethod::RaBitQ:
-            return dimensions / 8 + sizeof(float);
-        case QuantizationMethod::Int8:
-            /// One Int8 Lloyd-Max code per coordinate, followed by the 4-byte original L2 norm.
-            return dimensions + sizeof(float);
-        case QuantizationMethod::PrefixInt8:
-            /// `bits` int8 codes of the leading dimensions, followed by the 4-byte per-vector scale.
-            return bits + sizeof(float);
-        case QuantizationMethod::PrefixBf16:
-            /// `bits` leading dimensions as bfloat16 (2 bytes each).
-            return bits * 2;
-    }
-    return 0;
-}
-
 constexpr UInt64 RANDOM_PROJECTION_SEED = 0x9E3779B97F4A7C15ULL;
 
 /// Second, independent seed for the 'turboquant' QJL (Quantized Johnson-Lindenstrauss) projection, applied to the
@@ -76,7 +50,7 @@ constexpr UInt64 RANDOM_PROJECTION_SEED_QJL = 0xD1B54A32D192ED03ULL;
 constexpr int PROJECTION_ROUNDS = 3;
 
 /// Smallest power of two >= n.
-inline size_t projectionPaddedSize(size_t n)
+size_t projectionPaddedSize(size_t n)
 {
     size_t p = 1;
     while (p < n)
@@ -87,7 +61,7 @@ inline size_t projectionPaddedSize(size_t n)
 /// Working dimension of the structured transform: the input dimension itself when it admits an exact Hadamard matrix
 /// (`dimensions = 2^k * m`, m in {12, 20} - e.g. 384/768/1536/3072/2560), otherwise the input zero-padded to the next
 /// power of two. Using the exact dimension avoids both the padding work and the geometry distortion of padding.
-inline size_t projectionWorkingDim(size_t dimensions)
+size_t projectionWorkingDim(size_t dimensions)
 {
     return HadamardTransform::hadamardOrderFor(dimensions).m ? dimensions : projectionPaddedSize(dimensions);
 }
@@ -272,7 +246,7 @@ RaBitQQuery buildRaBitQQuery(const float * q, size_t dimensions)
 /// Reconstruct `sum_i s_i * q_i` (the inner product of the +-1 sign code with the bit-sliced query) from the popcounts.
 /// `pc = popcount(code)` = number of +1 sign bits; `plane_pc[j] = popcount(code AND query_plane_j)`. This is the shared
 /// estimator core used by both 'rabitq' and the exact 'turboquant' (which sums two such dots).
-inline float raBitQNumeratorFromCounts(const RaBitQQuery & q, UInt64 pc, const UInt64 * plane_pc)
+float raBitQNumeratorFromCounts(const RaBitQQuery & q, UInt64 pc, const UInt64 * plane_pc)
 {
     /// sum_i b_i * q_tilde_i = sum_j 2^j * popcount(code AND plane_j); approx sum over set bits of q_i:
     ///   sum_{b_i=1} q_i ~= delta * (sum_j 2^j * plane_pc[j]) + q_min * pc.
@@ -285,7 +259,7 @@ inline float raBitQNumeratorFromCounts(const RaBitQQuery & q, UInt64 pc, const U
 
 /// Scalar bit-sliced dot: AND+popcount the +-1 sign code against each query bit-plane, 8 bytes at a time, and return
 /// `sum_i s_i * q_i`. `code` points at `q.code_bytes` packed sign bits (no trailing factor is read here).
-inline float raBitQNumeratorScalar(const RaBitQQuery & q, const char * code)
+float raBitQNumeratorScalar(const RaBitQQuery & q, const char * code)
 {
     const size_t code_bytes = q.code_bytes;
     const UInt8 * planes = q.planes.data();
@@ -314,63 +288,16 @@ inline float raBitQNumeratorScalar(const RaBitQQuery & q, const char * code)
     return raBitQNumeratorFromCounts(q, pc, plane_pc);
 }
 
-#if USE_MULTITARGET_CODE
-/// AVX-512 (Ice Lake) bit-sliced dot: VPOPCNTDQ counts 8x 64-bit lanes per instruction, so each 512-bit chunk of the
-/// sign code is AND-ed with each query bit-plane and popcounted in one `_mm512_popcnt_epi64`. Integer popcount sums are
-/// order-independent, so the result is identical to the scalar kernel. This keeps the 1-bit scan in the popcount regime.
-X86_64_ICELAKE_FUNCTION_SPECIFIC_ATTRIBUTE
-inline float raBitQNumeratorICELAKE(const RaBitQQuery & q, const char * code)
-{
-    const size_t code_bytes = q.code_bytes;
-    const UInt8 * planes = q.planes.data();
-    __m512i acc_pc = _mm512_setzero_si512();
-    __m512i acc[RABITQ_QUERY_BITS];
-    for (int j = 0; j < RABITQ_QUERY_BITS; ++j)
-        acc[j] = _mm512_setzero_si512();
-
-    size_t b = 0;
-    for (; b + 64 <= code_bytes; b += 64)
-    {
-        const __m512i c = _mm512_loadu_si512(reinterpret_cast<const void *>(code + b));
-        acc_pc = _mm512_add_epi64(acc_pc, _mm512_popcnt_epi64(c));
-        for (int j = 0; j < RABITQ_QUERY_BITS; ++j)
-        {
-            const __m512i pj = _mm512_loadu_si512(reinterpret_cast<const void *>(planes + static_cast<size_t>(j) * code_bytes + b));
-            acc[j] = _mm512_add_epi64(acc[j], _mm512_popcnt_epi64(_mm512_and_si512(c, pj)));
-        }
-    }
-    UInt64 pc = _mm512_reduce_add_epi64(acc_pc);
-    UInt64 plane_pc[RABITQ_QUERY_BITS];
-    for (int j = 0; j < RABITQ_QUERY_BITS; ++j)
-        plane_pc[j] = _mm512_reduce_add_epi64(acc[j]);
-
-    /// Tail (code_bytes not a multiple of 64): finish byte-wise.
-    for (; b < code_bytes; ++b)
-    {
-        const unsigned cw = static_cast<UInt8>(code[b]);
-        pc += static_cast<UInt64>(std::popcount(cw));
-        for (int j = 0; j < RABITQ_QUERY_BITS; ++j)
-            plane_pc[j] += static_cast<UInt64>(std::popcount(cw & static_cast<unsigned>(planes[static_cast<size_t>(j) * code_bytes + b])));
-    }
-    return raBitQNumeratorFromCounts(q, pc, plane_pc);
-}
-#endif
-
 /// Dispatch to the Ice Lake (VPOPCNTDQ) kernel when available (decided once per query), else the scalar version.
-inline float raBitQNumeratorFast(const RaBitQQuery & q, const char * code, bool use_icelake)
+float raBitQNumerator(const RaBitQQuery & q, const char * code)
 {
-#if USE_MULTITARGET_CODE
-    if (use_icelake)
-        return raBitQNumeratorICELAKE(q, code);
-#endif
-    (void)use_icelake;
     return raBitQNumeratorScalar(q, code);
 }
 
 /// 'rabitq' estimator -> cosineDistance.
-inline float raBitQDistanceFast(const RaBitQQuery & q, const char * code, bool use_icelake)
+float raBitQDistance(const RaBitQQuery & q, const char * code)
 {
-    const float numerator = raBitQNumeratorFast(q, code, use_icelake);
+    const float numerator = raBitQNumerator(q, code);
     float inv_factor = NAN;
     std::memcpy(&inv_factor, code + q.code_bytes, sizeof(float));
     /// Clamp the estimated cosine to a valid range; the unbiased RaBitQ estimator can fall outside [-1, 1] for some
@@ -462,11 +389,11 @@ TurboQuantQuery buildTurboQuantQuery(const std::vector<float> & p1, const std::v
 }
 
 /// Exact TurboQuant cosine estimator -> cosineDistance. `code` is `d/8` MSE sign bits, `d/8` QJL sign bits, then `gamma`.
-inline float turboQuantDistanceFast(const TurboQuantQuery & q, const char * code, bool use_icelake)
+float turboQuantDistance(const TurboQuantQuery & q, const char * code)
 {
     const size_t code_bytes = q.mse.code_bytes; /// = dimensions / 8
-    const float mse_dot = raBitQNumeratorFast(q.mse, code, use_icelake);
-    const float qjl_dot = raBitQNumeratorFast(q.qjl, code + code_bytes, use_icelake);
+    const float mse_dot = raBitQNumerator(q.mse, code);
+    const float qjl_dot = raBitQNumerator(q.qjl, code + code_bytes);
     float gamma = NAN;
     std::memcpy(&gamma, code + 2 * code_bytes, sizeof(float));
     /// Clamp the estimated cosine so the public `cosineDistance` stays in [0, 2] (the estimator can fall outside [-1, 1]).
@@ -497,9 +424,8 @@ QuantizationMethod methodToCodec(std::string_view method)
 
 bool VectorQuantizer::supportsL2(std::string_view method)
 {
-    /// `rabitq` and `turboquant` are sign/rotation cosine estimators that do not retain the vector norm, so their
-    /// approximate distance can only rank by angle. `int8` (stores the norm) and `mrl_*` (dequantize the kept prefix)
-    /// can estimate an L2-compatible score.
+    /// `rabitq` and `turboquant` are sign/rotation cosine estimators. They do not retain the vector norm, so their
+    /// approximate distance can only rank by ang.
     return method == "int8" || method == "mrl_int8" || method == "mrl_bf16";
 }
 
@@ -509,15 +435,13 @@ std::string VectorQuantizer::validateParams(std::string_view method, size_t dime
 
     if (dimensions == 0)
         return "The number of dimensions must be greater than zero";
-    /// Bound dimensions before any derived-size arithmetic (`bytesPerVector`, the padded projection size): an absurd
-    /// value from a fuzzer or bad DDL would otherwise overflow size_t and drive unbounded allocations / loops. Cap well
-    /// above any real embedding (matches `ProductQuantization::validateParams`).
+
+    /// Sanity-check against absurd values generated by fuzzers
     static constexpr size_t MAX_DIMENSIONS = 1u << 20; /// 1,048,576
     if (dimensions > MAX_DIMENSIONS)
         return fmt::format("the number of dimensions ({}) exceeds the maximum {}", dimensions, MAX_DIMENSIONS);
 
-    /// 'turboquant' and 'rabitq' pack their codes 8 coordinates to the byte, so a dimension that is not a multiple of 8
-    /// would silently drop the tail coordinates. 'int8' and the prefix methods have no such constraint.
+    /// 'turboquant' and 'rabitq' pack their codes 8 coordinates to the byte, They require that teh dimension is multiple of 8.
     if ((codec == QuantizationMethod::TurboQuant || codec == QuantizationMethod::RaBitQ)
         && dimensions % 8 != 0)
         return fmt::format("method '{}' requires the number of dimensions to be a multiple of 8, got {}", method, dimensions);
@@ -531,7 +455,23 @@ std::string VectorQuantizer::validateParams(std::string_view method, size_t dime
 
 size_t VectorQuantizer::bytesPerVector(std::string_view method, size_t dimensions, size_t bits)
 {
-    return expectedFlatBytesPerVector(methodToCodec(method), dimensions, bits);
+    switch (methodToCodec(method))
+    {
+        case QuantizationMethod::TurboQuant:
+            return dimensions / 4 + sizeof(float);
+        case QuantizationMethod::RaBitQ:
+            return dimensions / 8 + sizeof(float);
+        case QuantizationMethod::Int8:
+            /// One Int8 Lloyd-Max code per coordinate, followed by the 4-byte original L2 norm.
+            return dimensions + sizeof(float);
+        case QuantizationMethod::PrefixInt8:
+            /// `bits` int8 codes of the leading dimensions, followed by the 4-byte per-vector scale.
+            return bits + sizeof(float);
+        case QuantizationMethod::PrefixBf16:
+            /// `bits` leading dimensions as bfloat16 (2 bytes each).
+            return bits * 2;
+    }
+    return 0;
 }
 
 struct VectorQuantizer::Encoder
@@ -649,7 +589,6 @@ void VectorQuantizer::encode(Encoder & encoder, const float * vec, char * dst)
 
 void VectorQuantizer::encode(std::string_view method, const float * vec, size_t dimensions, size_t bits, char * dst)
 {
-    /// Convenience one-shot; encoding many vectors should `createEncoder` once and reuse it to amortize the projection.
     auto encoder = createEncoder(method, dimensions, bits);
     encode(*encoder, vec, dst);
 }
@@ -681,8 +620,6 @@ struct VectorQuantizer::Query
     std::vector<float> mrl_query;
     float mrl_query_norm = 0.0f;
     bool is_l2 = false;
-    /// The AVX-512 (VPOPCNTDQ) popcount scan for the rabitq/turboquant 1-bit codes. Decided once here, read per code.
-    bool use_icelake = false;
 };
 
 std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
@@ -691,9 +628,6 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
     query->codec = methodToCodec(method);
     query->dimensions = dimensions;
     query->bits = bits;
-#if USE_MULTITARGET_CODE
-    query->use_icelake = isArchSupported(TargetArch::x86_64_icelake);
-#endif
 
     double ref_norm_sq = 0.0;
     for (size_t i = 0; i < dimensions; ++i)
@@ -762,9 +696,9 @@ float VectorQuantizer::distance(const Query & query, const char * code)
     switch (query.codec)
     {
         case QuantizationMethod::RaBitQ:
-            return raBitQDistanceFast(query.rabitq, code, query.use_icelake);
+            return raBitQDistance(query.rabitq, code);
         case QuantizationMethod::TurboQuant:
-            return turboQuantDistanceFast(query.turbo, code, query.use_icelake);
+            return turboQuantDistance(query.turbo, code);
         case QuantizationMethod::PrefixInt8:
         case QuantizationMethod::PrefixBf16:
         {

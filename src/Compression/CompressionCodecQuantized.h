@@ -19,16 +19,11 @@ struct QuantizedCodecParams
 
 /// `Quantized(method, dimensions[, bits])` is a column codec for dense vector columns (`Array(Float32)` and friends).
 ///
-/// At the byte level it does nothing - the full-precision data is stored verbatim, exactly like `NONE` (hence
+/// At the byte level the codec does nothing - the full-precision data is stored verbatim, exactly like `NONE` (hence
 /// `isNone() == true`). Its purpose is purely declarative: its presence on a vector column makes
-/// `SerializationQuantizedVector` write a compact, data-independent quantized companion stream alongside the
-/// full-precision data, exposed as the readable subcolumn `<column>.quantized`. A two-stage vector search can then rank
-/// cheaply over the small codes and rescore the shortlist against the full-precision vectors.
-///
-/// Because it behaves like `NONE`, it must be used on its own: `CODEC(Quantized('rabitq', 64))`. The full-precision
-/// vectors are always stored uncompressed, which is the norm for dense embeddings (they do not compress).
-///
-/// The codec is gated behind the `allow_experimental_codecs` setting (`isExperimental() == true`).
+/// `SerializationQuantizedVector` write a compact and data-independent quantized companion stream alongside the
+/// full-precision vectors, exposed as a readable subcolumn `<column>.quantized`. Vector search can then rank
+/// cheaply over the quantized vectors and rescore the results against the full-precision vectors.
 class CompressionCodecQuantized : public ICompressionCodec
 {
 public:
@@ -45,9 +40,7 @@ protected:
 
     bool isCompression() const override { return false; }
     bool isGenericCompression() const override { return false; }
-    /// At the byte level the full-precision stream is stored verbatim. The companion code stream is produced by the
-    /// serialization, not by this codec.
-    bool isNone() const override { return true; }
+    bool isNone() const override { return true; } /// see the class-level comment
     bool isExperimental() const override { return true; }
 
     String getDescription() const override
@@ -60,7 +53,6 @@ private:
     QuantizedCodecParams params;
 };
 
-/// If the given column codec description (the `CODEC(...)` AST) contains a `Quantized(...)` codec, return its parameters.
 std::optional<QuantizedCodecParams> tryExtractQuantizedCodecParams(const ASTPtr & codec_desc);
 
 }
