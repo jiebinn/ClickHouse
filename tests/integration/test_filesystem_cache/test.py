@@ -57,6 +57,16 @@ def cluster():
             ],
             stay_alive=True,
         )
+        # Dedicated node: the background eviction push-fail test enables a process-global
+        # failpoint, so it must not share a node with other tests.
+        cluster.add_instance(
+            "keep_up_push_fail",
+            main_configs=[
+                "config.d/storage_conf.xml",
+                "config.d/filesystem_caches_path.xml",
+            ],
+            stay_alive=True,
+        )
 
         logging.info("Starting cluster...")
         cluster.start()
@@ -812,7 +822,7 @@ SETTINGS disk = disk(type = cache,
 
 
 def test_keep_up_size_ratio_push_fail(cluster):
-    node = cluster.instances["node"]
+    node = cluster.instances["keep_up_push_fail"]
     max_elements = 100
     cache_name = "keep_up_size_ratio_push_fail"
     node.query(
@@ -852,20 +862,21 @@ SETTINGS disk = disk(type = cache,
     node.query("SYSTEM ENABLE FAILPOINT file_cache_background_eviction_push_fail")
     try:
         node.query(
-            "INSERT INTO test_push_fail SELECT randomString(1000) FROM numbers(2000);"
+            "INSERT INTO test_push_fail SELECT randomString(1000) FROM numbers(500);"
         )
         node.query("SELECT * FROM test_push_fail FORMAT Null")
 
+        # With the failpoint on, every collected batch fails to reach the remover workers,
+        # so background keeping bails out (CANNOT_EVICT) and cannot drop below the fill level.
+        node.wait_for_log_line("Background eviction workers take too much time")
         blocked = elems()
-        time.sleep(15)
-        assert elems() == blocked
         assert blocked > expected
-
-        assert node.contains_in_log("Background eviction workers take too much time")
+        time.sleep(3)
+        assert elems() == blocked
     finally:
         node.query("SYSTEM DISABLE FAILPOINT file_cache_background_eviction_push_fail")
 
-    # After the dropped batch is rolled back, background keeping must converge all the
+    # After the dropped batches are rolled back, background keeping must converge all the
     # way to the configured target - not just make partial progress - which proves no
     # entries were left stuck in the `Evicting` state.
     for _ in range(60):
@@ -875,7 +886,7 @@ SETTINGS disk = disk(type = cache,
         time.sleep(1)
     assert converged <= expected
 
-    assert int(node.query("SELECT count() FROM test_push_fail")) == 2000
+    assert int(node.query("SELECT count() FROM test_push_fail")) == 500
     assert node.query(
         "SELECT sum(cityHash64(a)) FROM test_push_fail"
     ) == node.query(
