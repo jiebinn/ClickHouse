@@ -8025,11 +8025,22 @@ async function reconcileStartup() {
             } else if (has_url_query && !url_tab_name && (match = savedTabs.find(t => t.query === url_query))) {
                 /// Unnamed URL with a query: a tab already holds this exact query, switch to it.
                 activeTabId = match.id;
-            } else {
-                /// Not found: open a new tab carrying the name (if any) and query.
+            } else if (has_url_query || !url_tab_name) {
+                /// Not found, but the URL is authoritative: it carries a query (a fresh/shared
+                /// link) or is unnamed. Open a new tab carrying the name (if any) and query.
                 const t = makeTab(url_tab_name || undefined, url_query);
                 tabs.push(t);
                 activeTabId = t.id;
+            } else {
+                /// Bare `?tab=Name` (no query) naming a tab that is not among the saved tabs.
+                /// This is normally a plain reload whose active tab was a blank scratch tab we
+                /// just dropped: the URL only echoes that tab's title and carries no query, so it
+                /// is NOT authoritative. Recreating it would resurrect the blank tab (and the
+                /// trailing `scheduleSave` would write it back to `IndexedDB`), defeating the very
+                /// pruning above. Instead fall back to the persisted active tab if it survived,
+                /// otherwise the first saved tab (mirrors the plain-load branch).
+                activeTabId = (loaded.meta && savedTabs.some(t => t.id === loaded.meta.activeTabId))
+                    ? loaded.meta.activeTabId : savedTabs[0].id;
             }
         }
         await activateTab(activeTabId);
