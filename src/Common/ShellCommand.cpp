@@ -19,6 +19,7 @@
 #include <csignal>
 #include <limits>
 
+#include <base/sleep.h>
 #include <Common/logger_useful.h>
 #include <base/errnoToString.h>
 #include <Common/Exception.h>
@@ -480,7 +481,26 @@ bool ShellCommand::waitIfProccesTerminated()
 
 bool ShellCommand::tryReapWithoutStatusCheck()
 {
-    return tryWaitImpl(/*blocking=*/false, /*check_exit_status=*/false).is_process_terminated;
+    /// A child that has closed stdout (so the pipeline is complete) but has only
+    /// just called `_exit` is not yet a reapable zombie the instant cleanup runs, so
+    /// a single non-blocking `wait4(WNOHANG)` can miss it and lose its `rusage` — the
+    /// CPU counters would then read zero. Poll for a short bounded budget so a
+    /// promptly-exiting child is reaped and its usage captured. A child that keeps
+    /// running past the budget is still left to `~ShellCommand`'s bounded
+    /// `command_termination_timeout` + SIGTERM teardown, so cleanup never hangs.
+    static constexpr UInt64 reap_poll_budget_ms = 1000;
+    static constexpr UInt64 reap_poll_step_ms = 5;
+
+    UInt64 waited_ms = 0;
+    while (true)
+    {
+        if (tryWaitImpl(/*blocking=*/false, /*check_exit_status=*/false).is_process_terminated)
+            return true;
+        if (waited_ms >= reap_poll_budget_ms)
+            return false;
+        sleepForMilliseconds(reap_poll_step_ms);
+        waited_ms += reap_poll_step_ms;
+    }
 }
 
 

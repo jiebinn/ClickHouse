@@ -604,9 +604,10 @@ namespace
                     /// (`check_exit_code=true`, normal completion), `isWaitCalled()` is
                     /// true and `tryReapWithoutStatusCheck` is skipped.
                     ///
-                    /// Non-blocking: a child that closed stdout but keeps running is left
-                    /// to `~ShellCommand`'s bounded `command_termination_timeout` + SIGTERM,
-                    /// so profiling cannot turn cleanup into a query hang.
+                    /// Bounded reap: a child that closed stdout but keeps running past
+                    /// the short poll budget is left to `~ShellCommand`'s bounded
+                    /// `command_termination_timeout` + SIGTERM, so profiling cannot turn
+                    /// cleanup into a query hang.
                     /// No status check: a non-zero exit must not raise
                     /// CHILD_WAS_NOT_EXITED_NORMALLY when `check_exit_code=false`.
                     if (!command->isWaitCalled())

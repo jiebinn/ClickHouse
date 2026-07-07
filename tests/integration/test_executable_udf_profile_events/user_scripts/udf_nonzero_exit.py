@@ -10,6 +10,7 @@ non-blocking, no-status-check path (`tryReapWithoutStatusCheck`), so:
 
 import os
 import sys
+import time
 
 
 def _cpu_work(seed: int) -> int:
@@ -31,6 +32,16 @@ for line in sys.stdin:
     sys.stdout.write(f"{_cpu_work(n)}\n")
     sys.stdout.flush()
 
-# Flush before exiting so all output is visible before the process dies.
+# Flush all output, then close stdout so ClickHouse observes EOF and proceeds to
+# reap the child while this process is still alive. Sleep before exiting so the
+# child is provably still running (not yet a zombie) when cleanup runs its reap:
+# this makes the "reap loses rusage" race deterministic. A single non-blocking
+# wait4(WNOHANG) then returns 0 and loses the rusage, so the reap must poll for a
+# bounded interval to still capture the child's CPU rusage. The delay is above the
+# single-shot failure threshold yet well under both the 1s reap poll budget and
+# command_termination_timeout, so a correct reap succeeds and cleanup never
+# SIGTERM-bounds.
 sys.stdout.flush()
+os.close(1)
+time.sleep(0.6)
 os._exit(3)
