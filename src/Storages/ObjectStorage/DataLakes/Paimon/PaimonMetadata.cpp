@@ -197,11 +197,11 @@ DataLakeMetadataPtr PaimonMetadata::create(
             "Not using in-memory cache for paimon metadata files, because the setting use_paimon_metadata_files_cache is false.");
 
     String table_cache_key_prefix;
+    Int64 schema0_time_millis = 0;
     if (cache_ptr)
     {
         auto schema0_info = table_client->getTableSchemaInfoById(0);
         auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
-        Int64 schema0_time_millis = 0;
         Paimon::getValueFromJSON(schema0_time_millis, schema0_json, "timeMillis");
 
         const String table_name = configuration_ptr->getRawPath().path.empty()
@@ -220,7 +220,8 @@ DataLakeMetadataPtr PaimonMetadata::create(
         table_cache_key_prefix,
         partition_default_name,
         incremental_read_enabled,
-        metadata_refresh_interval_sec);
+        metadata_refresh_interval_sec,
+        schema0_time_millis);
 
     return std::make_unique<PaimonMetadata>(
         object_storage, configuration_ptr, global_context, std::move(persistent_components), table_client);
@@ -334,6 +335,23 @@ void PaimonMetadata::update(const ContextPtr & /*local_context*/)
     /// NOTE: This method only refreshes the snapshot state.  It does NOT re-evaluate
     /// use_paimon_metadata_files_cache because cache_ptr lives in the immutable
     /// PaimonPersistentComponents (same design as IcebergMetadata::update).
+
+    /// 0. Detect external table recreation by checking schema-0 timeMillis.
+    if (persistent_components.isMetadataCacheActive())
+    {
+        auto schema0_info = table_client->getTableSchemaInfoById(0);
+        auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
+        Int64 current_schema0_time_millis = 0;
+        Paimon::getValueFromJSON(current_schema0_time_millis, schema0_json, "timeMillis");
+
+        if (current_schema0_time_millis != persistent_components.schema0_time_millis)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Underlying Paimon table was recreated (schema-0 timeMillis changed: {} -> {}). "
+                "Please DROP and re-CREATE the ClickHouse external table to pick up the new table identity.",
+                persistent_components.schema0_time_millis,
+                current_schema0_time_millis);
+    }
 
     /// 1. Load new state outside any lock (I/O operations)
     auto new_state = loadLatestState();
