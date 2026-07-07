@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <Common/ErrnoException.h>
+#include <Common/logger_useful.h>
 
 #if defined(OS_LINUX)
 #include <sys/inotify.h>
@@ -359,8 +360,11 @@ void DirectoryWatcherBase::watchFunc()
         {
             scan(current);
         }
-        catch (...) // Ok: the directory may be transiently unavailable (e.g. being recreated); retry next tick.
+        catch (const std::exception & e)
         {
+            /// The directory can be transiently unavailable (e.g. while being recreated); this is not
+            /// expected during normal operation, so log it and retry on the next tick.
+            LOG_WARNING(getLogger("FileLogDirectoryWatcher"), "Failed to scan watched directory {}, will retry: {}", path, e.what());
             continue;
         }
 
