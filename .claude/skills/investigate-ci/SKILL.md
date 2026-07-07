@@ -352,27 +352,40 @@ or the same patch authored directly in the PR). So:
 
 - **`is-ancestor` true** → the fix is definitely present. If the test still failed, the fix is
   incomplete/unrelated → keep investigating; do **not** report "already fixed".
-- **`is-ancestor` false (or the merge commit is absent locally)** → **do not conclude yet.** Always
-  run the equivalent-change search first, and treat only a **positive** find as conclusive:
+- **`is-ancestor` false (or the merge commit is absent locally)** → **do not conclude yet, and do
+  not conclude from `git log` alone.** Establish what the fix actually changed, then check that
+  **content** against the failing branch:
 
-  ```bash
-  git log --oneline <report-sha> --grep "<fix PR title or key phrase>"
-  git log --oneline <report-sha> -- <file the fix touched>   # catches a cherry-pick / self-applied copy
-  ```
+  1. Get the fix's actual change (its hunks) — the diff of the merged PR:
 
-  - **Found an equivalent change** → `merged #N — in branch` (fix present; if the test still failed,
-    it is incomplete → keep digging). This holds regardless of report type.
-  - **Not found** → a failed search is a **heuristic, not proof** (a cherry-pick can rewrite the
-    subject, squash a different file set, or fall past shallow history). Decide by report type:
-    - **master PR report** → `merged #N — not in this branch → rebase/retry`. The `git log -- <file>`
-      search reliably catches an in-branch copy (it does not depend on the commit subject), so "not
-      found" on a master-based branch is a sound basis for rebase/retry — the common, useful case.
-    - **S3 `REF`/master-CI report, release/backport branch, non-master base, or commit absent /
-      base unknown** → `merged #N — presence unverified`; keep the failure open for step 5. Do
-      **not** emit `rebase/retry` here.
+     ```bash
+     .claude/tools/gh-ro.sh pr diff <fix-pr> --repo ClickHouse/ClickHouse
+     ```
 
-  Never turn a bare negative `is-ancestor` — without the equivalent-change search — into any
-  conclusion.
+  2. Use `git log` only to *find candidate* commits on the branch — never as the verdict (a
+     `--grep` hit can be a coincidental subject; a `-- <file>` hit only proves some commit touched
+     that path, not that it carries the fix; and a **miss proves nothing** — the fix may be present
+     after conflict resolution, a refactor, or manual transcription):
+
+     ```bash
+     git log --oneline <report-sha> --grep "<fix PR title or key phrase>"   # candidates only
+     git log --oneline <report-sha> -- <file the fix touched>               # candidates only
+     ```
+
+  3. **Verify at the content level** before emitting any verdict: inspect the fix's key hunk in the
+     branch's own version of the file at the report commit (and/or a candidate commit), e.g.
+     `git show <report-sha>:<path>` and look for the specific guard/line/logic the fix added, or
+     `git show <candidate>` to confirm it is the same change.
+
+  Then:
+  - **The fix's logic is present in the branch (content confirmed)** → `merged #N — in branch`
+    (if the test still failed, it is incomplete → keep digging). Holds regardless of report type.
+  - **The fix's logic is confirmed absent from the branch's file content, and the base is `master`**
+    → `merged #N — not in this branch → rebase/retry`.
+  - **Anything you could not confirm at the content level** — no access to the fix diff, a
+    backport/`REF`/non-master base, the commit absent locally, or an ambiguous/refactored match →
+    `merged #N — presence unverified`; keep the failure open for step 5. Never emit `in branch` or
+    `rebase/retry` from a `git log` subject/path hit-or-miss alone.
 
 Time order is a weak last resort, not a substitute: a fix `mergedAt` **after** the run's
 commit/`check_start_time` cannot be in the run, but "before" does **not** prove presence (the branch
