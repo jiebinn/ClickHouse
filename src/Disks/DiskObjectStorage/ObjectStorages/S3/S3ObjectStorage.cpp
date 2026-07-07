@@ -721,6 +721,17 @@ void S3ObjectStorage::applyNewSettings(
         /// creation in `S3StorageParsedArguments::fromAST` (global `<s3>` first, endpoint on top).
         apply_config_settings();
         apply_endpoint_settings();
+
+        /// Re-apply user/profile/query-level settings on top so they take priority over both the
+        /// global `<s3>` section and the endpoint block. `applyNewSettings` runs on every query for
+        /// an engine table (`StorageObjectStorage::read`/`write`), and `readObject` consumes
+        /// `request_settings` directly, so without this a query-level read setting (e.g.
+        /// `s3_max_single_read_retries`, `s3_max_get_rps`) would be overwritten by the endpoint
+        /// block. This matches the final `updateFromSettings` step in `fromAST`.
+        modified_settings->request_settings.updateFromSettings(
+            context->getSettingsRef(),
+            /* if_changed */ true,
+            context->getSettingsRef()[Setting::s3_validate_request_settings]);
     }
 
     modified_settings->request_settings.proxy_resolver = DB::ProxyConfigurationResolverProvider::getFromOldSettingsFormat(
