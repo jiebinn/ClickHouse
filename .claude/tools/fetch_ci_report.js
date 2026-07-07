@@ -581,6 +581,20 @@ async function fetchReport(inputUrl, options = {}) {
       }
     }
 
+    // A direct top-level workflow result JSON (result_pr.json / result_masterci.json / result_ref.json
+    // located directly under the <sha> dir — NOT under a job subdir) is a workflow index, just like
+    // the json.html?...&name_0=PR form. Rewrite it to that HTML form so the index handling below
+    // applies uniformly (expand into per-job reports; refuse per-job --download-logs) instead of
+    // treating the whole PR/workflow as a single job. Concrete job reports are result_<job>.json
+    // (or live under <sha>/<job>/...), so they never match this and stay on the single-report path.
+    const topJson = inputUrl.match(/\/(?:PRs\/(\d+)|REFs\/([^/]+))\/([0-9a-f]{40})\/result_(?:pr|masterci|ref)\.json(?:$|\?)/i);
+    if (topJson) {
+      const prefix = inputUrl.slice(0, topJson.index);
+      inputUrl = topJson[1]
+        ? `${prefix}/json.html?PR=${topJson[1]}&sha=${topJson[3]}&name_0=PR`
+        : `${prefix}/json.html?REF=${encodeURIComponent(topJson[2])}&sha=${topJson[3]}&name_0=MasterCI`;
+    }
+
     // Check if this is a direct JSON URL or an HTML URL with parameters
     const isDirectJsonUrl = inputUrl.includes('.json') || !inputUrl.includes('?');
 
