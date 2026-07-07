@@ -31,15 +31,18 @@
   var INKEEP_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/@inkeep/cxkit-mintlify@0.5/dist/index.js';
 
   // ── Search tabs ──────────────────────────────────────────────────────────
-  // Catch-all (default) tab. Deliberately NOT named 'All': Inkeep reserves the
-  // literal 'All' as a built-in tab that force-pushes EVERY result into it
+  // Catch-all tab. Deliberately NOT named 'All': Inkeep reserves the literal
+  // 'All' as a built-in tab that force-pushes EVERY result into it
   // (`tabs.includes("All") && bucket.All.push(item)` in the cxkit bundle),
   // which can't be filtered — so changelogs could never be excluded from it.
   // We use our own catch-all tag instead and apply it in transformSource to
   // every source except changelogs.
   var CATCH_ALL_TAB = 'All results';
-  // Row 1 (always visible): the top-level tabs.
-  var ROW1_TABS = [CATCH_ALL_TAB, 'Docs', 'Changelogs', 'Blogs', 'Website', 'GitHub'];
+  // Row 1 (always visible): the top-level tabs. 'Docs' is first because cxkit
+  // uses the FIRST configured tab as the default selected one (its defaultTab
+  // is derived as `tabs[0]`), so the modal opens on Docs results rather than
+  // the catch-all.
+  var ROW1_TABS = ['Docs', CATCH_ALL_TAB, 'Changelogs', 'Blogs', 'Website', 'GitHub'];
   // Row 2 (docs sub-areas): shown only while a docs-context tab is active. A
   // docs source is tagged with BOTH 'Docs' and its sub-area, so selecting
   // 'Docs' shows everything and selecting a sub-area narrows it.
