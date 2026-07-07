@@ -118,6 +118,8 @@ public:
         std::shared_ptr<MarksInCompressedFile> finish();
 
     private:
+        friend MarksInCompressedFile;
+
         /// Add all marks at once. Processes full blocks directly without
         /// copying into the internal buffer. Must only be called once on
         /// an empty builder (no prior addMarks calls). Used by create.
