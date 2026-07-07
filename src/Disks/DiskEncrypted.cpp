@@ -447,7 +447,7 @@ void DiskEncrypted::prepareRead(
         });
 
     /// A disk file has a stable, engine-managed storage path, so its encryption headers are safe to
-    /// cache; url / external reads never call this and so are never cached.
+    /// cache.
     pipeline.allowEncryptionHeaderCache();
 }
 

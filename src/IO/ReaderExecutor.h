@@ -47,8 +47,7 @@ public:
         size_t block_size = DEFAULT_BLOCK_SIZE;
         size_t max_tail_for_drain = DEFAULT_MAX_TAIL_FOR_DRAIN;
         std::shared_ptr<LongConnectionLimit> long_connection_limit = nullptr;
-        /// Global cache of encryption-header bytes; null disables caching. Set only for disk reads,
-        /// so `initDecryption` reads the header once per file across opens instead of every open.
+        /// Global cache of encryption-header bytes; null disables it. Set only for disk reads.
         std::shared_ptr<EncryptionHeaderCache> encryption_header_cache = nullptr;
     };
 

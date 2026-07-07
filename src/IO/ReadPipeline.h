@@ -166,9 +166,8 @@ public:
     /// (the executor takes the stateless one-shot path when it is unset).
     void needLongConnectionLimit(std::shared_ptr<LongConnectionLimit> limit);
 
-    /// Permit the `ReaderExecutor` to cache this file's encryption headers in the global
-    /// encryption-header cache. Set only by disk reads (whose paths are stable); url / external
-    /// reads never set it, so their headers are never cached even if encrypted.
+    /// Permit the executor to cache this file's encryption headers. Set only by disk reads (stable
+    /// paths); url / external reads never set it.
     void allowEncryptionHeaderCache() { allow_encryption_header_cache = true; }
 
     /// -- Build the final ReadBuffer chain --

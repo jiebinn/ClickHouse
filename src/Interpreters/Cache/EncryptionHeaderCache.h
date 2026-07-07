@@ -10,14 +10,13 @@
 namespace DB
 {
 
-/// Process-global cache of the raw encryption-header bytes stored at the front of an encrypted
-/// file, keyed by the file's stable storage path. It lets the experimental `ReaderExecutor` skip
-/// the source read of those header bytes on repeated opens of the same file. Only disk-managed
-/// files (whose paths are immutable) are cached; url / external-storage reads never use it, so a
-/// reused external path can never return stale headers.
+/// Process-global cache of the raw encryption-header bytes at the front of an encrypted file,
+/// keyed by its storage path, so the experimental `ReaderExecutor` can skip re-reading the header
+/// on repeated opens of the same file. Only disk reads populate it (see
+/// `ReadPipeline::allowEncryptionHeaderCache`); url / external reads pass a null cache.
 ///
-/// The cache stores opaque bytes, not parsed `FileEncryption::Header`s, so it carries no SSL
-/// dependency and compiles in every build; the consumer re-parses the tiny header on a hit.
+/// Stores opaque bytes rather than parsed `FileEncryption::Header`s, so it has no SSL dependency;
+/// the consumer parses them on a hit.
 class EncryptionHeaderCache
 {
 public:

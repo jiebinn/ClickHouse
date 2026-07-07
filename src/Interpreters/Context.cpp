@@ -5119,8 +5119,7 @@ void Context::clearCaches() const
     if (shared->query_condition_cache)
         shared->query_condition_cache->clear();
 
-    /// The encryption header cache is keyed by file path, so — like the delete-bitmap cache below —
-    /// a reused path could otherwise return stale headers; clear it with the other caches.
+    /// Path-keyed like the delete-bitmap cache below; clear it here too (see the note there).
     if (shared->encryption_header_cache)
         shared->encryption_header_cache->clear();
 

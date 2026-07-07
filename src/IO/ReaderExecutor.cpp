@@ -377,9 +377,8 @@ void ReaderExecutor::initDecryption()
     if (!object)
         return;
 
-    /// Cache hit: parse the header bytes straight from the global cache and skip the source read.
-    /// A cached size mismatch means the path was reused for a different layer layout, so treat it
-    /// as a miss and re-read rather than trust stale bytes.
+    /// Cache hit: parse the cached header bytes and skip the source read. The size check guards
+    /// against a stale entry from a differently-layered file at the same path.
     if (encryption_header_cache)
     {
         if (auto cached = encryption_header_cache->read(object->remote_path);
@@ -396,8 +395,7 @@ void ReaderExecutor::initDecryption()
 
     LOG_DEBUG(log, "initDecryption: reading headers ({} bytes)", data_start_offset);
 
-    /// Miss: read the headers once with a plain one-shot source read — they are tiny and read a
-    /// single time per executor, so no long connection.
+    /// Miss: read the headers from the source (one-shot; no long connection).
     auto block = std::make_shared<OwnedChainedBuffer>(data_start_offset);
     const size_t got = readOneShot(*object, /*object_offset=*/0, data_start_offset, block->data());
 
@@ -417,7 +415,6 @@ void ReaderExecutor::initDecryption()
     header_chain.append(ChainedBufferNode{block, 0, got, 0});
     decryptor.parseHeaders(header_chain);
 
-    /// Populate the cache so the next open of this file skips the header read.
     if (encryption_header_cache)
         encryption_header_cache->write(object->remote_path, String(block->data(), got));
 #endif
@@ -443,8 +440,7 @@ ChainedBuffers ReaderExecutor::readNextWindow()
 
     /// The offset map and object sizes are physical; logical `position` maps to physical
     /// `position + data_start_offset` (the encryption headers sit at the file front, and
-    /// `data_start_offset` is 0 without encryption). All source I/O below is physical; the
-    /// served payload is decrypted back to plaintext at its logical offset before it leaves.
+    /// `data_start_offset` is 0 without encryption).
     const size_t position_phys = position + data_start_offset;
     size_t object_phys_start_offset = 0;
     const StoredObject * object = offset_map.findObjectAt(position_phys, &object_phys_start_offset);
@@ -525,8 +521,7 @@ ChainedBuffers ReaderExecutor::readNextWindow()
     continuity_tracker.recordReadRange(position, got);
 
     /// Decrypt the freshly-read, uniquely-owned block in place at its logical offset. CTR is
-    /// position-addressable, so decrypting only the consumed window is exact — read-ahead served
-    /// later is decrypted on its own window. No-op when there is no encryption.
+    /// position-addressable, so decrypting just this window is exact.
     decryptInPlace(block->data(), got, position);
 
     ChainedBuffers chain;
