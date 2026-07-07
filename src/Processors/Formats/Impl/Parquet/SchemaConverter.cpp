@@ -606,15 +606,18 @@ void SchemaConverter::processSubtreeTuple(TraversalNode & node)
     /// The requested type may wrap the tuple in Nullable (e.g. `Nullable(Tuple(...))` is a legal
     /// type). Unwrap it, match elements against the inner Tuple, and let the outer wrapper be
     /// restored via outer_type_hint (needs_cast) in processSubtree.
-    /// Only do this when the tuple is always defined, so the outer Nullable is always-non-null and
-    /// the cast-based restore is lossless. That requires the group itself to be REQUIRED and to
-    /// have no optional ancestor: an OPTIONAL ancestor still carries definition-level nulls (a
-    /// non-array level in the stack), which are not propagated to the outer Nullable, so accepting
-    /// the hint would silently drop those nulls. In those cases keep the hint wrapped and let the
-    /// check below reject it.
+    /// Only unwrap when the tuple is always defined (REQUIRED group, no optional struct-group
+    /// ancestor), so the restored outer Nullable is always-non-null and lossless. Only Nullable
+    /// levels nested below the innermost array count: a Nullable level at or before it is the
+    /// optional wrapper of a LIST/MAP, whose nulls are normalized to empty collections by
+    /// processRepDefLevelsForArray and never reach the inner tuple null-map.
+    size_t innermost_array_idx = 0;
+    for (size_t i = 0; i < levels.size(); ++i)
+        if (levels[i].is_array)
+            innermost_array_idx = i;
     bool has_optional_ancestor = false;
-    for (const LevelInfo & l : levels)
-        has_optional_ancestor |= !l.is_array;
+    for (size_t i = innermost_array_idx + 1; i < levels.size(); ++i)
+        has_optional_ancestor |= !levels[i].is_array;
     if (node.type_hint && node.type_hint->isNullable()
         && node.element->repetition_type == parq::FieldRepetitionType::REQUIRED
         && !has_optional_ancestor)
