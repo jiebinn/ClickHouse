@@ -411,10 +411,10 @@ def main():
             f' -DCMAKE_EXE_LINKER_FLAGS="-Wl,--emit-relocs,-znow"'
             f' -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--emit-relocs,-znow"'
             f" -DLLVM_ENABLE_TERMINFO=OFF"
-            # Enable zlib so the produced clang supports -gz=zlib (compressed debug sections), used
-            # by COMPRESS_DEBUG_SECTIONS in the root CMakeLists. Needs zlib1g-dev in the build image
-            # (binary-builder). Stage 1 is profile-generation only and stays without it.
-            f" -DLLVM_ENABLE_ZLIB=ON"
+            # Enable zlib so the produced clang supports -gz=zlib (compressed debug sections), used by
+            # COMPRESS_DEBUG_SECTIONS in the root CMakeLists; FORCE_ON so a missing zlib1g-dev fails
+            # the build instead of silently disabling it. Stage 1 (profile-gen) stays without zlib.
+            f" -DLLVM_ENABLE_ZLIB=FORCE_ON"
             f" -DLLVM_ENABLE_ZSTD=OFF"
             f" -DLLVM_BINUTILS_INCDIR=/usr/include"
             f' -DLLVM_BUILTIN_TARGETS="{builtin_targets}"'
