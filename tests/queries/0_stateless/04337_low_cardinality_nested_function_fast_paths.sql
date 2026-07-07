@@ -93,4 +93,10 @@ SELECT mapSort(mapExtractKeyLike(materialize(CAST(map('key1', 'v'), 'Map(LowCard
 SELECT mapContainsValueLike(materialize(CAST(map('k', 'val1'), 'Map(String, LowCardinality(String))')), CAST('v%', 'LowCardinality(Nullable(String))')) AS v, toTypeName(v);
 SELECT mapSort(mapExtractValueLike(materialize(CAST(map('k', 'val1'), 'Map(String, LowCardinality(String))')), CAST('v%', 'LowCardinality(Nullable(String))'))) AS v, toTypeName(v);
 
+SELECT 'low cardinality map key type checks';
+SELECT materialize(CAST(map('ab', 'v'), 'Map(LowCardinality(FixedString(2)), String)'))['ab'] AS v, toTypeName(v);
+SELECT materialize(CAST(map('ab', 'v'), 'Map(LowCardinality(FixedString(2)), String)'))['a'] AS v, toTypeName(v);
+SELECT materialize(CAST(map(1, 'v'), 'Map(LowCardinality(UInt8), String)'))['1']; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT CAST(map(1, 'v'), 'Map(LowCardinality(UInt8), String)')['1']; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+
 DROP TABLE t_nested_lc_fast_paths;

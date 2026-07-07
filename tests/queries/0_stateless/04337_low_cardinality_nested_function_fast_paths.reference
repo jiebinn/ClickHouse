@@ -51,3 +51,6 @@ low cardinality nullable patterns
 {'key1':'v'}	Map(String, String)
 1	Nullable(UInt8)
 {'k':'val1'}	Map(String, String)
+low cardinality map key type checks
+v	String
+	String

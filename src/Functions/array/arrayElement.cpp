@@ -1941,6 +1941,11 @@ bool castColumnString(const IColumn * column, F && f)
     return castTypeToEither<ColumnString, ColumnFixedString>(column, std::forward<F>(f));
 }
 
+static bool isStringOrFixedStringColumn(const IColumn & column)
+{
+    return typeid_cast<const ColumnString *>(&column) || typeid_cast<const ColumnFixedString *>(&column);
+}
+
 template <ArrayElementExceptionMode mode>
 bool FunctionArrayElement<mode>::matchKeyToIndexStringConst(
     const IColumn & data, const Offsets & offsets, const Field & index, PaddedPODArray<UInt64> & matched_idxs)
@@ -1948,7 +1953,12 @@ bool FunctionArrayElement<mode>::matchKeyToIndexStringConst(
     if (index.getType() != Field::Types::String)
         return false;
 
-    if (const auto * low_cardinality_data = typeid_cast<const ColumnLowCardinality *>(&data))
+    /// The dictionary lookup below is defined only for String and FixedString keys. For other
+    /// LowCardinality key types, fall through so that the regular dispatch reports the type error
+    /// instead of silently finding no match.
+    const auto * low_cardinality_data = typeid_cast<const ColumnLowCardinality *>(&data);
+    if (low_cardinality_data
+        && isStringOrFixedStringColumn(*low_cardinality_data->getDictionary().getNestedNotNullableColumn()))
     {
         const auto & requested_key = index.safeGet<String>();
         auto dictionary_index = low_cardinality_data->getDictionary().getOrFindValueIndex(requested_key);
@@ -2255,6 +2265,13 @@ ColumnPtr FunctionArrayElement<mode>::executeLowCardinality(
 
     const auto & map_column = *col_map;
     if (!typeid_cast<const ColumnLowCardinality *>(&map_column.getNestedData().getColumn(0)))
+        return nullptr;
+
+    /// The string key lookup below is defined only for String and FixedString keys. For other
+    /// LowCardinality key types, leave the arguments to the default implementations so that the
+    /// regular dispatch reports the type error, exactly as without the specialized path.
+    const auto & map_type = assert_cast<const DataTypeMap &>(*arguments[0].type);
+    if (!isStringOrFixedString(removeLowCardinality(map_type.getKeyType())))
         return nullptr;
 
     if (index.getType() != Field::Types::String)
