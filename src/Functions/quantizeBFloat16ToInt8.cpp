@@ -1,6 +1,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/LloydMaxQuantization.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnQBit.h>
@@ -18,7 +19,6 @@
 
 #include <array>
 #include <bit>
-#include <cmath>
 #include <cstring>
 
 /** quantizeBFloat16ToInt8 / dequantizeInt8ToBFloat16
@@ -215,7 +215,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const IColumn * col = arguments[0].column.get();
-        const std::array<Int8, 65536> & lut = quantizeCodeLUT();
+        const std::array<Int8, 65536> & lut = LloydMax::quantizeCodeLUT();
         auto quantize = [&lut](BFloat16 v) -> Int8 { return lut[std::bit_cast<UInt16>(v)]; };
 
         if (const auto * col_bfloat16 = checkAndGetColumn<ColumnBFloat16>(col))
@@ -277,7 +277,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const IColumn * col = arguments[0].column.get();
-        const std::array<BFloat16, 256> & levels = dequantizeLevels();
+        const std::array<BFloat16, 256> & levels = LloydMax::dequantizeLevels();
         /// Direct copy of the precomputed BFloat16 level -- no Float32 conversion at runtime.
         auto dequantize = [&levels](Int8 code) -> BFloat16 { return levels[static_cast<size_t>(static_cast<Int16>(code) + 128)]; };
 
