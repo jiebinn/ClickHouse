@@ -94,13 +94,21 @@ INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_multi.parquet', 'Pa
 -- Parquet V3 native reader multi col (not yet supported)
 SELECT c0, c1 FROM file(currentDatabase() || '_04065_multi.parquet', 'Parquet', 'c0 Nullable(Tuple(UInt32, String)), c1 Nullable(Tuple(Float64))'); -- { serverError TYPE_MISMATCH }
 DROP TABLE test_nullable_tuple_multi;
--- Type hint mismatch: file has Tuple(...), read as Nullable(Tuple(...)) (add nullable wrapper, not yet supported)
+-- Type hint mismatch: file has a REQUIRED Tuple group, read as Nullable(Tuple(...)) (issue #109605).
+-- A REQUIRED group is always defined, so the outer Nullable is always-non-null and reading it as
+-- Nullable(Tuple) is lossless and now supported.
 DROP TABLE IF EXISTS test_nullable_tuple_mismatch2;
 CREATE TABLE test_nullable_tuple_mismatch2 (c0 Tuple(UInt32, String)) ENGINE = Memory;
 INSERT INTO test_nullable_tuple_mismatch2 VALUES ((1, 'a')), ((2, 'b'));
 INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_mismatch2.parquet', 'Parquet') SELECT c0 FROM test_nullable_tuple_mismatch2;
--- Parquet V3 native reader: read non-nullable file as nullable (not yet supported)
-SELECT c0, toTypeName(c0) FROM file(currentDatabase() || '_04065_mismatch2.parquet', 'Parquet', 'c0 Nullable(Tuple(UInt32, String))'); -- { serverError TYPE_MISMATCH }
+-- Parquet V3 native reader: read a non-nullable (REQUIRED group) file as Nullable(Tuple)
+SELECT c0, toTypeName(c0) FROM file(currentDatabase() || '_04065_mismatch2.parquet', 'Parquet', 'c0 Nullable(Tuple(UInt32, String))');
+(1,'a')	Nullable(Tuple(UInt32, String))
+(2,'b')	Nullable(Tuple(UInt32, String))
+-- Same REQUIRED group, requested as Nullable(Tuple) with named, reordered subset of elements
+SELECT c0, toTypeName(c0) FROM file(currentDatabase() || '_04065_mismatch2.parquet', 'Parquet', 'c0 Nullable(Tuple(`2` String, `1` UInt32))');
+('a',1)	Nullable(Tuple(`2` String, `1` UInt32))
+('b',2)	Nullable(Tuple(`2` String, `1` UInt32))
 DROP TABLE test_nullable_tuple_mismatch2;
 -- Schema inference: inferred type with toTypeName
 DROP TABLE IF EXISTS test_nullable_tuple_describe;

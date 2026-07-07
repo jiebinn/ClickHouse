@@ -603,6 +603,18 @@ void SchemaConverter::processSubtreeTuple(TraversalNode & node)
     ///     <recurse> `name2`
     ///     ...
 
+    /// The requested type may wrap the tuple in Nullable (e.g. `Nullable(Tuple(...))` is a legal
+    /// type). Unwrap it, match elements against the inner Tuple, and let the outer wrapper be
+    /// restored via outer_type_hint (needs_cast) in processSubtree.
+    /// Only do this for a REQUIRED group: the group is then always defined, so the outer Nullable
+    /// is always-non-null and the cast-based restore is lossless. For an OPTIONAL group the struct
+    /// level nulls come from parquet definition levels and are not yet propagated to the outer
+    /// Nullable, so keep the hint wrapped and let the check below reject it rather than silently
+    /// drop those nulls.
+    if (node.type_hint && node.type_hint->isNullable()
+        && node.element->repetition_type == parq::FieldRepetitionType::REQUIRED)
+        node.type_hint = assert_cast<const DataTypeNullable &>(*node.type_hint).getNestedType();
+
     const DataTypeTuple * tuple_type_hint = typeid_cast<const DataTypeTuple *>(node.type_hint.get());
     if (node.type_hint && !tuple_type_hint && !typeid_cast<const DataTypeObject *>(node.type_hint.get()))
         throw Exception(ErrorCodes::TYPE_MISMATCH, "Requested type of column {} doesn't match parquet schema: parquet type is Tuple, requested type is {}", node.getNameForLogging(), node.type_hint->getName());
