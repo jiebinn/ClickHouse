@@ -69,6 +69,17 @@ SELECT 'b_sparse = true',           count() FROM t_sparsity WHERE b_sparse = tru
 SELECT 'b_sparse = true baseline',  count() FROM t_sparsity WHERE b_sparse = true  SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
 SELECT 'b_sparse != true',          count() FROM t_sparsity WHERE b_sparse != true SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
 
+-- Bare-truthy shapes: `WHERE col` / `WHERE NOT col`. These go through the
+-- ColumnNode / not() branch of the classifier, distinct from the `= true` /
+-- `!= true` branch above. Non-Bool integers are rejected as a filter column
+-- by SQL type checks before the classifier is even reached, so Bool is the
+-- only reachable case.
+SELECT 'b_sparse',                  count() FROM t_sparsity WHERE b_sparse           SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
+SELECT 'b_sparse baseline',         count() FROM t_sparsity WHERE b_sparse           SETTINGS optimize_trivial_count_with_sparsity_filter = 0;
+SELECT 'NOT b_sparse',              count() FROM t_sparsity WHERE NOT b_sparse       SETTINGS optimize_trivial_count_with_sparsity_filter = 1;
+SELECT 'plan b_sparse',        countIf(explain LIKE '%Optimized trivial count with sparsity filter%') FROM (EXPLAIN SELECT count() FROM t_sparsity WHERE b_sparse     SETTINGS optimize_trivial_count_with_sparsity_filter = 1);
+SELECT 'plan NOT b_sparse',    countIf(explain LIKE '%Optimized trivial count with sparsity filter%') FROM (EXPLAIN SELECT count() FROM t_sparsity WHERE NOT b_sparse SETTINGS optimize_trivial_count_with_sparsity_filter = 1);
+
 -- Predicate shapes that should NOT be recognised by the classifier. The answer
 -- must still be correct (falls through to a normal scan).
 SELECT 'unrecognised: u_sparse > 5',  count() FROM t_sparsity WHERE u_sparse > 5      SETTINGS optimize_trivial_count_with_sparsity_filter = 1;

@@ -21,6 +21,11 @@ nul_sparse IS NOT NULL	500
 b_sparse = true	500
 b_sparse = true baseline	500
 b_sparse != true	9500
+b_sparse	500
+b_sparse baseline	500
+NOT b_sparse	9500
+plan b_sparse	1
+plan NOT b_sparse	1
 unrecognised: u_sparse > 5	499
 unrecognised: id > 0	9999
 unrecognised: AND	4501
