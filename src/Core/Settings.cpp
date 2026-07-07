@@ -1587,10 +1587,12 @@ Possible values:
 
 - Any positive even integer.
 )", 0) \
-    DECLARE(UInt64, merge_tree_exclusion_search_max_steps, 0, R"(
-When filtering by primary key columns other than the first column, ClickHouse performs an iterative generic exclusion search algorithm. This setting limits the number of steps the algorithm spends dividing key ranges for granule pruning.
+    DECLARE(UInt64, merge_tree_generic_exclusion_search_max_steps, 0, R"(
+When a filter cannot be evaluated as a single continuous range of the primary key, for example when it uses key columns other than the first one, ClickHouse runs an iterative generic exclusion search algorithm over the index marks. This setting limits the number of steps (index checks) the algorithm spends on each data part.
 
-Using fewer steps can speed up index analysis with high cardinality primary keys, but the result of index analysis may include more granules that do not match the filter. For this reason, this setting is only recommended when you notice performance issues with certain queries, and you cannot optimize the ORDER BY key of the table to have lower cardinality.
+The budget is spent on the largest remaining mark ranges first. When it is exhausted, the ranges that were not fully analyzed are accepted as a whole, so the query stays correct but may read more granules than an unlimited search would select. A lower budget speeds up index analysis at the cost of reading more data.
+
+The number of steps the search made for each data part is reported in the trace level log messages of the query, and the `IndexGenericExclusionSearchStepLimitReached` profile event counts how many times the budget was exhausted.
 
 The (default) value 0 means unlimited steps.
 
