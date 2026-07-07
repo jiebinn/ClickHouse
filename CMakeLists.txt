@@ -138,10 +138,11 @@ endif ()
 
 include (cmake/add_warning.cmake)
 
-# -gz=zlib support depends on the compiler's zlib linkage (LLVM_ENABLE_ZLIB), not its version, so it
-# must be probed - intentionally before block_build_time_checks.cmake below bans compile probes.
+# -gz=zlib support depends on the compiler's zlib linkage (LLVM_ENABLE_ZLIB), not its version, so
+# probe it (before block_build_time_checks.cmake below bans compile probes). A clang without zlib
+# only *warns* on -gz=zlib, so -Werror on that warning is required or the probe false-positives.
 include (CheckCXXSourceCompiles)
-set (CMAKE_REQUIRED_FLAGS "-gz=zlib -g")
+set (CMAKE_REQUIRED_FLAGS "-gz=zlib -g -Werror=debug-compression-unavailable")
 check_cxx_source_compiles ("int main() { return 0; }" COMPILER_SUPPORTS_GZ_ZLIB)
 unset (CMAKE_REQUIRED_FLAGS)
 
