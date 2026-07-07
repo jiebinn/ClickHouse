@@ -679,6 +679,259 @@ class LakeDataGenerator:
             f"DELETE FROM {tpath} WHERE {self._random_predicate(table)};",
         )
 
+    # Top-level Spark column types eligible for an equality-delete key. Each maps
+    # to a primitive Iceberg type whose value `_to_iceberg_value` can build.
+    _EQ_DELETE_TYPES = (
+        StringType,
+        CharType,
+        VarcharType,
+        BooleanType,
+        ByteType,
+        ShortType,
+        IntegerType,
+        LongType,
+        FloatType,
+        DoubleType,
+        DecimalType,
+        DateType,
+        BinaryType,
+    )
+
+    def _to_iceberg_value(self, jvm, spark_type: DataType, value):
+        # Build the exact Java object Iceberg's `GenericRecord` expects for this
+        # column type. py4j maps Python str/int/bool straight through, but sends
+        # `float` as Java double (wrong for a FLOAT field) and `int` as Integer
+        # (wrong for a LONG field), and does not convert date / Decimal / bytes at
+        # all -- so those are constructed explicitly. Returns None for a type we
+        # do not handle, so the caller skips it.
+        if isinstance(spark_type, (StringType, CharType, VarcharType)):
+            return str(value)
+        if isinstance(spark_type, BooleanType):
+            return jvm.java.lang.Boolean.valueOf(bool(value))
+        if isinstance(spark_type, (ByteType, ShortType, IntegerType)):
+            return jvm.java.lang.Integer.valueOf(int(value))
+        if isinstance(spark_type, LongType):
+            return jvm.java.lang.Long.valueOf(int(value))
+        if isinstance(spark_type, FloatType):
+            return jvm.java.lang.Float.valueOf(float(value))
+        if isinstance(spark_type, DoubleType):
+            return jvm.java.lang.Double.valueOf(float(value))
+        if isinstance(spark_type, DateType):
+            return jvm.java.time.LocalDate.of(
+                int(value.year), int(value.month), int(value.day)
+            )
+        if isinstance(spark_type, DecimalType):
+            # Iceberg validates that the BigDecimal scale equals the field scale.
+            return jvm.java.math.BigDecimal(str(value)).setScale(
+                spark_type.scale, jvm.java.math.RoundingMode.HALF_UP
+            )
+        if isinstance(spark_type, BinaryType):
+            return jvm.java.nio.ByteBuffer.wrap(bytes(value))
+        return None
+
+    def _synthetic_py_value(self, spark_type: DataType):
+        # A Python value used only when the table has no rows to reuse, just so
+        # the delete file is not empty; it need not match any row.
+        if isinstance(spark_type, (StringType, CharType, VarcharType)):
+            return self._rand_string(random.randint(1, 8))
+        if isinstance(spark_type, BooleanType):
+            return random.randint(0, 1) == 1
+        if isinstance(spark_type, (ByteType, ShortType, IntegerType, LongType)):
+            return random.randint(-1000, 1000)
+        if isinstance(spark_type, (FloatType, DoubleType)):
+            return random.uniform(-1000.0, 1000.0)
+        if isinstance(spark_type, DateType):
+            return self._rand_date()
+        if isinstance(spark_type, DecimalType):
+            return Decimal(0)  # always fits any precision/scale
+        if isinstance(spark_type, BinaryType):
+            return self._rand_binary(random.randint(1, 8))
+        return None
+
+    def write_equality_delete(self, spark: SparkSession, table: SparkTable):
+        # Spark SQL only ever writes *position* deletes; *equality* deletes must
+        # be produced through the Iceberg Java API (reached here via the PySpark
+        # JVM gateway). This exercises the equality-delete read path in ClickHouse
+        # and, on a coin flip, makes the delete file's column nullability differ
+        # from the table schema -- the shape that crashed the server in
+        # https://github.com/ClickHouse/ClickHouse/pull/109551 (a required column
+        # in the table declared optional in the delete file, or vice versa).
+        tpath = table.get_table_full_path()
+
+        # Equality deletes match on top-level primitive columns.
+        candidates = [
+            name
+            for name, col in table.columns.items()
+            if not col.generated and isinstance(col.spark_type, self._EQ_DELETE_TYPES)
+        ]
+        if not candidates:
+            self.insert_random_data(spark, table)
+            return
+        col_name = random.choice(candidates)
+        col_type = table.columns[col_name].spark_type
+
+        # Reuse real values when the table has any, otherwise a synthetic one so
+        # the delete file is never empty. Matching real rows is not required to
+        # exercise the read path (the set is built from the delete file
+        # regardless), but it keeps the delete meaningful for result checking.
+        try:
+            rows = spark.sql(
+                f"SELECT DISTINCT `{col_name}` FROM {tpath} "
+                f"WHERE `{col_name}` IS NOT NULL LIMIT {random.randint(1, 10)}"
+            ).collect()
+        except Exception:
+            rows = []
+        py_values = [r[0] for r in rows if r[0] is not None]
+        if not py_values:
+            synthetic = self._synthetic_py_value(col_type)
+            if synthetic is None:
+                self.insert_random_data(spark, table)
+                return
+            py_values = [synthetic]
+
+        jvm = spark.sparkContext._jvm
+        gateway = spark.sparkContext._gateway
+
+        java_values = [
+            v
+            for v in (self._to_iceberg_value(jvm, col_type, pv) for pv in py_values)
+            if v is not None
+        ]
+        if not java_values:
+            self.insert_random_data(spark, table)
+            return
+
+        # Make the delete-file column nullability match (False) or deliberately
+        # differ from (True) the table schema.
+        flip_nullability = random.randint(1, 2) == 1
+        self.logger.info(
+            "Writing Iceberg equality delete on %s.`%s` (%d value(s), flip_nullability=%s)",
+            tpath,
+            col_name,
+            len(java_values),
+            flip_nullability,
+        )
+
+        # Resolve the Iceberg table through Spark's catalog so this works for any
+        # registered Iceberg catalog (hadoop / hive / rest / nessie / glue),
+        # instead of assuming a hadoop warehouse path.
+        iceberg_table = jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(
+            spark._jsparkSession, tpath
+        )
+        schema = iceberg_table.schema()
+        field = schema.findField(col_name)
+        field_id = field.fieldId()
+
+        types = jvm.org.apache.iceberg.types.Types
+        make_required = field.isRequired() != flip_nullability
+        if make_required:
+            delete_field = types.NestedField.required(field_id, col_name, field.type())
+        else:
+            delete_field = types.NestedField.optional(field_id, col_name, field.type())
+        delete_schema = jvm.org.apache.iceberg.Schema([delete_field])
+
+        equality_ids = gateway.new_array(jvm.int, 1)
+        equality_ids[0] = field_id
+
+        appender_factory = jvm.org.apache.iceberg.data.GenericAppenderFactory(
+            schema, iceberg_table.spec(), equality_ids, delete_schema, None
+        )
+        # Delete files may be Parquet, ORC or Avro (recorded per-file in the
+        # manifest), independently of the data file format -- vary it so all three
+        # delete-file reader paths get exercised.
+        delete_format = random.choice(["parquet", "orc", "avro"])
+        file_format = getattr(jvm.org.apache.iceberg.FileFormat, delete_format.upper())
+        file_name = (
+            "eq-delete-"
+            + "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
+            + f".{delete_format}"
+        )
+        out = iceberg_table.io().newOutputFile(
+            iceberg_table.locationProvider().newDataLocation(file_name)
+        )
+        writer = appender_factory.newEqDeleteWriter(
+            jvm.org.apache.iceberg.encryption.EncryptedFiles.plainAsEncryptedOutput(
+                out
+            ),
+            file_format,
+            None,
+        )
+        try:
+            for value in java_values:
+                record = jvm.org.apache.iceberg.data.GenericRecord.create(delete_schema)
+                record.setField(col_name, value)
+                writer.write(record)
+        finally:
+            writer.close()
+        iceberg_table.newRowDelta().addDeletes(writer.toDeleteFile()).commit()
+
+    def shallow_clone_table(self, spark: SparkSession, table: SparkTable):
+        # Delta SHALLOW CLONE makes a table's log reference data files by ABSOLUTE
+        # path from another location instead of copying them. To exercise
+        # ClickHouse reading such foreign-path references on a table it already
+        # knows -- without registering a new table on the ClickHouse side:
+        #   1. DEEP CLONE the table into a scratch table, so the scratch owns a
+        #      physical copy of the files at a different location;
+        #   2. CREATE OR REPLACE the table as a SHALLOW CLONE of the scratch.
+        # The table keeps its identity, schema and rows (so both sides stay in
+        # sync and the oracle stays valid), but its log now points at the
+        # scratch table's directory.
+        #
+        # The scratch table's files become load-bearing for the table after
+        # step 2, so it must not be dropped; give it a unique name and leave it.
+        # It is never registered, so the rest of dolor (tablecheck, BuzzHouse)
+        # never touches it, and the run's teardown removes the whole warehouse.
+        tpath = table.get_table_full_path()
+        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        scratch = f"{table.catalog_name}.test.`{table.table_name}_shallow_src_{suffix}`"
+        self.logger.info(
+            "Delta SHALLOW CLONE round-trip on %s (via %s)", tpath, scratch
+        )
+        self.run_query(spark, f"CREATE TABLE {scratch} DEEP CLONE {tpath};")
+        self.run_query(
+            spark, f"CREATE OR REPLACE TABLE {tpath} SHALLOW CLONE {scratch};"
+        )
+
+    def add_files_to_table(self, spark: SparkSession, table: SparkTable):
+        # Iceberg `add_files` imports EXTERNALLY-authored data files (files with no
+        # Iceberg field-IDs) by reference, mapping columns by name -- a distinct
+        # read path from files written by Iceberg's own writer. Write a small batch
+        # of random rows as plain Parquet/ORC/Avro to a sibling path, then CALL
+        # add_files to pull them in.
+        #
+        # add_files references the imported files in place, so the scratch path is
+        # load-bearing afterwards and is left in place (unique per call, tiny, and
+        # invisible to the rest of dolor); the run's teardown removes the warehouse.
+        tpath = table.get_table_full_path()
+        nrows = random.randint(1, 100)
+        src_format = random.choice(["parquet", "orc", "avro"])
+        df = self._create_random_df(spark, table, nrows)
+
+        jvm = spark.sparkContext._jvm
+        # Base the scratch path on the table's own location so it lands on the same
+        # filesystem / URI scheme (local, s3, azure) with no extra configuration.
+        iceberg_table = jvm.org.apache.iceberg.spark.Spark3Util.loadIcebergTable(
+            spark._jsparkSession, tpath
+        )
+        location = str(iceberg_table.location()).rstrip("/")
+        suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        src_path = f"{location}_add_files_src_{suffix}"
+
+        self.logger.info(
+            "Iceberg add_files into %s from %d %s row(s) at %s",
+            tpath,
+            nrows,
+            src_format,
+            src_path,
+        )
+        df.write.format(src_format).mode("overwrite").save(src_path)
+        self.run_query(
+            spark,
+            f"CALL `{table.catalog_name}`.system.add_files("
+            f"table => '{table.get_namespace_path()}', "
+            f"source_table => '`{src_format}`.`{src_path}`')",
+        )
+
     def update_rows(self, spark: SparkSession, table: SparkTable):
         # Standalone UPDATE ... SET ... WHERE (distinct from the UPDATE inside
         # MERGE). SET targets are top-level, non-generated columns; scalar
@@ -775,7 +1028,7 @@ class LakeDataGenerator:
         )
 
     def update_table(self, spark: SparkSession, table: SparkTable) -> bool:
-        next_operation = random.randint(1, 1000)
+        next_operation = random.randint(1, 1100)
 
         is_iceberg = table.lake_format == LakeFormat.Iceberg
         is_delta = table.lake_format == LakeFormat.DeltaLake
@@ -822,7 +1075,31 @@ class LakeDataGenerator:
                     self.insert_into_branch(spark, table)
                 else:
                     self.insert_random_data(spark, table)
-            elif next_operation <= 870:
+            elif next_operation <= 745:
+                # Iceberg equality-delete file via the Java API (Spark SQL only
+                # writes position deletes). Restricted to unpartitioned tables so
+                # the writer can use a null partition tuple.
+                if is_iceberg and not table.partition_keys:
+                    self.write_equality_delete(spark, table)
+                else:
+                    self.insert_random_data(spark, table)
+            elif next_operation <= 755:
+                # Delta SHALLOW CLONE round-trip: rewrites the table's log to
+                # reference its data files by absolute foreign path. Only on
+                # non-deterministic tables.
+                if is_delta and not table.deterministic:
+                    self.shallow_clone_table(spark, table)
+                else:
+                    self.insert_random_data(spark, table)
+            elif next_operation <= 780:
+                # Iceberg add_files: import externally-authored (no field-ID) data
+                # files by reference, mapped by name. Unpartitioned only (a
+                # partitioned target needs a Hive-layout source or partition_filter).
+                if is_iceberg and not table.partition_keys:
+                    self.add_files_to_table(spark, table)
+                else:
+                    self.insert_random_data(spark, table)
+            elif next_operation <= 970:
                 # SQL Procedures or other statements specific for the lake
                 next_table_generator = LakeTableGenerator.get_next_generator(
                     table.lake_format

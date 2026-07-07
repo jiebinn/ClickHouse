@@ -330,12 +330,13 @@ logger.jetty.level = warn
         catalog_extension = ""
         catalog_format = ""
         all_jars = [
-            "io.delta:delta-spark_2.13:4.0.0",
+            "io.delta:delta-spark_2.13:4.0.1",
             "io.unitycatalog:unitycatalog-spark_2.13:0.3.0",
             "org.apache.iceberg:iceberg-aws-bundle:1.10.0",
             "org.apache.iceberg:iceberg-azure-bundle:1.10.0",
             "org.apache.iceberg:iceberg-spark-extensions-4.0_2.13:1.10.0",
             "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0",
+            "org.apache.spark:spark-avro_2.13:4.0.2",
             "org.apache.spark:spark-hadoop-cloud_2.13:4.0.1",
             "org.apache.paimon:paimon-spark-4.0_2.13:1.4.1",
             # Derby jars
