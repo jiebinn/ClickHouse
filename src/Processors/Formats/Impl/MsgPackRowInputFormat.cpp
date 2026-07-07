@@ -637,13 +637,20 @@ msgpack::object_handle MsgPackSchemaReader::readObject()
         /// handled below exactly like insufficient_bytes (grow and retry, reject once the whole input is
         /// buffered and it still does not fit).
         const size_t available = buf.buffer().end() - buf.position();
+        /// A map is the exception: msgpack allocates sizeof(object_kv) (a key plus a value) per declared
+        /// pair, but a valid pair is two encoded objects and so occupies at least two bytes. Bounding the
+        /// pair count by the byte count (like arrays/str/bin) would let a malformed map32 over-declare by
+        /// almost 2x and still drive a large allocation before the payload is found short. Cap map pairs by
+        /// available / 2 instead: a fully buffered valid map has payload >= 2 * pairs, so it never trips the
+        /// bound, while an over-declaration is rejected before the allocation.
+        const size_t map_available = available / 2;
         /// Also bound the nesting depth. msgpack::unpack builds the DOM tree eagerly, so a deeply nested
         /// header (arrays/maps nested many levels deep) would allocate the whole deep tree before
         /// getDataType gets to enforce max_parser_depth. Thread the setting through so unpack rejects it
         /// while building. max_parser_depth == 0 means unlimited (matching getDataType and the SQL parser);
         /// msgpack spells unlimited as 0xffffffff.
         const size_t depth_limit = format_settings.max_parser_depth ? format_settings.max_parser_depth : 0xffffffff;
-        const msgpack::unpack_limit limit(available, available, available, available, available, depth_limit);
+        const msgpack::unpack_limit limit(available, map_available, available, available, available, depth_limit);
         try
         {
             object_handle = msgpack::unpack(

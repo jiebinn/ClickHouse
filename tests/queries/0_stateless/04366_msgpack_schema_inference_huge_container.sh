@@ -40,6 +40,24 @@ for header_label in "array32:\xdd" "map32:\xdf" "str32:\xdb" "bin32:\xc6"; do
         | expect_contains "$label" UNEXPECTED_END_OF_FILE
 done
 
+# A map is bounded by pairs, not bytes: msgpack allocates sizeof(object_kv) (key + value) per declared
+# pair. A valid pair is two encoded objects (>= 2 bytes), so the map slot is capped at available / 2
+# rather than available. This map32 buffers a full payload of n single-byte objects, so it passes the
+# old raw-available map check (n <= 5 + n) and would allocate n * sizeof(object_kv) before discovering
+# the payload holds at most n / 2 pairs; the tightened available / 2 bound rejects it before that
+# allocation. Output is a clean rejection either way; the case guards the tighter bound stays correct.
+python3 -c "import sys,struct; n=100000; sys.stdout.buffer.write(b'\xdf'+struct.pack('>I',n)+b'\x01'*n)" \
+    | $CLICKHOUSE_LOCAL --input-format MsgPack --input_format_msgpack_number_of_columns=1 \
+        -q "SELECT toTypeName(c1) FROM table" 2>&1 \
+    | expect_contains "map_underbound" UNEXPECTED_END_OF_FILE
+
+# The tightened map bound must not reject a valid map at the boundary. A fixmap of 15 pairs of
+# single-byte objects has available = 1 + 2*15 = 31, so available / 2 = 15 == the pair count: the
+# tightest valid map still passes and infers normally.
+python3 -c "import sys; sys.stdout.buffer.write(b'\x8f' + b'\x01\x02'*15)" \
+    | $CLICKHOUSE_LOCAL --input-format MsgPack --input_format_msgpack_number_of_columns=1 \
+        -q "SELECT toTypeName(c1) FROM table"
+
 # Valid data must still be inferred correctly (the bound must not reject legitimate objects). In
 # particular a real string whose length header far exceeds the first buffered chunk must be read by
 # growing the buffer, not rejected.
