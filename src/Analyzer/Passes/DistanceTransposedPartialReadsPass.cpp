@@ -23,6 +23,11 @@ namespace Setting
 extern const SettingsBool optimize_qbit_distance_function_reads;
 }
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
+
 namespace
 {
 
@@ -230,24 +235,25 @@ public:
             new_args.push_back(cast_function);
         }
 
-        /// Re-resolve function with new arguments. Keep the original arguments so the rewrite can be reverted if it
-        /// would change the result type.
-        auto original_arguments = function_node->getArguments().getNodes();
+        /// Re-resolve function with the rewritten arguments.
         function_node->getArguments().getNodes() = std::move(new_args);
         auto function_builder = FunctionFactory::instance().get(function_name, getContext());
         function_node->resolveAsFunction(function_builder->build(function_node->getArgumentColumns()));
 
-        /// The rewritten form always yields a Float64 / Nullable(Float64) result: it casts the reference vector to a
-        /// plain Array and drops the precision and used_dims arguments. If the original call has some other result type
-        /// - for example a Nullable(Array) reference vector whose nullability is dropped by the cast - applying the
-        /// optimization would silently change the result type. In that case revert to the original arguments and leave
-        /// the query unoptimized instead. (Variant and Dynamic reference vectors, the other type-changing cases, are
-        /// excluded up front before the rewrite.)
+        /// The rewrite must preserve the result type of the call. The distance function always returns Float64, wrapped
+        /// in Nullable exactly when one of its arguments is Nullable; the rewrite carries that nullability onto the
+        /// trailing size constant (or through the Nullable bit-plane subcolumns when the QBit column itself is Nullable)
+        /// so the rewritten result type matches the original. The only other type-changing reference vectors - Variant
+        /// and Dynamic - are excluded up front. Reaching a mismatch here therefore means the optimization silently
+        /// changed the query result type, which is a bug in this pass rather than a user error, so fail loudly instead
+        /// of degrading to an unoptimized result.
         if (!function_node->getResultType()->equals(*original_result_type))
-        {
-            function_node->getArguments().getNodes() = std::move(original_arguments);
-            function_node->resolveAsFunction(function_builder->build(function_node->getArgumentColumns()));
-        }
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "DistanceTransposedPartialReadsPass changed the result type of function {} from {} to {}",
+                function_name,
+                original_result_type->getName(),
+                function_node->getResultType()->getName());
     }
 };
 

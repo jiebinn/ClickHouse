@@ -105,9 +105,10 @@ DROP TABLE qbit_strided;
 
 
 -- The optimization rewrites the reference vector to a plain Array and drops the precision/used_dims arguments, so it
--- always produces a Float64 / Nullable(Float64) result. If a special-typed reference vector (e.g. Dynamic) makes the
--- original call have a different result type, the pass must leave the query unoptimized instead of raising a logical
--- error. Reproduces a fuzzer-found crash: dotProductTransposed(vec, <Dynamic>, precision) over a QBit table column.
+-- always produces a Float64 / Nullable(Float64) result. A special-typed reference vector (e.g. Dynamic) makes the
+-- original call have a different result type, so the pass must exclude it up front and leave the query unoptimized
+-- rather than silently changing the result type. Reproduces a fuzzer-found crash: dotProductTransposed(vec, <Dynamic>,
+-- precision) over a QBit table column.
 
 DROP TABLE IF EXISTS qbit_dynamic_ref;
 CREATE TABLE qbit_dynamic_ref (id UInt32, vec Nullable(QBit(Float32, 4))) ENGINE = Memory;
