@@ -16,6 +16,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+#include <Functions/IFunctionAdaptors.h>
 #include <Functions/LowCardinalityExecutionHelpers.h>
 #include <Functions/castTypeToEither.h>
 #include <Interpreters/Context_fwd.h>
@@ -2233,7 +2234,12 @@ ColumnPtr FunctionArrayElement<mode>::executeImpl(
 
     auto arguments_without_low_cardinality = arguments;
     if (convertLowCardinalityColumnsToFull(arguments_without_low_cardinality))
-        return executeImpl(arguments_without_low_cardinality, result_type, input_rows_count);
+    {
+        /// Re-enter the function through the framework so that the default implementations
+        /// (in particular for Nullable arguments uncovered by removing LowCardinality) are applied.
+        return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionArrayElement<mode>>())
+            .execute(arguments_without_low_cardinality, result_type, input_rows_count, /*dry_run=*/ false);
+    }
 
     const auto * col_map = checkAndGetColumn<ColumnMap>(arguments[0].column.get());
     const auto * col_const_map = checkAndGetColumnConst<ColumnMap>(arguments[0].column.get());

@@ -152,7 +152,13 @@ public:
         {
             if (auto result = Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count))
                 return result;
-            convertLowCardinalityColumnsToFull(arguments_to_execute);
+            if (convertLowCardinalityColumnsToFull(arguments_to_execute))
+            {
+                /// Re-enter the function through the framework so that the default implementations
+                /// (in particular for Nullable arguments uncovered by removing LowCardinality) are applied.
+                return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionMapToArrayAdapter>())
+                    .execute(arguments_to_execute, result_type, input_rows_count, /*dry_run=*/ false);
+            }
         }
 
         auto nested_arguments = arguments_to_execute;
