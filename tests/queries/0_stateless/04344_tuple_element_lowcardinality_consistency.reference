@@ -48,3 +48,26 @@ SELECT n.m, tupleElement(n, 'm'), tupleElement(materialize(n), 'm') FROM t_04344
 {'k':'v'}	{'k':'v'}	{'k':'v'}
 {}	{}	{}
 DROP TABLE t_04344;
+-- A `Map` / `Array` element of a `Nullable(Tuple(...))` can neither be wrapped in `Nullable` nor carry
+-- NULL itself, so outer-NULL rows must read as the element default ({} / []) -- matching a stored subcolumn
+-- and `NestedUtils::unwrapNullableTuple`. The construction below nulls the outer tuple with `if(...)` while
+-- leaving a non-default payload ({'k2':'v2'} / [3,4]) in the hidden nested column, and `materialize(...)`
+-- forces the non-optimized function path. The outer-NULL row must read the default, not that hidden payload.
+SELECT n, tupleElement(materialize(n), 'm') AS via_function
+FROM (
+    SELECT if(t.1 = 'b', NULL, t)::Nullable(Tuple(a String, m Map(String, String))) AS n
+    FROM (SELECT arrayJoin([tuple('a', map('k1', 'v1'))::Tuple(a String, m Map(String, String)),
+                            tuple('b', map('k2', 'v2'))::Tuple(a String, m Map(String, String))]) AS t)
+)
+SETTINGS allow_experimental_nullable_tuple_type = 1;
+('a',{'k1':'v1'})	{'k1':'v1'}
+\N	{}
+SELECT n, tupleElement(materialize(n), 'arr') AS via_function
+FROM (
+    SELECT if(t.1 = 'b', NULL, t)::Nullable(Tuple(a String, arr Array(UInt32))) AS n
+    FROM (SELECT arrayJoin([tuple('a', [1, 2])::Tuple(a String, arr Array(UInt32)),
+                            tuple('b', [3, 4])::Tuple(a String, arr Array(UInt32))]) AS t)
+)
+SETTINGS allow_experimental_nullable_tuple_type = 1;
+('a',[1,2])	[1,2]
+\N	[]

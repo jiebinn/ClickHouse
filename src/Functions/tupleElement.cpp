@@ -198,13 +198,40 @@ public:
 
             if (null_map_column)
             {
-                /// Fold the outer `Nullable(Tuple(...))` null map into the extracted element using the exact
-                /// same logic as the subcolumn path (`t.a`): wrap wrappable elements in `ColumnNullable`, OR
-                /// the outer null map into an element that already carries NULLs (Nullable / LowCardinality
-                /// (Nullable) / Dynamic / Variant), and promote a non-nullable `LowCardinality(T)` element to
-                /// `LowCardinality(Nullable(T))` before applying the mask. This keeps the (type, column) pair
-                /// consistent with both `getReturnTypeImpl` and the subcolumn reader.
-                res = NullableSubcolumnCreator(null_map_column).create(res);
+                const DataTypePtr & element_type = input_type_as_tuple->getElements()[index.value()];
+
+                if (canExtractedSubcolumnsBeInsideNullableOrLowCardinalityNullable(element_type) || canContainNull(*element_type))
+                {
+                    /// The element can represent NULL: fold the outer `Nullable(Tuple(...))` null map in with
+                    /// the exact same logic as the subcolumn path (`t.a`) -- wrap wrappable elements in
+                    /// `ColumnNullable`, OR the mask into an element that already carries NULLs (Nullable /
+                    /// LowCardinality(Nullable) / Dynamic / Variant), and promote a non-nullable
+                    /// `LowCardinality(T)` element to `LowCardinality(Nullable(T))` first. Keeps the
+                    /// (type, column) pair consistent with `getReturnTypeImpl` and the subcolumn reader.
+                    res = NullableSubcolumnCreator(null_map_column).create(res);
+                }
+                else
+                {
+                    /// The element (e.g. Map, Array) can neither be wrapped in `Nullable` nor carry NULL
+                    /// itself, so it has no NULL representation. Write the element's default for outer-NULL
+                    /// rows -- matching `NestedUtils::unwrapNullableTuple` and the stored subcolumn -- instead
+                    /// of leaking whatever payload sits under the null map in the hidden nested column.
+                    const auto & null_map = assert_cast<const ColumnUInt8 &>(*null_map_column).getData();
+
+                    auto result_column = element_type->createColumn();
+                    result_column->reserve(res->size());
+
+                    Field default_field = element_type->getDefault();
+                    for (size_t i = 0; i < res->size(); ++i)
+                    {
+                        if (null_map[i])
+                            result_column->insert(default_field);
+                        else
+                            result_column->insertFrom(*res, i);
+                    }
+
+                    res = std::move(result_column);
+                }
             }
         }
         else if (const DataTypeQBit * input_type_as_qbit = checkAndGetDataType<DataTypeQBit>(input_type))
