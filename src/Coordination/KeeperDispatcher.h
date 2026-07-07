@@ -8,7 +8,9 @@
 #include <Common/ThreadPool.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <unordered_set>
 #include <Coordination/KeeperServer.h>
 #include <Coordination/Keeper4LWInfo.h>
@@ -77,6 +79,12 @@ private:
     /// Flag to signal TCP handlers that they should close connections.
     /// Set before the full shutdown() to allow handlers to exit promptly.
     std::atomic<bool> shutting_down{false};
+
+    /// Wakes the container garbage collector thread from its inter-tick wait, so
+    /// shutdown does not have to block for a full `container_gc_period_ms` (60s by
+    /// default). The unrelated TTL GC loop uses a short period and does not need this.
+    std::mutex container_gc_wait_mutex;
+    std::condition_variable container_gc_wait_cv;
 
     /// Thread clean disconnected sessions from memory
     void sessionCleanerTask();

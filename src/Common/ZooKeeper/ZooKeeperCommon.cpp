@@ -251,6 +251,8 @@ void ZooKeeperCreateRequest::writeImpl(WriteBuffer & out) const
         flags = CreateMode::EPHEMERAL;
     else if (is_sequential)
         flags = CreateMode::PERSISTENT_SEQUENTIAL;
+    else if (is_container)
+        flags = CreateMode::CONTAINER;
     else
         flags = CreateMode::PERSISTENT;
 
@@ -283,8 +285,10 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
     /// that disagree with the wire create-mode (e.g. Create2 carrying a TTL flag would
     /// otherwise pass feature-gating as Create2 yet create a TTL node here).
     const bool from_create_ttl_opnum = include_ttl;
+    const bool from_create_container_opnum = is_container;
     is_ephemeral = false;
     is_sequential = false;
+    is_container = false;
     include_ttl = false;
 
     /// org.apache.zookeeper.CreateMode.fromFlag — reject unknown flags rather than
@@ -325,6 +329,15 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
     if (from_create_ttl_opnum != include_ttl)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "CreateTTL opnum and create-mode flag disagree on TTL");
+
+    /// Same for containers: opnum CreateContainer must be paired with the CONTAINER create
+    /// mode and nothing else. Otherwise a malformed packet (e.g. opnum CreateContainer with a
+    /// PERSISTENT_SEQUENTIAL flag) would survive as both container and sequential, and the
+    /// leader would append a sequence suffix while followers replay a plain container path,
+    /// diverging the Raft log.
+    if (from_create_container_opnum != is_container)
+        throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
+            "CreateContainer opnum and create-mode flag disagree on container");
 
     /// Create2 sets include_stats; that must not coexist with a TTL create mode.
     if (include_stats && include_ttl)

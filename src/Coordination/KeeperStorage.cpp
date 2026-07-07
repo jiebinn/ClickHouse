@@ -1839,8 +1839,14 @@ static Coordination::Error preprocess(
         if (!node->stats.isTTL() || time < node->stats.destroyTime())
             return {};
     }
-    /// Re-check that the node is still a container with no children; the child count
-    /// may have changed between when the GC thread sampled it and now.
+    /// Re-check the node is still a container with no children, matching ZooKeeper's
+    /// `deleteContainer` handling in `PrepRequestProcessor` (only `childCount == 0` and
+    /// "still a container/ttl, not a normal node" are verified here). GC eligibility
+    /// (`cversion > 0` or the never-used grace period) is decided once at sampling time
+    /// in `collectContainerCandidates`; like ZooKeeper we deliberately do not re-derive
+    /// it here, so a stale TryRemove that races a delete+recreate may delete a freshly
+    /// recreated empty container. That is accepted by the container contract: the client
+    /// recreates the container on the next child create.
     if (is_container_gc_remove)
     {
         if (!node->stats.isContainer() || node->numChildren() != 0)

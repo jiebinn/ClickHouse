@@ -222,6 +222,13 @@ void KeeperDispatcher::shutdown(bool closed_all_connections)
 
             LOG_DEBUG(log, "Shutting down storage dispatcher");
 
+            /// `shutdown_called` is now set (via setShutdownCalled() above); wake the
+            /// container GC thread so it observes it instead of sleeping out its tick.
+            {
+                std::lock_guard lock(container_gc_wait_mutex);
+            }
+            container_gc_wait_cv.notify_all();
+
             const auto & feature_flags = keeper_context->getFeatureFlags();
             if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL) && ttl_garbage_collector_thread.joinable())
                 ttl_garbage_collector_thread.join();
@@ -398,8 +405,18 @@ void KeeperDispatcher::containerGarbageCollectorThread(size_t batch_size, UInt64
         }
         if (isShuttingDown())
             return;
-        sleepForMilliseconds(std::chrono::milliseconds(
-            keeper_context->getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds()).count());
+
+        /// Interruptible wait: unlike a raw sleep, this returns immediately once
+        /// shutdown is requested, so joining this thread never blocks for a full
+        /// `container_gc_period_ms` (60s by default).
+        {
+            const auto period_ms = keeper_context->getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
+            std::unique_lock lock(container_gc_wait_mutex);
+            container_gc_wait_cv.wait_for(
+                lock,
+                std::chrono::milliseconds(period_ms),
+                [&] { return shutdown_called || isShuttingDown(); });
+        }
     }
 }
 
