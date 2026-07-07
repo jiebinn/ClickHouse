@@ -1079,7 +1079,7 @@ class LakeDataGenerator:
                 # Iceberg equality-delete file via the Java API (Spark SQL only
                 # writes position deletes). Restricted to unpartitioned tables so
                 # the writer can use a null partition tuple.
-                if is_iceberg and not table.partition_keys:
+                if is_iceberg and not table.partitioned:
                     self.write_equality_delete(spark, table)
                 else:
                     self.insert_random_data(spark, table)
@@ -1095,7 +1095,7 @@ class LakeDataGenerator:
                 # Iceberg add_files: import externally-authored (no field-ID) data
                 # files by reference, mapped by name. Unpartitioned only (a
                 # partitioned target needs a Hive-layout source or partition_filter).
-                if is_iceberg and not table.partition_keys:
+                if is_iceberg and not table.partitioned:
                     self.add_files_to_table(spark, table)
                 else:
                     self.insert_random_data(spark, table)

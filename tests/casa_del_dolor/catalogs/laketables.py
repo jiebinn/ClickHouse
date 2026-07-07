@@ -141,7 +141,15 @@ class SparkTable:
         self.clustered: bool = False
         # Plain partition-key column names (PARTITIONED BY). OPTIMIZE ... WHERE only
         # accepts partition predicates, so the WHERE column must come from here.
+        # NOTE: this is the WHERE-usable column list, NOT a partitioned-vs-unpartitioned
+        # flag -- it stays empty for transformed Iceberg specs (bucket/year/truncate/void)
+        # and for tables created via the pyiceberg catalog path. Use `partitioned` for
+        # "is this table partitioned at all".
         self.partition_keys: list[str] = []
+        # Whether the table has ANY partitioning (plain or transformed, SQL DDL or catalog
+        # PartitionSpec). Operations that assume no partition tuple / partition filter
+        # (e.g. Iceberg equality deletes, add_files) must gate on this, not partition_keys.
+        self.partitioned: bool = False
 
     def get_namespace_path(self) -> str:
         return f"test.{self.table_name}"

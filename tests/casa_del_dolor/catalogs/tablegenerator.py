@@ -154,9 +154,11 @@ class LakeTableGenerator:
                     table.clustered = len(row["clusteringColumns"] or []) > 0
                 if "partitionColumns" in row:
                     flat_cols = table.flat_columns()
-                    table.partition_keys = [
-                        c for c in (row["partitionColumns"] or []) if c in flat_cols
-                    ]
+                    part_cols = row["partitionColumns"] or []
+                    table.partition_keys = [c for c in part_cols if c in flat_cols]
+                    # Delta only has plain partition columns, so partitionColumns is an
+                    # authoritative partitioned-vs-unpartitioned signal here.
+                    table.partitioned = len(part_cols) > 0
 
     def generate_common_alter_statements(
         self,
@@ -420,6 +422,7 @@ class LakeTableGenerator:
                     k=random.randint(1, min(3, len(partition_clauses))),
                 )
                 ddl += f" PARTITIONED BY ({','.join(random_subset)})"
+                res.partitioned = True
                 # Remember plain partition columns for Delta OPTIMIZE ... WHERE (which only
                 # accepts partition predicates). Non-Delta formats emit transform expressions
                 # here (e.g. bucket(n, col)), which are not usable as a WHERE column, so keep
@@ -487,11 +490,19 @@ class IcebergTableGenerator(LakeTableGenerator):
             # Add or drop partition field
             partition_clauses = self.add_partition_clauses(table)
             if partition_clauses:
-                return f"ALTER TABLE {tpath} {random.choice(['ADD', 'DROP'])} PARTITION FIELD {random.choice(partition_clauses)}"
+                op = random.choice(["ADD", "DROP"])
+                if op == "ADD":
+                    # A newly added partition field makes the table partitioned. DROP is
+                    # deliberately not reset here: we can't cheaply tell whether it removed
+                    # the last field, and over-reporting partitioned only skips the
+                    # unpartitioned-only ops (equality deletes / add_files), which is safe.
+                    table.partitioned = True
+                return f"ALTER TABLE {tpath} {op} PARTITION FIELD {random.choice(partition_clauses)}"
         elif next_operation <= 4:
             # Replace partition field
             partition_clauses = self.add_partition_clauses(table)
             if partition_clauses:
+                table.partitioned = True
                 return f"ALTER TABLE {tpath} REPLACE PARTITION FIELD {random.choice(partition_clauses)} WITH {random.choice(partition_clauses)}"
         elif next_operation <= 6:
             # Set ORDER BY
@@ -631,13 +642,18 @@ class IcebergTableGenerator(LakeTableGenerator):
 
         if random.randint(1, 2) == 1:
             nproperties.update(self.generate_table_properties(table))
+        npartition_spec = self.type_mapper.generate_random_iceberg_partition_spec(
+            nschema
+        )
+        # This catalog path never populates partition_keys (those are plain SQL DDL
+        # partition columns); track partitioned-vs-unpartitioned separately so
+        # operations that assume an unpartitioned table gate correctly.
+        table.partitioned = len(npartition_spec.fields) > 0
         ctable = catalog_impl.create_table(
             identifier=("test", table.table_name),
             location=f"s3{'a' if table.catalog == LakeCatalogs.Hive else ''}://warehouse-{'rest' if table.catalog == LakeCatalogs.REST else ('hms' if table.catalog == LakeCatalogs.Hive else 'glue')}/data",
             schema=nschema,
-            partition_spec=self.type_mapper.generate_random_iceberg_partition_spec(
-                nschema
-            ),
+            partition_spec=npartition_spec,
             sort_order=self.type_mapper.generate_random_iceberg_sort_order(nschema),
             properties=nproperties,
         )
@@ -1052,15 +1068,27 @@ class IcebergTableGenerator(LakeTableGenerator):
             res += ")"
             return res
         if next_option in (5, 6, 7, 8):
+            snapshots = self.get_snapshots(spark, table)
+            # These three take an OPTIONAL snapshot_id.
             calls = [
                 "ancestors_of",
                 "compute_partition_stats",
                 "compute_table_stats",
-                "set_current_snapshot",
             ]
-            res = f"CALL `{table.catalog_name}`.system.{random.choice(calls)}(table => '{table.get_namespace_path()}'"
-            snapshots = self.get_snapshots(spark, table)
-            if len(snapshots) > 0 and random.randint(1, 2) == 1:
+            # set_current_snapshot REQUIRES exactly one of snapshot_id / ref on every
+            # call, so only offer it when a concrete snapshot_id is available, and then
+            # always pass one of the required arguments (`main` always exists once the
+            # table has a snapshot).
+            if len(snapshots) > 0:
+                calls.append("set_current_snapshot")
+            chosen = random.choice(calls)
+            res = f"CALL `{table.catalog_name}`.system.{chosen}(table => '{table.get_namespace_path()}'"
+            if chosen == "set_current_snapshot":
+                if random.randint(1, 2) == 1:
+                    res += f", snapshot_id => {random.choice(snapshots)}"
+                else:
+                    res += ", ref => 'main'"
+            elif len(snapshots) > 0 and random.randint(1, 2) == 1:
                 res += f", snapshot_id => {random.choice(snapshots)}"
             res += ")"
             return res
