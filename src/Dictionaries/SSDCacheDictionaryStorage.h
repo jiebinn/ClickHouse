@@ -805,14 +805,17 @@ private:
     static int preallocateDiskSpace(int fd, size_t offset, size_t len)
     {
         #if defined(OS_DARWIN)
-            /// macOS has neither fallocate nor posix_fallocate. Reserve contiguous space best-effort
-            /// (F_PREALLOCATE allocates past EOF but does not change the file size), then extend the
-            /// file with ftruncate, which is what actually makes the region readable/writable.
+            /// macOS has neither fallocate nor posix_fallocate. F_PREALLOCATE reserves blocks past EOF
+            /// but does not change the file size, so ftruncate sets the size afterwards. We must match
+            /// fallocate's contract of actually reserving space: if the reservation fails (e.g. ENOSPC)
+            /// we fail here rather than letting ftruncate grow a sparse file and pushing the failure
+            /// into a later write, after cache state (evicted index entries) has already changed.
             fstore_t store{F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, static_cast<off_t>(len), 0};
             if (::fcntl(fd, F_PREALLOCATE, &store) == -1)
             {
                 store.fst_flags = F_ALLOCATEALL;
-                ::fcntl(fd, F_PREALLOCATE, &store);
+                if (::fcntl(fd, F_PREALLOCATE, &store) == -1)
+                    return -1;
             }
             return ::ftruncate(fd, static_cast<off_t>(offset + len));
         #elif defined(OS_FREEBSD)
