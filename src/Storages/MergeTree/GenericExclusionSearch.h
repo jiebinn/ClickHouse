@@ -21,11 +21,13 @@ struct GenericExclusionSearchSettings
     /// Must be greater than 1. The default matches the default of `merge_tree_coarse_index_granularity`.
     size_t coarse_index_granularity = 8;
 
-    /// Budget of check invocations spent on the search; 0 means unlimited. When the budget is
-    /// exhausted, the remaining ranges are not split further: each still receives its one check and
-    /// is then either dropped or accepted whole, so the result may contain more marks, but the
-    /// analysis time stays bounded. The budget is spent on the largest remaining ranges first, and
-    /// at least one check per initial range is always made.
+    /// Budget of check invocations spent on the search; 0 means unlimited. When the budget no
+    /// longer covers the checks already owed to the queued ranges, the remaining ranges are not
+    /// split further: each still receives its one check and is then either dropped or accepted
+    /// whole, so the result may contain more marks, but the analysis time stays bounded. The budget
+    /// is spent on the largest remaining ranges first. It is applied loosely: the children of an
+    /// allowed split are not reserved in advance, so the number of checks may exceed the budget by
+    /// at most `coarse_index_granularity`, and at least one check per initial range is always made.
     size_t max_steps = 0;
 
     /// Accepted ranges separated by a gap of at most this many marks are merged, because reading the

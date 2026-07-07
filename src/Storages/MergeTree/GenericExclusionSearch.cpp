@@ -111,10 +111,11 @@ struct LessBySize
 };
 
 /// The step-limited variant spends a budget of check invocations, largest ranges first. A range is
-/// split further only when the budget can still cover one check for every range already in the queue
-/// plus the new subranges; otherwise the range is accepted whole. This bounds the total number of
-/// checks by the budget (or by the number of initial ranges, whichever is larger) while every queued
-/// range still receives its one check that can exclude it entirely.
+/// split further only when the budget still covers one check for every range already in the queue;
+/// otherwise the range is accepted whole. The children of an allowed split are not reserved in
+/// advance, so the total number of checks may exceed the budget by at most one split fan-out, but a
+/// split is never refused while the budget lasts and every queued range still receives its one
+/// check that can exclude it entirely.
 void searchLimited(
     const MarkRanges & initial_ranges,
     const MarkRangeCheck & check_in_range,
@@ -150,34 +151,21 @@ void searchLimited(
             continue;
         }
 
-        size_t step = splitStep(range, search_settings.coarse_index_granularity);
-        size_t num_subranges = (range.end - range.begin + step - 1) / step;
-
-        if (result.num_steps + queue.size() + num_subranges > search_settings.max_steps)
+        if (result.num_steps + queue.size() > search_settings.max_steps)
         {
             result.reached_step_limit = true;
             accepted.push_back(range);
             continue;
         }
 
-        [[maybe_unused]] size_t num_pushed = 0;
-        splitRange(
-            range,
-            search_settings.coarse_index_granularity,
-            [&](MarkRange subrange)
-            {
-                ++num_pushed;
-                queue.push(subrange);
-            });
-
-        /// The budget gate above reserved exactly this many future checks, so the split must not
-        /// produce a different number of subranges.
-        chassert(num_pushed == num_subranges);
+        splitRange(range, search_settings.coarse_index_granularity, [&](MarkRange subrange) { queue.push(subrange); });
     }
 
-    /// The number of checks never exceeds the budget, except that every initial range always
-    /// receives its one check.
-    chassert(result.num_steps <= std::max(search_settings.max_steps, initial_ranges.size()));
+    /// The number of checks never exceeds the budget by more than the fan-out of the last allowed
+    /// split, except that every initial range always receives its one check.
+    chassert(
+        result.num_steps <= search_settings.coarse_index_granularity
+        || result.num_steps - search_settings.coarse_index_granularity <= std::max(search_settings.max_steps, initial_ranges.size()));
 
     std::sort(accepted.begin(), accepted.end());
     for (const auto & range : accepted)
