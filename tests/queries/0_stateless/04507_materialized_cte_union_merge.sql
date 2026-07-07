@@ -63,7 +63,7 @@ SELECT number FROM (
 --    materializations here: one for `inner_cte`, one for `outer_cte`.
 SELECT count() FROM (
     EXPLAIN
-    WITH inner_cte AS MATERIALIZED (SELECT number FROM numbers(10)),
+    WITH inner_cte AS MATERIALIZED (SELECT number FROM numbers(3)),
          outer_cte AS MATERIALIZED (SELECT number * 2 AS number FROM inner_cte)
     SELECT number FROM outer_cte UNION ALL SELECT number FROM outer_cte
 ) WHERE explain LIKE '%MaterializingCTE (Materializing CTE:%';
@@ -88,7 +88,7 @@ SELECT count() FROM (
 --    second UNION branch) share a single materialization.
 SELECT count() FROM (
     EXPLAIN
-    WITH t AS MATERIALIZED (SELECT number FROM numbers(10))
+    WITH t AS MATERIALIZED (SELECT number FROM numbers(3))
     SELECT number FROM t WHERE number IN (SELECT number FROM t) UNION ALL SELECT number FROM t
 ) WHERE explain LIKE '%MaterializingCTE (Materializing CTE:%';
 
@@ -97,3 +97,23 @@ SELECT number FROM (
     WITH t AS MATERIALIZED (SELECT number FROM numbers(3))
     SELECT number FROM t WHERE number IN (SELECT number FROM t) UNION ALL SELECT number FROM t
 ) ORDER BY number;
+
+-- 8. Two sibling scopes, each independently defining `t AS MATERIALIZED (...)` with the
+--    SAME name and a structurally identical body, each `t` referenced twice, the two
+--    scopes combined by an outer UNION ALL. The merge key (CTE name + subquery hash) has
+--    no scope component, so the two independent definitions merge into a single
+--    materialization -- this is intended (and unavoidable, see the design doc), not a bug.
+SELECT count() FROM (
+    EXPLAIN
+    (WITH t AS MATERIALIZED (SELECT number FROM numbers(3)) SELECT number FROM t UNION ALL SELECT number FROM t)
+    UNION ALL
+    (WITH t AS MATERIALIZED (SELECT number FROM numbers(3)) SELECT number FROM t UNION ALL SELECT number FROM t)
+) WHERE explain LIKE '%MaterializingCTE (Materializing CTE:%';
+
+-- 8b. Functional pin using nondeterminism: a single shared materialization across both
+--     sibling scopes means all four references observe the same random value.
+SELECT uniqExact(r) FROM (
+    (WITH t AS MATERIALIZED (SELECT rand() AS r) SELECT r FROM t UNION ALL SELECT r FROM t)
+    UNION ALL
+    (WITH t AS MATERIALIZED (SELECT rand() AS r) SELECT r FROM t UNION ALL SELECT r FROM t)
+);

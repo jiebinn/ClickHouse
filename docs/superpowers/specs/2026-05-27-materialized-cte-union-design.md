@@ -410,6 +410,7 @@ let a second registration attempt through and threw `TABLE_ALREADY_EXISTS`.*
 | Two materialized CTEs with identical bodies, different `cte_name` | ~~*Do* dedup. `ignore_cte = true` hides the outer-node binding metadata so the bucket sees one logical body. See "Non-goals" note. Test #5 pins this behavior.~~ *Amended: does **not** merge. `cte_name` is part of the merge key, so distinctly-named CTEs stay separate regardless of body equality. Pinned by case 3 of `04507_materialized_cte_union_merge.sql`.* |
 | Two materialized CTEs with same body but different column aliases (`SELECT 1 AS a` vs `SELECT 1 AS b`) | Stay separate. Inner aliases participate in the hash because `compare_aliases = true`. |
 | In-branch repeat reference (`SELECT FROM x JOIN x`) within a single SELECT | Already deduped by `tryResolveIdentifierFromCTE`'s pointer-reuse path (line 1302). Dedup is a no-op; the bucket sees only one entry per branch. |
+| Two genuinely independent `MATERIALIZED` CTE definitions in sibling scopes, same `cte_name` AND structurally identical body | *DO* merge. The merge key (`cte_name` + subquery hash) has no scope component, so this is indistinguishable from the bug-reproducing UNION-branch-clone shape the pass exists to fix, and is unavoidable without adding scope to the key. Only observable for a nondeterministic body (e.g. `rand()`), where it collapses two independent random draws into one shared value. Pinned by case 8 of `04507_materialized_cte_union_merge.sql`. |
 
 ## Testing
 
