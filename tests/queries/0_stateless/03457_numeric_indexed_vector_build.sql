@@ -1,3 +1,6 @@
+-- Tags: no-darwin
+-- no-darwin: UInt64 demangles to 'unsigned long long' on macOS libc++ (vs 'unsigned long' on Linux), so the value_type name in the output differs.
+
 select 'TEST groupNumericIndexedVector';
 
 DROP TABLE IF EXISTS uin_value_details;

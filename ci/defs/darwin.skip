@@ -14,10 +14,6 @@
 03702_geometry_functions
 03976_geometry_functions_accept_subtypes
 
-# UInt64 demangles to 'unsigned long long' on macOS libc++ (vs 'unsigned long' on Linux), so the
-# value_type name printed in the output differs.
-03457_numeric_indexed_vector_build
-
 # SSD cache dictionaries: the SSD_CACHE layout is Linux/FreeBSD-only (uses O_DIRECT and Linux
 # native AIO io_submit/io_getevents); not built on macOS. Needs an I/O-layer port to enable.
 01684_ssd_cache_dictionary_simple_key
