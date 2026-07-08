@@ -175,7 +175,15 @@ void forEachColumnHashBatch(const IColumn & column, UInt64 seed, ProcessBatch &&
 }
 
 /// Grow the bloom filter bytes to hold `distinct_keys` keys at the target fill rate using
-/// `hash_functions` hash functions: m = -hash_functions * distinct_keys / ln(1 - fill_rate) bits
+/// `hash_functions` hash functions: filter_bits = -hash_functions * distinct_keys / ln(1 - fill_rate)
+/// The formula is built on the following logic:
+/// - distinct_keys * hash_functions: total bit-inserts into the filter
+/// - filter_bits: the size of the filter in bits (what we solve for)
+/// - 1/filter_bits: probability that one bit-insert sets a given bit
+/// - (1 - 1/filter_bits)^(distinct_keys * hash_functions): probability that a given bit is not set after all inserts
+/// - e^(-distinct_keys * hash_functions / filter_bits) is used to approximate the above probability
+/// - 1 - e^(-distinct_keys * hash_functions / filter_bits): expected fraction of bits that end up set (= fill_rate)
+/// For more infomation check: https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf
 UInt64 growBloomFilterBytes(UInt64 distinct_keys, UInt64 hash_functions, UInt64 default_bloom_filter_bytes, Float64 max_ratio_of_set_bits)
 {
     const Float64 target_fill_rate = std::min(RUNTIME_BLOOM_FILTER_TARGET_FILL_RATE, max_ratio_of_set_bits);
