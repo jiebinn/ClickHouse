@@ -16,7 +16,11 @@ def started_node():
     cluster = helpers.cluster.ClickHouseCluster(__file__)
     node = cluster.add_instance(
         "node",
-        main_configs=["configs/crash_log.xml", "configs/core_dump.xml"],
+        main_configs=[
+            "configs/crash_log.xml",
+            "configs/core_dump.xml",
+            "configs/disable_trace_log.xml",
+        ],
         env_variables={
             "ASAN_OPTIONS": "use_sigaltstack=0 disable_coredump=0",
             "TSAN_OPTIONS": "use_sigaltstack=0 memory_limit_mb=5120 disable_coredump=0",
