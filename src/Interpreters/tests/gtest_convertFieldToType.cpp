@@ -4,6 +4,7 @@
 #include <Core/Field.h>
 #include <Interpreters/convertFieldToType.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <Common/Exception.h>
 
 #include <gtest/gtest.h>
 #include <base/Decimal.h>
@@ -264,8 +265,9 @@ INSTANTIATE_TEST_SUITE_P(
 /// https://github.com/ClickHouse/ClickHouse/issues/43144
 /// Conversion to a floating-point type is exact by default (a value that is not exactly
 /// representable returns Null), so optimizer/pruning callers do not build a wrong comparison
-/// bound from a rounded constant. Materialization paths (the `values` table function, `INSERT`,
-/// reached via `convertFieldToTypeOrThrow`) opt into rounding to the nearest value, like `CAST`.
+/// bound from a rounded constant. Materialization paths (the `values` table function, `INSERT`)
+/// reach `convertFieldToTypeOrThrow` and pass `convert_inexact_floats=true` to opt into rounding to
+/// the nearest value, like `CAST`.
 /// The strict conversion used by the `IN` operator always stays exact.
 TEST(ConvertFieldToTypeStrictness, Float64ToFloat32)
 {
@@ -287,8 +289,12 @@ TEST(ConvertFieldToTypeStrictness, Float64ToFloat32)
     EXPECT_FALSE(nearest.isNull());
     EXPECT_EQ(nearest, Field(static_cast<Float32>(0.1)));
 
-    /// `convertFieldToTypeOrThrow` (the `values`/insert path) rounds and does not throw.
-    const Field materialized = convertFieldToTypeOrThrow(inexact, *to_type, from_type.get());
+    /// `convertFieldToTypeOrThrow` is exact by default: a non-representable value is rejected. This keeps
+    /// lossy rounding out of callers such as `ALTER ... PARTITION` resolution (`getPartitionIDFromQuery`).
+    EXPECT_THROW(convertFieldToTypeOrThrow(inexact, *to_type, from_type.get()), Exception);
+
+    /// The `values`/insert path passes `convert_inexact_floats=true`, so it rounds to the nearest value and does not throw.
+    const Field materialized = convertFieldToTypeOrThrow(inexact, *to_type, from_type.get(), {}, /*convert_inexact_floats=*/ true);
     EXPECT_EQ(materialized, Field(static_cast<Float32>(0.1)));
 
     /// Strict: a value that is not exactly representable becomes Null (excluded from an IN set).
