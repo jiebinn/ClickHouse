@@ -262,7 +262,7 @@ private:
         if (row_begin == row_end)
             return;
 
-        std::array<Key, hash_chunk_size> hashes;
+        std::array<Key, hash_chunk_size> hashes{};
         size_t row = row_begin;
 
         bool use_last_value_cache = true;
