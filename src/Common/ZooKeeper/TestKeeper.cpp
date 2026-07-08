@@ -301,75 +301,28 @@ struct TestKeeperMultiRequest final : MultiRequest<RequestPtr>, TestKeeperReques
 
 std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Container & container, int64_t zxid) const
 {
-    CreateResponse base_response;
-    base_response.zxid = zxid;
+    CreateResponse response;
+    response.zxid = zxid;
     Undo undo;
 
-    /// Mirror the check order of KeeperStorage::preprocess: parent existence/kind first,
-    /// then the is_sequential + not_exists combination, then compute the effective path
-    /// (appending the sequence suffix for sequential creates), then the node-existence
-    /// (duplicate) check against that effective path, then TTL validation. Keeping the
-    /// same order makes TestKeeper return the same error code as real Keeper for the
-    /// same request.
-    auto parent_it = container.find(parentPath(path));
-
-    if (parent_it == container.end())
+    if (container.contains(path))
     {
-        base_response.error = Error::ZNONODE;
-    }
-    else if (parent_it->second.is_ephemeral)
-    {
-        base_response.error = Error::ZNOCHILDRENFOREPHEMERALS;
-    }
-    else if (parent_it->second.is_ttl)
-    {
-        /// A TTL node cannot have children, matching KeeperStorage::preprocess.
-        base_response.error = Error::ZBADARGUMENTS;
-    }
-    else if (is_sequential && not_exists)
-    {
-        /// ZooKeeperCreateRequest::getOpNum maps not_exists to CreateIfNotExists, and
-        /// KeeperStorage::preprocess rejects a sequential CreateIfNotExists with
-        /// ZBADARGUMENTS (the check precedes the node-existence lookup). Mirror it so a
-        /// request built via zkutil::makeCreateRequest(path, data,
-        /// CreateMode::PersistentSequential, /*ignore_if_exists=*/ true) fails closed
-        /// under implementation=testkeeper instead of silently creating a node.
-        base_response.error = Error::ZBADARGUMENTS;
+        if (not_exists)
+            response.error = Error::ZOK;
+        else
+            response.error = Error::ZNODEEXISTS;
     }
     else
     {
-        /// KeeperStorage::preprocess appends the sequence suffix to path_created before
-        /// checking for a duplicate node, so a sequential create can still succeed even
-        /// when the unsuffixed prefix already exists (e.g. a literal "/p/log-" node must
-        /// not block "/p/log-0000000003" from being created). Mirror that by computing
-        /// the effective path up front and checking existence against it, not the raw path.
-        std::string path_created = path;
-        if (is_sequential)
-            path_created += fmt::format("{:0>10}", parent_it->second.seq_num);
+        auto it = container.find(parentPath(path));
 
-        if (container.contains(path_created))
+        if (it == container.end())
         {
-            // Create2 / CreateTTL take precedence over CreateIfNotExists: a duplicate node
-            // is always rejected with ZNODEEXISTS when include_stats or include_ttl is set,
-            // mirroring ZooKeeperCreateRequest::getOpNum precedence in real Keeper.
-            if (not_exists && !include_stats && !include_ttl)
-            {
-                base_response.error = Error::ZOK;
-                /// Mirror KeeperStorage::process: a duplicate CreateIfNotExists still
-                /// reports the requested path in path_created, so consumers reading
-                /// path_created (e.g. from multi) behave the same as against real Keeper.
-                /// (is_sequential is guaranteed false here, so path_created == path.)
-                base_response.path_created = path_created;
-            }
-            else
-                base_response.error = Error::ZNODEEXISTS;
+            response.error = Error::ZNONODE;
         }
-        else if (include_ttl && (is_ephemeral || ttl <= 0 || ttl > MAX_TESTKEEPER_TTL_MS))
+        else if (it->second.is_ephemeral)
         {
-            /// Reject invalid TTL creates the same way KeeperStorage::preprocess does:
-            /// TTL is incompatible with ephemeral, and the ttl must be positive and
-            /// bounded (prevents time + ttl overflow when computing destroy_time).
-            base_response.error = Error::ZBADARGUMENTS;
+            response.error = Error::ZNOCHILDRENFOREPHEMERALS;
         }
         else
         {
@@ -387,14 +340,18 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
             created_node.is_sequental = is_sequential;
             created_node.is_ttl = include_ttl;
             created_node.ttl = include_ttl ? ttl : 0;
+            std::string path_created = path;
+
+            if (is_sequential)
+                path_created += fmt::format("{:0>10}", it->second.seq_num);
 
             /// Increment sequential number even if node is not sequential
-            ++parent_it->second.seq_num;
+            ++it->second.seq_num;
 
-            base_response.path_created = path_created;
+            response.path_created = path_created;
             container.emplace(path_created, std::move(created_node));
 
-            undo = [&container, path_created, parent_path = parent_it->first]
+            undo = [&container, path_created, parent_path = it->first]
             {
                 container.erase(path_created);
                 auto & undo_parent = container.at(parent_path);
@@ -403,26 +360,14 @@ std::pair<ResponsePtr, Undo> TestKeeperCreateRequest::process(TestKeeper::Contai
                 --undo_parent.seq_num;
             };
 
-            ++parent_it->second.stat.cversion;
-            ++parent_it->second.stat.numChildren;
+            ++it->second.stat.cversion;
+            ++it->second.stat.numChildren;
 
-            base_response.error = Error::ZOK;
+            response.error = Error::ZOK;
         }
     }
 
-    if (include_stats || include_ttl)
-    {
-        Create2Response response2;
-        static_cast<CreateResponse &>(response2) = base_response;
-        if (!base_response.path_created.empty())
-        {
-            const auto & node = container.at(base_response.path_created);
-            response2.stat = node.stat;
-        }
-        return { std::make_shared<Create2Response>(response2), undo };
-    }
-
-    return { std::make_shared<CreateResponse>(base_response), undo };
+    return { std::make_shared<CreateResponse>(response), undo };
 }
 
 std::pair<ResponsePtr, Undo> TestKeeperRemoveRequest::process(TestKeeper::Container & container, int64_t zxid) const
@@ -844,12 +789,7 @@ std::pair<ResponsePtr, Undo> TestKeeperMultiRequest::processMultiRead(TestKeeper
     return { std::make_shared<MultiResponse>(response), {} };
 }
 
-ResponsePtr TestKeeperCreateRequest::createResponse() const
-{
-    if (include_stats || include_ttl)
-        return std::make_shared<Create2Response>();
-    return std::make_shared<CreateResponse>();
-}
+ResponsePtr TestKeeperCreateRequest::createResponse() const { return std::make_shared<CreateResponse>(); }
 ResponsePtr TestKeeperRemoveRequest::createResponse() const { return std::make_shared<RemoveResponse>(); }
 ResponsePtr TestKeeperRemoveRecursiveRequest::createResponse() const { return std::make_shared<RemoveRecursiveResponse>(); }
 ResponsePtr TestKeeperExistsRequest::createResponse() const { return std::make_shared<ExistsResponse>(); }
@@ -884,7 +824,6 @@ TestKeeper::TestKeeper(const zkutil::ZooKeeperArgs & args_)
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::CHECK_STAT);
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::TRY_REMOVE);
     keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::LIST_WITH_STAT_AND_DATA);
-    keeper_feature_flags.enableFeatureFlag(KeeperFeatureFlag::CREATE_WITH_STATS);
 
     processing_thread = ThreadFromGlobalPool([this] { processingThread(); });
 }
