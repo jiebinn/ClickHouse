@@ -211,6 +211,13 @@ Chunk IRowInputFormat::read()
                     throw;
                 }
 
+                /// If the parse error was caused by a throwing read that self-canceled the
+                /// buffer (via ReadBuffer::next()'s catch handler), we cannot skip the bad row:
+                /// syncAfterError() reads from the buffer (skipToNextLineOrEOF/ignore/eof), which
+                /// calls next() and trips chassert(!isCanceled()). Rethrow instead of aborting.
+                if (getReadBuffer().isCanceled())
+                    throw;
+
                 syncAfterError();
 
                 /// Rollback all columns in block to initial size (remove values, that was appended to only part of columns).

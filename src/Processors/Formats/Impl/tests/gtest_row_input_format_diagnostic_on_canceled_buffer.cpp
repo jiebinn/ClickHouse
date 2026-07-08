@@ -79,3 +79,38 @@ TEST(RowInputFormatDiagnostics, CanceledBufferDoesNotAbort)
     /// Must throw a regular exception, not abort the process.
     EXPECT_THROW(format.read(), Exception);
 }
+
+/// Regression test for the second reachable path to the same "ReadBuffer is canceled"
+/// abort, this time in IRowInputFormat::read()'s error-skipping branch.
+///
+/// With allow_errors_num / allow_errors_ratio set, read() catches the parse error inside
+/// the row loop (before it reaches the diagnostics guard) and calls syncAfterError() to
+/// skip to the next row. For TSV/CSV/template that starts with skipTo*NextLineOrEOF, whose
+/// first buf.eof() calls next() on the now canceled buffer, tripping the same
+/// chassert(!isCanceled()). The fix rethrows when the buffer is already canceled instead
+/// of trying to skip, so a regular exception is thrown rather than aborting.
+TEST(RowInputFormatDiagnostics, CanceledBufferDoesNotAbortWithAllowErrors)
+{
+    Block header;
+    header.insert({ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "a"});
+    header.insert({ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "b"});
+    auto shared_header = std::make_shared<const Block>(header);
+
+    /// One complete row, then a partial row so the parser calls next() mid-row.
+    ThrowingReadBuffer buf("1\t2\n3\t");
+
+    RowInputFormatParams params;
+    params.max_block_size_rows = 100;
+    /// Enable error skipping so read() takes the syncAfterError() path, not the diagnostics one.
+    params.allow_errors_num = 10;
+    params.allow_errors_ratio = 1.0;
+
+    FormatSettings format_settings;
+    TabSeparatedRowInputFormat format(
+        shared_header, buf, params,
+        /* with_names_ = */ false, /* with_types_ = */ false, /* is_raw = */ false,
+        format_settings);
+
+    /// Must throw a regular exception, not abort the process.
+    EXPECT_THROW(format.read(), Exception);
+}
