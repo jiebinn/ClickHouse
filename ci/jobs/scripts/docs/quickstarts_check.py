@@ -10,7 +10,7 @@ Two checks (see docs/get-started/quickstarts/README.md for the authoring
 guide):
 
 1. Frontmatter tags and badge markers. Every English quickstart page must
-   declare `products` (exactly one of ALLOWED_PRODUCTS) and `useCases` (one
+   declare `products` (one or more of ALLOWED_PRODUCTS) and `useCases` (one
    or more of ALLOWED_USE_CASES). The QuickStartsGrid explorer filters match
    on slugs derived from these values, so an unknown value produces a card
    that no filter can find. Every page must also contain the
@@ -102,19 +102,20 @@ def check_frontmatter(docs_root: Path) -> list:
             continue
         fm = m.group(1)
 
+        # A page may support more than one product (e.g. a guide with separate
+        # steps for Cloud and self-managed), and the explorer treats `products`
+        # as filter membership, so every product a guide documents must be
+        # tagged or a user filtering on it will not find the guide.
         products = parse_tag_list(fm, "products")
-        if products is None:
-            errors.append(f"{name}: missing `products` frontmatter")
-        elif len(products) != 1:
-            errors.append(
-                f"{name}: `products` must contain exactly one value, "
-                f"got {products}"
-            )
-        elif products[0] not in ALLOWED_PRODUCTS:
-            errors.append(
-                f"{name}: unknown product {products[0]!r} "
-                f"(allowed: {', '.join(ALLOWED_PRODUCTS)})"
-            )
+        if not products:
+            errors.append(f"{name}: missing or empty `products` frontmatter")
+        else:
+            for pr in products:
+                if pr not in ALLOWED_PRODUCTS:
+                    errors.append(
+                        f"{name}: unknown product {pr!r} "
+                        f"(allowed: {', '.join(ALLOWED_PRODUCTS)})"
+                    )
 
         use_cases = parse_tag_list(fm, "useCases")
         if not use_cases:
