@@ -2,6 +2,8 @@
 #include <Columns/ColumnConst.h>
 #include <Core/Settings.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/IDataType.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -143,7 +145,23 @@ void dropAliases(ASTPtr & node)
 }
 
 
-bool isCompatible(ASTPtr & node)
+/// Returns true if `node` references a column of UUID type. ClickHouse and external
+/// databases (e.g. PostgreSQL) sort UUIDs differently, so range comparisons on a UUID
+/// column cannot be pushed down without silently dropping rows.
+bool isUUIDColumn(const ASTPtr & node, const NamesAndTypesList & available_columns)
+{
+    const auto * identifier = node->as<ASTIdentifier>();
+    if (!identifier)
+        return false;
+
+    for (const auto & column : available_columns)
+        if (column.name == identifier->name())
+            return WhichDataType(removeNullable(column.type)).isUUID();
+
+    return false;
+}
+
+bool isCompatible(ASTPtr & node, const NamesAndTypesList & available_columns)
 {
     if (auto * function = node->as<ASTFunction>())
     {
@@ -173,6 +191,18 @@ bool isCompatible(ASTPtr & node)
             || name == "tuple"))
             return false;
 
+        /// Range comparisons on UUID columns must not be pushed down. ClickHouse and the
+        /// external database sort UUIDs differently, so the pushed-down predicate compares
+        /// against a different ordering and silently drops rows. Equality and IN are order
+        /// independent and remain compatible. Such predicates are applied locally instead.
+        /// See https://github.com/ClickHouse/ClickHouse/issues/105558.
+        if (name == "less" || name == "greater" || name == "lessOrEquals" || name == "greaterOrEquals")
+        {
+            for (const auto & argument : function->arguments->children)
+                if (isUUIDColumn(argument, available_columns))
+                    return false;
+        }
+
         /// A tuple with zero or one elements is represented by a function tuple(x) and is not compatible,
         /// but a normal tuple with more than one element is represented as a parenthesized expression (x, y) and is perfectly compatible.
         /// So to support tuple with zero or one elements we can clear function name to get (x) instead of tuple(x)
@@ -190,7 +220,7 @@ bool isCompatible(ASTPtr & node)
             return false;
 
         for (auto & expr : function->arguments->children)
-            if (!isCompatible(expr))
+            if (!isCompatible(expr, available_columns))
                 return false;
 
         /// When the parser's fast-path literal conversion produces
@@ -370,7 +400,7 @@ String transformQueryForExternalDatabaseImpl(
         ReplaceLiteralToExprVisitor::Data replace_literal_to_expr_data;
         ReplaceLiteralToExprVisitor(replace_literal_to_expr_data).visit(original_where);
 
-        if (isCompatible(original_where))
+        if (isCompatible(original_where, available_columns))
         {
             select->setExpression(ASTSelectQuery::Expression::WHERE, ASTPtr(original_where));
         }
@@ -393,7 +423,7 @@ String transformQueryForExternalDatabaseImpl(
 
                     for (auto & elem : func->arguments->children)
                     {
-                        if (isCompatible(elem))
+                        if (isCompatible(elem, available_columns))
                             new_function_and->arguments->children.push_back(elem);
                         else if (const auto * child = elem->as<ASTFunction>(); child && (child->name == "and" || child->name == "tuple"))
                             predicates.push(child);
