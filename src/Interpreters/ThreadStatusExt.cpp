@@ -17,6 +17,7 @@
 #include <Common/CurrentThread.h>
 #include <Common/DateLUT.h>
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/ProfileEvents.h>
 #include <Common/QueryProfiler.h>
@@ -39,6 +40,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+    extern const char attach_to_group_failure[];
+}
+
 namespace Setting
 {
     extern const SettingsBool calculate_text_stack_trace;
@@ -74,6 +80,7 @@ namespace ServerSetting
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int FAULT_INJECTED;
 }
 
 void configureMemoryTrackerFromSettings(bool has_trace_collector, MemoryTracker & memory_tracker, const Settings & settings)
@@ -113,9 +120,24 @@ ThreadGroup::ThreadGroup(ContextPtr query_context_, Int32 os_threads_nice_value_
             }
             return false;
     };
+    shared_data.throw_if_query_canceled_predicate = [this] ()
+    {
+        if (auto context_locked = query_context.lock())
+        {
+            if (auto elem = context_locked->getProcessListElementSafe())
+                elem->throwIfKilled();
+        }
+    };
 }
 
-// c-tor for method createForMaterializedView
+bool ThreadGroup::isBorrowed() const
+{
+    return kind == ThreadGroupKind::Borrowed;
+}
+
+// Borrowed groups point their counters and memory tracker at `parent` without owning it.
+// They must stay scoped to synchronous work and must not be captured by async tasks.
+// Constructor for `createForMaterializedView`
 ThreadGroup::ThreadGroup(ThreadGroupPtr parent)
     : master_thread_id(parent->master_thread_id)
     , query_context(parent->query_context)
@@ -125,11 +147,12 @@ ThreadGroup::ThreadGroup(ThreadGroupPtr parent)
     , memory_spill_scheduler(parent->memory_spill_scheduler)
     , performance_counters(VariableContext::Process, &parent->performance_counters)
     , memory_tracker(&parent->memory_tracker, VariableContext::Process, /*log_peak_memory_usage_in_destructor*/ false)
+    , kind(ThreadGroupKind::Borrowed)
     , shared_data(parent->getSharedData())
 {
 }
 
-// c-tor for method createForFlushAsyncInsertQueue
+// Constructor for `createForFlushAsyncInsertQueue`
 ThreadGroup::ThreadGroup(ContextPtr query_context_, ThreadGroupPtr parent)
     : master_thread_id(CurrentThread::get().thread_id)
     , query_context(query_context_)
@@ -139,6 +162,7 @@ ThreadGroup::ThreadGroup(ContextPtr query_context_, ThreadGroupPtr parent)
     , memory_spill_scheduler(parent->memory_spill_scheduler)
     , performance_counters(VariableContext::Process, &parent->performance_counters)
     , memory_tracker(&parent->memory_tracker, VariableContext::Process, /*log_peak_memory_usage_in_destructor*/ false)
+    , kind(ThreadGroupKind::Borrowed)
 {
     shared_data.query_is_canceled_predicate = [this] () -> bool {
         if (auto context_locked = query_context.lock())
@@ -146,6 +170,14 @@ ThreadGroup::ThreadGroup(ContextPtr query_context_, ThreadGroupPtr parent)
             return context_locked->isCurrentQueryKilled();
         }
         return false;
+    };
+    shared_data.throw_if_query_canceled_predicate = [this] ()
+    {
+        if (auto context_locked = query_context.lock())
+        {
+            if (auto elem = context_locked->getProcessListElementSafe())
+                elem->throwIfKilled();
+        }
     };
 }
 
@@ -227,7 +259,7 @@ ThreadGroupPtr ThreadGroup::createForMaterializedView(ContextPtr context)
     ThreadGroupPtr res_group;
     if (auto current_group = CurrentThread::getGroup())
     {
-        res_group = std::make_shared<ThreadGroup>(current_group);
+        res_group = ThreadGroupPtr(new ThreadGroup(current_group));
     }
     else
     {
@@ -240,7 +272,7 @@ ThreadGroupPtr ThreadGroup::createForMaterializedView(ContextPtr context)
 
 ThreadGroupPtr ThreadGroup::createForFlushAsyncInsertQueue(ContextPtr context, ThreadGroupPtr parent)
 {
-    auto res_group = std::make_shared<ThreadGroup>(context, parent);
+    auto res_group = ThreadGroupPtr(new ThreadGroup(context, parent));
     res_group->memory_tracker.setDescription("FlushAsyncInsertQueue");
     return res_group;
 }
@@ -296,6 +328,10 @@ void CurrentThread::attachQueryForLog(const String & query_)
 
 void ThreadStatus::applyGlobalSettings()
 {
+    /// Runs on every attach (after memory_tracker is parented to the group), so non-query threads
+    /// still pick up total_memory_tracker_sample_probability; query threads refine it in applyQuerySettings.
+    resolveMemorySampleConfig();
+
     auto global_context_ptr = global_context.lock();
     if (!global_context_ptr)
         return;
@@ -329,10 +365,7 @@ void ThreadStatus::applyQuerySettings()
     /// (we cannot do this for all threads, even though it is no-op, since it is a data-race)
     if (thread_group->master_thread_id == thread_id)
         configureMemoryTrackerFromSettings(query_context_ptr->hasTraceCollector(), thread_group->memory_tracker, settings);
-    auto sample_config = memory_tracker.getResolvedSampleConfig();
-    sample_probability = sample_config.probability;
-    sample_min_allocation_size = sample_config.min_allocation_size;
-    sample_max_allocation_size = sample_config.max_allocation_size;
+    resolveMemorySampleConfig();
 
 #if USE_JEMALLOC
     if (settings[Setting::jemalloc_enable_profiler])
@@ -350,27 +383,39 @@ void ThreadStatus::attachToGroupImpl(const ThreadGroupPtr & thread_group_)
 {
     thread_attach_time.setUp();
 
-    /// Attach or init current thread to thread group and copy useful information from it
+    thread_group_->linkThread(thread_id);
     thread_group = thread_group_;
-    thread_group->linkThread(thread_id);
-
-    performance_counters.setParent(&thread_group->performance_counters);
-    memory_tracker.setParent(&thread_group->memory_tracker);
-
-    query_context = thread_group->query_context;
-    global_context = thread_group->global_context;
-
-    fatal_error_callback = thread_group->fatal_error_callback;
-
-    local_data = thread_group->getSharedData();
-
-    applyGlobalSettings();
-    applyQuerySettings();
-    initPerformanceCounters();
-
-    if (thread_group->os_threads_nice_value != 0)
+    try
     {
-        OSThreadNiceValue::set(thread_group->os_threads_nice_value);
+        performance_counters.setParent(&thread_group->performance_counters);
+        memory_tracker.setParent(&thread_group->memory_tracker);
+
+        query_context = thread_group->query_context;
+        global_context = thread_group->global_context;
+
+        fatal_error_callback = thread_group->fatal_error_callback;
+
+        local_data = thread_group->getSharedData();
+
+        applyGlobalSettings();
+        applyQuerySettings();
+
+        fiu_do_on(FailPoints::attach_to_group_failure,
+        {
+            throw Exception(ErrorCodes::FAULT_INJECTED, "Injected failure in attachToGroupImpl");
+        });
+
+        initPerformanceCounters();
+
+        if (thread_group->os_threads_nice_value != 0)
+        {
+            OSThreadNiceValue::set(thread_group->os_threads_nice_value);
+        }
+    }
+    catch (...)
+    {
+        detachFromGroup();
+        throw;
     }
 }
 
@@ -392,6 +437,9 @@ void ThreadStatus::detachFromGroup()
     memory_tracker.reset();
     /// Extract MemoryTracker out from query and user context
     memory_tracker.setParent(&total_memory_tracker);
+    /// Refresh the cache for the new parent so the detached thread honors
+    /// total_memory_tracker_sample_probability rather than the query's stale config.
+    resolveMemorySampleConfig();
 
     thread_group->unlinkThread();
 
