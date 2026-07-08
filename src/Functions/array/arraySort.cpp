@@ -7,6 +7,9 @@
 #include <Functions/array/arraySort.h>
 #include <Common/NaNUtils.h>
 #include <Common/iota.h>
+#include <base/extended_types.h>
+
+#include <limits>
 
 namespace DB
 {
@@ -85,8 +88,10 @@ struct GenericLess
 };
 
 /// Zeroing and scanning the 256 counters amortizes only over longer ranges; below this measured
-/// threshold ::sort wins on random data.
+/// threshold `::sort` wins on random data.
 constexpr size_t counting_sort_min_size = 256;
+/// The counters are UInt32; on longer ranges they could overflow, so such ranges take `::sort`.
+constexpr size_t counting_sort_max_size = std::numeric_limits<UInt32>::max();
 
 template <bool positive, typename T>
 void countingSort8(T * begin, T * end)
@@ -109,7 +114,7 @@ void countingSort8(T * begin, T * end)
 }
 
 /// Several times faster than the generic path, which sorts a permutation through per-comparison
-/// IColumn::compareAt and then permutes the nested column.
+/// `IColumn::compareAt` and then permutes the nested column.
 template <bool positive, typename T>
 ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & array)
 {
@@ -132,17 +137,18 @@ ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & 
     {
         T * begin = base + current_offset;
         T * end = base + next_offset;
-        if constexpr (std::is_floating_point_v<T>)
+        if constexpr (is_floating_point<T>)
         {
-            /// All NaNs go last in both directions, matching the nan_direction_hint that the
-            /// generic path passes to compareAt. Moving them out first keeps the comparator
+            /// All NaNs go last in both directions, matching the `nan_direction_hint` that the
+            /// generic path passes to `compareAt`. Moving them out first keeps the comparator
             /// of the sort itself branchless.
             T * nan_begin = std::partition(begin, end, [](T x) { return !isNaN(x); });
             sort_range(begin, nan_begin);
         }
         else if constexpr (sizeof(T) == 1)
         {
-            if (static_cast<size_t>(end - begin) >= counting_sort_min_size)
+            size_t range_size = end - begin;
+            if (range_size >= counting_sort_min_size && range_size <= counting_sort_max_size)
                 countingSort8<positive>(begin, end);
             else
                 sort_range(begin, end);

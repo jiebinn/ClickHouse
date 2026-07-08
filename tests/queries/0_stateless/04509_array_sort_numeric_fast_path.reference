@@ -26,17 +26,22 @@ integer types
 date and datetime
 ['2019-12-31','2020-01-01','2020-01-02']
 ['2020-01-02 00:00:02','2020-01-02 00:00:01']
+counting sort for long one-byte arrays
+1	1
+1	1
 consistency with the generic comparator path
-0
-0
-0
-0
-0
-0
-0
-0
-0
-0
-0
+UInt8	0
+UInt16	0
+UInt32	0
+UInt64	0
+Int8	0
+Int16	0
+Int32	0
+Int64	0
+Float32	0
+Float64	0
+Nullable(Int32)	0
+UInt8 long	0
+Int8 long	0
 consistency with the identity lambda
 0

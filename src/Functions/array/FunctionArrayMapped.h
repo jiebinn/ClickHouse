@@ -279,6 +279,9 @@ public:
                 column_array = assert_cast<const ColumnArray *>(column_array_ptr.get());
             }
 
+            /// `ArraySortImpl` detects the no-lambda case by the pointer identity of this
+            /// `getDataPtr()` result with the array's data to take a typed fast path; passing
+            /// a copied or converted column here would silently disable that optimization.
             if constexpr (num_fixed_params)
                 return Impl::execute(
                     *column_array,
