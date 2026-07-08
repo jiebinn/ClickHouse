@@ -22,7 +22,7 @@ public:
             /// The 16-bit thread counter must not overflow into the time bits.
             chassert(cur_num_threads < MASK_16_BIT);
 
-            UInt64 time_value;
+            UInt64 time_value = 0;
             if (cur_num_threads == 0)
             {
                 const UInt64 elapsed = clock_gettime_ns() - query_start_time;
