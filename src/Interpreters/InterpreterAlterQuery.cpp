@@ -708,6 +708,11 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(
             required_access.emplace_back(AccessType::ALTER_DROP_CONSTRAINT, database, table);
             break;
         }
+        case ASTAlterCommand::MODIFY_CONSTRAINT:
+        {
+            required_access.emplace_back(AccessType::ALTER_MODIFY_CONSTRAINT, database, table);
+            break;
+        }
         case ASTAlterCommand::ADD_PROJECTION:
         {
             required_access.emplace_back(AccessType::ALTER_ADD_PROJECTION, database, table);
