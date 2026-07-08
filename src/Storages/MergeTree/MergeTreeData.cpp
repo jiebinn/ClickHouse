@@ -4575,19 +4575,22 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 
             /// The codec was added, removed, or changed.
             bool forbidden = old_sig != new_sig;
-            /// Or the type changed while a Quantize codec is present on both sides (e.g. MODIFY COLUMN vec Array(Float64)
-            /// keeping CODEC(Quantize(...)) - same codec signature, but the type change still bypasses reattaching the
-            /// serialization).
-            if (!forbidden && old_has && new_has && !old_sig.empty() && !new_sig.empty())
-                forbidden = old_metadata.getColumns().get(command.column_name).type->getName()
-                    != new_metadata.getColumns().get(command.column_name).type->getName();
+            /// Or a typed `MODIFY COLUMN` is applied while the Quantized codec is present. Such a command reassigns the
+            /// column type (`ColumnsDescription::modify` sets `col.type = command.data_type`), which drops the codec's
+            /// custom serialization even when the type is textually unchanged (e.g. `MODIFY COLUMN vec Array(Float32)
+            /// COMMENT '...'`): the metadata still carries `CODEC(Quantized(...))` while subsequent writes stop producing
+            /// the companion codes subcolumn, leaving parts inconsistent. A comment-only `MODIFY COLUMN vec COMMENT '...'`
+            /// (no type clause) does not set `data_type` and remains allowed.
+            if (!forbidden && command.type == AlterCommand::MODIFY_COLUMN && command.data_type && !old_sig.empty())
+                forbidden = true;
 
             if (forbidden)
                 throw Exception(ErrorCodes::ALTER_OF_COLUMN_IS_FORBIDDEN,
-                    "The Quantize(...) codec is immutable via ALTER: it cannot be added, removed or changed, and the type "
-                    "of a Quantize-coded column cannot be changed (column {}). A metadata-only ALTER would leave existing "
-                    "parts inconsistent with new ones. Set the codec at CREATE TABLE; to change the codec or the type on "
-                    "existing data, create a new table with the codec and INSERT ... SELECT into it.",
+                    "The Quantized(...) codec is immutable via ALTER: it cannot be added, removed or changed, and a "
+                    "MODIFY COLUMN that restates the type of a Quantized-coded column is rejected (column {}), because it "
+                    "would drop the codec's serialization and leave new parts without the companion codes subcolumn. Set "
+                    "the codec at CREATE TABLE; to change the codec or type on existing data, create a new table with the "
+                    "codec and INSERT ... SELECT into it. A comment-only MODIFY COLUMN (without a type) is allowed.",
                     backQuoteIfNeed(command.column_name));
         }
     }

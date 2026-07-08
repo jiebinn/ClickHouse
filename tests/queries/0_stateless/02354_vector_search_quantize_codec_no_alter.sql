@@ -11,18 +11,20 @@ DROP TABLE IF EXISTS quantize_alter;
 CREATE TABLE quantize_alter (id UInt32, vec Array(Float32) CODEC(Quantized('rabitq', 64))) ENGINE = MergeTree ORDER BY id;
 
 -- Changing the codec parameters, switching the method, or removing the codec (explicitly, via CODEC(NONE)) is rejected.
--- (A bare MODIFY COLUMN vec Array(Float32) without a CODEC clause keeps the existing codec, so it is a no-op here.)
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(Quantized('rabitq', 128)); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(Quantized('turboquant', 64)); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) CODEC(NONE); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 
--- Changing the TYPE of a Quantized-coded column is also rejected - both when the codec is preserved implicitly (a bare
--- MODIFY keeps the codec but would change the type) and when it is respecified explicitly. Otherwise the type-change
--- reaches ColumnsDescription::modify and replaces the type without reattaching the custom serialization.
+-- Any MODIFY COLUMN that restates the type is rejected, because it reaches ColumnsDescription::modify and reassigns the
+-- column type without reattaching the codec's custom serialization - even when the type is textually unchanged. This
+-- covers a bare same-type restatement, a same-type restatement carrying only a COMMENT, and a genuine type change.
+-- Otherwise the metadata would still say CODEC(Quantized(...)) while new writes stop producing the companion codes.
+ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
+ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float32) COMMENT 'x'; -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float64); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 ALTER TABLE quantize_alter MODIFY COLUMN vec Array(Float64) CODEC(Quantized('rabitq', 64)); -- { serverError ALTER_OF_COLUMN_IS_FORBIDDEN }
 
--- An ALTER that leaves the codec unchanged is allowed (a comment-only modify must not be mistaken for removing it).
+-- A comment-only MODIFY COLUMN (no type clause) preserves the serialization and is allowed.
 ALTER TABLE quantize_alter MODIFY COLUMN vec COMMENT 'kept';
 SELECT 'comment_kept', comment FROM system.columns WHERE database = currentDatabase() AND table = 'quantize_alter' AND name = 'vec';
 
