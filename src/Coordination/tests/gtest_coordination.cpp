@@ -216,6 +216,21 @@ TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
     EXPECT_EQ(dynamic_cast<Coordination::ZooKeeperCreate2Response *>(response.get()), nullptr);
 }
 
+TYPED_TEST(CoordinationTest, ClientBuiltCreateIfNotExistsResponseMatchesOpNum)
+{
+    /// Client-built requests (e.g. zkutil::makeCreateRequest) never go through readImpl, so
+    /// getWireOpNum() must fall back to getOpNum() for them, not some unrelated default.
+    auto request = std::make_shared<Coordination::ZooKeeperCreateRequest>();
+    request->path = "/path";
+    request->not_exists = true;
+
+    EXPECT_EQ(request->getOpNum(), Coordination::OpNum::CreateIfNotExists);
+    EXPECT_EQ(request->getWireOpNum(), Coordination::OpNum::CreateIfNotExists);
+
+    auto response = request->makeResponse();
+    EXPECT_EQ(response->getOpNum(), Coordination::OpNum::CreateIfNotExists);
+}
+
 template <typename StateMachine>
 struct SimpliestRaftServer
 {

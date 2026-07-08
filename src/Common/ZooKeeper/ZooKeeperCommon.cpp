@@ -13,7 +13,6 @@
 #include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context_fwd.h>
-#include <type_traits>
 
 namespace Coordination
 {
@@ -348,6 +347,8 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
     if (include_stats && is_container)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "Create2 must not carry a CONTAINER create-mode flag");
+
+    container_from_flag = is_container && !from_create_container_opnum;
 
     if (include_ttl)
         Coordination::read(ttl, in);
@@ -1460,15 +1461,17 @@ ZooKeeperResponsePtr ZooKeeperRemoveRequest::makeResponse() const
 
 ZooKeeperResponsePtr ZooKeeperCreateRequest::makeResponse() const
 {
-    /// Keyed on the original wire opnum, not getOpNum(): a client that sent e.g. plain Create
-    /// with the CONTAINER flag still expects the plain path-only CreateResponse back.
-    if (original_op_num == OpNum::CreateTTL)
+    /// Keyed on the wire opnum, not getOpNum(): a client that sent e.g. plain Create with the
+    /// CONTAINER flag still expects the plain path-only CreateResponse back.
+    const auto wire_op_num = getWireOpNum();
+
+    if (wire_op_num == OpNum::CreateTTL)
         return std::make_shared<ZooKeeperCreateTTLResponse>();
 
-    if (original_op_num == OpNum::Create2 || original_op_num == OpNum::CreateContainer)
+    if (wire_op_num == OpNum::Create2 || wire_op_num == OpNum::CreateContainer)
         return std::make_shared<ZooKeeperCreate2Response>();
 
-    if (original_op_num == OpNum::CreateIfNotExists)
+    if (wire_op_num == OpNum::CreateIfNotExists)
         return std::make_shared<ZooKeeperCreateIfNotExistsResponse>();
 
     return std::make_shared<ZooKeeperCreateResponse>();
@@ -1782,9 +1785,6 @@ void registerZooKeeperRequest(ZooKeeperRequestFactory & factory)
     factory.registerRequest(num, []
     {
         auto res = std::make_shared<RequestT>();
-
-        if constexpr (std::is_same_v<RequestT, ZooKeeperCreateRequest>)
-            res->original_op_num = num;
 
         if constexpr (num == OpNum::MultiRead)
             res->operation_type = ZooKeeperMultiRequest::OperationType::Read;
