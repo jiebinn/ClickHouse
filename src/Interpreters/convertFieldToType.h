@@ -32,9 +32,11 @@ class IDataType;
   * `convert_inexact_floats` opts into lossy floating-point conversion: a value that is not exactly
   * representable is converted to the nearest representable value, like CAST. It is meant for paths that
   * materialize a value rather than build a comparison bound (the `values`/`VALUES` table function, the
-  * `INSERT` VALUES section, `WITH FILL`, window frame offsets, ...). Most of these go through
-  * `convertFieldToTypeOrThrow`, which passes `convert_inexact_floats = true`; the `INSERT` VALUES
-  * expression fallback (`ValuesBlockInputFormat`) passes it directly:
+  * `INSERT` VALUES section, `WITH FILL`, window frame offsets, ...). These callers pass
+  * `convert_inexact_floats = true` explicitly (through `convertFieldToTypeOrThrow`, or directly for the
+  * `INSERT` VALUES expression fallback in `ValuesBlockInputFormat`), while callers that resolve an exact
+  * target - notably `ALTER ... PARTITION` resolution in `MergeTreeData::getPartitionIDFromQuery` - keep
+  * the exact default, so a destructive statement never silently rounds an unrepresentable literal:
   *   convertFieldToType(Field(0.1), Float32, .., false, true) -> Field(0.1f)  (nearest Float32, not exactly 0.1)
   *   convertFieldToType(Field(0.5), Float32, .., false, true) -> Field(0.5f)  (exactly representable)
   *
@@ -79,9 +81,11 @@ Field convertFieldToType(
 Field tryConvertFieldToType(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr, const FormatSettings & format_settings = {}, bool strict = false, bool convert_inexact_floats = false);
 
 /// Does the same, but throws ARGUMENT_OUT_OF_BOUND if value does not fall into the range.
-/// Used to materialize values (the `values`/`VALUES` table function, `WITH FILL`, window frame
-/// offsets, ...), so it converts to the nearest representable floating-point value like CAST
-/// (it passes `convert_inexact_floats = true`).
-Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr, const FormatSettings & format_settings = {});
+/// `convert_inexact_floats` is off by default so that callers resolving an exact target (e.g.
+/// `ALTER ... PARTITION` resolution) reject float literals that are not exactly representable instead
+/// of silently rounding them. Value-materialization callers (the `values`/`VALUES` table function,
+/// `WITH FILL`, window frame offsets, ...) pass it as true to convert to the nearest representable
+/// floating-point value like CAST.
+Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr, const FormatSettings & format_settings = {}, bool convert_inexact_floats = false);
 
 }

@@ -1,0 +1,10 @@
+-- initial rows (two partitions)
+1	0.5
+2	0.1
+-- DROP PARTITION with an unrepresentable Float64 literal is rejected (fail-closed)
+-- nothing was dropped
+2
+-- an exactly-representable literal resolves the partition
+2	0.1
+-- the remaining partition is dropped with the exactly-representable value
+0

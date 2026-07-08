@@ -944,18 +944,18 @@ Field convertFieldToType(const Field & from_value, const IDataType & to_type, co
 }
 
 
-Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint, const FormatSettings & format_settings)
+Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint, const FormatSettings & format_settings, bool convert_inexact_floats)
 {
     bool is_null = from_value.isNull();
     if (is_null && !canContainNull(to_type))
         throw Exception(ErrorCodes::TYPE_MISMATCH, "Cannot convert NULL to {}", to_type.getName());
 
-    /// `convertFieldToTypeOrThrow` materializes a value (the `values`/`VALUES` table function, the
-    /// `INSERT` VALUES section, `WITH FILL`, window frame offsets, ...), so it converts to the nearest
-    /// representable floating-point value like `CAST`, rather than rejecting decimal literals that are
-    /// not exactly representable (e.g. `0.1` for a `Float32` column). It is not a pruning/comparison
-    /// path, so the lossy float conversion is safe here. See `convert_inexact_floats` in the header.
-    Field converted = convertFieldToType(from_value, to_type, from_type_hint, format_settings, /*strict=*/false, /*convert_inexact_floats=*/true);
+    /// Value-materialization callers pass `convert_inexact_floats = true` so a decimal literal that is
+    /// not exactly representable (e.g. `0.1` for a `Float32` column) is converted to the nearest
+    /// representable value like `CAST` instead of being rejected. Callers that resolve an exact target -
+    /// e.g. `ALTER ... PARTITION` in `MergeTreeData::getPartitionIDFromQuery` - keep the default (false)
+    /// so a destructive statement never silently rounds an unrepresentable literal. See the header.
+    Field converted = convertFieldToType(from_value, to_type, from_type_hint, format_settings, /*strict=*/false, convert_inexact_floats);
 
     if (!is_null && converted.isNull())
         throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND,
