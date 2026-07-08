@@ -23,3 +23,12 @@ CREATE TABLE {CLICKHOUSE_DATABASE:Identifier}.t
     AS SELECT id, value FROM fileCluster('test_shard_localhost', {CLICKHOUSE_DATABASE:String} || '_04365_data.tsv', 'TSV', 'id UInt64, value String') FORMAT Null;
 
 SELECT count(), sum(id) FROM {CLICKHOUSE_DATABASE:Identifier}.t;
+
+-- Positional arguments must also be resolved on the Replicated DDL worker (query_kind =
+-- NO_QUERY): QueryAnalyzer::replaceNodesWithPositionalArguments gated on == INITIAL_QUERY,
+-- so GROUP BY 1 was left unresolved and threw NOT_AN_AGGREGATE.
+CREATE TABLE {CLICKHOUSE_DATABASE:Identifier}.t_pos
+    ENGINE = MergeTree() ORDER BY id
+    AS SELECT id, count() AS c FROM fileCluster('test_shard_localhost', {CLICKHOUSE_DATABASE:String} || '_04365_data.tsv', 'TSV', 'id UInt64, value String') GROUP BY 1 FORMAT Null;
+
+SELECT count(), sum(id) FROM {CLICKHOUSE_DATABASE:Identifier}.t_pos;
