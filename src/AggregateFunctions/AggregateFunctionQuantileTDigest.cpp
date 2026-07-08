@@ -97,7 +97,7 @@ This function is equivalent to [`quantileTDigest`](/sql-reference/aggregate-func
 
 Memory consumption is `log(n)`, where `n` is a number of values. The result depends on the order of running the query, and is nondeterministic.
 
-The performance of the function is lower than performance of [`quantiles`](/sql-reference/aggregate-functions/reference/quantiles) or [`quantilesTiming`](/sql-reference/aggregate-functions/reference/quantilestiming). In terms of the ratio of State size to precision, this function is much better than `quantiles`.
+The performance of the function is lower than performance of [`quantiles`](/sql-reference/aggregate-functions/reference/quantiles) or [`quantilesTiming`](/sql-reference/aggregate-functions/reference/quantilesTiming). In terms of the ratio of State size to precision, this function is much better than `quantiles`.
     )";
     FunctionDocumentation::Syntax syntax_quantiles = R"(
 quantilesTDigest(level1, level2, ...)(expr)
@@ -108,7 +108,7 @@ quantilesTDigest(level1, level2, ...)(expr)
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of approximate quantiles of the specified levels in the same order as the levels were specified.", {"Array(Float64)", "Array(Date)", "Array(DateTime)"}};
+    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of approximate quantiles of the specified levels in the same order as the levels were specified. For `Date` and `DateTime` inputs the output format matches the input format.", {"Array(Float32)", "Array(Date)", "Array(DateTime)"}};
     FunctionDocumentation::Examples examples_quantiles = {
     {
         "Computing multiple quantiles with t-digest",
