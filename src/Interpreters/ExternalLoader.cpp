@@ -690,7 +690,8 @@ public:
         }
     }
 
-    void resetInfoToUnloaded(const String& name, Info & info) {
+    void resetInfoToUnloaded(const String & name, Info & info)
+    {
         /// Reset state so that the next access triggers lazy reload.
         LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
         info.object = nullptr;

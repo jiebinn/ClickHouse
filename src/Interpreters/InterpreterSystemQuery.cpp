@@ -756,16 +756,14 @@ BlockIO InterpreterSystemQuery::execute()
             ExternalDictionariesLoader::resetAll();
             break;
         }
-        case Type::UNLOAD_DICTIONARY:
-        {
+        case Type::UNLOAD_DICTIONARY: {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_DICTIONARY);
 
             auto & external_dictionaries_loader = system_context->getExternalDictionariesLoader();
             external_dictionaries_loader.unloadDictionary(query.getTable(), getContext());
             break;
         }
-        case Type::UNLOAD_DICTIONARIES:
-        {
+        case Type::UNLOAD_DICTIONARIES: {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_DICTIONARY);
             auto & external_dictionaries_loader = system_context->getExternalDictionariesLoader();
             external_dictionaries_loader.unloadAllDictionaries();
@@ -2580,8 +2578,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::RELOAD_DICTIONARIES:
         case Type::RELOAD_EMBEDDED_DICTIONARIES:
         case Type::UNLOAD_DICTIONARY:
-        case Type::UNLOAD_DICTIONARIES:
-        {
+        case Type::UNLOAD_DICTIONARIES: {
             required_access.emplace_back(AccessType::SYSTEM_RELOAD_DICTIONARY);
             break;
         }
