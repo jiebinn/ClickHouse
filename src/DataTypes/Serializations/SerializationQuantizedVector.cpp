@@ -296,9 +296,12 @@ void SerializationQuantizedVector::serializeBinaryBulkStateSuffix(
 
 std::vector<float> SerializationQuantizedVector::trainCodebook(const IColumn & column, size_t offset, size_t count) const
 {
-    const auto * col_arr = typeid_cast<const ColumnArray *>(&column);
+    /// A constant vector expression (e.g. `INSERT INTO t SELECT [1., ...] FROM numbers(N)`) could reach the serializer as
+    /// a `ColumnConst`; materialize it so the `ColumnArray` cast succeeds (a no-op for an already-full column).
+    const auto full = column.convertToFullColumnIfConst();
+    const auto * col_arr = typeid_cast<const ColumnArray *>(full.get());
     if (!col_arr)
-        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column with a Quantize codec must be an Array");
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column with a Quantized codec must be an Array");
 
     const size_t budget_vectors = std::max<size_t>(1, PRODUCT_QUANTIZATION_MAX_TRAINING_BYTES / (params.dimensions * sizeof(float)));
     const size_t n = std::min({count, PRODUCT_QUANTIZATION_MAX_TRAINING_VECTORS, budget_vectors});
@@ -318,9 +321,12 @@ std::vector<float> SerializationQuantizedVector::trainCodebook(const IColumn & c
 
 ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size_t offset, size_t count, const float * codebook) const
 {
-    const auto * col_arr = typeid_cast<const ColumnArray *>(&column);
+    /// Materialize a possible `ColumnConst` (e.g. from a constant vector expression in an INSERT) before the cast; a
+    /// no-op for an already-full column.
+    const auto full = column.convertToFullColumnIfConst();
+    const auto * col_arr = typeid_cast<const ColumnArray *>(full.get());
     if (!col_arr)
-        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column with a Quantize codec must be an Array");
+        throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Column with a Quantized codec must be an Array");
 
     auto result = ColumnFixedString::create(bytes_per_vector);
     auto & chars = result->getChars();
