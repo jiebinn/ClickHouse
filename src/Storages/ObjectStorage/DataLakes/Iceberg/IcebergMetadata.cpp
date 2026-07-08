@@ -747,7 +747,8 @@ void IcebergMetadata::createInitial(
     auto compression_method_str = local_context->getSettingsRef()[Setting::iceberg_metadata_compression_method].value;
     auto compression_method = chooseCompressionMethod(compression_method_str, compression_method_str);
 
-    auto compression_suffix = compression_method_str;
+    /// Use the Iceberg spec file extension (gzip -> "gz"), not the raw setting token.
+    auto compression_suffix = toIcebergMetadataCompressionExtension(compression_method);
     if (!compression_suffix.empty())
         compression_suffix = "." + compression_suffix;
 
