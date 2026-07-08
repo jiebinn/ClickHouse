@@ -49,6 +49,51 @@ namespace DB::ArrowIPC
 
 namespace
 {
+/// Rebuild `type` so its Nullable placement matches the decoded `column`. `fieldToCHType` decides whether a
+/// Struct becomes `Nullable(Tuple)` from the setting alone, while `decodeField` also honours a nullable type
+/// hint, so the two can disagree only in whether a struct is wrapped in Nullable. Walk both in parallel and
+/// adopt the column's nullability, keeping the element names and other details from `type`.
+DataTypePtr matchColumnNullability(const DataTypePtr & type, const ColumnPtr & column)
+{
+    const bool col_nullable = column->isNullable();
+    const ColumnPtr & nested_col = col_nullable
+        ? assert_cast<const ColumnNullable &>(*column).getNestedColumnPtr() : column;
+    DataTypePtr t = removeNullable(type);
+
+    if (const auto * arr_t = typeid_cast<const DataTypeArray *>(t.get()))
+    {
+        if (const auto * arr_c = typeid_cast<const ColumnArray *>(nested_col.get()))
+            t = std::make_shared<DataTypeArray>(matchColumnNullability(arr_t->getNestedType(), arr_c->getDataPtr()));
+    }
+    else if (const auto * tup_t = typeid_cast<const DataTypeTuple *>(t.get()))
+    {
+        const auto * tup_c = typeid_cast<const ColumnTuple *>(nested_col.get());
+        if (tup_c && tup_c->tupleSize() == tup_t->getElements().size())
+        {
+            DataTypes elems(tup_t->getElements().size());
+            for (size_t i = 0; i < elems.size(); ++i)
+                elems[i] = matchColumnNullability(tup_t->getElement(i), tup_c->getColumnPtr(i));
+            t = tup_t->hasExplicitNames()
+                ? std::make_shared<DataTypeTuple>(elems, tup_t->getElementNames())
+                : std::make_shared<DataTypeTuple>(elems);
+        }
+    }
+    else if (const auto * map_t = typeid_cast<const DataTypeMap *>(t.get()))
+    {
+        const auto * map_c = typeid_cast<const ColumnMap *>(nested_col.get());
+        const auto * arr_c = map_c ? typeid_cast<const ColumnArray *>(map_c->getNestedColumnPtr().get()) : nullptr;
+        const auto * tup_c = arr_c ? typeid_cast<const ColumnTuple *>(arr_c->getDataPtr().get()) : nullptr;
+        if (tup_c && tup_c->tupleSize() == 2)
+            t = std::make_shared<DataTypeMap>(
+                matchColumnNullability(map_t->getKeyType(), tup_c->getColumnPtr(0)),
+                matchColumnNullability(map_t->getValueType(), tup_c->getColumnPtr(1)));
+    }
+
+    if (col_nullable && t->canBeInsideNullable())
+        return std::make_shared<DataTypeNullable>(t);
+    return t;
+}
+
 /// Expand an Arrow LSB-first bitmap into one byte per row (0 or 1). With `invert` each output byte is
 /// flipped, turning the validity bitmap (1 = valid) into a ClickHouse null map (1 = null). Unpacks 8 bits
 /// at a time via SWAR (the same trick as the Parquet decoder), scalar for the trailing < 8 bits.
@@ -1052,10 +1097,14 @@ ColumnPtr RecordBatchDecoder::decodeField(
 
     /// Only wrap in Nullable when the type allows it; Array/Map cannot be inside Nullable in ClickHouse, so
     /// (matching the Apache Arrow library reader) their outer validity is dropped. A Struct (Tuple) is only
-    /// wrapped when `allow_experimental_nullable_tuple_type` is enabled (matching `fieldToCHType` and the
-    /// library); otherwise it is read as a plain Tuple, dropping the struct-level null map.
-    const bool struct_not_allowed_nullable
-        = field.type.kind == TypeKind::Struct && !settings.schema_inference_allow_nullable_tuple_type;
+    /// wrapped when it is allowed: either `allow_experimental_nullable_tuple_type` is on, or the requested
+    /// target type at this field is already nullable (e.g. reading into an existing `Nullable(Tuple)` column).
+    /// This mirrors the library reader's `allow_nullable_struct`. Otherwise the struct is read as a plain
+    /// Tuple, dropping the struct-level null map. `decodeColumns` reconciles the reported type to this column.
+    const DataTypePtr effective_hint = resolveTargetHint(target_hint, path);
+    const bool nullable_tuple_allowed = settings.schema_inference_allow_nullable_tuple_type
+        || (effective_hint && (effective_hint->isNullable() || effective_hint->isLowCardinalityNullable()));
+    const bool struct_not_allowed_nullable = field.type.kind == TypeKind::Struct && !nullable_tuple_allowed;
     if (field.nullable && inner->canBeInsideNullable() && !struct_not_allowed_nullable)
     {
         ColumnPtr null_map = buildNullMap(validity, rows, node.null_count());
@@ -1253,6 +1302,10 @@ RecordBatchDecoder::DecodedColumns RecordBatchDecoder::decodeColumns(
         /// `normalized_name` seeds the recursive `date32` numeric type hint (looked up in `target_types`);
         /// nested fields derive their hints from it as the decoder recurses. See decodeField/decodeInner.
         decoded.column = decodeField(field, /*allow_low_cardinality=*/true, /*target_hint=*/nullptr, normalized_name);
+        /// `decodeField` may wrap a struct in Nullable based on the requested type hint even when
+        /// `fieldToCHType` did not (setting off); reconcile the reported type with the decoded column so the
+        /// column/type pair stays consistent for the subsequent cast.
+        decoded.type = matchColumnNullability(decoded.type, decoded.column);
         if (decoded.column->size() != batch_rows)
             throw Exception(
                 ErrorCodes::INCORRECT_DATA,
