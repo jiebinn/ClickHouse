@@ -41,10 +41,7 @@ namespace
             policy.setRestrictive(*query.is_restrictive);
 
         for (const auto & [filter_type, filter] : query.filters)
-        {
-            checkRowPolicyFilterExpression(filter);
             policy.filters[static_cast<size_t>(filter_type)] = filter ? filter->formatWithSecretsOneLine() : String{};
-        }
 
         if (override_to_roles)
             policy.to_roles = *override_to_roles;
@@ -59,6 +56,12 @@ BlockIO InterpreterCreateRowPolicyQuery::execute()
     const auto updated_query_ptr = removeOnClusterClauseIfNeeded(query_ptr, getContext());
     auto & query = updated_query_ptr->as<ASTCreateRowPolicyQuery &>();
     auto required_access = getRequiredAccess();
+
+    /// Reject invalid filters on user-facing CREATE/ALTER only. Deserialization of persisted
+    /// policies (ATTACH/replicated/restored) must not fail here; the query-time guard in
+    /// ContextAccess::getRowPolicyFilter rejects such policies when they are actually used.
+    for (const auto & [filter_type, filter] : query.filters)
+        checkRowPolicyFilterExpression(filter);
 
     if (!query.cluster.empty())
     {
