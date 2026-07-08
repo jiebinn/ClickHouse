@@ -455,9 +455,10 @@ TEST(TransformQueryForExternalDatabase, UUIDColumn)
           R"(SELECT "uuid_col" FROM "test"."table")");
 
     /// The UUID column may be nested inside a tuple/row comparison; that must not be pushed down either.
-    check(state, 1, {"uuid_col", "a"},
-          "SELECT uuid_col, a FROM table WHERE (uuid_col, a) > (toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0'), 0)",
-          R"(SELECT "uuid_col", "a" FROM "test"."table")");
+    /// (The pushed-down query lists columns in table-definition order, so "a" precedes "uuid_col".)
+    check(state, 1, {"a", "uuid_col"},
+          "SELECT a, uuid_col FROM table WHERE (uuid_col, a) > (toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0'), 0)",
+          R"(SELECT "a", "uuid_col" FROM "test"."table")");
 
     /// A LowCardinality(UUID) column is still UUID-backed, so its range comparisons must stay local too.
     check(state, 1, {"lc_uuid_col"},
