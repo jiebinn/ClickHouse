@@ -440,11 +440,17 @@ class LakeTableGenerator:
             partition_clauses = [
                 c for c in self.add_partition_clauses(res) if c not in identity_cols
             ]
-            if partition_clauses:
+            # Delta rejects covering every column (ALL_PARTITION_COLUMNS_NOT_ALLOWED),
+            # so keep at least one non-partition column there. Iceberg (transforms) and
+            # Paimon accept all-column partitioning.
+            max_partitions = min(3, len(partition_clauses))
+            if self.get_format() == "delta":
+                max_partitions = min(max_partitions, len(columns_spark) - 1)
+            if partition_clauses and max_partitions > 0:
                 random.shuffle(partition_clauses)
                 random_subset = random.sample(
                     partition_clauses,
-                    k=random.randint(1, min(3, len(partition_clauses))),
+                    k=random.randint(1, max_partitions),
                 )
                 ddl += f" PARTITIONED BY ({','.join(random_subset)})"
                 res.partitioned = True
@@ -631,9 +637,6 @@ class IcebergTableGenerator(LakeTableGenerator):
             # bucket count and truncate width must be positive
             res.append(f"bucket({random.randint(1, 1000)}, {k})")
             res.append(f"truncate({random.randint(1, 1000)}, {k})")
-            # void() always yields null partition values (the transform Iceberg
-            # uses to retire a partition field); valid in the Spark SQL spec.
-            res.append(f"void({k})")
         return res
 
     def add_generated_col(
@@ -1504,6 +1507,20 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
                     ]
                 )
             ] = "false"
+        if (
+            properties.get("delta.columnMapping.mode") in ("name", "id")
+            and properties.get("delta.compatibility.symlinkFormatManifest.enabled")
+            == "true"
+        ):
+            # Writes fail with DELTA_UNSUPPORTED_MANIFEST_GENERATION_WITH_COLUMN_MAPPING:
+            # symlink manifests are for external readers, which cannot resolve
+            # column-mapped tables. Keep only one of the two features
+            if random.randint(1, 2) == 1:
+                properties["delta.columnMapping.mode"] = "none"
+            else:
+                properties[
+                    "delta.compatibility.symlinkFormatManifest.enabled"
+                ] = "false"
         return properties
 
     def generate_alter_table_statements(
