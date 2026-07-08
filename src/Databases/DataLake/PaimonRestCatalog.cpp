@@ -455,6 +455,27 @@ CatalogTables PaimonRestCatalog::getTables() const
     return result;
 }
 
+DataLake::ICatalog::Namespaces PaimonRestCatalog::getNamespaces() const
+{
+    /// Paimon REST databases are flat — they cannot contain nested namespaces.
+    DB::Strings databases;
+    forEachDatabase(databases, {}, {});
+    return databases;
+}
+
+CatalogTables PaimonRestCatalog::listTablesInNamespaceDirect(const std::string & namespace_name) const
+{
+    DB::Names tables;
+    forEachTables(namespace_name, tables, {});
+
+    /// A Paimon REST catalog lists only Paimon tables, so every listed table is readable.
+    CatalogTables result;
+    result.reserve(tables.size());
+    for (auto & name : tables)
+        result.push_back(CatalogTable{.name = std::move(name)});
+    return result;
+}
+
 bool PaimonRestCatalog::existsTable(const String & database_name, const String & table_name) const
 {
     try

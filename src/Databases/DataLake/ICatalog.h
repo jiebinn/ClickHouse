@@ -135,6 +135,25 @@ struct CatalogTable
 
 using CatalogTables = std::vector<CatalogTable>;
 
+/// Catalog-layer view of the `name` predicate (translated from `DB::TablesFilter`
+/// by `DatabaseDataLake`) so the catalog can restrict which namespaces it lists.
+struct TableNameFilter
+{
+    /// Equals (`name = 'ns.table'`) and Like (`name LIKE 'ns.%'`) prune to specific
+    /// namespaces; All lists the whole catalog (fallback when we can't prune).
+    enum class Kind
+    {
+        All,
+        Equals,
+        Like,
+    };
+
+    Kind kind = Kind::All;
+    /// `Equals`: the literal value (e.g. `ns.table`). `Like`: the pattern (e.g. `ns.%`).
+    std::string value;
+};
+
+
 struct CatalogSettings
 {
     String storage_endpoint;
@@ -167,6 +186,15 @@ public:
     /// Fetch the list of tables (names contain full namespaces). Each entry carries an
     /// `is_readable` flag so listings can drop unreadable tables without a metadata fetch.
     virtual CatalogTables getTables() const = 0;
+
+    /// Enumerate every namespace as a full dot-separated path (hierarchical catalogs
+    /// return every nested level; flat catalogs their single-level names).
+    virtual Namespaces getNamespaces() const = 0;
+
+    /// Fetch the list of tables restricted by the `name` predicate (see `TableNameFilter`);
+    /// each entry carries an `is_readable` flag like getTables(). Default impl prunes
+    /// namespaces via `getNamespaces()`.
+    virtual CatalogTables getTables(const TableNameFilter & filter) const;
 
     /// Check that a table exists in a given namespace.
     virtual bool existsTable(
@@ -226,6 +254,10 @@ public:
     }
 
 protected:
+    /// List tables directly in `namespace_name` (non-recursive), as fully-qualified
+    /// `namespace.table` entries carrying an `is_readable` flag like getTables().
+    virtual CatalogTables listTablesInNamespaceDirect(const std::string & namespace_name) const = 0;
+
     /// Name of the warehouse,
     /// which is sometimes also called "catalog name".
     const std::string warehouse;
