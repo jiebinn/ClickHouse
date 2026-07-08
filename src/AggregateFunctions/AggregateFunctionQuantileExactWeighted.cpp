@@ -512,7 +512,7 @@ quantilesExactWeighted(level1, level2, ...)(expr, weight)
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified.", {"Array(Float64)", "Array(Date)", "Array(DateTime)"}};
+    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified. For numeric data types the output format matches the input format.", {"Array((U)Int*)", "Array(Float*)", "Array(Decimal*)", "Array(Date)", "Array(DateTime)"}};
     FunctionDocumentation::Examples examples_quantiles = {
     {
         "Computing multiple exact weighted quantiles",
