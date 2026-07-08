@@ -3038,7 +3038,7 @@ void QueryFuzzer::fuzzExplainSettings(ASTSetQuery & settings_ast, ASTExplainQuer
     {
         if (fuzz_rand() % 5 == 0)
         {
-            changes.emplace_back(setting, true);
+            changes.emplace_back(setting, static_cast<UInt64>(1));
         }
     }
 }

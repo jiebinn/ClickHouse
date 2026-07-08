@@ -18,13 +18,26 @@ const DB::Strings QueryOracle::oracleFormats = {"CSV", "TabSeparated", "Values"}
 
 static void finishSettings(SettingValues * svs)
 {
-    /// Wait for mutations to finish
+    /// Wait for mutations to finish. Also reset lake time travel: a session-level
+    /// `SET iceberg_snapshot_id/iceberg_timestamp_ms` (or the DeltaLake/Paimon version pins)
+    /// makes every read see an old snapshot, so an oracle comparing counts before/after an
+    /// INSERT gets a false mismatch (and the pinned id is unreplayable - snapshot ids are
+    /// random per run). The Iceberg pins trigger on the setting's `changed` flag, so the
+    /// reset must be the `DEFAULT` keyword - assigning the default value would keep the
+    /// setting `changed` and pin a nonexistent snapshot. Delta/Paimon pins are value-based
+    /// (-1 = latest), where `DEFAULT` works as well.
     static const std::unordered_map<String, String> toSet
         = {{"alter_sync", "2"},
            {"apply_deleted_mask", "1"},
            {"apply_patch_parts", "1"},
+           {"delta_lake_snapshot_end_version", "DEFAULT"},
+           {"delta_lake_snapshot_start_version", "DEFAULT"},
+           {"delta_lake_snapshot_version", "DEFAULT"},
+           {"iceberg_snapshot_id", "DEFAULT"},
+           {"iceberg_timestamp_ms", "DEFAULT"},
            {"lightweight_deletes_sync", "2"},
-           {"mutations_sync", "2"}};
+           {"mutations_sync", "2"},
+           {"paimon_target_snapshot_id", "DEFAULT"}};
     for (const auto & [key, val] : toSet)
     {
         SetValue * sv = svs->has_set_value() ? svs->add_other_values() : svs->mutable_set_value();

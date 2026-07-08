@@ -1023,6 +1023,18 @@ class IcebergTableGenerator(LakeTableGenerator):
             next_properties.pop("write.metadata.delete-after-commit.enabled", None)
         return next_properties
 
+    def generate_table_properties(
+        self,
+        table: SparkTable,
+    ) -> dict[str, str]:
+        properties = super().generate_table_properties(table)
+        if (
+            "write.parquet.compression-level" in properties
+            and properties.get("write.parquet.compression-codec") != "zstd"
+        ):
+            del properties["write.parquet.compression-level"]
+        return properties
+
     def get_snapshots(self, spark: SparkSession, table: SparkTable):
         result = spark.sql(
             f"SELECT snapshot_id FROM {table.get_table_full_path()}.snapshots;"

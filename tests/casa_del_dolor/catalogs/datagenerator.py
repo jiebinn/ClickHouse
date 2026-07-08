@@ -213,6 +213,14 @@ def _to_json_safe(obj):
     return str(obj)
 
 
+def _to_hashable(value):
+    """Deep-convert lists to tuples so a value can be used as a dict key (map keys
+    of ARRAY type come back as Python lists). PySpark accepts tuples for ArrayType."""
+    if isinstance(value, list):
+        return tuple(_to_hashable(v) for v in value)
+    return value
+
+
 class LakeDataGenerator:
     def __init__(self, query_logger):
         self._thread_local = threading.local()
@@ -417,15 +425,24 @@ class LakeDataGenerator:
             attempts = 0
             # Keep drawing until we have n unique, non-null keys (cap attempts)
             while len(out) < n and attempts < n * 5:
+                attempts += 1
                 k = self._random_value_for_type(
                     dtype.keyType, 0.0
                 )  # NEVER null for keys
                 if k is None:
-                    attempts += 1
+                    continue
+                # ClickHouse/Spark allow ARRAY map keys (e.g. Map(Array(Date32), ...)),
+                # which come back as Python lists - unhashable as dict keys. Deep-convert
+                # lists to tuples (PySpark accepts any sequence for ArrayType). Skip keys
+                # that remain unhashable (e.g. bytearray for BINARY, dict for MAP keys)
+                # rather than fail - the map just ends up with fewer entries.
+                k = _to_hashable(k)
+                try:
+                    hash(k)
+                except TypeError:
                     continue
                 v = self._random_value_for_type(dtype.valueType, value_null_rate)
                 out[k] = v
-                attempts += 1
             return out
         if isinstance(dtype, StructType):
             obj = {}
