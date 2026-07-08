@@ -497,15 +497,14 @@ Field QueryFuzzer::getRandomField(int type)
             return tup;
         }
         case 14: {
-            /// Map with the canonical [(key, value), ...] structure.
+            /// Map as a flat alternating [key0, value0, key1, value1, ...] vector, matching how
+            /// Field::Map is parsed, formatted and mutated (the fuzzField(Map) branch below).
             Map map;
             const size_t n = fuzz_rand() % 3;
             for (size_t i = 0; i < n; ++i)
             {
-                Tuple kv;
-                kv.push_back(getRandomField(fuzz_rand() % 11));
-                kv.push_back(getRandomField(fuzz_rand() % 11));
-                map.push_back(std::move(kv));
+                map.push_back(getRandomField(fuzz_rand() % 11)); /// key
+                map.push_back(getRandomField(fuzz_rand() % 11)); /// value
             }
             return map;
         }
