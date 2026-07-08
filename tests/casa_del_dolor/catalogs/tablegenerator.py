@@ -142,7 +142,12 @@ class LakeTableGenerator:
     def _rand_comment() -> str:
         from .datagenerator import SOME_STRINGS
 
-        return random.choice(SOME_STRINGS).replace("'", "\\'")
+        # Escape backslashes BEFORE quotes: an entry like `\'` would otherwise become
+        # `\\'` in the literal, where `\\` parses as a backslash and the quote then
+        # terminates the string early -> PARSE_SYNTAX_ERROR on the rest of the DDL
+        return (
+            random.choice(SOME_STRINGS).replace("\\", "\\\\").replace("'", "\\'")
+        )
 
     @staticmethod
     def _refresh_table_model(spark: SparkSession, table: SparkTable):
