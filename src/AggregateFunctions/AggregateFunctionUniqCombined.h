@@ -25,7 +25,10 @@
 #include <AggregateFunctions/UniqCombinedBiasData.h>
 #include <AggregateFunctions/UniqVariadicHash.h>
 
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnsNumber.h>
 
 #include <functional>
 
@@ -102,31 +105,44 @@ public:
         else
         {
             const auto & value = assert_cast<const ColumnVector<T> &>(*columns[0]).getElement(row_num);
-
-            HashValueType hash;
-
-            if constexpr (std::is_same_v<T, UInt128>)
-            {
-                /// This specialization exists due to historical circumstances.
-                /// Initially UInt128 was introduced only for UUID, and then the other big-integer types were added.
-                hash = static_cast<HashValueType>(sipHash64(value));
-            }
-            else if constexpr (is_floating_point<T>)
-            {
-                hash = static_cast<HashValueType>(intHash64(bit_cast<UInt64>(value)));
-            }
-            else if constexpr (sizeof(T) > sizeof(UInt64))
-            {
-                hash = static_cast<HashValueType>(DefaultHash64<T>(value));
-            }
-            else
-            {
-                /// This specialization exists also for compatibility with the initial implementation.
-                hash = static_cast<HashValueType>(intHash64(value));
-            }
-
-            this->data(place).set.insert(hash);
+            this->data(place).set.insert(hashOne(value));
         }
+    }
+
+    void addBatchSinglePlace( /// NOLINT
+        size_t row_begin,
+        size_t row_end,
+        AggregateDataPtr __restrict place,
+        const IColumn ** columns,
+        Arena *,
+        ssize_t if_argument_pos = -1) const override
+    {
+        const UInt8 * flags = nullptr;
+        if (if_argument_pos >= 0)
+            flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
+
+        addBatchImpl(row_begin, row_end, place, columns, flags, nullptr);
+    }
+
+    void addBatchSinglePlaceNotNull( /// NOLINT
+        size_t row_begin,
+        size_t row_end,
+        AggregateDataPtr __restrict place,
+        const IColumn ** columns,
+        const UInt8 * null_map,
+        Arena *,
+        ssize_t if_argument_pos = -1) const override
+    {
+        const UInt8 * flags = nullptr;
+        if (if_argument_pos >= 0)
+            flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData().data();
+
+        addBatchImpl(row_begin, row_end, place, columns, flags, null_map);
+    }
+
+    void addManyDefaults(AggregateDataPtr __restrict place, const IColumn ** columns, size_t /*length*/, Arena * arena) const override
+    {
+        this->add(place, columns, 0, arena);
     }
 
     void mergeImpl(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -147,6 +163,122 @@ public:
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         assert_cast<ColumnUInt64 &>(to).getData().push_back(this->data(place).set.size());
+    }
+
+private:
+    using Data = AggregateFunctionUniqCombinedData<T, K, HashValueType>;
+    using Key = typename Data::Key;
+
+    static constexpr size_t hash_chunk_size = 256;
+
+    static ALWAYS_INLINE HashValueType hashOne(T value)
+    {
+        if constexpr (std::is_same_v<T, UInt128>)
+        {
+            /// This specialization exists due to historical circumstances.
+            /// Initially UInt128 was introduced only for UUID, and then the other big-integer types were added.
+            return static_cast<HashValueType>(sipHash64(value));
+        }
+        else if constexpr (is_floating_point<T>)
+        {
+            return static_cast<HashValueType>(intHash64(bit_cast<UInt64>(value)));
+        }
+        else if constexpr (sizeof(T) > sizeof(UInt64))
+        {
+            return static_cast<HashValueType>(DefaultHash64<T>(value));
+        }
+        else
+        {
+            /// This specialization exists also for compatibility with the initial implementation.
+            return static_cast<HashValueType>(intHash64(value));
+        }
+    }
+
+    void addBatchImpl(
+        size_t row_begin,
+        size_t row_end,
+        AggregateDataPtr __restrict place,
+        const IColumn ** columns,
+        const UInt8 * flags,
+        const UInt8 * null_map) const
+    {
+        auto & set = this->data(place).set;
+
+        if constexpr (std::is_same_v<T, String>)
+        {
+            if (const auto * column_string = typeid_cast<const ColumnString *>(columns[0]))
+            {
+                const auto & chars = column_string->getChars();
+                const auto & offsets = column_string->getOffsets();
+
+                insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
+                {
+                    return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(chars.data()) + offsets[row - 1], offsets[row] - offsets[row - 1]);
+                });
+            }
+            else
+            {
+                const auto & column_fixed = assert_cast<const ColumnFixedString &>(*columns[0]);
+                const auto & chars = column_fixed.getChars();
+                const size_t n = column_fixed.getN();
+
+                insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
+                {
+                    return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(chars.data()) + row * n, n);
+                });
+            }
+        }
+        else if constexpr (std::is_same_v<T, IPv6>)
+        {
+            const auto & data = assert_cast<const ColumnVector<IPv6> &>(*columns[0]).getData();
+
+            insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
+            {
+                return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&data[row]), sizeof(IPv6));
+            });
+        }
+        else
+        {
+            const auto & data = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
+            insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row) { return hashOne(data[row]); });
+        }
+    }
+
+    /// Hashes rows a chunk ahead into a stack buffer, so that hash computation pipelines
+    /// independently of the set inserts, and inserts whole chunks via insertMany.
+    template <typename Hasher>
+    static void insertChunked(size_t row_begin, size_t row_end, typename Data::Set & set, const UInt8 * flags, const UInt8 * null_map, Hasher hasher)
+    {
+        Key hashes[hash_chunk_size];
+        size_t row = row_begin;
+
+        while (row < row_end)
+        {
+            const size_t chunk_size = std::min(hash_chunk_size, row_end - row);
+            size_t num_hashes = 0;
+
+            if (!flags && !null_map)
+            {
+                for (size_t i = 0; i < chunk_size; ++i)
+                    hashes[i] = hasher(row + i);
+
+                num_hashes = chunk_size;
+            }
+            else
+            {
+                for (size_t i = 0; i < chunk_size; ++i)
+                {
+                    if ((flags && !flags[row + i]) || (null_map && null_map[row + i]))
+                        continue;
+
+                    hashes[num_hashes] = hasher(row + i);
+                    ++num_hashes;
+                }
+            }
+
+            set.insertMany(hashes, num_hashes);
+            row += chunk_size;
+        }
     }
 };
 

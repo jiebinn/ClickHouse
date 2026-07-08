@@ -115,6 +115,53 @@ public:
             getContainer<Large>().insert(value);
     }
 
+    /// Equivalent to calling insert for each value, but dispatches on the container type
+    /// once per batch and runs a tight loop per container, which also lets the container's
+    /// insert be inlined. Promotions must stay exactly size-triggered, as in insert:
+    /// they are observable in results (medium is exact, large is approximate) and in serialized states.
+    void insertMany(const Key * values, size_t n)
+    {
+        size_t i = 0;
+        while (i < n)
+        {
+            auto container_type = getContainerType();
+
+            if (container_type == details::ContainerType::SMALL)
+            {
+                for (; i < n; ++i)
+                {
+                    if (small.find(values[i]) != small.end())
+                        continue;
+
+                    if (small.full())
+                    {
+                        toMedium();
+                        break;
+                    }
+
+                    small.insert(values[i]);
+                }
+            }
+            else if (container_type == details::ContainerType::MEDIUM)
+            {
+                auto & container = getContainer<Medium>();
+                for (; i < n; ++i)
+                    container.insert(values[i]);
+
+                /// Allow to overflow the medium container to avoid check in the loop.
+                /// Medium container supports arbitrary number of elements oppsite to the small container.
+                if (container.size() >= medium_set_size_max)
+                    toLarge();
+            }
+            else if (container_type == details::ContainerType::LARGE)
+            {
+                auto & container = getContainer<Large>();
+                for (; i < n; ++i)
+                    container.insert(values[i]);
+            }
+        }
+    }
+
     UInt64 size() const
     {
         auto container_type = getContainerType();
