@@ -13,7 +13,7 @@ struct QuantizedCodecParams
 {
     String method;            /// The quantization method
     size_t dimensions = 0;    /// The vector length
-    size_t bits = 0;          /// The number of bits per sub-quantizer. Used by `e8`, and as nbits per subspace by `pq`.
+    size_t bits = 0;          /// Overloaded: the number of leading dimensions kept by the `mrl_*` methods, and nbits per subspace for `pq`.
     size_t m = 0;             /// The number of subspaces, used only by the trained `pq` (Product Quantization) method.
 };
 
