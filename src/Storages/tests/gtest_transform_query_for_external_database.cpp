@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -81,6 +82,7 @@ private:
                 {"foo", std::make_shared<DataTypeString>()},
                 {"is_value", DataTypeFactory::instance().get("Bool")},
                 {"uuid_col", std::make_shared<DataTypeUUID>()},
+                {"lc_uuid_col", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeUUID>())},
             }),
         TableWithColumnNamesAndTypes(
             createDBAndTable("table2"),
@@ -420,10 +422,10 @@ TEST(TransformQueryForExternalDatabase, Analyzer)
         "SELECT sleepEachRow(1) FROM table",
         R"(SELECT "column" FROM "test"."table")");
 
-    check(state, 1, {"column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col"},
+    check(state, 1, {"column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col", "lc_uuid_col"},
         "SELECT * EXCEPT (is_value) FROM table WHERE (column) IN (1)",
-        R"(SELECT "column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col" FROM "test"."table" WHERE ("column") IN (1))",
-        R"(SELECT "column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col" FROM "test"."table" WHERE "column" IN (1))");
+        R"(SELECT "column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col", "lc_uuid_col" FROM "test"."table" WHERE ("column") IN (1))",
+        R"(SELECT "column", "apply_id", "apply_type", "apply_status", "create_time", "field", "value", "a", "b", "foo", "uuid_col", "lc_uuid_col" FROM "test"."table" WHERE "column" IN (1))");
 
     check(state, 1, {"is_value"},
         "SELECT is_value FROM table WHERE is_value = true",
@@ -456,6 +458,11 @@ TEST(TransformQueryForExternalDatabase, UUIDColumn)
     check(state, 1, {"uuid_col", "a"},
           "SELECT uuid_col, a FROM table WHERE (uuid_col, a) > (toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0'), 0)",
           R"(SELECT "uuid_col", "a" FROM "test"."table")");
+
+    /// A LowCardinality(UUID) column is still UUID-backed, so its range comparisons must stay local too.
+    check(state, 1, {"lc_uuid_col"},
+          "SELECT lc_uuid_col FROM table WHERE lc_uuid_col > toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0')",
+          R"(SELECT "lc_uuid_col" FROM "test"."table")");
 
     /// Equality does not depend on ordering, so it remains pushed down.
     check(state, 1, {"uuid_col"},

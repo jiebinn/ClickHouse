@@ -3,7 +3,7 @@
 #include <Core/Settings.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -156,7 +156,8 @@ bool containsUUIDColumn(const ASTPtr & node, const NamesAndTypesList & available
     {
         for (const auto & column : available_columns)
             if (column.name == identifier->name())
-                return WhichDataType(removeNullable(column.type)).isUUID();
+                /// Unwrap LowCardinality / Nullable so e.g. LowCardinality(UUID) is recognised too.
+                return WhichDataType(removeLowCardinalityAndNullable(column.type)).isUUID();
         return false;
     }
 
