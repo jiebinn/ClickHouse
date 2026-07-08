@@ -173,6 +173,23 @@ TYPED_TEST(CoordinationTest, ContainerCreateModeMismatchRejected)
     EXPECT_THROW(request_read->readImpl(rbuf), Coordination::Exception);
 }
 
+TYPED_TEST(CoordinationTest, Create2WithContainerFlagRejected)
+{
+    /// A Create2 opnum carrying the CONTAINER flag must be rejected: getOpNum() prioritizes
+    /// include_stats over is_container, so this combination would otherwise validate and log
+    /// as Create2 (gated by CREATE_WITH_STATS) while still creating a container node (gated
+    /// separately by CREATE_CONTAINER) — bypassing the CreateContainer feature-flag gate.
+    DB::WriteBufferFromNuraftBuffer wbuf;
+    Coordination::write(std::string{"/container"}, wbuf); /// path
+    Coordination::write(std::string{}, wbuf);             /// data
+    Coordination::write(Coordination::ACLs{}, wbuf);      /// acls
+    Coordination::write(static_cast<int32_t>(4), wbuf);   /// CreateMode::CONTAINER
+
+    auto request_read = Coordination::ZooKeeperRequestFactory::instance().get(Coordination::OpNum::Create2);
+    DB::ReadBufferFromNuraftBuffer rbuf(wbuf.getBuffer());
+    EXPECT_THROW(request_read->readImpl(rbuf), Coordination::Exception);
+}
+
 TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
 {
     /// ZooKeeper derives container semantics from the flag, not the opnum (see readImpl).

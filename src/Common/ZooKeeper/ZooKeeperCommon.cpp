@@ -341,6 +341,13 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "Create2 must not carry a TTL create-mode flag");
 
+    /// Nor with a CONTAINER create mode: getOpNum() prioritizes include_stats over is_container,
+    /// so a Create2 opnum carrying the CONTAINER flag would validate and log as Create2 (gated by
+    /// CREATE_WITH_STATS) while still creating a container node (gated separately by CREATE_CONTAINER).
+    if (include_stats && is_container)
+        throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
+            "Create2 must not carry a CONTAINER create-mode flag");
+
     if (include_ttl)
         Coordination::read(ttl, in);
 }
