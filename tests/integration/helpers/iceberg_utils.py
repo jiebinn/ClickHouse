@@ -409,6 +409,20 @@ def get_uuid_str():
     return str(uuid.uuid4()).replace("-", "_")
 
 
+def iceberg_local_interop_dir(node):
+    """Absolute Iceberg data dir for the local Spark<->ClickHouse interop tests.
+
+    The path is both a container path (ClickHouse) and a host path (Spark), and it
+    is written verbatim into Iceberg metadata, so the two engines must agree on one
+    string. Under the flaky check (-n 3 --dist=each) the whole module runs in several
+    xdist workers at once, so the string is namespaced by PYTEST_XDIST_WORKER to keep
+    each worker's host symlink and data dir distinct. conftest and the tests both call
+    this, so they compute the same path within one worker process.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "master")
+    return f"/var/lib/clickhouse/user_files/iceberg_{worker}_{node}"
+
+
 def create_iceberg_table(
     storage_type,
     node,

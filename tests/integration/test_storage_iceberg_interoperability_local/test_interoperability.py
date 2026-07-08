@@ -1,6 +1,8 @@
-from helpers.iceberg_utils import get_uuid_str
+from helpers.iceberg_utils import get_uuid_str, iceberg_local_interop_dir
 
-ICEBERG_DIR_NODE1 = "/var/lib/clickhouse/user_files/iceberg_node1"
+# Same per-xdist-worker paths conftest uses (parallel-safe under --dist=each).
+ICEBERG_DIR_NODE1 = iceberg_local_interop_dir("node1")
+ICEBERG_DIR_NODE2 = iceberg_local_interop_dir("node2")
 
 
 def test_nodes_dont_see_each_other(started_cluster_iceberg):
@@ -55,14 +57,14 @@ def test_nodes_dont_see_each_other(started_cluster_iceberg):
         f"""
         CREATE TABLE {TABLE_NAME}
         ENGINE=IcebergLocal(local,
-            path = '/var/lib/clickhouse/user_files/iceberg_node1/default/{TABLE_NAME}')
+            path = '{ICEBERG_DIR_NODE1}/default/{TABLE_NAME}')
         """
     )
     node2.query(
         f"""
         CREATE TABLE {TABLE_NAME}
         ENGINE=IcebergLocal(local,
-            path = '/var/lib/clickhouse/user_files/iceberg_node2/default/{TABLE_NAME}')
+            path = '{ICEBERG_DIR_NODE2}/default/{TABLE_NAME}')
         """
     )
 
@@ -114,7 +116,7 @@ def test_ch_write_spark_read(started_cluster_iceberg):
         f"""
         CREATE TABLE {TABLE_NAME}
         ENGINE=IcebergLocal(local,
-            path = '/var/lib/clickhouse/user_files/iceberg_node1/default/{TABLE_NAME}')
+            path = '{ICEBERG_DIR_NODE1}/default/{TABLE_NAME}')
         """
     )
 
