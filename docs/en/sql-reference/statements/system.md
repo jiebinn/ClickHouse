@@ -45,10 +45,10 @@ SELECT name, status FROM system.dictionaries;
 
 ## SYSTEM UNLOAD DICTIONARY {#unload-dictionary}
 
-Unloads a dictionary `dictionary_name`. Returns an error if the dictionary is not loaded or is currently being loaded.
+Unloads a dictionary `dictionary_name`.
 
 ```sql
-SYSTEM UNLOAD DICTIONARY dictionary_name
+SYSTEM UNLOAD DICTIONARY [ON CLUSTER cluster_name] dictionary_name
 ```
 
 The status of the dictionary can be checked by querying the `system.dictionaries` table.
@@ -62,7 +62,7 @@ SELECT name, status FROM system.dictionaries;
 The `SYSTEM UNLOAD DICTIONARIES` query unloads all dictionaries with a `LOADED` status (see the `status` column of [`system.dictionaries`](/operations/system-tables/dictionaries)), i.e dictionaries that have been successfully loaded before.
 
 ```sql
-SYSTEM UNLOAD DICTIONARIES
+SYSTEM UNLOAD DICTIONARIES [ON CLUSTER cluster_name]
 ```
 
 ## SYSTEM RELOAD MODELS {#reload-models}
