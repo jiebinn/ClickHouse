@@ -498,7 +498,7 @@ void ClientInfo::setFromHTTPRequest(const Poco::Net::HTTPRequest & request)
         String key_lowercase = Poco::toLower(header.first);
         if (key_lowercase.starts_with("x-clickhouse") || key_lowercase == "authentication" || key_lowercase == "authorization")
             continue;
-        http_headers[key_lowercase] = header.second;
+        http_headers[header.first] = header.second;
     }
 }
 

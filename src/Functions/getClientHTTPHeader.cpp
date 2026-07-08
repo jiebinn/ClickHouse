@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Core/Field.h>
 #include <Core/Settings.h>
-#include <Poco/String.h>
 
 
 namespace DB
@@ -66,7 +65,7 @@ public:
         {
             Field header;
             source->get(row, header);
-            if (auto it = client_info.http_headers.find(Poco::toLower(header.safeGet<String>())); it != client_info.http_headers.end())
+            if (auto it = client_info.http_headers.find(header.safeGet<String>()); it != client_info.http_headers.end())
                 result->insert(it->second);
             else
                 result->insertDefault();
