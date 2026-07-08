@@ -184,7 +184,11 @@ Chunk IRowInputFormat::read()
 
                 /// Logic for possible skipping of errors.
 
-                if (!isParseError(e.code()))
+                /// Skip a bad row only for a genuine parse error that was not thrown from the
+                /// buffer itself. A throwing read self-cancels the buffer (ReadBuffer::next()'s
+                /// catch handler), and syncAfterError() reads from it again
+                /// (skipToNextLineOrEOF/ignore/eof -> next()), tripping chassert(!isCanceled()).
+                if (!isParseError(e.code()) || getReadBuffer().isCanceled())
                     throw;
 
                 if (params.allow_errors_num == 0 && params.allow_errors_ratio == 0)
@@ -210,13 +214,6 @@ Chunk IRowInputFormat::read()
                     e.addMessage("(Input format doesn't allow to skip errors)");
                     throw;
                 }
-
-                /// If the parse error was caused by a throwing read that self-canceled the
-                /// buffer (via ReadBuffer::next()'s catch handler), we cannot skip the bad row:
-                /// syncAfterError() reads from the buffer (skipToNextLineOrEOF/ignore/eof), which
-                /// calls next() and trips chassert(!isCanceled()). Rethrow instead of aborting.
-                if (getReadBuffer().isCanceled())
-                    throw;
 
                 syncAfterError();
 
@@ -245,7 +242,10 @@ Chunk IRowInputFormat::read()
         }
         else
         {
-            if (!isParseError(e.code()))
+            /// Collect verbose diagnostics only for a genuine parse error that was not thrown
+            /// from the buffer itself. A throwing read self-cancels the buffer, and
+            /// getDiagnosticInfo() reads from it (eof() -> next()), tripping chassert(!isCanceled()).
+            if (!isParseError(e.code()) || getReadBuffer().isCanceled())
                 throw;
 
             String verbose_diagnostic;

@@ -39,10 +39,7 @@ std::pair<String, String> RowInputFormatWithDiagnosticInfo::getDiagnosticAndRawD
     WriteBufferFromOwnString out_diag;
     WriteBufferFromOwnString out_data;
 
-    /// A canceled buffer cannot be read (eof() calls next() which asserts !isCanceled()).
-    /// This happens when the parse error that triggered diagnostics was itself caused by a
-    /// throwing read that self-canceled the buffer via ReadBuffer::next()'s catch handler.
-    if (in->isCanceled() || in->eof())
+    if (in->eof())
         return std::make_pair(
             "Buffer has gone, cannot extract information about what has been parsed.",
             "Buffer has gone, cannot extract information about what has been parsed.");
