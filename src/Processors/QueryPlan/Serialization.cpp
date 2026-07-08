@@ -172,12 +172,7 @@ QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & cont
             "Query plan serialization version {} is not supported. The last supported version is {}",
             version, DBMS_QUERY_PLAN_SERIALIZATION_VERSION);
 
-<<<<<<< HEAD
-    SerializationFlags flags{.skip_data = skip};
-=======
-    SerializationFlags flags;
-    flags.version = version;
->>>>>>> origin/master
+    SerializationFlags flags{.version = version, .skip_data = skip};
     return deserialize(in, context, flags);
 }
 
@@ -232,11 +227,8 @@ QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & cont
         for (const auto & child : frame.children)
             input_headers.push_back(child->step->getOutputHeader());
 
-<<<<<<< HEAD
-        IQueryPlanStep::Deserialization ctx{in, sets_registry, {}, context, input_headers, output_header, settings, flags.skip_data};
-=======
-        IQueryPlanStep::Deserialization ctx{in, sets_registry, {}, context, input_headers, output_header, settings, flags.version};
->>>>>>> origin/master
+        IQueryPlanStep::Deserialization ctx{
+            in, sets_registry, {}, context, input_headers, output_header, settings, flags.version, flags.skip_data};
         auto step = step_registry.createStep(step_name, ctx);
 
         if (step->hasOutputHeader())
