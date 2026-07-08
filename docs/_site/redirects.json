@@ -1,7 +1,7 @@
 [
   {
-    "source": "/docs/en/:path*",
-    "destination": "/docs/:path*"
+    "source": "/en/:path*",
+    "destination": "/:path*"
   },
   {
     "source": "/about",
