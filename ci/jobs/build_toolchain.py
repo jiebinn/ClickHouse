@@ -200,9 +200,6 @@ def main():
             f" -DCMAKE_CXX_COMPILER=clang++-21"
             f" -DLLVM_ENABLE_LLD=ON"
             f" -DLLVM_ENABLE_TERMINFO=OFF"
-            # zlib so the instrumented clang can emit -gz=zlib while building ClickHouse for
-            # profile collection - the PGO profile then covers the debug-compression paths that
-            # COMPRESS_DEBUG_SECTIONS now exercises by default. FORCE_ON to fail closed.
             f" -DLLVM_ENABLE_ZLIB=FORCE_ON"
             f" -DLLVM_ENABLE_ZSTD=OFF"
             f" -DCMAKE_INSTALL_PREFIX={STAGE1_INSTALL_DIR}"
@@ -414,9 +411,6 @@ def main():
             f' -DCMAKE_EXE_LINKER_FLAGS="-Wl,--emit-relocs,-znow"'
             f' -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--emit-relocs,-znow"'
             f" -DLLVM_ENABLE_TERMINFO=OFF"
-            # Enable zlib so the produced clang supports -gz=zlib (compressed debug sections), used by
-            # COMPRESS_DEBUG_SECTIONS in the root CMakeLists; FORCE_ON so a missing zlib1g-dev fails
-            # the build instead of silently disabling it.
             f" -DLLVM_ENABLE_ZLIB=FORCE_ON"
             f" -DLLVM_ENABLE_ZSTD=OFF"
             f" -DLLVM_BINUTILS_INCDIR=/usr/include"
