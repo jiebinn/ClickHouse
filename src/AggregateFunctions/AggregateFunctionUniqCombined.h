@@ -171,12 +171,14 @@ private:
 
     static constexpr size_t hash_chunk_size = 512;
 
+    /// Returns Key, not HashValueType: for String and IPv6 the set stores
+    /// the full 64-bit hash even in the 32-bit uniqCombined (see Data::Key).
     template <typename U>
-    static ALWAYS_INLINE HashValueType hashOne(U value)
+    static ALWAYS_INLINE Key hashOne(U value)
     {
         if constexpr (std::is_same_v<U, std::string_view>)
         {
-            return static_cast<HashValueType>(CityHash_v1_0_2::CityHash64(value.data(), value.size()));
+            return CityHash_v1_0_2::CityHash64(value.data(), value.size());
         }
         else
         {
@@ -186,25 +188,25 @@ private:
             {
                 /// This specialization exists due to historical circumstances.
                 /// Initially UInt128 was introduced only for UUID, and then the other big-integer types were added.
-                return static_cast<HashValueType>(sipHash64(value));
+                return static_cast<Key>(sipHash64(value));
             }
             else if constexpr (std::is_same_v<U, IPv6>)
             {
                 /// This specialization exists also for compatibility with the initial implementation.
-                return static_cast<HashValueType>(CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&value), sizeof(IPv6)));
+                return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&value), sizeof(IPv6));
             }
             else if constexpr (is_floating_point<U>)
             {
-                return static_cast<HashValueType>(intHash64(bit_cast<UInt64>(value)));
+                return static_cast<Key>(intHash64(bit_cast<UInt64>(value)));
             }
             else if constexpr (sizeof(U) > sizeof(UInt64))
             {
-                return static_cast<HashValueType>(DefaultHash64<U>(value));
+                return static_cast<Key>(DefaultHash64<U>(value));
             }
             else
             {
                 /// This specialization exists also for compatibility with the initial implementation.
-                return static_cast<HashValueType>(intHash64(value));
+                return static_cast<Key>(intHash64(value));
             }
         }
     }
