@@ -905,6 +905,36 @@ class GH:
         return cls.do_command_with_retries(command)
 
     @classmethod
+    def get_commit_statuses(cls, sha="", repo="") -> Dict[str, "GH.CommitStatus"]:
+        """
+        Fetch commit statuses for the given commit SHA and return the latest
+        status for each context.
+        """
+        repo = repo or _Environment.get().REPOSITORY
+        sha = sha or _Environment.get().SHA
+
+        output = cls.get_output_with_retries(
+            f"gh api repos/{repo}/commits/{sha}/statuses --paginate"
+        )
+        if not output:
+            return {}
+
+        statuses_list = json.loads(output)
+        status_map: Dict[str, GH.CommitStatus] = {}
+
+        for status in statuses_list:
+            context = status["context"]
+            if context not in status_map:
+                status_map[context] = GH.CommitStatus(
+                    state=status["state"],
+                    description=status.get("description", ""),
+                    url=status.get("target_url", ""),
+                    context=context,
+                )
+
+        return status_map
+
+    @classmethod
     def merge_pr(cls, pr=None, repo=None, squash=False, keep_branch=False):
         if not repo:
             repo = _Environment.get().REPOSITORY
