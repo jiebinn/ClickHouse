@@ -56,6 +56,11 @@ std::optional<EncryptionHeaderCache::HeaderBytes> EncryptionHeaderCache::read(co
     return {};
 }
 
+void EncryptionHeaderCache::drop(const String & storage_path)
+{
+    cache.remove(makeKey(storage_path));
+}
+
 void EncryptionHeaderCache::clear()
 {
     cache.clear();

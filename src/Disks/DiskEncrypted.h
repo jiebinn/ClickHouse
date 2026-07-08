@@ -102,6 +102,8 @@ public:
         auto tx = createEncryptedTransaction();
         tx->replaceFile(from_path, to_path);
         tx->commit();
+        /// `to_path` now holds `from_path`'s ciphertext (new header); drop its cached header.
+        dropEncryptionHeaderCache(to_path);
     }
 
     void listFiles(const String & path, std::vector<String> & file_names) const override
@@ -138,6 +140,9 @@ public:
         WriteMode mode,
         const WriteSettings & settings) override
     {
+        /// A rewrite regenerates the header (new IV); drop any cached header for the reused path.
+        if (mode == WriteMode::Rewrite)
+            dropEncryptionHeaderCache(path);
         auto tx = createEncryptedTransaction();
         auto result = tx->writeFileWithAutoCommit(path, buf_size, mode, settings);
         return result;
@@ -145,6 +150,7 @@ public:
 
     void removeFile(const String & path) override
     {
+        dropEncryptionHeaderCache(path);
         auto tx = createEncryptedTransaction();
         tx->removeFile(path);
         tx->commit();
@@ -152,6 +158,7 @@ public:
 
     void removeFileIfExists(const String & path) override
     {
+        dropEncryptionHeaderCache(path);
         auto tx = createEncryptedTransaction();
         tx->removeFileIfExists(path);
         tx->commit();
@@ -415,6 +422,11 @@ private:
     {
         return DiskEncryptedTransaction::wrappedPath(disk_path, path);
     }
+
+    /// Invalidate the global encryption-header cache entry for `path` (resolved to its object
+    /// `remote_path`). Called when a write / replace binds fresh ciphertext to a path so a later
+    /// `ReaderExecutor` read re-reads the new header instead of a stale cached one.
+    void dropEncryptionHeaderCache(const String & path) const;
 
     DiskPtr delegate;
     const String encrypted_name;

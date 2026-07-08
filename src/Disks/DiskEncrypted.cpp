@@ -3,6 +3,8 @@
 #if USE_SSL
 #include <Disks/DiskFactory.h>
 #include <IO/ReadPipeline.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/Cache/EncryptionHeaderCache.h>
 #include <Common/Base64.h>
 #include <Common/Exception.h>
 #include <IO/FileEncryptionCommon.h>
@@ -477,8 +479,22 @@ size_t DiskEncrypted::getEncryptedFileSize(size_t unencrypted_size) const
 
 void DiskEncrypted::truncateFile(const String & path, size_t size)
 {
+    dropEncryptionHeaderCache(path);
     auto wrapped_path = wrappedPath(path);
     delegate->truncateFile(wrapped_path, size ? (size + FileEncryption::Header::kSize) : 0);
+}
+
+void DiskEncrypted::dropEncryptionHeaderCache(const String & path) const
+{
+    auto global_context = Context::getGlobalContextInstance();
+    if (!global_context)
+        return;
+    auto cache = global_context->getEncryptionHeaderCache();
+    if (!cache)
+        return;
+    /// The ReaderExecutor keys the header cache by the first object's `remote_path`.
+    if (auto objects = getStorageObjectsIfExist(path); objects && !objects->empty())
+        cache->drop(objects->front().remote_path);
 }
 
 SyncGuardPtr DiskEncrypted::getDirectorySyncGuard(const String & path) const
