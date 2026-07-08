@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Tags: no-replicated-database, no-fasttest, no-shared-merge-tree, no-ordinary-database
+# Tags: zookeeper, no-replicated-database, no-fasttest, no-shared-merge-tree, no-ordinary-database
+# Tag zookeeper: uses ReplicatedMergeTree, so it must be skipped when Keeper is unavailable
+#   (e.g. the `--no-zookeeper` lane); otherwise CREATE TABLE fails in a genuinely Keeper-less run.
 # Tag no-replicated-database: relies on a single local replica and reads its /proc fds
 # Tag no-shared-merge-tree: SharedMergeTree does not honor sleep_before_commit_local_part_in_replicated_table_ms
 # Tag no-ordinary-database: the fd scan locates the part files by the table's UUID, which is
