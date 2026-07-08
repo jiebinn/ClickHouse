@@ -100,7 +100,7 @@ public:
         if constexpr (std::is_same_v<T, String> || std::is_same_v<T, IPv6>)
         {
             auto value = columns[0]->getDataAt(row_num);
-            this->data(place).set.insert(CityHash_v1_0_2::CityHash64(value.data(), value.size()));
+            this->data(place).set.insert(hashOne(value));
         }
         else
         {
@@ -169,29 +169,55 @@ private:
     using Data = AggregateFunctionUniqCombinedData<T, K, HashValueType>;
     using Key = typename Data::Key;
 
-    static constexpr size_t hash_chunk_size = 256;
+    static constexpr size_t hash_chunk_size = 512;
 
-    static ALWAYS_INLINE HashValueType hashOne(T value)
+    template <typename U>
+    static ALWAYS_INLINE HashValueType hashOne(U value)
     {
-        if constexpr (std::is_same_v<T, UInt128>)
+        if constexpr (std::is_same_v<U, std::string_view>)
         {
-            /// This specialization exists due to historical circumstances.
-            /// Initially UInt128 was introduced only for UUID, and then the other big-integer types were added.
-            return static_cast<HashValueType>(sipHash64(value));
-        }
-        else if constexpr (is_floating_point<T>)
-        {
-            return static_cast<HashValueType>(intHash64(bit_cast<UInt64>(value)));
-        }
-        else if constexpr (sizeof(T) > sizeof(UInt64))
-        {
-            return static_cast<HashValueType>(DefaultHash64<T>(value));
+            return static_cast<HashValueType>(CityHash_v1_0_2::CityHash64(value.data(), value.size()));
         }
         else
         {
-            /// This specialization exists also for compatibility with the initial implementation.
-            return static_cast<HashValueType>(intHash64(value));
+            static_assert(std::is_same_v<U, T>, "numeric types must be the same as the template parameter");
+
+            if constexpr (std::is_same_v<U, UInt128>)
+            {
+                /// This specialization exists due to historical circumstances.
+                /// Initially UInt128 was introduced only for UUID, and then the other big-integer types were added.
+                return static_cast<HashValueType>(sipHash64(value));
+            }
+            else if constexpr (std::is_same_v<U, IPv6>)
+            {
+                /// This specialization exists also for compatibility with the initial implementation.
+                return static_cast<HashValueType>(CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&value), sizeof(IPv6)));
+            }
+            else if constexpr (is_floating_point<U>)
+            {
+                return static_cast<HashValueType>(intHash64(bit_cast<UInt64>(value)));
+            }
+            else if constexpr (sizeof(U) > sizeof(UInt64))
+            {
+                return static_cast<HashValueType>(DefaultHash64<U>(value));
+            }
+            else
+            {
+                /// This specialization exists also for compatibility with the initial implementation.
+                return static_cast<HashValueType>(intHash64(value));
+            }
         }
+    }
+
+    /// Compares values the same way hashOne distinguishes them. Floats are compared
+    /// as bit patterns: e.g. -0.0 == +0.0, but their hashes differ.
+    template <typename U>
+    static ALWAYS_INLINE bool bitEquals(const U & lhs, const U & rhs)
+    {
+        if constexpr (is_floating_point<U>)
+            return bit_cast<UInt64>(lhs) == bit_cast<UInt64>(rhs);
+        else
+            return lhs == rhs;
     }
 
     void addBatchImpl(
@@ -208,49 +234,41 @@ private:
         {
             if (const auto * column_string = typeid_cast<const ColumnString *>(columns[0]))
             {
-                const auto & chars = column_string->getChars();
-                const auto & offsets = column_string->getOffsets();
-
-                insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
-                {
-                    return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(chars.data()) + offsets[row - 1], offsets[row] - offsets[row - 1]);
-                });
+                insertChunked<std::string_view>(row_begin, row_end, set, flags, null_map, [&](size_t row) { return column_string->getDataAt(row); });
             }
             else
             {
                 const auto & column_fixed = assert_cast<const ColumnFixedString &>(*columns[0]);
-                const auto & chars = column_fixed.getChars();
-                const size_t n = column_fixed.getN();
-
-                insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
-                {
-                    return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(chars.data()) + row * n, n);
-                });
+                insertChunked<std::string_view>(row_begin, row_end, set, flags, null_map, [&](size_t row) { return column_fixed.getDataAt(row); });
             }
         }
         else if constexpr (std::is_same_v<T, IPv6>)
         {
             const auto & data = assert_cast<const ColumnVector<IPv6> &>(*columns[0]).getData();
-
-            insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row)
-            {
-                return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&data[row]), sizeof(IPv6));
-            });
+            insertChunked<T>(row_begin, row_end, set, flags, null_map, [&](size_t row) { return data[row]; });
         }
         else
         {
             const auto & data = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
-            insertChunked(row_begin, row_end, set, flags, null_map, [&](size_t row) { return hashOne(data[row]); });
+            insertChunked<T>(row_begin, row_end, set, flags, null_map, [&](size_t row) { return data[row]; });
         }
     }
 
     /// Hashes rows a chunk ahead into a stack buffer, so that hash computation pipelines
     /// independently of the set inserts, and inserts whole chunks via insertMany.
-    template <typename Hasher>
-    static void insertChunked(size_t row_begin, size_t row_end, typename Data::Set & set, const UInt8 * flags, const UInt8 * null_map, Hasher hasher)
+    template <typename U, typename Getter>
+    static void insertChunked(size_t row_begin, size_t row_end, typename Data::Set & set, const UInt8 * flags, const UInt8 * null_map, Getter getter)
     {
-        Key hashes[hash_chunk_size];
+        if (row_begin == row_end)
+            return;
+
+        std::array<Key, hash_chunk_size> hashes;
         size_t row = row_begin;
+
+        bool use_last_value_cache = true;
+        U last_value{};
+        size_t cache_hits = 0;
+        size_t num_processed = 0;
 
         while (row < row_end)
         {
@@ -259,10 +277,35 @@ private:
 
             if (!flags && !null_map)
             {
-                for (size_t i = 0; i < chunk_size; ++i)
-                    hashes[i] = hasher(row + i);
+                if (use_last_value_cache)
+                {
+                    last_value = getter(row);
+                    hashes[num_hashes++] = hashOne(last_value);
 
-                num_hashes = chunk_size;
+                    for (size_t i = 1; i < chunk_size; ++i)
+                    {
+                        auto value = getter(row + i);
+                        if (bitEquals(value, last_value))
+                            continue;
+
+                        last_value = value;
+                        hashes[num_hashes++] = hashOne(value);
+                    }
+
+                    /// Disable the cache for the rest of the batch when consecutive duplicates are rare.
+                    cache_hits += chunk_size - num_hashes;
+                    num_processed += chunk_size;
+
+                    if (cache_hits * 2 <= num_processed)
+                        use_last_value_cache = false;
+                }
+                else
+                {
+                    num_hashes = chunk_size;
+
+                    for (size_t i = 0; i < chunk_size; ++i)
+                        hashes[i] = hashOne(getter(row + i));
+                }
             }
             else
             {
@@ -271,12 +314,11 @@ private:
                     if ((flags && !flags[row + i]) || (null_map && null_map[row + i]))
                         continue;
 
-                    hashes[num_hashes] = hasher(row + i);
-                    ++num_hashes;
+                    hashes[num_hashes++] = hashOne(getter(row + i));
                 }
             }
 
-            set.insertMany(hashes, num_hashes);
+            set.insertMany(hashes.data(), num_hashes);
             row += chunk_size;
         }
     }

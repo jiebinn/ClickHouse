@@ -116,9 +116,7 @@ public:
     }
 
     /// Equivalent to calling insert for each value, but dispatches on the container type
-    /// once per batch and runs a tight loop per container, which also lets the container's
-    /// insert be inlined. Promotions must stay exactly size-triggered, as in insert:
-    /// they are observable in results (medium is exact, large is approximate) and in serialized states.
+    /// once per batch and runs a loop per container, which also lets the container's insert be inlined.
     void insertMany(const Key * values, size_t n)
     {
         size_t i = 0;
@@ -150,7 +148,7 @@ public:
 
                 /// Allow to overflow the medium container to avoid check in the loop.
                 /// Medium container supports arbitrary number of elements oppsite to the small container.
-                if (container.size() >= medium_set_size_max)
+                if (container.size() > medium_set_size_max)
                     toLarge();
             }
             else if (container_type == details::ContainerType::LARGE)
