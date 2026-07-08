@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
 """
-Unit tests for the pure helpers in `create_release.py`. Run with
-`python -m unittest` from `tests/ci/`, or with
-`pytest tests/ci/test_create_release.py` from the repo root.
+Unit tests for the pure helpers in `create_release.py`. Run as part of the
+`ci/tests/` suite with `pytest ci/tests/test_create_release.py` from the repo
+root.
 """
 
+import os
+import sys
 import unittest
 
-from create_release import ReleaseInfo
+# `create_release` lives under `tests/ci` and imports sibling modules by bare
+# name, so put that directory on `sys.path` only while importing it and remove
+# it again afterwards to avoid leaking it into the rest of the pytest session.
+_CI_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "ci")
+)
+sys.path.insert(0, _CI_DIR)
+try:
+    # pylint: disable=import-error
+    from create_release import ReleaseInfo
+finally:
+    sys.path.remove(_CI_DIR)
 
 
 class TestIsEmptyPatchRelease(unittest.TestCase):
