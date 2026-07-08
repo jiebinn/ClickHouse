@@ -157,6 +157,17 @@ private:
     /// commands, which never register.
     UInt64 udf_registry_generation = 0;
 
+    /// Absolute monotonic deadline (ns, `clock_gettime_ns`) shared by the cleanup-side
+    /// wait and the destructor-side wait so `command_termination_timeout` bounds their
+    /// SUM, not each separately. Armed lazily by `remainingTerminationTimeoutMs`; 0 means
+    /// not yet armed.
+    UInt64 termination_deadline_ns = 0;
+
+    /// Milliseconds left until the shared termination deadline, arming it on the first
+    /// call from `wait_for_normal_exit_before_termination_seconds`. Returns 0 once the
+    /// deadline has passed, so both wait paths stop at one shared budget.
+    UInt64 remainingTerminationTimeoutMs();
+
     ShellCommand(pid_t pid_, int & in_fd_, int & out_fd_, int & err_fd_, const Config & config);
 
     bool tryWaitProcessWithTimeout(size_t timeout_in_seconds);

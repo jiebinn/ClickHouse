@@ -31,6 +31,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/Operators.h>
 #include <Common/waitForPid.h>
+#include <Common/Stopwatch.h>
 
 
 namespace
@@ -79,6 +80,23 @@ LoggerPtr ShellCommand::getLogger()
     return ::getLogger("ShellCommand");
 }
 
+UInt64 ShellCommand::remainingTerminationTimeoutMs()
+{
+    const UInt64 now_ns = clock_gettime_ns();
+
+    /// Arm the shared deadline once, on the first waiter (cleanup, or the destructor when
+    /// cleanup never ran). Every later waiter subtracts the time already spent so both the
+    /// cleanup poll and the destructor wait draw from one `command_termination_timeout`.
+    if (termination_deadline_ns == 0)
+        termination_deadline_ns
+            = now_ns + config.terminate_in_destructor_strategy.wait_for_normal_exit_before_termination_seconds * 1000000000ULL;
+
+    if (now_ns >= termination_deadline_ns)
+        return 0;
+
+    return (termination_deadline_ns - now_ns) / 1000000ULL;
+}
+
 ShellCommand::~ShellCommand()
 {
     if (do_not_terminate)
@@ -89,7 +107,12 @@ ShellCommand::~ShellCommand()
 
     if (config.terminate_in_destructor_strategy.terminate_in_destructor)
     {
-        size_t try_wait_timeout = config.terminate_in_destructor_strategy.wait_for_normal_exit_before_termination_seconds;
+        /// Draw from the shared deadline: the cleanup-side wait may have already spent
+        /// most of `command_termination_timeout`, so this wait gets only what remains and
+        /// the configured grace period is honored once, not doubled. `waitForPid` is
+        /// second-granular, so round the remainder up to keep at least one poll when any
+        /// budget is left.
+        size_t try_wait_timeout = (remainingTerminationTimeoutMs() + 999) / 1000;
         bool process_terminated_normally = tryWaitProcessWithTimeout(try_wait_timeout);
 
         if (process_terminated_normally)
@@ -484,24 +507,24 @@ bool ShellCommand::tryWaitWithoutStatusCheck()
 {
     /// A child that closed stdout but has only just called `_exit` is not yet a
     /// zombie, so a single `wait4(WNOHANG)` can miss it and lose its `rusage`. Poll
-    /// within the same `command_termination_timeout` window the destructor uses
-    /// (`wait_for_normal_exit_before_termination_seconds`), so a child exiting inside
-    /// that window has its usage collected here rather than by the destructor's
-    /// `waitForPid`, which collects none. A configured timeout of 0 means a single
+    /// until the shared termination deadline (`remainingTerminationTimeoutMs`), collecting the
+    /// child's usage here via `wait4` instead of leaving it to the destructor's
+    /// `waitForPid`, which collects none. The deadline is shared with the destructor,
+    /// so a child that lingers past it is not double-charged: the destructor's own wait
+    /// gets only the time remaining. A configured timeout of 0 means a single
     /// non-blocking attempt, so this never stalls a query beyond the configuration.
-    const UInt64 poll_budget_ms
-        = config.terminate_in_destructor_strategy.wait_for_normal_exit_before_termination_seconds * 1000ULL;
     static constexpr UInt64 poll_step_ms = 5;
 
-    UInt64 waited_ms = 0;
     while (true)
     {
         if (tryWaitImpl(/*blocking=*/false, /*check_exit_status=*/false).is_process_terminated)
             return true;
-        if (waited_ms >= poll_budget_ms)
+
+        const UInt64 remaining_ms = remainingTerminationTimeoutMs();
+        if (remaining_ms == 0)
             return false;
-        sleepForMilliseconds(std::min(poll_step_ms, poll_budget_ms - waited_ms));
-        waited_ms += poll_step_ms;
+
+        sleepForMilliseconds(std::min(poll_step_ms, remaining_ms));
     }
 }
 

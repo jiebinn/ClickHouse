@@ -478,16 +478,18 @@ def test_peak_memory_reflects_udf_not_server(started_cluster):
 def test_check_exit_code_false_lingering_child_is_bounded_and_flushes_bytes(started_cluster):
     _skip_msan()
     # Invariant: with check_exit_code=false a child that closes stdout and lingers
-    # does not block cleanup (teardown is bounded by command_termination_timeout,
-    # ~3 s, not by the child's 30 s sleep), and its already-observed stdin/stdout
-    # byte counters are still reported even though no wait4 rusage was captured.
+    # is torn down within ONE command_termination_timeout window (3 s here), not the
+    # child's 30 s sleep, and its already-observed stdin/stdout byte counters are still
+    # reported even though no wait4 rusage was captured. The 5 s bound also guards the
+    # cleanup+destructor double-wait: sharing one deadline keeps teardown near 3 s, while
+    # charging the window twice would push it to ~6 s.
     qid = "exec-stdout-linger-1"
     t0 = time.monotonic()
     _run("SELECT sum(test_udf_stdout_close_linger(number)) FROM numbers(50)", qid)
     elapsed = time.monotonic() - t0
-    assert elapsed < 25, (
-        f"Query took {elapsed:.1f}s — must be bounded by command_termination_timeout (~3s) "
-        f"+ teardown, not the child's 30s sleep"
+    assert elapsed < 5, (
+        f"Query took {elapsed:.1f}s — teardown must fit one command_termination_timeout "
+        f"window (~3s), not two (~6s) or the child's 30s sleep"
     )
 
     invocations = _profile_event_value(qid, "ExecutableUserDefinedFunctionInvocations")
