@@ -5354,23 +5354,6 @@ std::unique_ptr<IQueryPlanStep> ReadFromMergeTree::deserialize(Deserialization &
     if (has_prewhere_info)
         query_info.prewhere_info = std::make_shared<PrewhereInfo>(PrewhereInfo::deserialize(ctx));
 
-    size_t distributed_read_bucket_count = 0;
-    readVarUInt(distributed_read_bucket_count, ctx.in);
-
-    Names distributed_read_part_names;
-    if (distributed_read_bucket_count)
-    {
-        size_t num_parts = 0;
-        readVarUInt(num_parts, ctx.in);
-        distributed_read_part_names.reserve(num_parts);
-        for (size_t i = 0; i < num_parts; ++i)
-        {
-            String part_name;
-            readStringBinary(part_name, ctx.in);
-            distributed_read_part_names.push_back(std::move(part_name));
-        }
-    }
-
     /// The plan is only being drained off the buffer (TCPHandler::skipData) and will be discarded.
     /// All serialized fields have been consumed above, so return a lightweight placeholder that
     /// carries the serialized header (satisfies the header check) instead of doing a table lookup,
