@@ -38,6 +38,11 @@ struct IQueryPlanStep::Deserialization
     const SharedHeaders & input_headers;
     const SharedHeader & output_header;
     const QueryPlanSerializationSettings & settings;
+
+    /// The plan is being drained (e.g. TCPHandler::skipData) and will be discarded, not executed.
+    /// Steps that are expensive or need execution-only context (index analysis, parallel-replicas
+    /// callbacks) may read their bytes but build a lightweight placeholder instead of a real step.
+    bool skipping = false;
 };
 
 }

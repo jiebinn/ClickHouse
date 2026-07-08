@@ -1,4 +1,5 @@
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
+#include <Processors/QueryPlan/ReadNothingStep.h>
 #include <base/sort.h>
 
 #include <Storages/MergeTree/Streaming/CursorUtils.h>
@@ -5190,6 +5191,13 @@ std::unique_ptr<IQueryPlanStep> ReadFromMergeTree::deserialize(Deserialization &
         }
     }
 
+    /// The plan is only being drained off the buffer (TCPHandler::skipData) and will be discarded.
+    /// All serialized fields have been consumed above, so return a lightweight placeholder that
+    /// carries the serialized header (satisfies the header check) instead of doing a table lookup,
+    /// index analysis and parallel-replicas callback wiring for a step that is never executed.
+    if (ctx.skipping)
+        return std::make_unique<ReadNothingStep>(ctx.output_header);
+
     /// The table could be dropped concurrently after the plan was serialized,
     /// so a failed lookup is a regular error, not a logical one.
     StorageID table_id(database_name, table_name);
@@ -5220,11 +5228,10 @@ std::unique_ptr<IQueryPlanStep> ReadFromMergeTree::deserialize(Deserialization &
         /*merge_tree_select_result_ptr*/ nullptr,
         /// On a replica this rebuilds the read in parallel-reading mode: the ReadFromMergeTree ctor
         /// resolves the coordinator callbacks from ctx.context (set by TCPHandler) and the replica number
-        /// from client_info. Passing no extension keeps those resolved from the context.
-        /// Only enable it when the callbacks are actually present: while draining leftover packets
-        /// after an early failure (TCPHandler::skipData) the plan is deserialized against the global
-        /// context, which has no coordinator callbacks, and the built step is discarded anyway.
-        enable_parallel_reading && ctx.context->hasMergeTreeAllRangesCallback(),
+        /// from client_info. Passing no extension keeps those resolved from the context. This path is
+        /// only reached for a plan that will actually be executed (see the ctx.skipping short-circuit
+        /// above), so the callbacks are always present.
+        enable_parallel_reading,
         /*extension*/ nullptr);
 
     if (distributed_read_bucket_count)

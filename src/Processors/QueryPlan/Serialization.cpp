@@ -62,6 +62,7 @@ static Block deserializeHeader(ReadBuffer & in)
 /// Nothing is here for now
 struct QueryPlan::SerializationFlags
 {
+    bool skip_data = false;
 };
 
 void QueryPlan::serialize(WriteBuffer & out, size_t max_supported_version) const
@@ -157,7 +158,7 @@ bool QueryPlan::isSerialized() const
     return serialized_plan != nullptr;
 }
 
-QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context)
+QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context, bool skip)
 {
     UInt64 version = 0;
     readVarUInt(version, in);
@@ -167,7 +168,7 @@ QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & cont
             "Query plan serialization version {} is not supported. The last supported version is {}",
             version, DBMS_QUERY_PLAN_SERIALIZATION_VERSION);
 
-    SerializationFlags flags;
+    SerializationFlags flags{.skip_data = skip};
     return deserialize(in, context, flags);
 }
 
@@ -222,7 +223,7 @@ QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & cont
         for (const auto & child : frame.children)
             input_headers.push_back(child->step->getOutputHeader());
 
-        IQueryPlanStep::Deserialization ctx{in, sets_registry, {}, context, input_headers, output_header, settings};
+        IQueryPlanStep::Deserialization ctx{in, sets_registry, {}, context, input_headers, output_header, settings, flags.skip_data};
         auto step = step_registry.createStep(step_name, ctx);
 
         if (step->hasOutputHeader())
