@@ -196,14 +196,18 @@ DataLakeMetadataPtr PaimonMetadata::create(
             log,
             "Not using in-memory cache for paimon metadata files, because the setting use_paimon_metadata_files_cache is false.");
 
-    String table_cache_key_prefix;
+    /// Always latch schema-0 timeMillis as the table identity, independent of whether the
+    /// metadata files cache is enabled.  It is used both for the cache-key prefix and for the
+    /// external-recreation guard in update(); the guard must not be tied to the cache being
+    /// active, because the schema_processor caches schemas by id regardless of cache capacity.
+    auto schema0_info = table_client->getTableSchemaInfoById(0);
+    auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
     Int64 schema0_time_millis = 0;
+    Paimon::getValueFromJSON(schema0_time_millis, schema0_json, "timeMillis");
+
+    String table_cache_key_prefix;
     if (cache_ptr)
     {
-        auto schema0_info = table_client->getTableSchemaInfoById(0);
-        auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
-        Paimon::getValueFromJSON(schema0_time_millis, schema0_json, "timeMillis");
-
         const String table_name = configuration_ptr->getRawPath().path.empty()
             ? table_path
             : configuration_ptr->getRawPath().path;
@@ -337,7 +341,12 @@ void PaimonMetadata::update(const ContextPtr & /*local_context*/)
     /// PaimonPersistentComponents (same design as IcebergMetadata::update).
 
     /// 0. Detect external table recreation by checking schema-0 timeMillis.
-    if (persistent_components.isMetadataCacheActive())
+    /// This guard is intentionally NOT tied to isMetadataCacheActive(): the schema_processor
+    /// caches schemas by id regardless of the metadata files cache capacity, so a stale schema
+    /// could otherwise be silently reused after an external DROP + re-CREATE at the same path
+    /// when paimon_metadata_files_cache_size is reloaded to 0.  Run it whenever the table
+    /// identity was latched at create time.
+    if (persistent_components.schema0_time_millis != 0)
     {
         auto schema0_info = table_client->getTableSchemaInfoById(0);
         auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
