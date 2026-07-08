@@ -200,7 +200,10 @@ def main():
             f" -DCMAKE_CXX_COMPILER=clang++-21"
             f" -DLLVM_ENABLE_LLD=ON"
             f" -DLLVM_ENABLE_TERMINFO=OFF"
-            f" -DLLVM_ENABLE_ZLIB=OFF"
+            # zlib so the instrumented clang can emit -gz=zlib while building ClickHouse for
+            # profile collection - the PGO profile then covers the debug-compression paths that
+            # COMPRESS_DEBUG_SECTIONS now exercises by default. FORCE_ON to fail closed.
+            f" -DLLVM_ENABLE_ZLIB=FORCE_ON"
             f" -DLLVM_ENABLE_ZSTD=OFF"
             f" -DCMAKE_INSTALL_PREFIX={STAGE1_INSTALL_DIR}"
             f" -S {LLVM_SOURCE_DIR}/llvm"
@@ -317,8 +320,8 @@ def main():
                 build_result.info = "Build failed at link step (expected); profraw files collected"
             results.append(build_result)
 
-        # Merge profraw files using system llvm-profdata (stage 1 build lacks zlib
-        # support, but the profraw files may contain zlib-compressed sections)
+        # Merge profraw files with llvm-profdata-21 (it supports the zlib-compressed
+        # profile format the instrumented clang can emit)
         profraw_dir = f"{STAGE1_BUILD_DIR}/profiles/"
         if os.path.isdir(profraw_dir) and os.listdir(profraw_dir):
             results.append(
@@ -413,7 +416,7 @@ def main():
             f" -DLLVM_ENABLE_TERMINFO=OFF"
             # Enable zlib so the produced clang supports -gz=zlib (compressed debug sections), used by
             # COMPRESS_DEBUG_SECTIONS in the root CMakeLists; FORCE_ON so a missing zlib1g-dev fails
-            # the build instead of silently disabling it. Stage 1 (profile-gen) stays without zlib.
+            # the build instead of silently disabling it.
             f" -DLLVM_ENABLE_ZLIB=FORCE_ON"
             f" -DLLVM_ENABLE_ZSTD=OFF"
             f" -DLLVM_BINUTILS_INCDIR=/usr/include"
