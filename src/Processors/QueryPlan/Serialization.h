@@ -22,6 +22,9 @@ struct IQueryPlanStep::Serialization
     bool skip_final_flag = false;
     // The same situation as above.
     bool skip_cache_key = false;
+
+    /// Query-plan serialization version the stream is being written with (DBMS_QUERY_PLAN_SERIALIZATION_VERSION).
+    UInt64 version = 0;
 };
 
 struct SerializedSetsRegistry;
@@ -39,6 +42,8 @@ struct IQueryPlanStep::Deserialization
     const SharedHeader & output_header;
     const QueryPlanSerializationSettings & settings;
 
+    /// Query-plan serialization version the stream was written with (DBMS_QUERY_PLAN_SERIALIZATION_VERSION).
+    UInt64 version = 0;
     /// The plan is being drained (e.g. TCPHandler::skipData) and will be discarded, not executed.
     /// Steps that are expensive or need execution-only context (index analysis, parallel-replicas
     /// callbacks) may read their bytes but build a lightweight placeholder instead of a real step.
