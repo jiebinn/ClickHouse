@@ -8,6 +8,10 @@ from ci.praktika.result import Result
 
 def main():
     statuses = GH.get_commit_statuses()
+    if statuses is None:
+        print(f"Failed to fetch commit statuses, skip setting [{SYNC}]")
+        return
+
     if SYNC in statuses:
         print(
             f"Commit status [{SYNC}] already exists with description "

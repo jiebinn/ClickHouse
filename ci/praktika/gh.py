@@ -905,10 +905,13 @@ class GH:
         return cls.do_command_with_retries(command)
 
     @classmethod
-    def get_commit_statuses(cls, sha="", repo="") -> Dict[str, "GH.CommitStatus"]:
+    def get_commit_statuses(
+        cls, sha="", repo=""
+    ) -> Optional[Dict[str, "GH.CommitStatus"]]:
         """
         Fetch commit statuses for the given commit SHA and return the latest
-        status for each context.
+        status for each context. Returns `None` if the status list cannot be
+        retrieved or parsed.
         """
         repo = repo or _Environment.get().REPOSITORY
         sha = sha or _Environment.get().SHA
@@ -917,9 +920,13 @@ class GH:
             f"gh api repos/{repo}/commits/{sha}/statuses --paginate"
         )
         if not output:
-            return {}
-
-        statuses_list = json.loads(output)
+            print("ERROR: Failed to fetch commit statuses")
+            return None
+        try:
+            statuses_list = json.loads(output)
+        except json.JSONDecodeError as ex:
+            print(f"ERROR: Failed to parse commit statuses: {ex}")
+            return None
         status_map: Dict[str, GH.CommitStatus] = {}
 
         for status in statuses_list:
