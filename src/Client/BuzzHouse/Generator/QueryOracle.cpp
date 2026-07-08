@@ -1152,6 +1152,9 @@ void QueryOracle::dumpOracleIntermediateSteps(
             {
                 /// ALTER TABLE t UPDATE ... WHERE ...
                 Alter * at = next.mutable_single_query()->mutable_explain()->mutable_inner_query()->mutable_alter();
+                at->set_is_temp(t.is_temp);
+                at->set_sobject(SQLObject::TABLE);
+                t.setName(at->mutable_object()->mutable_est(), false);
                 gen.generateNextUpdate(rg, t, at->mutable_alter()->mutable_update());
                 maybeSetClusterAndSettings(at);
             }
@@ -1316,6 +1319,9 @@ void QueryOracle::dumpOracleIntermediateSteps(
             {
                 /// ALTER TABLE t DELETE WHERE true
                 Alter * at = next.mutable_single_query()->mutable_explain()->mutable_inner_query()->mutable_alter();
+                at->set_is_temp(t.is_temp);
+                at->set_sobject(SQLObject::TABLE);
+                t.setName(at->mutable_object()->mutable_est(), false);
                 Delete * del = at->mutable_alter()->mutable_del();
                 gen.generateNextDelete(rg, t, del);
                 del->clear_single_partition();
