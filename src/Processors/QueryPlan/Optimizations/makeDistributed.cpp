@@ -56,9 +56,6 @@ static void validateBucketCount(UInt64 bucket_count, const char * setting_name)
             setting_name, bucket_count, MAX_DISTRIBUTED_PLAN_BUCKET_COUNT);
 }
 
-/// Validate both bucket-count settings up front, before any distributed optimization reads them to size
-/// exchange fan-outs or read-bucket vectors. Reachable from optimizeTreeSecondPass's tryMakeDistributed*
-/// pass (which uses the raw values directly) as well as makeDistributedPlan.
 void validateDistributedPlanBucketCounts(const QueryPlanOptimizationSettings & optimization_settings);
 void validateDistributedPlanBucketCounts(const QueryPlanOptimizationSettings & optimization_settings)
 {
