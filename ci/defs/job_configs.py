@@ -634,15 +634,11 @@ class JobConfigs:
         runs_on=RunnerLabels.AMD_SMALL,
     )
     functional_tests_jobs = common_ft_job_config.parametrize(
-        *[
-            Job.ParamSet(
-                parameter=f"amd_asan_ubsan, distributed plan, parallel, {batch}/{total_batches}",
-                runs_on=RunnerLabels.AMD_MEDIUM_CPU,
-                requires=[ArtifactNames.CH_AMD_ASAN_UBSAN],
-            )
-            for total_batches in (2,)
-            for batch in range(1, total_batches + 1)
-        ],
+        Job.ParamSet(
+            parameter="amd_asan_ubsan, distributed plan, parallel",
+            runs_on=RunnerLabels.AMD_MEDIUM_CPU,
+            requires=[ArtifactNames.CH_AMD_ASAN_UBSAN],
+        ),
         *[
             Job.ParamSet(
                 parameter=f"amd_asan_ubsan, db disk, distributed plan, sequential, {batch}/{total_batches}",
@@ -712,15 +708,11 @@ class JobConfigs:
             runs_on=RunnerLabels.AMD_SMALL,
             requires=[ArtifactNames.CH_AMD_DEBUG],
         ),
-        *[
-            Job.ParamSet(
-                parameter=f"amd_tsan, parallel, {batch}/{total_batches}",
-                runs_on=RunnerLabels.AMD_LARGE,
-                requires=[ArtifactNames.CH_AMD_TSAN],
-            )
-            for total_batches in (2,)
-            for batch in range(1, total_batches + 1)
-        ],
+        Job.ParamSet(
+            parameter="amd_tsan, parallel",
+            runs_on=RunnerLabels.AMD_LARGE,
+            requires=[ArtifactNames.CH_AMD_TSAN],
+        ),
         *[
             Job.ParamSet(
                 parameter=f"amd_tsan, sequential, {batch}/{total_batches}",
@@ -764,7 +756,7 @@ class JobConfigs:
                 runs_on=RunnerLabels.AMD_MEDIUM,
                 requires=[ArtifactNames.CH_AMD_TSAN],
             )
-            for total_batches in (2,)
+            for total_batches in (3,)
             for batch in range(1, total_batches + 1)
         ],
         *[
@@ -988,7 +980,7 @@ class JobConfigs:
                 runs_on=RunnerLabels.AMD_MEDIUM,
                 requires=[ArtifactNames.CH_AMD_ASAN_UBSAN],
             )
-            for total_batches in (6,)
+            for total_batches in (8,)
             for batch in range(1, total_batches + 1)
         ],
         *[
