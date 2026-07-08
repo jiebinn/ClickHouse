@@ -1546,10 +1546,7 @@ class JobConfigs:
         run_in_docker=BINARY_DOCKER_COMMAND,
         timeout=8 * 3600,
         digest_config=Job.CacheDigestConfig(
-            include_paths=[
-                "./ci/jobs/build_toolchain.py",
-                "./ci/docker/binary-builder",
-            ],
+            include_paths=["./ci/jobs/build_toolchain.py"],
         ),
     ).parametrize(
         Job.ParamSet(
