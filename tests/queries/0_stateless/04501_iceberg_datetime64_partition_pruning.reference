@@ -1,7 +1,6 @@
 --- full read ---
-2024-01-01 00:00:00.123456	a
-2024-06-15 12:30:00.654321	b
---- equality on the partition column ---
-b
---- monotonic function of the partition column ---
-1
+2024-06-15 12:30:00.654321	a
+--- with prunning ---
+a
+--- without prunning ---
+a
