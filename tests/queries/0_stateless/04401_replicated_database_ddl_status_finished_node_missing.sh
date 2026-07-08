@@ -20,7 +20,17 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 RDB="rdb_$CLICKHOUSE_DATABASE"
 
-$CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS $RDB"
+# The failpoint is server-global and the Keeper path is fixed, so always clean up on
+# every exit path: disable the failpoint (otherwise a mid-test failure leaves it enabled
+# and poisons unrelated tests) and drop the database SYNC (so a retry does not race the
+# previous replicated-database drop on the same Keeper path).
+cleanup() {
+    $CLICKHOUSE_CLIENT -q "SYSTEM DISABLE FAILPOINT replicated_database_status_finished_node_missing" 2>/dev/null
+    $CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS $RDB SYNC" 2>/dev/null
+}
+trap cleanup EXIT
+
+$CLICKHOUSE_CLIENT -q "DROP DATABASE IF EXISTS $RDB SYNC"
 $CLICKHOUSE_CLIENT -q "CREATE DATABASE $RDB ENGINE = Replicated('/clickhouse/databases/$RDB', '{shard}', '{replica}')"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM ENABLE FAILPOINT replicated_database_status_finished_node_missing"
@@ -35,5 +45,3 @@ $CLICKHOUSE_CLIENT -q "SYSTEM DISABLE FAILPOINT replicated_database_status_finis
 
 # Server must still be alive and the DDL must have succeeded.
 $CLICKHOUSE_CLIENT -q "SELECT 'alive', count() FROM $RDB.t"
-
-$CLICKHOUSE_CLIENT -q "DROP DATABASE $RDB"
