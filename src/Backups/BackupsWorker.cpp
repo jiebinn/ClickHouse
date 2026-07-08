@@ -583,6 +583,7 @@ std::pair<BackupOperationID, BackupStatus> BackupsWorker::startMakingBackup(cons
 
         schedule([starter]
             {
+                auto component_guard = Coordination::setCurrentComponent("BackupStarter::doBackup");
                 try
                 {
                     starter->doBackup();
