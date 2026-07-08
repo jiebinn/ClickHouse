@@ -1,10 +1,10 @@
-CREATE TABLE runner (query String, database String, settings Map(String, String), delay_microseconds UInt64) ENGINE = QueryRunner SETTINGS mode = 'synchronous';
+CREATE TABLE runner (query String, database String, settings Map(String, String)) ENGINE = QueryRunner SETTINGS mode = 'synchronous';
 
 CREATE TABLE bad (q String) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (database String) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (query UInt64) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (query String, settings Map(String, UInt64)) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
-CREATE TABLE bad (query String, delay_microseconds Int64) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
+CREATE TABLE bad (query String, delay_microseconds UInt64) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (query String, database String ALIAS query) ENGINE = QueryRunner; -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (query String) ENGINE = QueryRunner('arg'); -- { serverError BAD_ARGUMENTS }
 CREATE TABLE bad (query String) ENGINE = QueryRunner SETTINGS mode = 'sometimes'; -- { serverError BAD_ARGUMENTS }

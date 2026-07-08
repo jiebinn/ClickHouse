@@ -1,5 +1,3 @@
-import time
-
 import pytest
 
 from helpers.cluster import ClickHouseCluster
@@ -41,14 +39,14 @@ def test_dispatching(mode, location, node_target):
     node_target.query("CREATE OR REPLACE TABLE target (x UInt64) ENGINE = MergeTree ORDER BY tuple()")
     node_target.query("CREATE DATABASE IF NOT EXISTS routed")
     node_target.query("CREATE OR REPLACE TABLE routed.t (x UInt64) ENGINE = MergeTree ORDER BY tuple()")
-    node_query_runner.query(runner_ddl("query String, database String, delay_microseconds UInt64", mode, location))
+    node_query_runner.query(runner_ddl("query String, database String", mode, location))
     node_query_runner.query(
         "INSERT INTO runner VALUES "
-        f"('SELECT throwIf(1, ''{fail_marker}'')', '', 0), "
-        "('SELECT 1', '', 0), "
-        "('INSERT INTO default.target VALUES (1)', '', 0), "
-        "('INSERT INTO default.target VALUES (2)', '', 1000), "
-        "('INSERT INTO t VALUES (1)', 'routed', 0)"
+        f"('SELECT throwIf(1, ''{fail_marker}'')', ''), "
+        "('SELECT 1', ''), "
+        "('INSERT INTO default.target VALUES (1)', ''), "
+        "('INSERT INTO default.target VALUES (2)', ''), "
+        "('INSERT INTO t VALUES (1)', 'routed')"
     )
     assert_eq_with_retry(node_target, "SELECT x FROM target ORDER BY x", "1\n2")
     assert_eq_with_retry(node_target, "SELECT x FROM routed.t", "1")
@@ -153,19 +151,6 @@ def test_cluster_insert_requires_remote():
 
 
 def test_shutdown():
-    # DETACH must unblock workers asleep on delay_microseconds, not wait out the delay.
-    node_query_runner.query(runner_ddl("query String, delay_microseconds UInt64", "asynchronous", "local"))
-    node_query_runner.query(
-        "INSERT INTO runner VALUES "
-        "('SELECT 1', 100500000000000), ('SELECT 1', 100500000000000), "
-        "('SELECT 1', 100500000000000), ('SELECT 1', 100500000000000)"
-    )
-    # No signal exists for the pre-dispatch delay sleep, so wait briefly to maximise the chances of entering sleep.
-    time.sleep(3)
-    node_query_runner.query("DETACH TABLE runner")
-    node_query_runner.query("ATTACH TABLE runner")
-    node_query_runner.query("DROP TABLE runner")
-
     # DETACH must cancel an in-flight cluster query and leave no source terminal log.
     marker = "qr_shutdown_cancel"
     node_query_runner.query(runner_ddl("query String", "asynchronous", "cluster"))
@@ -234,12 +219,12 @@ def test_definer_not_tracked_without_table_uuid():
 
 def test_wait_query_runner():
     node_query_runner.query("CREATE OR REPLACE TABLE target (x UInt64) ENGINE = MergeTree ORDER BY tuple()")
-    node_query_runner.query(runner_ddl("query String, delay_microseconds UInt64", "asynchronous", "local"))
+    node_query_runner.query(runner_ddl("query String", "asynchronous", "local"))
     node_query_runner.query(
         "INSERT INTO runner VALUES "
-        "('INSERT INTO default.target VALUES (1)', 500000), "
-        "('INSERT INTO default.target VALUES (2)', 500000), "
-        "('INSERT INTO default.target VALUES (3)', 500000)"
+        "('INSERT INTO default.target SELECT 1 + sleep(0.5)'), "
+        "('INSERT INTO default.target SELECT 2 + sleep(0.5)'), "
+        "('INSERT INTO default.target SELECT 3 + sleep(0.5)')"
     )
     node_query_runner.query("SYSTEM WAIT QUERY RUNNER runner")
     assert node_query_runner.query("SELECT x FROM target ORDER BY x") == "1\n2\n3\n"

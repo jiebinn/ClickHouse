@@ -5,7 +5,6 @@
 #include <Client/ConnectionPool.h>
 #include <Client/ConnectionPoolWithFailover.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
 #include <Core/Settings.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
@@ -39,6 +38,7 @@
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -89,7 +89,6 @@ namespace
     const String QUERY_COLUMN = "query";
     const String DATABASE_COLUMN = "database";
     const String SETTINGS_COLUMN = "settings";
-    const String DELAY_MICROSECONDS_COLUMN = "delay_microseconds";
 
     enum class ShardSelectorKind : uint8_t
     {
@@ -214,7 +213,6 @@ struct QueryRunnerJob
     String query;
     String database;
     SettingsChanges settings_changes;
-    std::chrono::steady_clock::time_point deadline;
     std::shared_ptr<const QueryRunnerJobOrigin> origin;
     std::shared_ptr<CountDownLatch> batch;
     UInt64 seq = 0;
@@ -363,13 +361,8 @@ public:
 
     void shutdown()
     {
-        {
-            std::lock_guard lock(shutdown_called_mutex);
-            if (shutdown_called)
-                return;
-            shutdown_called = true;
-        }
-        shutdown_called_cv.notify_all();
+        if (shutdown_called.exchange(true))
+            return;
 
         queue.finish();
 
@@ -411,12 +404,8 @@ private:
 
     void executeJob(const QueryRunnerJob & job)
     {
-        {
-            std::unique_lock lock(shutdown_called_mutex);
-            shutdown_called_cv.wait_until(lock, job.deadline, [this] { return shutdown_called; });
-            if (shutdown_called)
-                return;
-        }
+        if (shutdown_called)
+            return;
 
         auto job_context = makeJobContext(job);
         QueryScope query_scope = QueryScope::create(job_context);
@@ -656,9 +645,7 @@ private:
     LoggerPtr log;
     ThreadPool pool;
 
-    std::mutex shutdown_called_mutex;
-    std::condition_variable shutdown_called_cv;
-    bool shutdown_called = false;
+    std::atomic<bool> shutdown_called = false;
 
     PrefixLatch pending;
 
@@ -703,13 +690,10 @@ public:
         const ColumnPtr query_column = get_column(QUERY_COLUMN);
         const ColumnPtr database_column = get_column(DATABASE_COLUMN);
         const ColumnPtr settings_column = get_column(SETTINGS_COLUMN);
-        const ColumnPtr delay_column = get_column(DELAY_MICROSECONDS_COLUMN);
 
         std::shared_ptr<CountDownLatch> batch;
         if (synchronous)
             batch = std::make_shared<CountDownLatch>(rows);
-
-        const auto submit_time = std::chrono::steady_clock::now();
 
         for (size_t i = 0; i < rows; ++i)
         {
@@ -728,10 +712,6 @@ public:
                     job.settings_changes.emplace_back(pair.at(0).safeGet<String>(), pair.at(1));
                 }
             }
-
-            job.deadline = submit_time;
-            if (delay_column)
-                job.deadline += std::chrono::microseconds(assert_cast<const ColumnUInt64 &>(*delay_column).getElement(i));
 
             job.origin = origin;
             job.batch = batch;
@@ -909,17 +889,12 @@ static void validateColumns(const ColumnsDescription & columns)
             if (!map_type || !isString(removeLowCardinality(map_type->getKeyType())) || !isString(map_type->getValueType()))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "The 'settings' column of a QueryRunner table must have type Map(String, String), got {}", column.type->getName());
         }
-        else if (column.name == DELAY_MICROSECONDS_COLUMN)
-        {
-            if (!isUInt64(column.type))
-                throw Exception(ErrorCodes::BAD_ARGUMENTS, "The 'delay_microseconds' column of a QueryRunner table must have type UInt64, got {}", column.type->getName());
-        }
         else
         {
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
                 "Unexpected column '{}': a QueryRunner table allows only the columns "
-                "'query String', 'database String', 'settings Map(String, String)', 'delay_microseconds UInt64'",
+                "'query String', 'database String', 'settings Map(String, String)'",
                 column.name);
         }
     }

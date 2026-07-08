@@ -21,8 +21,7 @@ CREATE TABLE runner
 (
     query String,
     database String,
-    settings Map(LowCardinality(String), String),
-    delay_microseconds UInt64
+    settings Map(LowCardinality(String), String)
 )
 ENGINE = QueryRunner
 SETTINGS
@@ -34,7 +33,7 @@ SETTINGS
 [DEFINER = { user | CURRENT_USER }] [SQL SECURITY { DEFINER | INVOKER | NONE }];
 ```
 
-The table must be created with a subset of the allowed columns: `query`, `database`, `settings`, `delay_microseconds`.
+The table must be created with a subset of the allowed columns: `query`, `database`, `settings`.
 The column `query` is mandatory, and the other columns are optional.
 
 | Column | Type | Meaning |
@@ -42,7 +41,6 @@ The column `query` is mandatory, and the other columns are optional.
 | `query` | `String` | The query to execute. |
 | `database` | `String` | The default database for the query. If empty, the server's default database is used. |
 | `settings` | `Map(String, String)` | Settings applied to the query. |
-| `delay_microseconds` | `UInt64` | The query is executed no earlier than this delay after the INSERT. |
 
 ## Engine settings {#engine-settings}
 
