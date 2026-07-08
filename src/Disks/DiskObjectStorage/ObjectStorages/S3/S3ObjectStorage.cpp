@@ -239,6 +239,19 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObject( /// NOLINT
 {
     auto settings_ptr = s3_settings.get();
 
+    /// Apply user/profile/query-level settings on top of the stored request settings so a per-query
+    /// override (e.g. `s3_max_single_read_retries`, `s3_max_get_rps`) takes priority over the global
+    /// `<s3>` config and the endpoint block. Done per-read on a local copy - not baked into the
+    /// shared `s3_settings` - so an override does not leak into later queries on the same table.
+    /// Background operations don't propagate session/query settings, mirroring `writeObject`.
+    S3::S3RequestSettings request_settings = settings_ptr->request_settings;
+    if (auto query_context = CurrentThread::tryGetQueryContext();
+        query_context && !query_context->isBackgroundContext())
+    {
+        const auto & settings = query_context->getSettingsRef();
+        request_settings.updateFromSettings(settings, /* if_changed */ true, settings[Setting::s3_validate_request_settings]);
+    }
+
     BlobStorageLogWriterPtr blob_storage_log;
     if (read_settings.remote_fs_settings.enable_blob_storage_log)
     {
@@ -252,7 +265,7 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObject( /// NOLINT
         uri.bucket,
         object.remote_path,
         uri.version_id,
-        settings_ptr->request_settings,
+        request_settings,
         patchSettings(read_settings),
         use_external_buffer,
         /* offset */0,
@@ -719,19 +732,14 @@ void S3ObjectStorage::applyNewSettings(
         /// top-level `<s3>` section, which is less specific than the URL-scoped endpoint settings.
         /// Apply it first so the endpoint settings win, matching the resolution order used at table
         /// creation in `S3StorageParsedArguments::fromAST` (global `<s3>` first, endpoint on top).
+        ///
+        /// Query/profile-level settings are intentionally NOT baked in here: `applyNewSettings`
+        /// runs on every query and updates the shared `s3_settings`, so a per-query `s3_*` override
+        /// would stick and leak into later queries on the same table. They are applied per-operation
+        /// instead (`readObject`/`writeObject`), so a query-level setting still takes priority
+        /// without being persisted.
         apply_config_settings();
         apply_endpoint_settings();
-
-        /// Re-apply user/profile/query-level settings on top so they take priority over both the
-        /// global `<s3>` section and the endpoint block. `applyNewSettings` runs on every query for
-        /// an engine table (`StorageObjectStorage::read`/`write`), and `readObject` consumes
-        /// `request_settings` directly, so without this a query-level read setting (e.g.
-        /// `s3_max_single_read_retries`, `s3_max_get_rps`) would be overwritten by the endpoint
-        /// block. This matches the final `updateFromSettings` step in `fromAST`.
-        modified_settings->request_settings.updateFromSettings(
-            context->getSettingsRef(),
-            /* if_changed */ true,
-            context->getSettingsRef()[Setting::s3_validate_request_settings]);
     }
 
     modified_settings->request_settings.proxy_resolver = DB::ProxyConfigurationResolverProvider::getFromOldSettingsFormat(
