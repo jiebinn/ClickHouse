@@ -1,11 +1,13 @@
-#ifdef OS_LINUX
-
 #include <Server/DistributedQuery/FutureConnection.h>
 #include <Common/Exception.h>
 #include <Common/logger_useful.h>
 #include <base/scope_guard.h>
-#include <sys/eventfd.h>
+#include <fcntl.h>
 #include <unistd.h>
+
+#if defined(OS_LINUX)
+#include <sys/eventfd.h>
+#endif
 
 namespace DB
 {
@@ -18,28 +20,53 @@ namespace ErrorCodes
 
 FutureConnection::FutureConnection()
     : future(promise.get_future())
-    , event_fd(createEventFd())
 {
+    createNotificationFd();
     LOG_TRACE(log, "Created FutureConnection");
 }
 
 FutureConnection::~FutureConnection()
 {
-    [[maybe_unused]] int err = close(event_fd);
+    [[maybe_unused]] int err = close(notify_read_fd);
     chassert(!err || errno == EINTR);
+    if (notify_write_fd != notify_read_fd)
+    {
+        err = close(notify_write_fd);
+        chassert(!err || errno == EINTR);
+    }
 }
 
-int FutureConnection::createEventFd()
+void FutureConnection::createNotificationFd()
 {
+#if defined(OS_LINUX)
+    /// A single eventfd is both readable (for the poller) and writable (for the notifier).
     auto fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (fd == -1)
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Failed to create eventfd, error {}", errno);
-    return fd;
+    notify_read_fd = notify_write_fd = fd;
+#else
+    /// macOS has no eventfd; use a self-pipe. The read end is what the kqueue poller waits on.
+    int fds[2];
+    if (pipe(fds) == -1)
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Failed to create pipe, error {}", errno);
+    for (int fd : fds)
+    {
+        if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1 || fcntl(fd, F_SETFD, FD_CLOEXEC) == -1)
+        {
+            int saved_errno = errno;
+            close(fds[0]);
+            close(fds[1]);
+            throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Failed to configure pipe, error {}", saved_errno);
+        }
+    }
+    notify_read_fd = fds[0];
+    notify_write_fd = fds[1];
+#endif
 }
 
 int FutureConnection::getEventFd() const
 {
-    return event_fd;
+    return notify_read_fd;
 }
 
 bool FutureConnection::isReady() const
@@ -80,16 +107,21 @@ void FutureConnection::cancel(std::exception_ptr exception)
 
 void FutureConnection::notifyWaiter() const
 {
+#if defined(OS_LINUX)
     uint64_t value = 1;
-    ssize_t written = 0;
-    /// Retry on EINTR so a signal does not leave the promise ready while the epoll waiter is never
-    /// woken. Other write failures cannot happen for a non-full, valid eventfd.
-    do
-        written = write(event_fd, &value, sizeof(value));
-    while (written < 0 && errno == EINTR);
-    chassert(written == sizeof(value));
-}
-
-}
-
+    constexpr ssize_t expected = sizeof(value);
+#else
+    /// A single byte is enough to make the self-pipe read end readable.
+    char value = 1;
+    constexpr ssize_t expected = sizeof(value);
 #endif
+    ssize_t written = 0;
+    /// Retry on EINTR so a signal does not leave the promise ready while the poller is never woken.
+    /// Other write failures cannot happen for a non-full, valid eventfd / self-pipe.
+    do
+        written = write(notify_write_fd, &value, sizeof(value));
+    while (written < 0 && errno == EINTR);
+    chassert(written == expected);
+}
+
+}

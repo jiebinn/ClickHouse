@@ -1,5 +1,3 @@
-#ifdef OS_LINUX
-
 #include <cstring>
 #include <optional>
 #include <string>
@@ -199,5 +197,3 @@ TEST(ExchangeConnectionsRendezvous, ConnectionAfterReleaseRejected)
     EXPECT_TRUE(future->isReady());
     EXPECT_ANY_THROW(future->getSocket());
 }
-
-#endif

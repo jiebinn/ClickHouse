@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef OS_LINUX
-
 #include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Processors/ISink.h>
@@ -89,5 +87,3 @@ private:
 };
 
 }
-
-#endif

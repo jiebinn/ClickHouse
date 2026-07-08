@@ -130,7 +130,6 @@ namespace ServerSetting
 
 namespace ErrorCodes
 {
-    extern const int UNSUPPORTED_METHOD;
     extern const int INVALID_SETTING_VALUE;
     extern const int SUPPORT_IS_DISABLED;
 }
@@ -236,7 +235,6 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(
     distributed_plan_default_shuffle_join_bucket_count = from[Setting::distributed_plan_default_shuffle_join_bucket_count];
     distributed_plan_default_reader_bucket_count = from[Setting::distributed_plan_default_reader_bucket_count];
     distributed_plan_optimize_exchanges = from[Setting::distributed_plan_optimize_exchanges];
-#ifdef OS_LINUX
     distributed_plan_force_exchange_kind = from[Setting::distributed_plan_force_exchange_kind].value;
     if (!distributed_plan_force_exchange_kind.empty()
         && distributed_plan_force_exchange_kind != "Persisted"
@@ -244,11 +242,6 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE,
             "Setting `distributed_plan_force_exchange_kind` must be empty, 'Persisted', or 'Streaming', got '{}'",
             distributed_plan_force_exchange_kind);
-#else
-    if (from[Setting::distributed_plan_force_exchange_kind].changed && from[Setting::distributed_plan_force_exchange_kind].value != "Persisted")
-        throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Only Persisted exchange is supported");
-    distributed_plan_force_exchange_kind = "Persisted";
-#endif
     distributed_plan_max_rows_to_broadcast = from[Setting::distributed_plan_max_rows_to_broadcast];
     distributed_plan_force_shuffle_aggregation = from[Setting::distributed_plan_force_shuffle_aggregation];
     distributed_aggregation_memory_efficient = from[Setting::distributed_aggregation_memory_efficient];
@@ -334,7 +327,6 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(ContextPtr from)
                 max_parallel_replicas = std::min<size_t>(nodes, max_parallel_replicas);
     }
 
-#ifdef OS_LINUX
     /// Auto-select the exchange kind when it is not forced: use Streaming only when its listener will
     /// run (both the port and a listen host are configured), otherwise Persisted. This avoids planning
     /// Streaming exchanges that would connect to a listener that was never started. A forced kind and
@@ -347,6 +339,5 @@ QueryPlanOptimizationSettings::QueryPlanOptimizationSettings(ContextPtr from)
             && !getMultipleValuesFromConfig(config, "distributed_query", "streaming_exchange_listen_host").empty();
         distributed_plan_force_exchange_kind = streaming_listener_configured ? "Streaming" : "Persisted";
     }
-#endif
 }
 }

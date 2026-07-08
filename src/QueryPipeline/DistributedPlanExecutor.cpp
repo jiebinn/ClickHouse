@@ -560,7 +560,6 @@ ExchangeLookupPtr createExchangeLookup(
         return std::make_shared<AllKindsExchangeLookup>(exchanges_, persisted_exchanges, /*streaming_exchange_lookup=*/nullptr);
     }
 
-#ifdef OS_LINUX
     auto streaming_exchange_port = context->getConfigRef().getUInt("distributed_query.streaming_exchange_port", 0);
     if (streaming_exchange_port == 0)
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
@@ -589,12 +588,6 @@ ExchangeLookupPtr createExchangeLookup(
     auto streaming_exchanges = createStreamingExchangeLookup(
         query_id, ExchangeConnections::instance(), sources_with_ports);
     return std::make_shared<AllKindsExchangeLookup>(exchanges_, persisted_exchanges, streaming_exchanges);
-#else
-    UNUSED(exchange_stream_sources);
-    throw Exception(ErrorCodes::SUPPORT_IS_DISABLED,
-        "Streaming exchanges are only supported on Linux; "
-        "use `distributed_plan_force_exchange_kind = 'Persisted'`");
-#endif
 }
 
 
@@ -638,12 +631,10 @@ void doExecuteTask(const DistributedQueryTaskDescription & task_description, Obj
     LOG_TRACE(logger, "Task '{}' input exchange streams: [{}], output exchange streams: [{}]",
         task.task_id, fmt::join(input_exchange_streams, ", "), fmt::join(output_exchange_streams, ", "));
 
-#ifdef OS_LINUX
     /// Release this task's pending streaming exchange connections on the worker when it ends. A
     /// consumer that never connects (e.g. its query was cancelled) would otherwise leave them behind.
     /// Only this task's output streams are dropped, so sibling tasks of the same query are unaffected.
     SCOPE_EXIT_SAFE(ExchangeConnections::instance()->removePendingStreams(distributed_query_id, output_exchange_streams));
-#endif
 
     auto temporary_files = createTemporaryFilesLookup(
         object_storage, object_storage_path, input_exchange_streams, output_exchange_streams);
@@ -1060,13 +1051,11 @@ public:
     void cleanup() override
     {
         running_tasks.cancel();
-#ifdef OS_LINUX
         /// Drop any still-pending exchange connection slots that belong to this query
         /// (the peer was cancelled or never arrived). Without this they would leak
         /// FutureConnection/eventfd entries in the ExchangeConnections singleton for
         /// the lifetime of the server.
         ExchangeConnections::instance()->cleanupQuery(toString(unique_query_id));
-#endif
     }
 
 protected:
