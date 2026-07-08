@@ -140,17 +140,30 @@ class Targeting:
     def functional_test_hash_batch_file(cls, fpath: str):
         """Return the on-disk stateless test filename (with extension) that
         `clickhouse-test --run-by-hash-*` uses to bucket the given changed path,
-        or `None` if it cannot be resolved to a concrete test source file (e.g.
-        an orphan data file with no sibling test).
+        or `None` if it cannot be resolved to a concrete test source file.
+
+        `clickhouse-test`'s `is_test_from_dir`/`get_selected_tests` only look
+        at files directly inside the suite root (`os.listdir`, not
+        recursive), so a file nested in a subdirectory - e.g.
+        `tests/queries/0_stateless/helpers/httpclient.py` or
+        `tests/queries/0_stateless/data_avro/generate_avro.sh` - is never a
+        test case there, no matter its extension. Hashing such a nested
+        file's basename would fabricate a bucket assignment that does not
+        correspond to how `--run-by-hash-*` actually splits the suite, so
+        return `None` (the caller then conservatively runs the batch) unless
+        the file's parent directory is exactly the suite root.
         """
-        fname = os.path.basename(fpath)
+        test_dir = Path("tests/queries/0_stateless")
+        path = Path(fpath.removeprefix("./"))
+        if path.parent != test_dir:
+            return None
+        fname = path.name
         for ext in cls._TEST_FILE_EXTENSIONS:
             if fname.endswith(ext):
                 return fname
         base_name = cls._derive_test_name(fpath)
         if base_name is None:
             return None
-        test_dir = Path("tests/queries/0_stateless")
         for ext in cls._TEST_FILE_EXTENSIONS:
             if (test_dir / f"{base_name}{ext}").is_file():
                 return f"{base_name}{ext}"
