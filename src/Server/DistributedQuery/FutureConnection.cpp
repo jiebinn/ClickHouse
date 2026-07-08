@@ -21,7 +21,7 @@ FutureConnection::FutureConnection()
 
 int FutureConnection::getEventFd() const
 {
-    return wake.fd();
+    return event_fd.fd;
 }
 
 bool FutureConnection::isReady() const
@@ -62,7 +62,7 @@ void FutureConnection::cancel(std::exception_ptr exception)
 
 void FutureConnection::notifyWaiter() const
 {
-    wake.notify();
+    event_fd.write();
 }
 
 }

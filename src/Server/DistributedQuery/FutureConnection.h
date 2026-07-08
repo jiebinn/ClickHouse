@@ -3,8 +3,8 @@
 #if defined(OS_LINUX) || defined(OS_DARWIN)
 
 #include <Poco/Net/StreamSocket.h>
+#include <Common/EventFD.h>
 #include <Common/Logger.h>
-#include <Common/WakeupFd.h>
 #include <atomic>
 #include <future>
 
@@ -13,7 +13,8 @@ namespace DB
 
 /// Represents a connection that may not be established yet.
 /// Provides a file descriptor that can be polled (epoll on Linux, kqueue on macOS) to wait
-/// asynchronously for the connection, backed by a portable self-pipe (`WakeupFd`).
+/// asynchronously for the connection, backed by `EventFD` (a native eventfd on Linux, a
+/// self-pipe on macOS).
 class FutureConnection
 {
 public:
@@ -48,8 +49,9 @@ private:
     /// Guards the single allowed promise completion: setSocket and cancel race (the peer connecting
     /// vs. query teardown), and the loser must be a no-op rather than throw "promise already set".
     std::atomic<bool> satisfied{false};
-    /// Pollable self-pipe: its read end is registered with the poller, and completion writes to it.
-    WakeupFd wake;
+    /// Pollable wakeup fd: `event_fd.fd` is registered with the poller, and completion writes to it.
+    /// One kernel fd on Linux (eventfd), a self-pipe pair on macOS.
+    EventFD event_fd;
     LoggerPtr log = getLogger("FutureConnection");
 };
 
