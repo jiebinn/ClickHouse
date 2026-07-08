@@ -96,8 +96,8 @@ class ClickHouseTypeMapper:
             # Date and Time types
             "Date": ("STRING", sp.StringType(), it.StringType()),  # it doesn't fit
             "Date32": ("DATE", sp.DateType(), it.DateType()),
-            "Time": ("STRING", sp.StringType(), it.TimeType()),
-            "Time64": ("STRING", sp.StringType(), it.TimeType()),
+            "Time": ("STRING", sp.StringType(), it.StringType()),  # it doesn't fit
+            "Time64": ("STRING", sp.StringType(), it.StringType()),  # it doesn't fit
             "DateTime": ("STRING", sp.StringType(), it.StringType()),  # it doesn't fit
             "DateTime64": ("TIMESTAMP", sp.TimestampType(), it.TimestampType()),
             # Boolean
@@ -365,24 +365,25 @@ class ClickHouseTypeMapper:
                 )
             )
 
-        # Handle DateTime and Time
-        for val in ["DateTime", "Time"]:
-            if ch_type.startswith(val):
-                if (
-                    HAS_TIMESTAMP_NTZ
-                    and val == "DateTime"
-                    and mapping == ClickHouseMapping.Spark
-                    and random.randint(1, 2) == 1
-                ):
-                    return ("TIMESTAMP_NTZ", inside_nullable, TimestampNTZType())
-                if (
-                    mapping == ClickHouseMapping.Iceberg
-                    and val == "DateTime"
-                    and random.randint(1, 2) == 1
-                ):
-                    # Spark's TIMESTAMP is timezone-aware and maps to Iceberg `timestamptz`
-                    return ("TIMESTAMP", inside_nullable, it.TimestamptzType())
-                return ("TIMESTAMP", inside_nullable, module.TimestampType())
+        # Handle Time: ClickHouse's Time range (-999:59:59..999:59:59) doesn't fit any
+        # Spark type nor Iceberg `time` (0-24h only), so use STRING for exact roundtrips.
+        # TIMESTAMP would silently reinterpret the value (write as epoch seconds, read
+        # back as time-of-day), changing results across DETACH/ATTACH
+        if ch_type.startswith("Time"):
+            return ("STRING", inside_nullable, module.StringType())
+
+        # Handle DateTime
+        if ch_type.startswith("DateTime"):
+            if (
+                HAS_TIMESTAMP_NTZ
+                and mapping == ClickHouseMapping.Spark
+                and random.randint(1, 2) == 1
+            ):
+                return ("TIMESTAMP_NTZ", inside_nullable, TimestampNTZType())
+            if mapping == ClickHouseMapping.Iceberg and random.randint(1, 2) == 1:
+                # Spark's TIMESTAMP is timezone-aware and maps to Iceberg `timestamptz`
+                return ("TIMESTAMP", inside_nullable, it.TimestamptzType())
+            return ("TIMESTAMP", inside_nullable, module.TimestampType())
 
         # Handle LowCardinality wrapper
         if ch_type.startswith("LowCardinality("):
