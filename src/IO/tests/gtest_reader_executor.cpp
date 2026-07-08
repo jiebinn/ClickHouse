@@ -969,48 +969,6 @@ TEST_F(ReaderExecutorTest, EncryptionHeaderCacheServesRepeatedOpens)
     EXPECT_EQ(read_once(), plaintext);
 }
 
-TEST_F(ReaderExecutorTest, EncryptionHeaderCacheDropRefreshesRewrittenPath)
-{
-    /// After a path is rewritten with a fresh IV, the cached header from the previous content would
-    /// decrypt the new ciphertext incorrectly. Dropping the entry (what DiskEncrypted does on
-    /// write / replace) makes the next read re-read the new header. This is the regression for the
-    /// stale-header bug on paths that a backend reuses across rewrites.
-    String key(16, 'k');
-    auto cache = std::make_shared<EncryptionHeaderCache>("SLRU", 1 << 20, 0.5);
-    auto key_finder = [&](UInt128, const String &) { return key; };
-
-    auto read_all = [&](const StoredObject & obj)
-    {
-        StoredObjects objects{obj};
-        ReaderExecutor ex(std::make_shared<LocalSourceReader>(), objects,
-            ReaderExecutor::Options{.block_size = 4096, .encryption_header_cache = cache});
-        ex.addDecryptionLayer("/r", key_finder);
-        ex.initDecryption();
-        auto out = drain(ex);
-        return String(out.begin(), out.end());
-    };
-
-    const String plaintext_v1(4000, 'A');
-    const String plaintext_v2(4000, 'B');
-
-    /// v1 (IV #1): first read caches its header keyed by the path.
-    auto obj = writeBytesObject(tmp_dir, "rewritten.enc",
-        makeEncryptedFile(key, FileEncryption::InitVector(UInt128{1}), plaintext_v1));
-    EXPECT_EQ(read_all(obj), plaintext_v1);
-
-    /// Rewrite the same path with a different IV and plaintext.
-    auto obj2 = writeBytesObject(tmp_dir, "rewritten.enc",
-        makeEncryptedFile(key, FileEncryption::InitVector(UInt128{2}), plaintext_v2));
-    ASSERT_EQ(obj.remote_path, obj2.remote_path);
-
-    /// The stale v1 header (IV #1) decrypts v2 ciphertext wrongly -- this is the bug the drop fixes.
-    EXPECT_NE(read_all(obj2), plaintext_v2);
-
-    /// Dropping the entry restores correctness.
-    cache->drop(obj2.remote_path);
-    EXPECT_EQ(read_all(obj2), plaintext_v2);
-}
-
 TEST(ReaderExecutorDecryptor, ConcurrentDecryptIsReentrant)
 {
     /// `ReaderExecutorDecryptor::decrypt` must be reentrant: it builds fresh per-call encryptors, so

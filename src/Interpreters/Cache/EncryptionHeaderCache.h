@@ -18,10 +18,12 @@ namespace DB
 /// Stores opaque bytes rather than parsed `FileEncryption::Header`s, so it has no SSL dependency;
 /// the consumer parses them on a hit.
 ///
-/// `DiskEncrypted` drops an entry when it rewrites / replaces / removes a path, so a sequential
-/// read -> rewrite -> read of a reused path sees the fresh header. Like the mark and uncompressed
-/// caches, it assumes a path being read is not rewritten in place concurrently (MergeTree part data
-/// is immutable and ref-counted), so a stale header cannot be served under a live reader.
+/// Populated only for backends with random object keys (metadata-based object storage; see
+/// `DiskEncrypted::prepareRead`). There every write produces a new `remote_path`, so a
+/// rewrite / replace / rename never rebinds an existing key to different ciphertext -- the cache is
+/// self-invalidating (a changed file has a new key -> a miss) and needs no explicit invalidation.
+/// Deterministic-path backends (plain / plain-rewritable, local, web), where the key is reused on
+/// rewrite, are excluded.
 class EncryptionHeaderCache
 {
 public:
@@ -62,10 +64,6 @@ public:
 
     /// Return the cached header bytes for `storage_path`, or nullopt on a miss.
     std::optional<HeaderBytes> read(const String & storage_path);
-
-    /// Invalidate the entry for `storage_path`. Called when the ciphertext bound to that path
-    /// changes (a rewrite / replace), so a later read re-reads the fresh header.
-    void drop(const String & storage_path);
 
     void clear();
 
