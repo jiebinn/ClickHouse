@@ -62,7 +62,13 @@ ExecutionStatus ReplicatedDatabaseQueryStatusSource::checkStatus([[maybe_unused]
     /// node holds a real deserialized status (positive code), or the (-1) sentinel when its payload is corrupt
     /// (tryDeserializeText is atomic, so the sentinel survives) which the cross-check must still surface.
     if (!node_exists)
+    {
+        LOG_DEBUG(log, "finished node {} is absent (benign cleaner/retry race), reporting success", status_path.string());
         return ExecutionStatus{0};
+    }
+    if (status.code < 0)
+        LOG_WARNING(log, "finished node {} is present but its status payload could not be deserialized, "
+                    "surfacing it via the cross-check", status_path.string());
     return status;
 #else
     return ExecutionStatus{0};
