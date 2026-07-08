@@ -145,18 +145,24 @@ void dropAliases(ASTPtr & node)
 }
 
 
-/// Returns true if `node` references a column of UUID type. ClickHouse and external
-/// databases (e.g. PostgreSQL) sort UUIDs differently, so range comparisons on a UUID
-/// column cannot be pushed down without silently dropping rows.
-bool isUUIDColumn(const ASTPtr & node, const NamesAndTypesList & available_columns)
+/// Returns true if `node` references a column of UUID type, including when that reference
+/// is nested inside a tuple or another expression (e.g. the row comparison
+/// `(uuid_col, x) < (...)`). ClickHouse and external databases (e.g. PostgreSQL) sort UUIDs
+/// differently, so range comparisons involving a UUID column cannot be pushed down without
+/// silently dropping rows.
+bool containsUUIDColumn(const ASTPtr & node, const NamesAndTypesList & available_columns)
 {
-    const auto * identifier = node->as<ASTIdentifier>();
-    if (!identifier)
+    if (const auto * identifier = node->as<ASTIdentifier>())
+    {
+        for (const auto & column : available_columns)
+            if (column.name == identifier->name())
+                return WhichDataType(removeNullable(column.type)).isUUID();
         return false;
+    }
 
-    for (const auto & column : available_columns)
-        if (column.name == identifier->name())
-            return WhichDataType(removeNullable(column.type)).isUUID();
+    for (const auto & child : node->children)
+        if (containsUUIDColumn(child, available_columns))
+            return true;
 
     return false;
 }
@@ -191,15 +197,16 @@ bool isCompatible(ASTPtr & node, const NamesAndTypesList & available_columns)
             || name == "tuple"))
             return false;
 
-        /// Range comparisons on UUID columns must not be pushed down. ClickHouse and the
-        /// external database sort UUIDs differently, so the pushed-down predicate compares
-        /// against a different ordering and silently drops rows. Equality and IN are order
-        /// independent and remain compatible. Such predicates are applied locally instead.
-        /// See https://github.com/ClickHouse/ClickHouse/issues/105558.
+        /// Range comparisons involving UUID columns must not be pushed down. ClickHouse and
+        /// the external database sort UUIDs differently, so the pushed-down predicate compares
+        /// against a different ordering and silently drops rows. This also covers tuple/row
+        /// comparisons such as `(uuid_col, x) < (...)`, where the UUID column is nested inside
+        /// a tuple. Equality and IN are order independent and remain compatible. Such predicates
+        /// are applied locally instead. See https://github.com/ClickHouse/ClickHouse/issues/105558.
         if (name == "less" || name == "greater" || name == "lessOrEquals" || name == "greaterOrEquals")
         {
             for (const auto & argument : function->arguments->children)
-                if (isUUIDColumn(argument, available_columns))
+                if (containsUUIDColumn(argument, available_columns))
                     return false;
         }
 

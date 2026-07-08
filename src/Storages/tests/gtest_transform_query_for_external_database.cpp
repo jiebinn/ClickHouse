@@ -437,6 +437,9 @@ TEST(TransformQueryForExternalDatabase, Analyzer)
 TEST(TransformQueryForExternalDatabase, UUIDColumn)
 {
     const State & state = State::instance();
+    /// The State context is shared between tests; make sure strict mode (set by the Strict test)
+    /// is off here, so non-compatible predicates are dropped rather than throwing.
+    state.context->setSetting("external_table_strict_query", false);
 
     /// ClickHouse and external databases sort UUIDs differently, so range comparisons on a UUID
     /// column must not be pushed down - the predicate would compare against a different ordering
@@ -448,6 +451,11 @@ TEST(TransformQueryForExternalDatabase, UUIDColumn)
     check(state, 1, {"uuid_col"},
           "SELECT uuid_col FROM table WHERE uuid_col < toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0')",
           R"(SELECT "uuid_col" FROM "test"."table")");
+
+    /// The UUID column may be nested inside a tuple/row comparison; that must not be pushed down either.
+    check(state, 1, {"uuid_col", "a"},
+          "SELECT uuid_col, a FROM table WHERE (uuid_col, a) > (toUUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0'), 0)",
+          R"(SELECT "uuid_col", "a" FROM "test"."table")");
 
     /// Equality does not depend on ordering, so it remains pushed down.
     check(state, 1, {"uuid_col"},
