@@ -623,6 +623,9 @@ Poco::Dynamic::Var getAvroType(DataTypePtr type)
             return "long";
         case TypeIndex::DateTime64:
         {
+            if (getDecimalScale(*type) != 6)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported type for iceberg {}", type->getName());
+
             Poco::JSON::Object::Ptr timestamp_type = new Poco::JSON::Object;
             timestamp_type->set("type", "long");
             timestamp_type->set("logicalType", "timestamp-micros");
