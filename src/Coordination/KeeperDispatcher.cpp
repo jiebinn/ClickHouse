@@ -198,6 +198,7 @@ void KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration & conf
     size_t batch_size = keeper_coordination_settings[CoordinationSetting::ttl_gc_batch_size];
     if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL))
         ttl_garbage_collector_thread = ThreadFromGlobalPool([this, batch_size] { garbageCollectorThread(batch_size); });
+    if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER))
     {
         size_t container_batch_size = keeper_coordination_settings[CoordinationSetting::container_gc_batch_size];
         UInt64 container_max_never_used_ms = keeper_coordination_settings[CoordinationSetting::container_gc_max_never_used_interval_ms].totalMilliseconds();
@@ -232,7 +233,7 @@ void KeeperDispatcher::shutdown(bool closed_all_connections)
             const auto & feature_flags = keeper_context->getFeatureFlags();
             if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL) && ttl_garbage_collector_thread.joinable())
                 ttl_garbage_collector_thread.join();
-            if (container_garbage_collector_thread.joinable())
+            if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER) && container_garbage_collector_thread.joinable())
                 container_garbage_collector_thread.join();
 
             if (session_cleaner_thread.joinable())

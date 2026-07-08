@@ -37,6 +37,7 @@ namespace CoordinationSetting
 {
     extern const CoordinationSettingsUInt64 write_snapshot_version;
     extern const CoordinationSettingsMilliseconds ttl_gc_period_ms;
+    extern const CoordinationSettingsMilliseconds container_gc_period_ms;
 }
 
 struct CachedCoordinationSettings
@@ -471,6 +472,17 @@ void KeeperContext::initializeFeatureFlags(const Poco::Util::AbstractConfigurati
                 "ttl_gc_period_ms must be greater than 0 when TTL nodes are enabled, got {}", ttl_gc_period_ms);
     }
 
+    /// The container GC thread is only started when CREATE_CONTAINER is enabled (see
+    /// KeeperDispatcher::initialize), so this check is gated the same way. A non-positive
+    /// period would turn its interruptible wait into a tight busy loop.
+    if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER))
+    {
+        const auto container_gc_period_ms = getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
+        if (container_gc_period_ms <= 0)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "container_gc_period_ms must be greater than 0, got {}", container_gc_period_ms);
+    }
+
     feature_flags.logFlags(getLogger("KeeperContext"));
 }
 
@@ -621,6 +633,8 @@ bool KeeperContext::isOperationSupported(Coordination::OpNum operation) const
             return feature_flags.isEnabled(KeeperFeatureFlag::CREATE_WITH_STATS);
         case Coordination::OpNum::CreateTTL:
             return feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL);
+        case Coordination::OpNum::CreateContainer:
+            return feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER);
         case Coordination::OpNum::TryRemove:
             return feature_flags.isEnabled(KeeperFeatureFlag::TRY_REMOVE);
         case Coordination::OpNum::SetWatch:
@@ -632,7 +646,6 @@ bool KeeperContext::isOperationSupported(Coordination::OpNum operation) const
         case Coordination::OpNum::Close:
         case Coordination::OpNum::Error:
         case Coordination::OpNum::Create:
-        case Coordination::OpNum::CreateContainer:
         case Coordination::OpNum::Remove:
         case Coordination::OpNum::Exists:
         case Coordination::OpNum::Get:
