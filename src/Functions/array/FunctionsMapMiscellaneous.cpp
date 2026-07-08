@@ -13,6 +13,7 @@
 #include <DataTypes/DataTypeTuple.h>
 
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionLowCardinalityFastPath.h>
 #include <Functions/IFunctionAdaptors.h>
 #include <Functions/LowCardinalityExecutionHelpers.h>
 #include <Functions/like.h>
@@ -49,22 +50,11 @@ namespace ErrorCodes
   * from Map arguments and possibly modify other columns.
 */
 template <typename Impl, typename Adapter, typename Name>
-class FunctionMapToArrayAdapter final : public IFunction
+class FunctionMapToArrayAdapter : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapToArrayAdapter>(); }
-
-    /// A specialized LowCardinality execution path (if the adapter provides one) requires opting
-    /// out of the default LowCardinality implementation, so that executeImpl can see
-    /// LowCardinality columns. When the specialized path does not apply, both return type
-    /// deduction and execution delegate to an instance created with
-    /// `use_low_cardinality_fast_path = false`, which restores the default framework behavior
-    /// for LowCardinality arguments.
-    explicit FunctionMapToArrayAdapter(bool use_low_cardinality_fast_path_ = true)
-        : use_low_cardinality_fast_path(use_low_cardinality_fast_path_)
-    {
-    }
 
     String getName() const override { return name; }
 
@@ -73,6 +63,16 @@ public:
         {
             Adapter::executeWithLowCardinalityColumns(args, type, rows);
         };
+
+    /// Fast path hook for FunctionWithLowCardinalityFastPath (see FunctionLowCardinalityFastPath.h).
+    /// Only adapters that implement executeWithLowCardinalityColumns have it, and only those
+    /// functions are registered wrapped in the mixin.
+    ColumnPtr tryExecuteLowCardinality(
+        const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+        requires has_low_cardinality_specialization
+    {
+        return Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count);
+    }
 
     /// Functions that return a Map by selecting or reordering the original key-value pairs
     /// (`mapFilter`, `mapSort` and its variants, `mapConcat`) must keep the exact key and value
@@ -89,24 +89,11 @@ public:
     bool useDefaultImplementationForNulls() const override { return impl.useDefaultImplementationForNulls(); }
     bool useDefaultImplementationForLowCardinalityColumns() const override
     {
-        if constexpr (has_low_cardinality_specialization)
-            return !use_low_cardinality_fast_path;
         if constexpr (preserve_nested_low_cardinality)
             return false;
         return impl.useDefaultImplementationForLowCardinalityColumns();
     }
-    /// The default implementation for constants must stay disabled together with the default
-    /// LowCardinality implementation: it normally runs after it and would otherwise unwrap
-    /// constants that the delegated LowCardinality handling relies on (see executeImpl).
-    bool useDefaultImplementationForConstants() const override
-    {
-        if constexpr (has_low_cardinality_specialization)
-        {
-            if (use_low_cardinality_fast_path)
-                return false;
-        }
-        return impl.useDefaultImplementationForConstants();
-    }
+    bool useDefaultImplementationForConstants() const override { return impl.useDefaultImplementationForConstants(); }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo &) const override  { return false; }
 
     /// Reflect the SQL-level signature, not the internal `impl` plumbing.
@@ -129,18 +116,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        if constexpr (has_low_cardinality_specialization)
-        {
-            /// Opting out of the default LowCardinality implementation also disables the default
-            /// return type deduction for LowCardinality arguments (in particular, the nullability
-            /// of a LowCardinality(Nullable) pattern and the LowCardinality wrapping of the result
-            /// type). Delegate to an instance with the default implementation enabled, so that the
-            /// deduced type is exactly the same as if the specialized LowCardinality path did not exist.
-            if (use_low_cardinality_fast_path && hasLowCardinalityTypes(arguments))
-                return FunctionToOverloadResolverAdaptor(std::make_shared<FunctionMapToArrayAdapter>(/*use_low_cardinality_fast_path_=*/ false))
-                    .getReturnType(arguments);
-        }
-
         if (arguments.empty())
             throw Exception(
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
@@ -188,27 +163,6 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        if constexpr (has_low_cardinality_specialization)
-        {
-            if (use_low_cardinality_fast_path)
-            {
-                if (auto result = Adapter::executeWithLowCardinalityColumns(arguments, result_type, input_rows_count))
-                    return result;
-
-                if (hasLowCardinalityTypes(arguments) || allArgumentColumnsAreConstant(arguments))
-                {
-                    /// The specialized LowCardinality path does not apply. Re-enter the function
-                    /// through the framework with the default implementations (for LowCardinality
-                    /// and constant arguments) enabled, so that conversion of LowCardinality
-                    /// arguments or execution on the dictionary, constant unwrapping and Nullable
-                    /// handling are applied in the usual order, exactly as if the specialized path
-                    /// did not exist.
-                    return FunctionToExecutableFunctionAdaptor(std::make_shared<FunctionMapToArrayAdapter>(/*use_low_cardinality_fast_path_=*/ false))
-                        .execute(arguments, result_type, input_rows_count, /*dry_run=*/ false);
-                }
-            }
-        }
-
         auto nested_arguments = arguments;
         Adapter::extractNestedTypesAndColumns(nested_arguments);
 
@@ -238,7 +192,6 @@ public:
 
 private:
     Impl impl;
-    bool use_low_cardinality_fast_path = true;
 };
 
 
@@ -659,16 +612,20 @@ struct NameMapAll { static constexpr auto name = "mapAll"; };
 using FunctionMapAll = FunctionMapToArrayAdapter<FunctionArrayAll, MapToNestedAdapter<NameMapAll, false>, NameMapAll>;
 
 struct NameMapContainsKeyLike { static constexpr auto name = "mapContainsKeyLike"; };
-using FunctionMapContainsKeyLike = FunctionMapToArrayAdapter<FunctionArrayExists, MapLikeAdapter<NameMapContainsKeyLike, false, 0>, NameMapContainsKeyLike>;
+using FunctionMapContainsKeyLike = FunctionWithLowCardinalityFastPath<
+    FunctionMapToArrayAdapter<FunctionArrayExists, MapLikeAdapter<NameMapContainsKeyLike, false, 0>, NameMapContainsKeyLike>>;
 
 struct NameMapContainsValueLike { static constexpr auto name = "mapContainsValueLike"; };
-using FunctionMapContainsValueLike = FunctionMapToArrayAdapter<FunctionArrayExists, MapLikeAdapter<NameMapContainsValueLike, false, 1>, NameMapContainsValueLike>;
+using FunctionMapContainsValueLike = FunctionWithLowCardinalityFastPath<
+    FunctionMapToArrayAdapter<FunctionArrayExists, MapLikeAdapter<NameMapContainsValueLike, false, 1>, NameMapContainsValueLike>>;
 
 struct NameMapExtractKeyLike { static constexpr auto name = "mapExtractKeyLike"; };
-using FunctionMapExtractKeyLike = FunctionMapToArrayAdapter<FunctionArrayFilter, MapLikeAdapter<NameMapExtractKeyLike, true, 0>, NameMapExtractKeyLike>;
+using FunctionMapExtractKeyLike = FunctionWithLowCardinalityFastPath<
+    FunctionMapToArrayAdapter<FunctionArrayFilter, MapLikeAdapter<NameMapExtractKeyLike, true, 0>, NameMapExtractKeyLike>>;
 
 struct NameMapExtractValueLike { static constexpr auto name = "mapExtractValueLike"; };
-using FunctionMapExtractValueLike = FunctionMapToArrayAdapter<FunctionArrayFilter, MapLikeAdapter<NameMapExtractValueLike, true, 1>, NameMapExtractValueLike>;
+using FunctionMapExtractValueLike = FunctionWithLowCardinalityFastPath<
+    FunctionMapToArrayAdapter<FunctionArrayFilter, MapLikeAdapter<NameMapExtractValueLike, true, 1>, NameMapExtractValueLike>>;
 
 struct NameMapSort { static constexpr auto name = "mapSort"; };
 struct NameMapReverseSort { static constexpr auto name = "mapReverseSort"; };
