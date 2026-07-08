@@ -164,10 +164,10 @@ ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & 
 }
 
 template <bool positive>
-ColumnPtr trySortNumericValues(const ColumnArray & array, const IColumn & mapped)
+ColumnPtr trySortNumericValues(const ColumnArray & array)
 {
 #define DISPATCH_FOR_NUMERIC_TYPE(TYPE) \
-    if (const auto * column = checkAndGetColumn<ColumnVector<TYPE>>(&mapped)) \
+    if (const auto * column = checkAndGetColumn<ColumnVector<TYPE>>(&array.getData())) \
         return sortNumericValues<positive>(*column, array);
 
     FOR_BASIC_NUMERIC_TYPES(DISPATCH_FOR_NUMERIC_TYPE)
@@ -204,7 +204,7 @@ ColumnPtr ArraySortImpl<positive, is_partial>::execute(
         /// the data is equivalent to sorting the values themselves.
         if (mapped.get() == &array.getData())
         {
-            if (ColumnPtr res = trySortNumericValues<positive>(array, *mapped))
+            if (ColumnPtr res = trySortNumericValues<positive>(array))
                 return res;
         }
     }
