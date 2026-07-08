@@ -8,6 +8,9 @@
                 <value>UInt32</value>
                 <value>UInt64</value>
                 <value>Int32</value>
+                <value>Int128</value>
+                <value>UInt256</value>
+                <value>BFloat16</value>
                 <value>Float32</value>
                 <value>Float64</value>
             </values>

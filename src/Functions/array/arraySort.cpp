@@ -163,11 +163,13 @@ ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & 
 template <bool positive>
 ColumnPtr trySortNumericValues(const ColumnArray & array)
 {
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define DISPATCH_FOR_NUMERIC_TYPE(TYPE) \
     if (const auto * column = checkAndGetColumn<ColumnVector<TYPE>>(&array.getData())) \
         return sortNumericValues<positive>(*column, array);
+// NOLINTEND(bugprone-macro-parentheses)
 
-    FOR_BASIC_NUMERIC_TYPES(DISPATCH_FOR_NUMERIC_TYPE)
+    FOR_NUMERIC_TYPES(DISPATCH_FOR_NUMERIC_TYPE)
 #undef DISPATCH_FOR_NUMERIC_TYPE
 
     return nullptr;

@@ -7,6 +7,8 @@ SELECT arraySort(materialize([1., nan, 2., 3., nan, -4., inf, -inf]));
 SELECT arrayReverseSort(materialize([1., nan, 2., 3., nan, -4., inf, -inf]));
 SELECT arraySort(materialize(CAST([1., nan, 2., 3., nan, -4., inf, -inf], 'Array(Float32)')));
 SELECT arrayReverseSort(materialize(CAST([1., nan, 2., 3., nan, -4., inf, -inf], 'Array(Float32)')));
+SELECT arraySort(materialize(CAST([1., nan, 2., 3., nan, -4., inf, -inf], 'Array(BFloat16)')));
+SELECT arrayReverseSort(materialize(CAST([1., nan, 2., 3., nan, -4., inf, -inf], 'Array(BFloat16)')));
 
 SELECT 'nullable';
 SELECT arraySort(materialize([3, NULL, 1, NULL, 2]));
@@ -29,6 +31,16 @@ SELECT arraySort(materialize([toInt8(3), 127, -128, 0, -1])), arrayReverseSort(m
 SELECT arraySort(materialize([toInt16(3), 32767, -32768, 0, -1])), arrayReverseSort(materialize([toInt16(3), 32767, -32768, 0, -1]));
 SELECT arraySort(materialize([toInt32(3), 2147483647, -2147483648, 0, -1])), arrayReverseSort(materialize([toInt32(3), 2147483647, -2147483648, 0, -1]));
 SELECT arraySort(materialize([toInt64(3), 9223372036854775807, -9223372036854775808, 0, -1])), arrayReverseSort(materialize([toInt64(3), 9223372036854775807, -9223372036854775808, 0, -1]));
+
+SELECT 'extended integer types';
+WITH materialize(CAST(['3', '340282366920938463463374607431768211455', '0', '18446744073709551616', '1'], 'Array(UInt128)')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3', '170141183460469231731687303715884105727', '-170141183460469231731687303715884105728', '0', '-1'], 'Array(Int128)')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3', '115792089237316195423570985008687907853269984665640564039457584007913129639935', '0', '340282366920938463463374607431768211456', '1'], 'Array(UInt256)')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3', '57896044618658097711785492504343953926634992332820282019728792003956564819967', '-57896044618658097711785492504343953926634992332820282019728792003956564819968', '0', '-1'], 'Array(Int256)')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
 
 SELECT 'date and datetime';
 SELECT arraySort(materialize([toDate('2020-01-02'), toDate('2019-12-31'), toDate('2020-01-01')]));
@@ -79,6 +91,26 @@ SELECT 'Float32', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arra
 FROM numbers(300);
 WITH arrayMap(x -> toFloat64(toInt64(cityHash64(number, x) % 1000) - 500) / 8, range(number % 33)) AS a
 SELECT 'Float64', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toUInt128(cityHash64(number, x)) * toUInt128(cityHash64(number, x, 1)), range(number % 33)) AS a
+SELECT 'UInt128', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toInt128(toInt64(cityHash64(number, x))) * toInt128(cityHash64(number, x, 1)), range(number % 33)) AS a
+SELECT 'Int128', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toUInt256(cityHash64(number, x)) * toUInt256(cityHash64(number, x, 1)) * toUInt256(cityHash64(number, x, 2)), range(number % 33)) AS a
+SELECT 'UInt256', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toInt256(toInt64(cityHash64(number, x))) * toInt256(cityHash64(number, x, 1)) * toInt256(cityHash64(number, x, 2)), range(number % 33)) AS a
+SELECT 'Int256', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toBFloat16(toFloat32(toInt64(cityHash64(number, x) % 1000) - 500) / 8), range(number % 33)) AS a
+SELECT 'BFloat16', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
      + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
 FROM numbers(300);
 WITH arrayMap(x -> if(cityHash64(number, x) % 5 = 0, NULL, toInt32(cityHash64(number, x))), range(number % 33)) AS a
