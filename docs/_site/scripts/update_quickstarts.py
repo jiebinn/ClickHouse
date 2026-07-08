@@ -174,20 +174,14 @@ def generate_badges(use_cases: List[str], products: List[str]) -> str:
     Returns:
         Badge components as a string
     """
-    # First line: muted text back-link (arrow icon + label), styled to match the
-    # homepage links. The href is a plain root-relative path so Mintlify
-    # auto-prefixes it with the /docs base during prerender (the SSR-safe source
-    # of the base path — window is not available then); the onClick is
-    # belt-and-braces on top for a client-side full navigation. This mirrors the
-    # quickstart CTA in docs/index.mdx. Keep this one physical line: MDX drops
-    # the children of an inline SVG that sits on its own JSX line.
-    first_line = (
-        '<a href="/get-started/quickstarts/home" '
-        "onClick={(e) => { e.preventDefault(); window.location.href = (window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/get-started/quickstarts/home'; }} "
-        'className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-[#fdff75] transition-colors font-normal no-underline">'
-        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>'
-        'All quickstarts</a>'
-    )
+    # First line: muted text back-link to the quickstarts home. Its markup and
+    # styling live in a single shared partial,
+    # get-started/quickstarts/_back-to-quickstarts.mdx, which every quickstart
+    # page imports as <BackToQuickstarts /> (Mintlify resolves the import to the
+    # localized copy per locale). Keeping the link in one partial avoids
+    # duplicating the styling across every page and locale; the page's import of
+    # the partial is what makes this tag resolve.
+    first_line = '<BackToQuickstarts />'
 
     # Second line: all other badges
     second_line_badges = []
