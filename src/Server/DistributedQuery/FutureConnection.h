@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Poco/Net/StreamSocket.h>
 #include <Common/Logger.h>
 #include <atomic>
@@ -58,3 +60,5 @@ private:
 using FutureConnectionPtr = std::shared_ptr<FutureConnection>;
 
 }
+
+#endif

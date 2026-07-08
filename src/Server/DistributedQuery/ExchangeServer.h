@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Server/DistributedQuery/ExchangeConnections.h>
 #include <Server/TCPServerConnectionFactory.h>
 #include <Poco/Net/ServerSocket.h>
@@ -41,3 +43,5 @@ private:
 };
 
 }
+
+#endif

@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Client/Connection.h>
 #include <base/defines.h>
 #include <Poco/Net/StreamSocket.h>
@@ -88,3 +90,5 @@ private:
 using ExchangeConnectionsPtr = std::shared_ptr<ExchangeConnections>;
 
 }
+
+#endif

@@ -1,3 +1,5 @@
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <cstring>
 #include <optional>
 #include <string>
@@ -197,3 +199,5 @@ TEST(ExchangeConnectionsRendezvous, ConnectionAfterReleaseRejected)
     EXPECT_TRUE(future->isReady());
     EXPECT_ANY_THROW(future->getSocket());
 }
+
+#endif

@@ -2,6 +2,8 @@
 #include <memory>
 #include <base/defines.h>
 
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Server/DistributedQuery/StreamingExchangeSink.h>
 #include <Server/DistributedQuery/StreamingExchangeProtocol.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -444,3 +446,5 @@ void StreamingExchangeSink::markNoMoreDataNeeded()
 }
 
 }
+
+#endif

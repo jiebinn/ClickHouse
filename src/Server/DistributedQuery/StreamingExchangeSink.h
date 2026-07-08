@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Processors/ISink.h>
@@ -87,3 +89,5 @@ private:
 };
 
 }
+
+#endif

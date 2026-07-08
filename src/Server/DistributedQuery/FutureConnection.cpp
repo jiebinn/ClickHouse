@@ -1,4 +1,7 @@
 #include <Server/DistributedQuery/FutureConnection.h>
+
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Common/Exception.h>
 #include <Common/logger_useful.h>
 #include <base/scope_guard.h>
@@ -125,3 +128,5 @@ void FutureConnection::notifyWaiter() const
 }
 
 }
+
+#endif

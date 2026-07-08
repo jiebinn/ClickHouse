@@ -2133,6 +2133,7 @@ try
         stateless_worker_endpoint_ptr.reset();
     });
 
+    #if defined(OS_LINUX) || defined(OS_DARWIN)
     ExchangeConnectionsPtr exchange_connections_ptr = ExchangeConnections::instance();
     std::vector<std::shared_ptr<ExchangeServer>> exchange_servers;
     if (auto streaming_exchange_port = config().getUInt("distributed_query.streaming_exchange_port", 0))
@@ -2177,6 +2178,10 @@ try
             exchange_server_ptr.reset();
         }
     });
+    #else
+    if (config().getUInt("distributed_query.streaming_exchange_port", 0))
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "ExchangeServer is not supported on this platform");
+    #endif
 
     /// Set up caches.
 

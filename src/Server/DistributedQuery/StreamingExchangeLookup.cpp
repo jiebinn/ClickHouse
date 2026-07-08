@@ -1,3 +1,5 @@
+#if defined(OS_LINUX) || defined(OS_DARWIN)
+
 #include <Server/DistributedQuery/StreamingExchangeLookup.h>
 #include <Server/DistributedQuery/StreamingExchangeSink.h>
 #include <Server/DistributedQuery/StreamingExchangeSource.h>
@@ -62,3 +64,5 @@ ExchangeLookupPtr createStreamingExchangeLookup(
 }
 
 }
+
+#endif

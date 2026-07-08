@@ -195,7 +195,13 @@ cp $SRC_PATH/config.d/storage_conf_backups.xml $DEST_SERVER_PATH/config.d/
 cp $SRC_PATH/config.d/backups.xml $DEST_SERVER_PATH/config.d/
 cp $SRC_PATH/config.d/filesystem_caches_path.xml $DEST_SERVER_PATH/config.d/
 ln -sf $SRC_PATH/config.d/validate_tcp_client_information.xml $DEST_SERVER_PATH/config.d/
-ln -sf $SRC_PATH/config.d/distributed_query.xml $DEST_SERVER_PATH/config.d/
+# distributed_query.xml sets distributed_query.streaming_exchange_port, which the server rejects on
+# platforms without the streaming exchange (only Linux and macOS support it); install it there only.
+case "$(uname -s)" in
+    Linux|Darwin)
+        ln -sf $SRC_PATH/config.d/distributed_query.xml $DEST_SERVER_PATH/config.d/
+        ;;
+esac
 
 ln -sf $SRC_PATH/config.d/zero_copy_destructive_operations.xml $DEST_SERVER_PATH/config.d/
 ln -sf $SRC_PATH/config.d/handlers.yaml $DEST_SERVER_PATH/config.d/
