@@ -2,8 +2,10 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsDateTime.h>
+#include <DataTypes/IDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/array/arraySort.h>
+#include <Common/NaNUtils.h>
 #include <Common/iota.h>
 
 namespace DB
@@ -82,6 +84,92 @@ struct GenericLess
     }
 };
 
+/// Zeroing and scanning the 256 counters amortizes only over longer ranges; below this measured
+/// threshold ::sort wins on random data.
+constexpr size_t counting_sort_min_size = 256;
+
+template <bool positive, typename T>
+void countingSort8(T * begin, T * end)
+{
+    /// XOR with the sign mask maps the values of a signed type to their rank as an unsigned bucket index.
+    constexpr UInt8 sign_mask = is_signed_v<T> ? 0x80 : 0;
+
+    UInt32 counts[256] = {};
+    for (T * p = begin; p != end; ++p)
+        ++counts[static_cast<UInt8>(static_cast<UInt8>(*p) ^ sign_mask)];
+
+    T * out = begin;
+    for (size_t i = 0; i < 256; ++i)
+    {
+        size_t bucket = positive ? i : 255 - i;
+        T value = static_cast<T>(static_cast<UInt8>(bucket ^ sign_mask));
+        std::fill_n(out, counts[bucket], value);
+        out += counts[bucket];
+    }
+}
+
+/// Several times faster than the generic path, which sorts a permutation through per-comparison
+/// IColumn::compareAt and then permutes the nested column.
+template <bool positive, typename T>
+ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & array)
+{
+    auto res_nested = ColumnVector<T>::create();
+    typename ColumnVector<T>::Container & data = res_nested->getData();
+    data.assign(column.getData());
+
+    auto sort_range = [](T * from, T * to)
+    {
+        if constexpr (positive)
+            ::sort(from, to);
+        else
+            ::sort(from, to, std::greater<T>());
+    };
+
+    const ColumnArray::Offsets & offsets = array.getOffsets();
+    T * base = data.data();
+    ColumnArray::Offset current_offset = 0;
+    for (auto next_offset : offsets)
+    {
+        T * begin = base + current_offset;
+        T * end = base + next_offset;
+        if constexpr (std::is_floating_point_v<T>)
+        {
+            /// All NaNs go last in both directions, matching the nan_direction_hint that the
+            /// generic path passes to compareAt. Moving them out first keeps the comparator
+            /// of the sort itself branchless.
+            T * nan_begin = std::partition(begin, end, [](T x) { return !isNaN(x); });
+            sort_range(begin, nan_begin);
+        }
+        else if constexpr (sizeof(T) == 1)
+        {
+            if (static_cast<size_t>(end - begin) >= counting_sort_min_size)
+                countingSort8<positive>(begin, end);
+            else
+                sort_range(begin, end);
+        }
+        else
+        {
+            sort_range(begin, end);
+        }
+        current_offset = next_offset;
+    }
+
+    return ColumnArray::create(std::move(res_nested), array.getOffsetsPtr());
+}
+
+template <bool positive>
+ColumnPtr trySortNumericValues(const ColumnArray & array, const IColumn & mapped)
+{
+#define DISPATCH_FOR_NUMERIC_TYPE(TYPE) \
+    if (const auto * column = checkAndGetColumn<ColumnVector<TYPE>>(&mapped)) \
+        return sortNumericValues<positive>(*column, array);
+
+    FOR_BASIC_NUMERIC_TYPES(DISPATCH_FOR_NUMERIC_TYPE)
+#undef DISPATCH_FOR_NUMERIC_TYPE
+
+    return nullptr;
+}
+
 }
 
 template <bool positive, bool is_partial>
@@ -101,6 +189,18 @@ ColumnPtr ArraySortImpl<positive, is_partial>::execute(
                 "Expected fixed arguments to get the limit for partial array sort");
 
         limit_column = fixed_arguments[0].column.get();
+    }
+
+    if constexpr (!is_partial)
+    {
+        /// `mapped` is the array's own data when there is no lambda (and when an identity lambda
+        /// returns its input column unchanged), so sorting a permutation by `mapped` and permuting
+        /// the data is equivalent to sorting the values themselves.
+        if (mapped.get() == &array.getData())
+        {
+            if (ColumnPtr res = trySortNumericValues<positive>(array, *mapped))
+                return res;
+        }
     }
 
     const ColumnArray::Offsets & offsets = array.getOffsets();
