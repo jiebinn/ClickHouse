@@ -1,5 +1,9 @@
 [
   {
+    "source": "/docs/en/:path*",
+    "destination": "/docs/:path*"
+  },
+  {
     "source": "/about",
     "destination": "/resources/about"
   },
@@ -1714,10 +1718,6 @@
   {
     "source": "/dictionary/best-practices",
     "destination": "/concepts/features/dictionaries/best-practices"
-  },
-  {
-    "source": "/en/:path*",
-    "destination": "/:path*"
   },
   {
     "source": "/engines",
