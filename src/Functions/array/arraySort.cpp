@@ -113,8 +113,6 @@ void countingSort8(T * begin, T * end)
     }
 }
 
-/// Several times faster than the generic path, which sorts a permutation through per-comparison
-/// `IColumn::compareAt` and then permutes the nested column.
 template <bool positive, typename T>
 ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & array)
 {
@@ -140,8 +138,7 @@ ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & 
         if constexpr (is_floating_point<T>)
         {
             /// All NaNs go last in both directions, matching the `nan_direction_hint` that the
-            /// generic path passes to `compareAt`. Moving them out first keeps the comparator
-            /// of the sort itself branchless.
+            /// generic path passes to `compareAt`.
             T * nan_begin = std::partition(begin, end, [](T x) { return !isNaN(x); });
             sort_range(begin, nan_begin);
         }
