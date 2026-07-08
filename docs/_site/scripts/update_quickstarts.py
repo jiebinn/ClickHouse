@@ -23,6 +23,25 @@ import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+def unquote_scalar(value: str) -> str:
+    """Unquote a single YAML scalar, honoring the escaping the docs frontmatter
+    actually uses.
+
+    Inside a single-quoted scalar a doubled '' is the one literal apostrophe
+    YAML allows ('l''immobilier' -> l'immobilier); inside a double-quoted scalar
+    a backslash escapes the next character. The previous code stripped the outer
+    quotes and emitted the rest verbatim, so escaped apostrophes leaked into the
+    generated card data. A real YAML parser would be ideal, but PyYAML is not
+    available in the docs CI image, so unescape the two quoting styles by hand.
+    """
+    value = value.strip()
+    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        # Unescape \" and \\ left-to-right (re.sub matches non-overlapping).
+        return re.sub(r'\\(["\\])', r'\1', value[1:-1])
+    return value
+
 def parse_frontmatter(content: str) -> Dict[str, Any]:
     """
     Parse YAML frontmatter from MDX file content.
@@ -53,18 +72,16 @@ def parse_frontmatter(content: str) -> Dict[str, Any]:
             key = key.strip()
             value = value.strip()
 
-            # Remove quotes from strings
-            value = value.strip('"').strip("'")
-
-            # Handle arrays like [item1, item2]
+            # Handle arrays like [item1, item2]. Brackets are unquoted, so this
+            # is checked before unquoting the scalar form below.
             if value.startswith('[') and value.endswith(']'):
                 # Parse array
                 array_content = value[1:-1]
-                items = [item.strip().strip('"').strip("'")
+                items = [unquote_scalar(item)
                         for item in array_content.split(',')]
                 frontmatter[key] = [item for item in items if item]
             else:
-                frontmatter[key] = value
+                frontmatter[key] = unquote_scalar(value)
 
     return frontmatter
 
@@ -158,12 +175,16 @@ def generate_badges(use_cases: List[str], products: List[str]) -> str:
         Badge components as a string
     """
     # First line: muted text back-link (arrow icon + label), styled to match the
-    # homepage links. The href is root-relative and the onClick prepends the
-    # /docs base path on the production deploy (a bare relative href like
-    # "home" breaks under the subpath mount).
+    # homepage links. The /docs base prefix lives in the href expression itself,
+    # not just a click handler: onClick only fires for a plain left-click, so
+    # middle-click, Cmd/Ctrl-click, "open link in new tab" and "copy link
+    # address" would otherwise use a raw href pointing outside the /docs subpath
+    # on the production mount. window is undefined during SSR, so the prefix is
+    # empty there and applied on the client (matching QuickStartsGrid's
+    # withBase). Keep this one physical line: MDX drops the children of an inline
+    # SVG that sits on its own JSX line.
     first_line = (
-        '<a href="/get-started/quickstarts/home" '
-        "onClick={(e) => { e.preventDefault(); window.location.href = (window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/get-started/quickstarts/home'; }} "
+        "<a href={(typeof window !== 'undefined' && window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/get-started/quickstarts/home'} "
         'className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-[#fdff75] transition-colors font-normal no-underline">'
         '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>'
         'All quickstarts</a>'
@@ -270,9 +291,25 @@ def build_quickstarts(quickstarts_dir: Path, project_root: Path,
     files = find_quickstart_files(quickstarts_dir)
     quickstarts = []
     failures = 0
+    seen_ids = {}
     for file_path in files:
         try:
             data = extract_quickstart_data(file_path, project_root)
+
+            # Ids are the filename stem, so the recursive scan lets two pages in
+            # different subdirectories collide (foo/setup.mdx and bar/setup.mdx
+            # both -> 'setup'). A collision would silently drop one page from the
+            # id->page map used for cross-locale tag inheritance, and emit
+            # duplicate ids for React keys and featured lookup, so fail closed
+            # (the non-zero failure count below blocks every write).
+            prior = seen_ids.get(data['id'])
+            if prior is not None:
+                raise ValueError(
+                    f"duplicate quickstart id {data['id']!r}; also produced by "
+                    f"{prior.relative_to(quickstarts_dir)}. Ids are the filename "
+                    "stem and must be unique across the tree — rename one file."
+                )
+            seen_ids[data['id']] = file_path
 
             if update_badges:
                 updated = update_quickstart_badges(file_path, data['useCases'], data['products'])

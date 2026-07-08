@@ -11,7 +11,7 @@ import ClickHouseAcademyCTA from '/get-started/quickstarts/_academy-ctas/_academ
 
 {/* 自動生成開始 */}
 
-<a href="/ja/get-started/quickstarts/home" onClick={(e) => { e.preventDefault(); window.location.href = (window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/ja/get-started/quickstarts/home'; }}><Badge size="lg" color="gray" icon="arrow-left">すべてのクイックスタート</Badge></a>
+<a href={(typeof window !== 'undefined' && window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/ja/get-started/quickstarts/home'}><Badge size="lg" color="gray" icon="arrow-left">すべてのクイックスタート</Badge></a>
 
 <div className="mt-2 flex flex-wrap gap-2">
   <Badge size="lg" color="blue">リアルタイムアナリティクス</Badge>
@@ -282,5 +282,5 @@ MergeTree エンジンは基盤です。ここから、その上に構築され�
 <ClickHouseAcademyCTA />
 
 <div className="mt-8">
-  <a href="/ja/get-started/quickstarts/home" onClick={(e) => { e.preventDefault(); window.location.href = (window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/ja/get-started/quickstarts/home'; }}><Badge size="lg" color="gray" icon="arrow-left">すべてのクイックスタート</Badge></a>
+  <a href={(typeof window !== 'undefined' && window.location.pathname.startsWith('/docs') ? '/docs' : '') + '/ja/get-started/quickstarts/home'}><Badge size="lg" color="gray" icon="arrow-left">すべてのクイックスタート</Badge></a>
 </div>
