@@ -1277,9 +1277,20 @@ class DeltaLakePropertiesGenerator(LakeTableGenerator):
                 res.append(k)
         return res
 
+    # DISABLED: OSS delta-spark's `DeltaCatalog` does not declare Spark 4's
+    # `SUPPORTS_CREATE_TABLE_WITH_GENERATED_COLUMNS` / `..._IDENTITY_COLUMNS`
+    # capabilities, so every SQL CREATE TABLE with a generated or identity
+    # column fails analysis with `UNSUPPORTED_FEATURE.TABLE_OPERATION`
+    # ("does not support generated columns"). Only the `DeltaTableBuilder`
+    # API can create them; re-enable if the create path moves to that API
+    # or delta-spark implements the capability.
+    SUPPORTS_SQL_GENERATED_COLUMNS = False
+
     def add_generated_col(
         self, columns: dict[str, SparkColumn], col: sp.DataType
     ) -> str:
+        if not self.SUPPORTS_SQL_GENERATED_COLUMNS:
+            return ""
         # IDENTITY is valid only on BIGINT (Long) columns.
         if isinstance(col, sp.LongType) and random.randint(1, 10) < 3:
             return f" GENERATED {random.choice(['ALWAYS', 'BY DEFAULT'])} AS IDENTITY"
