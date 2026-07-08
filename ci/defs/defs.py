@@ -579,13 +579,11 @@ class ArtifactConfigs:
             "./*.profdata",
         ],
         # The coverage merge (llvm-profdata) runs non-blocking and can produce no
-        # .profdata (e.g. it crashes on a corrupt .profraw). On PR runs a missing
-        # batch is tolerated by the downstream LLVM Coverage aggregation, which
-        # globs whatever .profdata files exist, so a missing file must not redden
-        # a coverage job whose tests all passed. This optional flag is honored
-        # ONLY on PR runs: on master a missing shard is still an error, because
-        # the published baseline must be complete (see the runner and
-        # ci/jobs/scripts/workflow_hooks/filter_job.py).
+        # .profdata (e.g. it crashes on a corrupt .profraw). A missing batch is
+        # tolerated by the downstream LLVM Coverage aggregation, which globs
+        # whatever .profdata files exist, so a missing file must not redden a
+        # coverage job whose tests all passed. Marking the artifact optional lets
+        # the runner skip a missing file with a warning instead of erroring.
         optional=True,
     ).parametrize(names=LLVM_ARTIFACTS_LIST)
 

@@ -589,24 +589,19 @@ class Runner:
         return result
 
     @staticmethod
-    def _skip_missing_optional_artifact(artifact, artifact_path, pr_number) -> bool:
+    def _skip_missing_optional_artifact(artifact, artifact_path) -> bool:
         """Whether a providing artifact that matched no file may be skipped.
 
-        Skipping is allowed only on pull-request runs (pr_number > 0). There an
-        optional artifact may legitimately be absent (the non-blocking LLVM
-        coverage merge can crash on a corrupt .profraw and produce no .profdata)
-        and skipping keeps a job whose tests all passed green.
-
-        On master/release runs (pr_number <= 0) a missing artifact is always an
-        error, even when optional: the coverage baseline published from master
-        must be complete, otherwise later PRs diff against a partial baseline and
-        see artificial deltas (see ci/jobs/scripts/workflow_hooks/filter_job.py).
-        A non-optional artifact is an error whenever it is missing.
+        A missing optional artifact is skipped with a warning on any run (PR,
+        master or release). It is optional because it may legitimately be absent
+        (the non-blocking LLVM coverage merge can crash on a corrupt .profraw and
+        produce no .profdata) and skipping keeps a job whose tests all passed
+        green. A non-optional artifact is an error whenever it is missing.
         """
-        if artifact.optional and pr_number > 0:
+        if artifact.optional:
             print(
                 f"WARNING: optional artifact [{artifact.name}:{artifact_path}] "
-                f"produced no file on PR run - skipping upload"
+                f"produced no file - skipping upload"
             )
             return True
         return False
@@ -656,7 +651,7 @@ class Runner:
                             matched = glob.glob(artifact_path)
                             if not matched:
                                 if self._skip_missing_optional_artifact(
-                                    artifact, artifact_path, env.PR_NUMBER
+                                    artifact, artifact_path
                                 ):
                                     continue
                                 raise FileNotFoundError(

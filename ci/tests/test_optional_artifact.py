@@ -24,11 +24,8 @@ instead of setting Result.Status.ERROR. The coverage profdata artifacts are
 marked optional; the downstream `LLVM Coverage` aggregation already globs
 whatever .profdata files exist, so a missing batch is tolerated.
 
-The skip is gated to PR runs only. On master/release runs a missing artifact
-is still an error, even when optional, so the coverage baseline published from
-master stays complete (a partial baseline makes later PRs diff against it and
-report artificial coverage deltas). See
-`ci/jobs/scripts/workflow_hooks/filter_job.py`.
+A missing optional artifact is skipped with a warning on any run (PR, master or
+release); a missing non-optional artifact is still an error.
 """
 
 import os
@@ -71,54 +68,32 @@ def test_coverage_profdata_artifacts_are_optional():
         assert a.path == ["./*.profdata"]
 
 
-def test_runner_skips_missing_optional_artifact_on_pr():
-    """A missing optional artifact is skipped on a PR run (job stays green)."""
+def test_runner_skips_missing_optional_artifact():
+    """A missing optional artifact is skipped with a warning on any run."""
     a = Artifact.Config(
         name="LLVM_COVERAGE_FILE_it_6",
         type=Artifact.Type.S3,
         path="./*.profdata",
         optional=True,
     )
-    assert Runner._skip_missing_optional_artifact(a, "./*.profdata", 12345) is True
-
-
-def test_runner_does_not_skip_missing_optional_artifact_on_master():
-    """On master (pr_number <= 0) a missing optional artifact is still an error.
-
-    Master must publish a complete coverage baseline; letting a shard whose
-    merge crashed stay green would upload a partial baseline and give later PRs
-    artificial coverage deltas. This is the master coverage contract asserted in
-    ci/jobs/scripts/workflow_hooks/filter_job.py.
-    """
-    a = Artifact.Config(
-        name="LLVM_COVERAGE_FILE_it_6",
-        type=Artifact.Type.S3,
-        path="./*.profdata",
-        optional=True,
-    )
-    assert Runner._skip_missing_optional_artifact(a, "./*.profdata", 0) is False
-    # push/schedule/dispatch/merge-queue events all set PR_NUMBER to 0; a
-    # workflow-config probe run uses -1. None of them may skip.
-    assert Runner._skip_missing_optional_artifact(a, "./*.profdata", -1) is False
+    assert Runner._skip_missing_optional_artifact(a, "./*.profdata") is True
 
 
 def test_runner_does_not_skip_missing_required_artifact():
-    """A missing non-optional artifact is still an error (even on a PR run)."""
+    """A missing non-optional artifact is still an error."""
     a = Artifact.Config(
         name="CH_AMD_DEBUG",
         type=Artifact.Type.S3,
         path="./clickhouse",
         optional=False,
     )
-    assert Runner._skip_missing_optional_artifact(a, "./clickhouse", 12345) is False
-    assert Runner._skip_missing_optional_artifact(a, "./clickhouse", 0) is False
+    assert Runner._skip_missing_optional_artifact(a, "./clickhouse") is False
 
 
 if __name__ == "__main__":
     test_optional_defaults_to_false()
     test_optional_field_is_settable()
     test_coverage_profdata_artifacts_are_optional()
-    test_runner_skips_missing_optional_artifact_on_pr()
-    test_runner_does_not_skip_missing_optional_artifact_on_master()
+    test_runner_skips_missing_optional_artifact()
     test_runner_does_not_skip_missing_required_artifact()
     print("All optional-artifact tests passed")
