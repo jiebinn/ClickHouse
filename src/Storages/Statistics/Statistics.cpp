@@ -675,18 +675,22 @@ MergeTreeStatisticsFactory & MergeTreeStatisticsFactory::instance()
     return instance;
 }
 
-void MergeTreeStatisticsFactory::validate(const ColumnStatisticsDescription & stats, const DataTypePtr & data_type) const
+void MergeTreeStatisticsFactory::validate(const ColumnStatisticsDescription & stats, const DataTypePtr & data_type, bool allow_deprecated_minmax) const
 {
     for (const auto & [type, desc] : stats.types_to_desc)
     {
         /// The `minmax` statistics type is deprecated: it is a subset of `basic`, which should be used instead.
-        /// Reject it only when it is declared explicitly (`STATISTICS(minmax)` in CREATE / ALTER). Implicit
-        /// `minmax` produced by the `auto_statistics_types` setting is tolerated here, so old tables that still
-        /// carry it in their metadata remain loadable and alterable; introducing `minmax` anew through that
-        /// setting is rejected separately on the setting-change path (see `validateAutoStatisticsTypes`).
+        /// Reject it only when it is declared explicitly (`STATISTICS(minmax)` in CREATE / ALTER) and newly
+        /// introduced by the current statement:
+        ///  - Implicit `minmax` produced by the `auto_statistics_types` setting is tolerated here (including on
+        ///    freshly-added columns of a table whose setting still lists `minmax`). Introducing `minmax` anew
+        ///    through that setting is rejected separately on the setting-change path (`validateAutoStatisticsTypes`).
+        ///  - `allow_deprecated_minmax` grandfathers explicit `minmax` that the column already carried in the
+        ///    existing metadata (e.g. a table created by an older version), so unrelated ALTERs of such old
+        ///    tables are not rejected.
         /// This whole validation is also skipped when loading existing tables (ATTACH / startup), so old tables
         /// and parts that still reference `minmax` keep working.
-        if (type == StatisticsType::MinMax && !desc.is_implicit)
+        if (type == StatisticsType::MinMax && !desc.is_implicit && !allow_deprecated_minmax)
             throw Exception(
                 ErrorCodes::INCORRECT_QUERY,
                 "Statistics type 'minmax' is deprecated. Use 'basic' instead, which is a superset of 'minmax'.");
