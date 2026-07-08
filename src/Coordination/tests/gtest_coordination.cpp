@@ -208,6 +208,12 @@ TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
     EXPECT_FALSE(create_read.is_ephemeral);
     EXPECT_FALSE(create_read.include_ttl);
     EXPECT_EQ(create_read.getOpNum(), Coordination::OpNum::CreateContainer);
+    EXPECT_EQ(create_read.getWireOpNum(), Coordination::OpNum::Create);
+
+    /// The client sent plain Create, so it expects a path-only CreateResponse back, not the
+    /// Create2Response (path + Stat) that getOpNum() == CreateContainer would otherwise select.
+    auto response = create_read.makeResponse();
+    EXPECT_EQ(dynamic_cast<Coordination::ZooKeeperCreate2Response *>(response.get()), nullptr);
 }
 
 template <typename StateMachine>

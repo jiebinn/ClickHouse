@@ -77,6 +77,9 @@ struct ZooKeeperRequest : virtual Request
 
     virtual OpNum getOpNum() const = 0;
     virtual int32_t tryGetOpNum() const { return static_cast<int32_t>(getOpNum()); }
+    /// Opnum as it was on the wire, for responses/log entries. Differs from getOpNum() only for
+    /// ZooKeeperCreateRequest, where getOpNum() may be reclassified from the create-mode flags.
+    virtual OpNum getWireOpNum() const { return getOpNum(); }
 
     /// Writes length, xid, op_num, then the rest.
     void write(WriteBuffer & out, bool use_xid_64, bool supports_tracing = false) const;
@@ -244,6 +247,10 @@ struct ZooKeeperCreateRequest final : public CreateRequest, ZooKeeperRequest
     /// used only during restore from zookeeper log
     int32_t parent_cversion = -1;
 
+    /// Opnum this request was constructed for (set by the request factory), kept separate from
+    /// is_container/include_stats/include_ttl since those get reclassified from the wire flags.
+    OpNum original_op_num = OpNum::Create;
+
     ZooKeeperCreateRequest() = default;
     explicit ZooKeeperCreateRequest(const CreateRequest & base) : CreateRequest(base) {}
 
@@ -257,6 +264,8 @@ struct ZooKeeperCreateRequest final : public CreateRequest, ZooKeeperRequest
             return OpNum::CreateContainer;
         return not_exists ? OpNum::CreateIfNotExists : OpNum::Create;
     }
+
+    OpNum getWireOpNum() const override { return original_op_num; }
 
     void writeImpl(WriteBuffer & out) const override;
     size_t sizeImpl() const override;

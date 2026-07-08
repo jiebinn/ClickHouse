@@ -353,13 +353,13 @@ nuraft::ptr<nuraft::buffer> KeeperStateMachine::getZooKeeperLogEntry(const Keepe
     DB::writeIntBinary(request_for_session.session_id, write_buf);
 
     const auto & request = request_for_session.request;
-    size_t request_size = sizeof(uint32_t) + Coordination::size(request->getOpNum()) + request->sizeImpl();
+    size_t request_size = sizeof(uint32_t) + Coordination::size(request->getWireOpNum()) + request->sizeImpl();
     Coordination::write(static_cast<int32_t>(request_size), write_buf);
 
     XidHelper xid_helper{.xid = request->xid};
     Coordination::write(xid_helper.parts.lower, write_buf);
 
-    Coordination::write(request->getOpNum(), write_buf);
+    Coordination::write(request->getWireOpNum(), write_buf);
     request->writeImpl(write_buf);
 
     DB::writeIntBinary(request_for_session.time, write_buf);

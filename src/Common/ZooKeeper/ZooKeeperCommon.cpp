@@ -13,6 +13,7 @@
 #include <Common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context_fwd.h>
+#include <type_traits>
 
 namespace Coordination
 {
@@ -1459,15 +1460,15 @@ ZooKeeperResponsePtr ZooKeeperRemoveRequest::makeResponse() const
 
 ZooKeeperResponsePtr ZooKeeperCreateRequest::makeResponse() const
 {
-    const auto op_num = getOpNum();
-
-    if (op_num == OpNum::CreateTTL)
+    /// Keyed on the original wire opnum, not getOpNum(): a client that sent e.g. plain Create
+    /// with the CONTAINER flag still expects the plain path-only CreateResponse back.
+    if (original_op_num == OpNum::CreateTTL)
         return std::make_shared<ZooKeeperCreateTTLResponse>();
 
-    if (op_num == OpNum::Create2 || op_num == OpNum::CreateContainer)
+    if (original_op_num == OpNum::Create2 || original_op_num == OpNum::CreateContainer)
         return std::make_shared<ZooKeeperCreate2Response>();
 
-    if (op_num == OpNum::CreateIfNotExists)
+    if (original_op_num == OpNum::CreateIfNotExists)
         return std::make_shared<ZooKeeperCreateIfNotExistsResponse>();
 
     return std::make_shared<ZooKeeperCreateResponse>();
@@ -1781,6 +1782,9 @@ void registerZooKeeperRequest(ZooKeeperRequestFactory & factory)
     factory.registerRequest(num, []
     {
         auto res = std::make_shared<RequestT>();
+
+        if constexpr (std::is_same_v<RequestT, ZooKeeperCreateRequest>)
+            res->original_op_num = num;
 
         if constexpr (num == OpNum::MultiRead)
             res->operation_type = ZooKeeperMultiRequest::OperationType::Read;
