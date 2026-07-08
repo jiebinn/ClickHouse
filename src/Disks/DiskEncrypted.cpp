@@ -446,12 +446,12 @@ void DiskEncrypted::prepareRead(
             return encryption_settings->findKeyByFingerprint(key_fingerprint, path_for_logs);
         });
 
-    /// Only cache encryption headers on backends with random object keys (metadata-based object
-    /// storage): there every write produces a new `remote_path`, so a rewrite / replace / rename
-    /// never rebinds an existing key to different ciphertext and the cache can never serve a stale
-    /// header. Deterministic-path backends (plain / plain-rewritable, local, web) reuse the key on
-    /// rewrite, so they are excluded.
-    if (delegate->isRemote() && !delegate->isPlain())
+    /// Only cache encryption headers when the backend assigns a fresh blob path to every write
+    /// (`areBlobPathsRandom`): then a rewrite / replace / rename never rebinds an existing path to
+    /// different ciphertext, so the cache can never serve a stale header and needs no invalidation.
+    /// Deterministic-path backends (plain / plain-rewritable, local, web) reuse the path on rewrite
+    /// and are excluded.
+    if (delegate->areBlobPathsRandom())
         pipeline.allowEncryptionHeaderCache();
 }
 
