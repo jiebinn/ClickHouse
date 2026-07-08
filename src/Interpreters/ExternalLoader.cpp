@@ -673,7 +673,7 @@ public:
             return false;
         }
 
-        resetInfoToUnloaded(name, info);
+        resetInfoToUnloaded(name, *info);
 
         return true;
     }
@@ -688,21 +688,6 @@ public:
                 resetInfoToUnloaded(name, info);
             }
         }
-    }
-
-    void resetInfoToUnloaded(const String & name, Info & info)
-    {
-        /// Reset state so that the next access triggers lazy reload.
-        LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
-        info.object = nullptr;
-        info.exception = nullptr;
-        info.state_id = 0;
-        info.loading_id = 0;
-        info.error_count = 0;
-        info.next_update_time = TimePoint::max();
-        info.loading_start_time = TimePoint();
-        info.loading_end_time = TimePoint();
-        info.last_successful_update_time = TimePoint();
     }
 
     /// Starts reloading all the object which update time is earlier than now.
@@ -844,6 +829,21 @@ private:
         std::exception_ptr exception; /// Last error occurred.
         TimePoint next_update_time = TimePoint::max(); /// Time of the next update, `TimePoint::max()` means "never".
     };
+
+    void resetInfoToUnloaded(const String & name, Info & info)
+    {
+        /// Reset state so that the next access triggers lazy reload.
+        LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
+        info.object = nullptr;
+        info.exception = nullptr;
+        info.state_id = 0;
+        info.loading_id = 0;
+        info.error_count = 0;
+        info.next_update_time = TimePoint::max();
+        info.loading_start_time = TimePoint();
+        info.loading_end_time = TimePoint();
+        info.last_successful_update_time = TimePoint();
+    }
 
     Info * getInfo(const String & name)
     {
