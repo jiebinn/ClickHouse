@@ -10,6 +10,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int ILLEGAL_STATISTICS;
+}
+
 /// Use uniqCombined64 with K=12: Small(16 exact) → HashSet(up to 256) → HLL(~3 KB).
 /// The 64-bit hash avoids collisions for high-cardinality columns (32-bit hashes degrade above ~65K distinct values).
 static constexpr UInt64 UNIQ_COMBINED_PRECISION = 12;
@@ -79,22 +84,20 @@ void StatisticsUniqV2::deserialize(ReadBuffer & buf, StatisticsFileVersion /*ver
 {
     bool is_null = false;
     readBinary(is_null, buf);
-    auto nested_func = collector->getNestedFunction();
-    /// when serialize is nullable, but we removed the nullable
-    if (is_null && !nested_func)
-    {
-        bool serialize_flag = false;
-        readBinary(serialize_flag, buf);
-        if (!serialize_flag)
-            return;
-    }
 
-    /// when serialize is not nullable, but we changed it to nullable
-    if (!is_null && nested_func)
-    {
-        nested_func->deserialize(data, buf);
-        return;
-    }
+    /// `is_null` is whether the state was built through the `Null` wrapper (i.e. a `Nullable` column).
+    /// The format (V4) stores the column type name and skips statistics whose stored type differs from the
+    /// current one, so a `MODIFY COLUMN` flipping nullability rebuilds the statistic before we get here.
+    /// If the flags disagree anyway, the serialized layout does not match `collector` (e.g. an old non-null
+    /// `uniqCombined64` state vs the current nullable wrapper whose nested state lives past a flag prefix).
+    /// Reject it rather than corrupt it: the caller catches this and rebuilds the statistic.
+    const bool collector_is_nullable = collector->getNestedFunction() != nullptr;
+    if (is_null != collector_is_nullable)
+        throw Exception(
+            ErrorCodes::ILLEGAL_STATISTICS,
+            "uniq_v2 statistics nullability ({}) does not match the current column type ({}); "
+            "rebuild with ALTER TABLE ... MATERIALIZE STATISTICS.",
+            is_null, collector_is_nullable);
 
     collector->deserialize(data, buf);
 }
