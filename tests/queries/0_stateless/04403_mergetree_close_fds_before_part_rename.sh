@@ -66,11 +66,25 @@ insert_pid=$!
 
 # While the insert is paused after the rename, look for any descriptor (across all
 # processes) still open *for writing* into this table's committed part data files.
+#
+# A genuinely leaked writer descriptor is held for the *whole* commit pause (the temporary
+# part that owns the writer is not destroyed until after
+# `sleep_before_commit_local_part_in_replicated_table_ms`), so it is observable on every
+# poll of the window. We therefore require the write descriptor to *persist* across several
+# consecutive polls before declaring a leak. A single transient sighting is not enough:
+# on a slow (sanitizer) build under load the poll can momentarily race the temp->final
+# rename or catch a reused /proc fd number, and neither of those persists.
 leaked=0
+consecutive_writes=0
+# Number of consecutive polls that must all see an open write descriptor. The real bug
+# keeps the descriptor open for the entire multi-second pause, so it is seen on every poll;
+# 3 in a row (spanning at least ~0.2s) is far longer than any sub-millisecond race window.
+required_consecutive=3
 for _ in $(seq 1 200); do
     # 'find -lname' lists every '/proc/PID/fd/FD' symlink whose target points into this
     # table's part data/index/mark files (its glob matches '/' too, so "*$uuid*" spans
     # the store path).
+    write_fd_seen=0
     while read -r fd_link; do
         # Only a descriptor into a *committed* part is the bug. While a part is still being
         # written its data files live in a temporary directory ('tmp_insert_...') and the
@@ -90,7 +104,7 @@ for _ in $(seq 1 200); do
         flags=$(grep -m1 '^flags:' "${fd_link/\/fd\//\/fdinfo\/}" 2>/dev/null | tr -dc '0-7')
         [ -n "$flags" ] || continue
         if [ $(( flags & 3 )) -ne 0 ]; then
-            leaked=1
+            write_fd_seen=1
             break
         fi
     done < <(find /proc/[0-9]*/fd -mindepth 1 -maxdepth 1 \( \
@@ -98,7 +112,16 @@ for _ in $(seq 1 200); do
                  -o -lname "*${uuid}*/primary.cidx" \
                  -o -lname "*${uuid}*/primary.idx" \
                  -o -lname "*${uuid}*.cmrk[0-9]*" \) 2>/dev/null)
-    [ "$leaked" -eq 1 ] && break
+    if [ "$write_fd_seen" -eq 1 ]; then
+        consecutive_writes=$((consecutive_writes + 1))
+        if [ "$consecutive_writes" -ge "$required_consecutive" ]; then
+            leaked=1
+            break
+        fi
+    else
+        # A transient sighting does not persist; reset so only a sustained leak counts.
+        consecutive_writes=0
+    fi
     # Stop once the insert has finished: the observation window is closed.
     kill -0 "$insert_pid" 2>/dev/null || break
     sleep 0.1
