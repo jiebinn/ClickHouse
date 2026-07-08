@@ -77,6 +77,11 @@ Field convertNumericTypeImpl(const Field & from, bool strict, bool convert_inexa
     /// that actually contains a matching row. Keeping the conversion exact there makes the caller
     /// fall back to not using the bound instead of building a wrong one, and keeps set membership
     /// consistent with the `=` operator: `toFloat32(0.1) IN (0.1)` is `0`, like `toFloat32(0.1) = 0.1`.
+    ///
+    /// `is_floating_point` here is the ClickHouse concept (`base/base/extended_types.h`), defined as
+    /// `std::is_floating_point_v<T> || std::is_same_v<T, BFloat16>`. So `BFloat16` is a floating-point
+    /// type here too and takes the same lossy path when `convert_inexact_floats` is set (e.g.
+    /// `values('x BFloat16', 0.1)` rounds to the nearest `BFloat16` like `CAST`, rather than being rejected).
     const bool exact = strict || !convert_inexact_floats || !is_floating_point<To>;
 
     const bool converted = exact
@@ -954,7 +959,10 @@ Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_t
     /// not exactly representable (e.g. `0.1` for a `Float32` column) is converted to the nearest
     /// representable value like `CAST` instead of being rejected. Callers that resolve an exact target -
     /// e.g. `ALTER ... PARTITION` in `MergeTreeData::getPartitionIDFromQuery` - keep the default (false)
-    /// so a destructive statement never silently rounds an unrepresentable literal. See the header.
+    /// so a destructive statement never silently rounds an unrepresentable numeric literal. A quoted
+    /// string literal (e.g. `DROP PARTITION '0.1'`) is still parsed into the target type by string
+    /// deserialization before this exactness check and rounds there - a pre-existing string-parsing
+    /// behavior shared with string-to-float comparisons, unchanged by this fix. See the header.
     Field converted = convertFieldToType(from_value, to_type, from_type_hint, format_settings, /*strict=*/false, convert_inexact_floats);
 
     if (!is_null && converted.isNull())

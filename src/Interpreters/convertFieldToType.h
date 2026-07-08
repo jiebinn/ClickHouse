@@ -36,7 +36,10 @@ class IDataType;
   * `convert_inexact_floats = true` explicitly (through `convertFieldToTypeOrThrow`, or directly for the
   * `INSERT` VALUES expression fallback in `ValuesBlockInputFormat`), while callers that resolve an exact
   * target - notably `ALTER ... PARTITION` resolution in `MergeTreeData::getPartitionIDFromQuery` - keep
-  * the exact default, so a destructive statement never silently rounds an unrepresentable literal:
+  * the exact default, so a destructive statement never silently rounds an unrepresentable numeric literal
+  * (a quoted string literal such as `'0.1'` is still parsed into the target type by string deserialization
+  * first, which rounds - a pre-existing behavior shared with string-to-float value comparisons like
+  * `WHERE f = '0.1'`, unchanged by this contract):
   *   convertFieldToType(Field(0.1), Float32, .., false, true) -> Field(0.1f)  (nearest Float32, not exactly 0.1)
   *   convertFieldToType(Field(0.5), Float32, .., false, true) -> Field(0.5f)  (exactly representable)
   *

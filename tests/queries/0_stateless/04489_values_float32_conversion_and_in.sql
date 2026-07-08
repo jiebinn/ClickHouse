@@ -17,6 +17,14 @@ SELECT '-- BFloat16 and Float64 columns';
 SELECT x FROM values('x BFloat16', 0.5);
 SELECT x FROM values('x Float64', 0.1);
 
+SELECT '-- BFloat16 also accepts inexact decimal literals (the lossy path covers all narrow floats)';
+-- `0.5` above is exactly representable in BFloat16, so it does not exercise the lossy conversion. An
+-- inexact literal such as `0.1` does: `is_floating_point` in `convertFieldToType` is the ClickHouse
+-- concept (`std::is_floating_point_v<T> || std::is_same_v<T, BFloat16>`), so BFloat16 is a floating-point
+-- type there and `convert_inexact_floats` rounds `0.1` to the nearest BFloat16 (like CAST) rather than
+-- rejecting it. The materialized value must equal `CAST(0.1, 'BFloat16')`, not error.
+SELECT x = CAST(0.1, 'BFloat16') FROM values('x BFloat16', 0.1);
+
 SELECT '-- out-of-range values are still rejected (no silent overflow to inf or wrap-around)';
 SELECT x FROM values('x Float32', 1e300); -- { serverError ARGUMENT_OUT_OF_BOUND }
 SELECT x FROM values('x Int8', 256); -- { serverError ARGUMENT_OUT_OF_BOUND }
