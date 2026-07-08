@@ -51,6 +51,8 @@ void ReaderExecutorDecryptor::parseHeaders(const ChainedBuffers & header_bytes)
         FileEncryption::Header header;
         header.read(rb);
         layer.key = layer.key_finder(header.key_fingerprint, layer.path);
+        /// The key is resolved; release the finder so no key-resolution callback is retained.
+        layer.key_finder = {};
         headers.push_back(std::move(header));
 
         initialized_encryptors.emplace_back(

@@ -58,6 +58,7 @@ private:
     {
         /// Only used as the `path_for_logs` argument to `key_finder` (key-resolution diagnostics).
         String path;
+        /// Resolves the header's key fingerprint to the key; cleared once `parseHeaders` resolves `key`.
         KeyFinderFunc key_finder;
         /// Populated by `parseHeaders`.
         String key;
