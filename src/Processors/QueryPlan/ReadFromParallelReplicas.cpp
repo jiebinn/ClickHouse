@@ -222,7 +222,7 @@ Pipe ReadFromParallelReplicasStep::createPipeForSingeReplica(
         context,
         ThrottlerPtr{},
         Scalars{},
-        Tables{},
+        context->getExternalTables(),
         QueryProcessingStage::QueryPlan,
         RemoteQueryExecutor::Extension{.parallel_reading_coordinator = coordinator, .replica_info = std::move(replica_info)},
         connection_pool_with_failover,
@@ -239,8 +239,6 @@ Pipe ReadFromParallelReplicasStep::createPipeForSingeReplica(
         async_read,
         async_query_sending,
         parallel_marshalling_threads);
-    // addConvertingActions(pipe, *out_header, context);
-    // return pipe;
 }
 
 void ReadFromParallelReplicasStep::describeDistributedPlan(FormatSettings & settings, const ExplainPlanOptions & options)
