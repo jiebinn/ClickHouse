@@ -11,10 +11,16 @@ from ci.defs.job_configs import JobConfigs
 #
 # Runs every Monday at 03:00 UTC.
 
+# NOTE: event is temporarily set to PULL_REQUEST to validate the CFI build+test path
+# (-fvisibility=default, -fno-sanitize-trap=cfi) against this fork PR head. A schedule
+# workflow's workflow_dispatch checks out only base-repo refs, so it cannot exercise a
+# fork head; PULL_REQUEST wires CHECKOUT_REF to the PR head sha. Revert to
+# Workflow.Event.SCHEDULE with `branches=[BASE_BRANCH]` and re-enable `cron_schedules`
+# before merging.
 workflow = Workflow.Config(
     name="WeeklyCFI",
-    event=Workflow.Event.SCHEDULE,
-    branches=[BASE_BRANCH],
+    event=Workflow.Event.PULL_REQUEST,
+    base_branches=[BASE_BRANCH],
     jobs=[
         *JobConfigs.cfi_build_job,
         *JobConfigs.cfi_stateless_jobs,
@@ -30,7 +36,6 @@ workflow = Workflow.Config(
     enable_cache=True,
     enable_report=True,
     enable_cidb=True,
-    cron_schedules=["0 3 * * 1"],
     pre_hooks=["python3 ./ci/jobs/scripts/workflow_hooks/store_data.py"],
 )
 
