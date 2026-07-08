@@ -156,6 +156,40 @@ class Targeting:
                 return f"{base_name}{ext}"
         return None
 
+    @staticmethod
+    def is_sequential_functional_test(test_source_file: str) -> bool:
+        """True if the on-disk stateless test file (e.g. `00001_x.sql`, as
+        returned by `functional_test_hash_batch_file`) is tagged `no-parallel`
+        or `sequential`.
+
+        Mirrors `clickhouse-test`'s own `is_sequential_test`/tag-parsing logic,
+        so the batch-skip check in `functional_tests.py` can tell whether a
+        changed test would even be selected by a job invoked with the
+        `parallel`/`sequential` runner option (`--no-sequential`/`--no-parallel`),
+        which splits the suite into two independently hash-batched job flavors.
+        """
+        if test_source_file.endswith(".sql") or test_source_file.endswith(".sql.j2"):
+            comment_sign = "--"
+        elif test_source_file.endswith((".sh", ".py", ".expect")):
+            comment_sign = "#"
+        else:
+            return False
+        path = Path("tests/queries/0_stateless") / test_source_file
+        try:
+            with path.open("r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.rstrip("\n")
+                    if not line.startswith(comment_sign):
+                        continue
+                    rest = line[len(comment_sign):].lstrip()
+                    if not rest.startswith("Tags:"):
+                        continue
+                    tags = {t.strip() for t in rest[len("Tags:"):].split(",")}
+                    return "no-parallel" in tags or "sequential" in tags
+        except OSError:
+            return False
+        return False
+
     def get_changed_tests(self):
         # TODO: add support for integration tests
         result = set()

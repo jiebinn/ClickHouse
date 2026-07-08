@@ -405,7 +405,7 @@ def should_skip_job(job_name):
         and _info_cache.pr_number > 0
         and not _has_build_digest_changes(_info_cache.get_changed_files() or [])
     ):
-        return True, "Skipped: no build-affecting changes; coverage merge would be identical to master"
+        return True, "No build-affecting changes"
 
     # If only CI scripts changed (no product code), run a minimal set of tests
     # to validate the CI pipeline: stateless batch 1 and amd_asan_ubsan integration batch 1.

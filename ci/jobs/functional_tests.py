@@ -320,12 +320,15 @@ def main():
             is_parallel_replicas = True
 
     # If this PR only touches test files (no production/config code changed),
-    # each batch only needs to run the changed tests that hash into it - other
-    # batches would produce identical results to master and can be skipped.
+    # this job only needs to run if one of the changed tests would even be
+    # selected here - and, when the job is also hash-batched (N/M), only the
+    # batch(es) containing a changed test need to run. Other jobs/batches
+    # would produce results identical to master and can be skipped. Note:
+    # "parallel"/"sequential" job flavors need no batch number of their own
+    # (e.g. "amd_debug, parallel") - the flavor-applicability check below must
+    # not be gated on batching being active.
     if (
-        batch_num
-        and total_batches > 1
-        and not is_flaky_check
+        not is_flaky_check
         and not is_targeted_check
         and not is_bugfix_validation
         and not is_llvm_coverage
@@ -347,6 +350,13 @@ def main():
                     status=Result.Status.SKIPPED,
                     info="Only non-functional test files changed in this PR - nothing for this job to run",
                 ).complete_job()
+            # "parallel"/"sequential" is a second, independent sharding dimension:
+            # each is hash-batched separately (--no-sequential/--no-parallel), and
+            # a test tagged no-parallel/sequential never runs under the "parallel"
+            # flavor (and vice versa) regardless of batch. Restrict to the changed
+            # tests that this job flavor would even select before checking batches.
+            is_parallel_flavor = "parallel" in test_options
+            is_sequential_flavor = "sequential" in test_options
             hash_batch_files = []
             for f in changed_functional_files:
                 hash_batch_file = Targeting.functional_test_hash_batch_file(f)
@@ -355,10 +365,27 @@ def main():
                     # orphan data file) - be conservative and run the batch normally.
                     hash_batch_files = None
                     break
+                is_sequential_test = Targeting.is_sequential_functional_test(
+                    hash_batch_file
+                )
+                if is_parallel_flavor and is_sequential_test:
+                    continue
+                if is_sequential_flavor and not is_sequential_test:
+                    continue
                 hash_batch_files.append(hash_batch_file)
-            if hash_batch_files is not None and not any(
-                zlib.crc32(f.encode("utf-8")) % total_batches == batch_num - 1
-                for f in hash_batch_files
+            if hash_batch_files is not None and not hash_batch_files:
+                Result.create_from(
+                    status=Result.Status.SKIPPED,
+                    info="Only test files changed in this PR and none of the changed tests apply to this job's parallel/sequential flavor",
+                ).complete_job()
+            if (
+                hash_batch_files is not None
+                and batch_num
+                and total_batches > 1
+                and not any(
+                    zlib.crc32(f.encode("utf-8")) % total_batches == batch_num - 1
+                    for f in hash_batch_files
+                )
             ):
                 Result.create_from(
                     status=Result.Status.SKIPPED,
