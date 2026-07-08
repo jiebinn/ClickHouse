@@ -1716,8 +1716,8 @@
     "destination": "/concepts/features/dictionaries/best-practices"
   },
   {
-    "source": "/docs/en/cloud/manage/service-types",
-    "destination": "/products/cloud/features/cloud-tiers"
+    "source": "/en/:path*",
+    "destination": "/:path*"
   },
   {
     "source": "/engines",
