@@ -21,6 +21,7 @@ CORE_BLOCKING_JOB_NAMES = [
         for substr in (
             "_debug, parallel",
             "_binary, parallel",
+            "_binary, sequential",
             "_asan_ubsan, distributed plan, parallel",
             "_asan_ubsan, db disk, distributed plan, sequential",
             "_tsan, parallel",
