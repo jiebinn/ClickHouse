@@ -486,10 +486,19 @@ void SortingStep::mergingSorted(QueryPipelineBuilder & pipeline, const SortDescr
             });
         }
 
+        /// A read-in-order `LIMIT` merge relies on a single `MergingSortedTransform`:
+        /// it stops as soon as it has produced `limit_` rows, and with virtual rows
+        /// (`read_in_order_use_virtual_row`) it can also skip reading parts whose smallest
+        /// key is beyond the `LIMIT` frontier. A hierarchical merge tree would defeat this,
+        /// because every intermediate merger applies `limit_` to its own group and would
+        /// eagerly read up to `limit_` rows from each group, including groups that never
+        /// contribute to the global result. So keep a single merge node when there is a limit.
+        const size_t max_streams_per_layer = limit_ ? 0 : sort_settings.max_streams_per_hierarchical_merge;
+
         addHierarchicalMergingSorted(
             pipeline,
             result_sort_desc,
-            sort_settings.max_streams_per_hierarchical_merge,
+            max_streams_per_layer,
             sort_settings.max_block_size,
             limit_,
             always_read_till_end,
