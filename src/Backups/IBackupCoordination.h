@@ -112,9 +112,8 @@ public:
     virtual BackupFileInfos getFileInfos() const = 0;
     virtual BackupFileInfos getFileInfosForAllHosts() const = 0;
 
-    /// Calls `callback` for each file info of all hosts. Unlike getFileInfosForAllHosts, overrides
-    /// iterate the infos in place instead of materializing a copy of all of them (a backup can
-    /// contain millions). The default implementation falls back to copying.
+    /// Like getFileInfosForAllHosts, but iterates the infos in place instead of copying them all
+    /// (a backup can contain millions). The default implementation copies.
     virtual void forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const;
 
     /// Starts writing a specified file, the function returns false if that file is already being written concurrently.

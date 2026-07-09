@@ -43,8 +43,7 @@ public:
     /// Returns file infos for all hosts after preparation.
     BackupFileInfos getFileInfosForAllHosts() const;
 
-    /// Calls `callback` for each file info of all hosts, in the same order as getFileInfosForAllHosts,
-    /// without copying the infos.
+    /// Like getFileInfosForAllHosts, but without copying the infos.
     void forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const;
 
     /// Returns a file info by data file index (see BackupFileInfo::data_file_index).

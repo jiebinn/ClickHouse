@@ -437,8 +437,7 @@ void BackupImpl::writeBackupMetadata()
         *out << "<data_file_name_generator>" << SettingFieldBackupDataFileNameGeneratorTypeTraits::toString(data_file_name_generator)
              << "</data_file_name_generator>";
 
-    /// Iterate the file infos in place: a backup can contain millions of them, and materializing a
-    /// copy of all of them (as getFileInfosForAllHosts does) can transiently cost gigabytes.
+    /// Iterate in place instead of copying all file infos (a backup can contain millions).
     size_t num_all_file_infos = 0;
     bool base_backup_in_use = false;
     coordination->forEachFileInfoForAllHosts([&](const BackupFileInfo & info)

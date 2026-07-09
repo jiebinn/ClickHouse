@@ -787,8 +787,6 @@ BackupFileInfos BackupCoordinationOnCluster::getFileInfosForAllHosts() const
 void BackupCoordinationOnCluster::forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const
 {
     auto component_guard = Coordination::setCurrentComponent("BackupCoordinationOnCluster::forEachFileInfoForAllHosts");
-    /// The callback runs under the mutex; the only user is the finalization of a backup, which runs
-    /// after all hosts have added their file infos.
     std::lock_guard lock{file_infos_mutex};
     prepareFileInfos();
     file_infos->forEachFileInfoForAllHosts(callback);

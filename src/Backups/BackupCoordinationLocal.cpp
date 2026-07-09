@@ -124,8 +124,6 @@ BackupFileInfos BackupCoordinationLocal::getFileInfosForAllHosts() const
 
 void BackupCoordinationLocal::forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const
 {
-    /// The callback runs under the mutex; the only user is the finalization of a backup, which runs
-    /// after all file infos have been added.
     std::lock_guard lock{file_infos_mutex};
     file_infos.forEachFileInfoForAllHosts(callback);
 }
