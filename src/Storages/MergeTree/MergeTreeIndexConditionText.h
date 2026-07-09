@@ -72,7 +72,7 @@ private:
     /// Not sorted, not deduplicated.
     VectorWithMemoryTracking<String> phrase_tokens;
     /// Precomputed in the constructor because getHash is called on hot paths.
-    UInt128 hash;
+    UInt128 hash{};
 };
 
 using TextSearchQueryPtr = std::shared_ptr<TextSearchQuery>;
