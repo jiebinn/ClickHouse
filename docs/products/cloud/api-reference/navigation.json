@@ -1,0 +1,181 @@
+{
+  "group": "API reference",
+  "openapi": "https://api.clickhouse.cloud/v1",
+  "pages": [
+    {
+      "group": "Organization",
+      "pages": [
+        {
+          "group": "Organization",
+          "pages": [
+            "products/cloud/api-reference/organization/organization-get-list",
+            "products/cloud/api-reference/organization/organization-get",
+            "products/cloud/api-reference/organization/organization-update",
+            "products/cloud/api-reference/organization/activity-get-list",
+            "products/cloud/api-reference/organization/activity-get",
+            "products/cloud/api-reference/organization/organization-private-endpoint-config-get-list",
+            "products/cloud/api-reference/organization/organization-byoc-infrastructure-create",
+            "products/cloud/api-reference/organization/organization-byoc-infrastructure-delete",
+            "products/cloud/api-reference/organization/organization-byoc-infrastructure-update"
+          ]
+        },
+        {
+          "group": "Billing",
+          "pages": [
+            "products/cloud/api-reference/billing/usage-cost-get"
+          ]
+        },
+        {
+          "group": "User management",
+          "pages": [
+            "products/cloud/api-reference/user-management/member-get-list",
+            "products/cloud/api-reference/user-management/member-get",
+            "products/cloud/api-reference/user-management/member-update",
+            "products/cloud/api-reference/user-management/member-delete",
+            "products/cloud/api-reference/user-management/invitation-get-list",
+            "products/cloud/api-reference/user-management/invitation-create",
+            "products/cloud/api-reference/user-management/invitation-get",
+            "products/cloud/api-reference/user-management/invitation-delete"
+          ]
+        },
+        {
+          "group": "Role Management",
+          "pages": [
+            "products/cloud/api-reference/role-management/organization-roles-get-list",
+            "products/cloud/api-reference/role-management/organization-role-post",
+            "products/cloud/api-reference/role-management/organization-role-get",
+            "products/cloud/api-reference/role-management/organization-role-patch",
+            "products/cloud/api-reference/role-management/organization-role-delete"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Service",
+      "pages": [
+        {
+          "group": "Service",
+          "pages": [
+            "products/cloud/api-reference/service/instance-get-list",
+            "products/cloud/api-reference/service/instance-create",
+            "products/cloud/api-reference/service/instance-get",
+            "products/cloud/api-reference/service/instance-update",
+            "products/cloud/api-reference/service/instance-delete",
+            "products/cloud/api-reference/service/instance-private-endpoint-config-get",
+            "products/cloud/api-reference/service/instance-query-endpoint-get",
+            "products/cloud/api-reference/service/instance-query-endpoint-delete",
+            "products/cloud/api-reference/service/instance-query-endpoint-upsert",
+            "products/cloud/api-reference/service/instance-state-update",
+            "products/cloud/api-reference/service/instance-scaling-update",
+            "products/cloud/api-reference/service/instance-replica-scaling-update",
+            "products/cloud/api-reference/service/instance-password-update",
+            "products/cloud/api-reference/service/instance-private-endpoint-create",
+            "products/cloud/api-reference/service/scaling-schedule-get",
+            "products/cloud/api-reference/service/scaling-schedule-upsert",
+            "products/cloud/api-reference/service/scaling-schedule-delete",
+            "products/cloud/api-reference/service/upgrade-window-get",
+            "products/cloud/api-reference/service/upgrade-window-update",
+            "products/cloud/api-reference/service/upgrade-window-delete",
+            "products/cloud/api-reference/service/service-clickhouse-settings-list-get",
+            "products/cloud/api-reference/service/service-clickhouse-settings-update",
+            "products/cloud/api-reference/service/service-clickhouse-settings-schema-get",
+            "products/cloud/api-reference/service/service-clickhouse-setting-get",
+            "products/cloud/api-reference/service/service-clickhouse-setting-delete"
+          ]
+        },
+        {
+          "group": "Backup",
+          "pages": [
+            "products/cloud/api-reference/backup/backup-get-list",
+            "products/cloud/api-reference/backup/backup-get",
+            "products/cloud/api-reference/backup/backup-configuration-get",
+            "products/cloud/api-reference/backup/backup-configuration-update",
+            "products/cloud/api-reference/backup/backup-bucket-get",
+            "products/cloud/api-reference/backup/backup-bucket-create",
+            "products/cloud/api-reference/backup/backup-bucket-update",
+            "products/cloud/api-reference/backup/backup-bucket-delete"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "OpenAPI",
+      "pages": [
+        "products/cloud/api-reference/openapi/openapi-key-get-list",
+        "products/cloud/api-reference/openapi/openapi-key-create",
+        "products/cloud/api-reference/openapi/openapi-key-get",
+        "products/cloud/api-reference/openapi/openapi-key-update",
+        "products/cloud/api-reference/openapi/openapi-key-delete"
+      ]
+    },
+    {
+      "group": "Prometheus",
+      "pages": [
+        "products/cloud/api-reference/prometheus/organization-prometheus-get",
+        "products/cloud/api-reference/prometheus/instance-prometheus-get",
+        "products/cloud/api-reference/prometheus/postgres-org-prometheus-get",
+        "products/cloud/api-reference/prometheus/postgres-instance-prometheus-get"
+      ]
+    },
+    {
+      "group": "ClickPipes",
+      "pages": [
+        "products/cloud/api-reference/clickpipes/click-pipe-get-list",
+        "products/cloud/api-reference/clickpipes/click-pipe-create",
+        "products/cloud/api-reference/clickpipes/click-pipe-get",
+        "products/cloud/api-reference/clickpipes/click-pipe-update",
+        "products/cloud/api-reference/clickpipes/click-pipe-delete",
+        "products/cloud/api-reference/clickpipes/click-pipe-settings-get",
+        "products/cloud/api-reference/clickpipes/click-pipe-settings-update",
+        "products/cloud/api-reference/clickpipes/click-pipe-schema-discovery",
+        "products/cloud/api-reference/clickpipes/click-pipe-scaling-update",
+        "products/cloud/api-reference/clickpipes/click-pipe-state-update",
+        "products/cloud/api-reference/clickpipes/click-pipe-cdc-scaling-get",
+        "products/cloud/api-reference/clickpipes/click-pipe-cdc-scaling-update",
+        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-get-list",
+        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-create",
+        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-get",
+        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-delete",
+        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-update"
+      ]
+    },
+    {
+      "group": "ClickStack",
+      "pages": [
+        "products/cloud/api-reference/clickstack/click-stack-list-dashboards",
+        "products/cloud/api-reference/clickstack/click-stack-create-dashboard",
+        "products/cloud/api-reference/clickstack/click-stack-get-dashboard",
+        "products/cloud/api-reference/clickstack/click-stack-update-dashboard",
+        "products/cloud/api-reference/clickstack/click-stack-delete-dashboard",
+        "products/cloud/api-reference/clickstack/click-stack-list-alerts",
+        "products/cloud/api-reference/clickstack/click-stack-create-alert",
+        "products/cloud/api-reference/clickstack/click-stack-list-sources",
+        "products/cloud/api-reference/clickstack/click-stack-get-alert",
+        "products/cloud/api-reference/clickstack/click-stack-update-alert",
+        "products/cloud/api-reference/clickstack/click-stack-delete-alert",
+        "products/cloud/api-reference/clickstack/click-stack-list-webhooks"
+      ]
+    },
+    {
+      "group": "Postgres",
+      "pages": [
+        "products/cloud/api-reference/postgres/postgres-service-create",
+        "products/cloud/api-reference/postgres/postgres-service-get-list",
+        "products/cloud/api-reference/postgres/postgres-service-get",
+        "products/cloud/api-reference/postgres/postgres-service-delete",
+        "products/cloud/api-reference/postgres/postgres-service-patch",
+        "products/cloud/api-reference/postgres/postgres-service-certs-get",
+        "products/cloud/api-reference/postgres/postgres-instance-restore",
+        "products/cloud/api-reference/postgres/postgres-service-set-password",
+        "products/cloud/api-reference/postgres/postgres-service-patch-state",
+        "products/cloud/api-reference/postgres/postgres-instance-create-read-replica",
+        "products/cloud/api-reference/postgres/postgres-instance-config-get",
+        "products/cloud/api-reference/postgres/postgres-instance-config-post",
+        "products/cloud/api-reference/postgres/postgres-instance-config-patch",
+        "products/cloud/api-reference/postgres/postgres-instance-metrics-get",
+        "products/cloud/api-reference/postgres/slow-query-patterns-get-list",
+        "products/cloud/api-reference/postgres/slow-query-pattern-get"
+      ]
+    }
+  ]
+}

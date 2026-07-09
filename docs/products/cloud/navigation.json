@@ -337,10 +337,7 @@
             }
           ]
         },
-        {
-          "group": "API reference",
-          "openapi": "https://api.clickhouse.cloud/v1"
-        }
+        { "$ref": "./api-reference/navigation.json" }
       ]
     },
     {
