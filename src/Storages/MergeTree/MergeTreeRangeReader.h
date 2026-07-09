@@ -140,17 +140,7 @@ class FilterWithCachedCount
 public:
     explicit FilterWithCachedCount() = default;
 
-    explicit FilterWithCachedCount(const ColumnPtr & column_)
-        : const_description(*column_)
-    {
-        ColumnPtr col = column_->convertToFullIfWrapped()->convertToFullColumnIfLowCardinality();
-        FilterDescription desc(*col);
-        column = desc.data_holder ? desc.data_holder : col;
-        data = desc.data;
-    }
-=======
     explicit FilterWithCachedCount(const ColumnPtr & column_);
->>>>>>> 4c5222940728ada84c9b331cb92218d74773fbc5
 
     bool present() const { return !!column; }
 
