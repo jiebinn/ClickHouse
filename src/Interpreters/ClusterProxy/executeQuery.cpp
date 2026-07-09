@@ -1023,6 +1023,10 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
     {
         auto local_replica_index = findLocalReplicaIndexAndUpdatePools(connection_pools, max_replicas_to_use, cluster);
 
+        /// Pin the snapshot replica to the initiator-local replica_num BEFORE any announcement
+        /// is sent (either locally from here or from remote replicas over the network).
+        coordinator->setSnapshotReplicaNum(local_replica_index);
+
         auto plan_fragment_clone = std::make_unique<QueryPlan>(plan_fragment->clone());
         auto local_plan
             = createLocalPlanFragmentForParallelReplicas(context, std::move(plan_fragment_clone), coordinator, local_replica_index);
