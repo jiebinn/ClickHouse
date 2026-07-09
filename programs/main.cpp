@@ -2,7 +2,6 @@
 #include <base/scope_guard.h>
 #include <base/defines.h>
 #include <base/sanitizer_options.h>
-#include <base/sanitizer_report.h>
 
 #include <Common/EnvironmentChecks.h>
 #include <Common/Exception.h>
