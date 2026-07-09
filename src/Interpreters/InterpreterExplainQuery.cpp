@@ -1179,6 +1179,7 @@ QueryPipeline InterpreterExplainQuery::executeImpl()
             watch.restart();
             auto pipeline = QueryPipelineBuilder::getPipeline(std::move(*pipeline_builder));
 
+            pipeline.setNormalizedQueryHash(query_context->getNormalizedQueryHash());
             auto to_complete = options.to_stage == QueryProcessingStage::Complete;
             auto quota = (!inner_ignore_quota && to_complete) ? context->getQuota() : nullptr;
 
