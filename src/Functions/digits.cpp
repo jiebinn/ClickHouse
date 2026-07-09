@@ -14,6 +14,7 @@
 #include <Common/intExp10.h>
 
 #include <limits>
+#include <optional>
 
 namespace DB
 {
@@ -27,50 +28,68 @@ extern const int ILLEGAL_COLUMN;
 namespace
 {
 
-UInt64 extractDigits(UInt64 num, Int64 offset, Int64 length, bool has_length)
+struct DigitRange
+{
+    Int64 first; // 1-based
+    Int64 count; // Number of digits to take from position first inclusive
+};
+
+std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int64 length, bool has_length)
 {
     if (offset == 0)
         throw Exception(ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX, "Indices in number are 1-based");
-    if (has_length && length == 0) // No digits to return
-        return 0ULL;
 
-    const Int64 total_digits = common::digits10(num);
+    Int64 first = offset > 0 ? offset : total_digits + offset + 1;
+    if (first > total_digits) // Index is greater than the right boundary
+        return std::nullopt;
 
-    if (offset < 0)
-        offset = total_digits + offset + 1; // Index from the left
-
-    if (offset > total_digits) // Index is greater than the right boundary
-        return 0ULL;
-
-    Int64 count = 0; // Number of digits to take from offset inclusive
     if (!has_length)
     {
-        offset = std::max<Int64>(offset, 1);
-        count = total_digits - offset + 1;
+        first = std::max<Int64>(first, 1);
+        return DigitRange{first, total_digits - first + 1};
     }
-    else
+
+    if (length == 0)
+        return std::nullopt;
+
+    if (length < 0)
     {
-        if (length < 0)
-        {
-            const Int64 end = total_digits + length; // negative length: absolute end position
-            offset = std::max<Int64>(offset, 1);
-            count = end - offset + 1;
-        }
-        else
-        {
-            // Length consumed by the off-edge positions left of index 1 that the window covers.
-            // `1 - offset` cannot overflow: common::digits10 >= 1 guarantees offset >= INT64_MIN + 2 at this point.
-            Int64 required = (offset <= 0 ? 1 - offset : 0);
-            length = length - required;
-            offset = std::max<Int64>(offset, 1);
-            count = std::min<Int64>(length, total_digits - offset + 1);
-        }
+        Int64 last = total_digits + length; // Negative length: absolute end position
+        if (last < 1)
+            return std::nullopt;
+
+        first = std::max<Int64>(first, 1);
+        if (last < first)
+            return std::nullopt;
+
+        return DigitRange{first, last - first + 1};
     }
-    if (count <= 0)
-        return 0ULL;
-    const Int64 suffix = total_digits - (offset + count - 1); // Suffix to remove
-    const UInt64 shifted = num / intExp10(static_cast<int>(suffix)); // Okay to cast suffix to int because suffix range is [0, 20)
-    return count >= 20 ? shifted : shifted % intExp10(static_cast<int>(count)); // Okay to cast count to int because count range is [1, 20]
+
+    if (first <= 0)
+    {
+        // Length consumed by the off-edge positions left of index 1 that the window covers.
+        // `1 - first` cannot overflow: total_digits >= 1 guarantees first >= INT64_MIN + 2 at this point.
+        Int64 skipped = 1 - first;
+        if (length <= skipped)
+            return std::nullopt;
+
+        length -= skipped;
+        first = 1;
+    }
+
+    return DigitRange{first, std::min<Int64>(length, total_digits - first + 1)};
+}
+
+UInt64 extractDigits(UInt64 num, Int64 offset, Int64 length, bool has_length)
+{
+    const Int64 total_digits = common::digits10(num);
+    const auto range = getDigitRange(total_digits, offset, length, has_length);
+    if (!range)
+        return 0;
+
+    const Int64 suffix = total_digits - range->first - range->count + 1; // Suffix to remove
+    const UInt64 shifted = num / intExp10(static_cast<int>(suffix));
+    return range->count >= 20 ? shifted : shifted % intExp10(static_cast<int>(range->count));
 }
 
 class FunctionDigits final : public IFunction
@@ -91,7 +110,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        const bool has_nullable = anyArgumentNullable(arguments);
+        const bool has_nullable = getNullPresense(arguments).has_nullable;
 
         ColumnsWithTypeAndName args_without_nullable = arguments;
         for (auto & arg : args_without_nullable)
@@ -159,9 +178,6 @@ public:
         auto result = ColumnUInt64::create(input_rows_count);
         auto & result_data = result->getData();
 
-        const bool is_offset_uint64 = (offset_column->getDataType() == TypeIndex::UInt64);
-        const bool is_length_uint64 = (has_length && length_column->getDataType() == TypeIndex::UInt64);
-
         if (!castTypeToEither<ColumnInt8, ColumnInt16, ColumnInt32, ColumnInt64, ColumnUInt8, ColumnUInt16, ColumnUInt32, ColumnUInt64>(
                 number_column.get(),
                 [&](const auto & col)
@@ -182,12 +198,10 @@ public:
                             magnitude = num < 0 ? -static_cast<UInt64>(num) : static_cast<UInt64>(num);
                         else
                             magnitude = static_cast<UInt64>(num);
-                        // If type is UInt64 and it exceeds max Int64 value, set it to max Int64 val
-                        // as maximum number of digits can only be 20 and it would not affect result
-                        Int64 offset = (is_offset_uint64 ? getMaxSignedValFromUnsigned(offset_column, i) : offset_column->getInt(i));
+                        Int64 offset = getClampedInt64(*offset_column, i);
                         Int64 length = 0;
                         if (has_length)
-                            length = (is_length_uint64 ? getMaxSignedValFromUnsigned(length_column, i) : length_column->getInt(i));
+                            length = getClampedInt64(*length_column, i);
                         result_data[i] = extractDigits(magnitude, offset, length, has_length);
                     }
                     return true;
@@ -196,23 +210,18 @@ public:
                 ErrorCodes::ILLEGAL_COLUMN, "Illegal column {} of argument of function {}", number_column->getName(), getName());
 
         if (any_nullable)
-            return ColumnNullable::create(std::move(result), std::move(combined_null_map));
+            return wrapInNullable(std::move(result), std::move(combined_null_map));
         return result;
     }
 
-    static bool anyArgumentNullable(const ColumnsWithTypeAndName & arguments)
+    static Int64 getClampedInt64(const IColumn & col, size_t index)
     {
-        bool has_nullable = false;
-        for (const auto & arg : arguments)
-            has_nullable |= arg.type->isNullable();
-        return has_nullable;
-    }
-
-    static Int64 getMaxSignedValFromUnsigned(const ColumnPtr & col, size_t index)
-    {
-        if (col->getUInt(index) > std::numeric_limits<Int64>::max())
+        // digits() only cares about magnitude and any offset/length past 20 has the same effect
+        // so clamping UInt64 to INT64_MAX is safe.
+        if (col.getDataType() == TypeIndex::UInt64
+            && col.getUInt(index) > static_cast<UInt64>(std::numeric_limits<Int64>::max()))
             return std::numeric_limits<Int64>::max();
-        return col->getInt(index);
+        return col.getInt(index);
     }
 };
 
