@@ -86,10 +86,12 @@ UInt64 extractDigits(UInt64 num, Int64 offset, Int64 length, bool has_length)
     const auto range = getDigitRange(total_digits, offset, length, has_length);
     if (!range)
         return 0;
-
+    // getDigitRange guarantees first in [1, total_digits] and count in [1, total_digits - first + 1],
+    // so suffix in [0, 19] and count in [1, 20]; intExp10 is never called with a negative argument
+    // and never returns 0 here.
     const Int64 suffix = total_digits - range->first - range->count + 1; // Suffix to remove
-    const UInt64 shifted = num / intExp10(static_cast<int>(suffix));
-    return range->count >= 20 ? shifted : shifted % intExp10(static_cast<int>(range->count));
+    const UInt64 shifted = num / intExp10(static_cast<int>(suffix)); // NOLINT(clang-analyzer-core.DivideZero)
+    return range->count >= 20 ? shifted : shifted % intExp10(static_cast<int>(range->count)); // NOLINT(clang-analyzer-core.DivideZero)
 }
 
 class FunctionDigits final : public IFunction
