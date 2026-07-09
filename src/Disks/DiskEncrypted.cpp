@@ -3,6 +3,8 @@
 #if USE_SSL
 #include <Disks/DiskFactory.h>
 #include <IO/ReadPipeline.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/Cache/EncryptionHeaderCache.h>
 #include <Common/Base64.h>
 #include <Common/Exception.h>
 #include <IO/FileEncryptionCommon.h>
@@ -452,7 +454,11 @@ void DiskEncrypted::prepareRead(
     /// Deterministic-path backends (plain / plain-rewritable, local, web) reuse the path on rewrite
     /// and are excluded.
     if (delegate->areBlobPathsRandom())
-        pipeline.allowEncryptionHeaderCache();
+    {
+        if (auto global_context = Context::getGlobalContextInstance())
+            if (auto cache = global_context->getEncryptionHeaderCache())
+                pipeline.needEncryptionHeaderCache(std::move(cache));
+    }
 }
 
 size_t DiskEncrypted::getFileSize(const String & path) const

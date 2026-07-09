@@ -15,7 +15,6 @@ namespace DB
 
 class MMappedFileCache;
 class PageCache;
-class EncryptionHeaderCache;
 class Context;
 
 /// Settings controlling reads from a remote filesystem (S3, Azure, HDFS, GCS, …).
@@ -142,11 +141,6 @@ struct ReadSettings
     bool use_page_cache_for_local_disks = false;
     bool use_page_cache_for_object_storage = false;
     PageCacheSettings page_cache_settings;
-
-    /// Shared global cache of encryption-header bytes by file path. The experimental ReaderExecutor
-    /// uses it to skip re-reading the header of a repeatedly-opened encrypted file; enabled only for
-    /// random-object-key disks (see `ReadPipeline::allowEncryptionHeaderCache`). Null disables it.
-    std::shared_ptr<EncryptionHeaderCache> encryption_header_cache;
 
     /// Experimental pipeline read executor. When `enabled`, `ReadPipeline::build` routes supported
     /// reads through `ReaderExecutor` instead of the legacy matryoshka of read buffers (reading in
