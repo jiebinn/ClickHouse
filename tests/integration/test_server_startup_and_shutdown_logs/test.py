@@ -13,8 +13,6 @@ instance = cluster.add_instance(
 )
 
 # Separate instances validate that the console log level is restored after startup.
-# They use a non-"none" root level so the post-startup "Restored ..." message is itself logged
-# (with level=none it would be suppressed right after the root logger level is restored).
 instance_console_unset = cluster.add_instance(
     "node_console_unset",
     main_configs=[
