@@ -19,8 +19,11 @@ CREATE TABLE t_users_dist_108299 (uid Int16, name String, age Int16)
 
 INSERT INTO t_users_108299 VALUES (1231, 'John', 33), (6666, 'Ksenia', 48), (8888, 'Alice', 50);
 
-SELECT age FROM t_users_dist_108299 WHERE name != '' ORDER BY age SETTINGS optimize_functions_to_subcolumns = 1;
-SELECT age FROM t_users_dist_108299 WHERE name != '' ORDER BY age SETTINGS optimize_functions_to_subcolumns = 0;
+-- optimize_empty_string_comparisons must be pinned: the buggy rewrite only fires via
+-- name != '' -> notEmpty(name) -> name.size, which requires this setting enabled. CI
+-- randomizes it, so pin it here to keep this a deterministic regression guard.
+SELECT age FROM t_users_dist_108299 WHERE name != '' ORDER BY age SETTINGS optimize_functions_to_subcolumns = 1, optimize_empty_string_comparisons = 1;
+SELECT age FROM t_users_dist_108299 WHERE name != '' ORDER BY age SETTINGS optimize_functions_to_subcolumns = 0, optimize_empty_string_comparisons = 1;
 
 DROP TABLE t_users_dist_108299;
 DROP TABLE t_users_108299;
