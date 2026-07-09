@@ -839,6 +839,15 @@ void SchemaConverter::processSubtreeTuple(TraversalNode & node)
     /// wrapped in ColumnNullable using the group null map. Make input_type Nullable(Tuple(...)) so
     /// the outer restore in processSubtree sees no type change (needs_cast stays off); the wrapping
     /// is done in Reader::formOutputColumn keyed by OutputColumnInfo::nullable_group.
+    /// The group null map is reconstructed from a physical leaf's definition levels, so at least one
+    /// leaf must actually be read. With allow_missing_columns, every requested element can be a
+    /// synthetic default (no physical leaf); then the null map is unrecoverable, so reject rather
+    /// than fabricate an all-non-null map that silently drops the struct nulls.
+    if (nullable_group && primitive_start == primitive_columns.size())
+        throw Exception(ErrorCodes::TYPE_MISMATCH,
+            "Requested type of column {} doesn't match parquet schema: physically nullable Tuple has no "
+            "physical elements to read (all requested elements are missing), so its null map cannot be "
+            "reconstructed; requested type is {}", node.getNameForLogging(), node.type_hint->getName());
     if (nullable_group)
         output_type = makeNullable(output_type);
 

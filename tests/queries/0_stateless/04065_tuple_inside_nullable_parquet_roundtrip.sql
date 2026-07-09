@@ -246,3 +246,17 @@ INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_opt_ancestor.parque
 SELECT `c0.inner` FROM file(currentDatabase() || '_04065_opt_ancestor.parquet', 'Parquet', '`c0.inner` Nullable(Tuple(a UInt32))'); -- { serverError TYPE_MISMATCH }
 
 DROP TABLE test_nullable_tuple_opt_ancestor;
+
+-- Physically nullable struct read as Nullable(Tuple) where every requested element is missing and
+-- synthesized (input_format_parquet_allow_missing_columns). With no physical leaf, the group null
+-- map cannot be reconstructed, so reject rather than fabricate an all-non-null map (would abort /
+-- read past the decoded-leaf array otherwise).
+DROP TABLE IF EXISTS test_nullable_tuple_all_missing;
+CREATE TABLE test_nullable_tuple_all_missing (c0 Nullable(Tuple(a UInt32, b UInt64))) ENGINE = Memory;
+INSERT INTO test_nullable_tuple_all_missing VALUES ((1, 10)), (NULL), ((3, 30));
+
+INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_all_missing.parquet', 'Parquet') SELECT c0 FROM test_nullable_tuple_all_missing;
+
+SELECT c0 FROM file(currentDatabase() || '_04065_all_missing.parquet', 'Parquet', 'c0 Nullable(Tuple(z String))') SETTINGS input_format_parquet_allow_missing_columns = 1; -- { serverError TYPE_MISMATCH }
+
+DROP TABLE test_nullable_tuple_all_missing;
