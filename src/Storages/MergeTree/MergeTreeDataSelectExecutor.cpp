@@ -2072,7 +2072,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                     {
                         /// If reverse_flags[i] is true, the left points to index_right[i].
                         left = reverse_flags[i] ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
-                        
+
                         /// If reverse_flags[i] is true, the right points to index_left[i].
                         right = reverse_flags[i] ? NEGATIVE_INFINITY : POSITIVE_INFINITY;
                     }
