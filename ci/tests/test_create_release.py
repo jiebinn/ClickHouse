@@ -6,8 +6,21 @@ root.
 """
 
 import os
+import subprocess
 import sys
 import unittest
+
+# FIXME: importing `create_release` pulls in `github_helper`/`get_robot_token`,
+# which do a top-level `from github import ...`, so it needs PyGithub -- not
+# shipped in the CI Tests docker image. Install it on demand as a stopgap.
+# The proper fix is to break the import-time PyGithub dependency of the
+# `create_release` chain (make the `github_helper`/`get_robot_token` imports
+# lazy, as `pr_version_info` already does), or drop PyGithub entirely in favour
+# of praktika's `gh`-CLI wrapper (`ci/praktika/gh.py`). Then remove this block.
+try:
+    import github  # noqa: F401  pylint: disable=unused-import
+except ModuleNotFoundError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "PyGithub"])
 
 # `create_release` lives under `tests/ci` and imports sibling modules by bare
 # name, so put that directory on `sys.path` only while importing it and remove
