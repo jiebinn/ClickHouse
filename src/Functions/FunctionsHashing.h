@@ -738,7 +738,7 @@ struct ImplXxHash64
 
     /*
        With current implementation with more than 1 arguments it will give the results
-       non-reproducible from outside of CH. (see comment on `ImplXxHash32`).
+       non-reproducible from outside of CH. (see comment on ImplXxHash32).
      */
     static auto combineHashes(UInt64 h1, UInt64 h2) { return CityHash_v1_0_2::Hash128to64(uint128_t(h1, h2)); }
 
@@ -751,7 +751,6 @@ struct ImplXxHash64Spark
 {
     static constexpr auto name = "xxHash64Spark";
     using ReturnType = Int64;
-    using uint128_t = CityHash_v1_0_2::uint128;
 
     /// Some restrictions apply:
     /// (1) While the Spark equivalent function supports >1 argument, only a single argument was verified
@@ -765,13 +764,8 @@ struct ImplXxHash64Spark
 
     static auto apply(const char * s, const size_t len) { return XXH_INLINE_XXH64(s, len, 42); }
 
-    /*
-       With current implementation with more than 1 arguments it will give the results
-       non-reproducible from outside of CH. (see comment on `ImplXxHash32`).
-    */
     static Int64 combineHashes(UInt64 /*h1*/, UInt64 /*h2*/)
     {
-        /// return bit_cast<Int64>(CityHash_v1_0_2::Hash128to64(uint128_t(bit_cast<UInt64>(h1), bit_cast<UInt64>(h2))));
         throw Exception(ErrorCodes::LOGICAL_ERROR, "{} cannot be called with more than one argument", name);
     }
 
