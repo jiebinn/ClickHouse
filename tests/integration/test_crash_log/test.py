@@ -154,6 +154,10 @@ def test_sanitizer_report_in_core_dump(started_node):
     ):
         pytest.skip("requires an ASan, TSan or MSan build")
 
+    # Only a server started with --daemon changes its working directory to the
+    # cores directory, and the previous test may have restarted it without it.
+    started_node.restart_clickhouse(daemon=True)
+
     cores_dir = os.path.join(started_node.path, "database", "cores")
     for name in os.listdir(cores_dir):
         os.remove(os.path.join(cores_dir, name))

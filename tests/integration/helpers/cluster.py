@@ -5414,7 +5414,7 @@ class ClickHouseInstance:
             logging.warning(f"Stop ClickHouse raised an error {e}")
 
     def start_clickhouse(
-        self, start_wait_sec=60, retry_start=True, expected_to_fail=False
+        self, start_wait_sec=60, retry_start=True, expected_to_fail=False, daemon=False
     ):
         if not self.stay_alive:
             raise Exception(
@@ -5431,7 +5431,15 @@ class ClickHouseInstance:
             if pid is None:
                 logging.debug("No clickhouse process running. Start new one.")
                 exec_id = self.exec_in_container(
-                    ["bash", "-c", self.clickhouse_start_command_in_daemon],
+                    [
+                        "bash",
+                        "-c",
+                        (
+                            self.clickhouse_start_command_in_daemon
+                            if daemon
+                            else self.clickhouse_start_command
+                        ),
+                    ],
                     user=str(os.getuid()),
                     detach=True,
                     use_cli=False,
@@ -5528,9 +5536,9 @@ class ClickHouseInstance:
             "ClickHouse server is still running, but was expected to shutdown. Check logs."
         )
 
-    def restart_clickhouse(self, stop_start_wait_sec=60, kill=False):
+    def restart_clickhouse(self, stop_start_wait_sec=60, kill=False, daemon=False):
         self.stop_clickhouse(stop_start_wait_sec, kill)
-        self.start_clickhouse(stop_start_wait_sec)
+        self.start_clickhouse(stop_start_wait_sec, daemon=daemon)
 
     def exec_in_container(
         self,
