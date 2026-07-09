@@ -932,18 +932,31 @@ TEST_F(ReaderExecutorTest, DecryptsMultiLayer)
     EXPECT_EQ(String(out.begin(), out.end()), plaintext);
 }
 
-TEST_F(ReaderExecutorTest, TotalSizeSaturatesOnUndersizedEncryptedFile)
+TEST_F(ReaderExecutorTest, TotalSizeIsZeroForEmptyEncryptedSource)
 {
-    /// File is 10 bytes; two layers expect 128 bytes of headers (physical size < data_start_offset).
-    /// Unsigned subtraction must saturate to 0, not underflow to ~SIZE_MAX (which would make the
-    /// executor think the logical file is enormous).
-    StoredObjects objects{makeFile("tiny.bin", 10)};
+    /// An empty encrypted source has no header. `initDecryption` skips it (no throw) and leaves
+    /// `data_start_offset` set, so `totalSize()` must report 0, not underflow `physical - data_start_offset`.
+    StoredObjects objects{makeFile("empty.bin", 0)};
+
+    ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects, ReaderExecutor::Options{});
+    executor.addDecryptionLayer("layer0", [](UInt128, const String &) { return String{}; });
+    executor.addDecryptionLayer("layer1", [](UInt128, const String &) { return String{}; });
+    executor.initDecryption();
+
+    EXPECT_EQ(executor.totalSize(), 0u);
+}
+
+TEST_F(ReaderExecutorTest, UndersizedEncryptedSourceThrowsOnInit)
+{
+    /// A non-empty file smaller than the declared headers is corrupt: `initDecryption` surfaces it
+    /// as CANNOT_READ_ALL_DATA (so `totalSize()` is never reached with 0 < physical < data_start_offset).
+    StoredObjects objects{makeFile("tiny.bin", 10)};   // 10 bytes < 128-byte two-layer header
 
     ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects, ReaderExecutor::Options{});
     executor.addDecryptionLayer("layer0", [](UInt128, const String &) { return String{}; });
     executor.addDecryptionLayer("layer1", [](UInt128, const String &) { return String{}; });
 
-    EXPECT_EQ(executor.totalSize(), 0u);
+    EXPECT_THROW(executor.initDecryption(), DB::Exception);
 }
 
 TEST_F(ReaderExecutorTest, EncryptedEofReleasesLongConnectionSlot)

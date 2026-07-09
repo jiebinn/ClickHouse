@@ -214,7 +214,7 @@ private:
     bool needsDecryption() const { return data_start_offset > 0; }
     /// Decrypt `size` bytes in place at logical `logical_offset` via the reentrant
     /// `decryptor`. No-op without SSL / with no layers.
-    void decryptInPlace(char * data, size_t size, size_t logical_offset);
+    void decryptInPlaceIfNeeded(char * data, size_t size, size_t logical_offset);
 
     std::shared_ptr<IFileBasedSourceReader> source;
     OffsetMap offset_map;
@@ -237,7 +237,7 @@ private:
     size_t max_tail_for_drain;
 
 #if USE_SSL
-    /// Immutable per-layer decryption config, parsed once by `initDecryption`; `decryptInPlace`
+    /// Immutable per-layer decryption config, parsed once by `initDecryption`; `decryptInPlaceIfNeeded`
     /// is reentrant over it. Present only in SSL builds.
     ReaderExecutorDecryptor decryptor;
 #endif

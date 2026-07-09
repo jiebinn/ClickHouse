@@ -333,7 +333,12 @@ void ReaderExecutor::dropLongConnection()
 size_t ReaderExecutor::totalSize() const
 {
     const size_t physical = offset_map.totalSize();
-    return physical > data_start_offset ? physical - data_start_offset : 0;
+    /// An empty encrypted source has no header; a non-empty one always has the full header
+    /// (initDecryption throws on a partial file), so physical is either 0 or >= data_start_offset.
+    if (physical == 0)
+        return 0;
+    chassert(physical >= data_start_offset);
+    return physical - data_start_offset;
 }
 
 void ReaderExecutor::addDecryptionLayer(
@@ -420,7 +425,7 @@ void ReaderExecutor::initDecryption()
 #endif
 }
 
-void ReaderExecutor::decryptInPlace(
+void ReaderExecutor::decryptInPlaceIfNeeded(
     [[maybe_unused]] char * data, [[maybe_unused]] size_t size, [[maybe_unused]] size_t logical_offset)
 {
 #if USE_SSL
@@ -441,16 +446,16 @@ ChainedBuffers ReaderExecutor::readNextWindow()
     /// The offset map and object sizes are physical; logical `position` maps to physical
     /// `position + data_start_offset` (the encryption headers sit at the file front, and
     /// `data_start_offset` is 0 without encryption).
-    const size_t position_phys = position + data_start_offset;
-    size_t object_phys_start_offset = 0;
-    const StoredObject * object = offset_map.findObjectAt(position_phys, &object_phys_start_offset);
+    const size_t position_physical = position + data_start_offset;
+    size_t object_physical_start_offset = 0;
+    const StoredObject * object = offset_map.findObjectAt(position_physical, &object_physical_start_offset);
     if (!object)
     {
         reached_eof = true;
         return {};
     }
 
-    const size_t object_offset = position_phys - object_phys_start_offset;
+    const size_t object_offset = position_physical - object_physical_start_offset;
 
     /// Clamp the block to the object boundary so a window never straddles two
     /// objects; the next call continues in the next object. Unknown total size
@@ -522,7 +527,7 @@ ChainedBuffers ReaderExecutor::readNextWindow()
 
     /// Decrypt the freshly-read, uniquely-owned block in place at its logical offset. CTR is
     /// position-addressable, so decrypting just this window is exact.
-    decryptInPlace(block->data(), got, position);
+    decryptInPlaceIfNeeded(block->data(), got, position);
 
     ChainedBuffers chain;
     chain.append(ChainedBufferNode{std::move(block), 0, got, position});
