@@ -113,11 +113,17 @@ void countingSort8(T * begin, T * end)
     }
 }
 
-template <bool positive, typename T>
-ColumnPtr sortNumericValues(const ColumnVector<T> & column, const ColumnArray & array)
+template <bool positive, typename ColumnType>
+ColumnPtr sortNumericValues(const ColumnType & column, const ColumnArray & array)
 {
-    auto res_nested = ColumnVector<T>::create();
-    typename ColumnVector<T>::Container & data = res_nested->getData();
+    using T = typename ColumnType::ValueType;
+
+    typename ColumnType::MutablePtr res_nested;
+    if constexpr (is_decimal<T>)
+        res_nested = ColumnType::create(0, column.getScale());
+    else
+        res_nested = ColumnType::create();
+    typename ColumnType::Container & data = res_nested->getData();
     data.assign(column.getData());
 
     auto sort_range = [](T * from, T * to)
@@ -167,10 +173,19 @@ ColumnPtr trySortNumericValues(const ColumnArray & array)
 #define DISPATCH_FOR_NUMERIC_TYPE(TYPE) \
     if (const auto * column = checkAndGetColumn<ColumnVector<TYPE>>(&array.getData())) \
         return sortNumericValues<positive>(*column, array);
+#define DISPATCH_FOR_DECIMAL_TYPE(TYPE) \
+    if (const auto * column = checkAndGetColumn<ColumnDecimal<TYPE>>(&array.getData())) \
+        return sortNumericValues<positive>(*column, array);
 // NOLINTEND(bugprone-macro-parentheses)
 
     FOR_NUMERIC_TYPES(DISPATCH_FOR_NUMERIC_TYPE)
+    DISPATCH_FOR_DECIMAL_TYPE(Decimal32)
+    DISPATCH_FOR_DECIMAL_TYPE(Decimal64)
+    DISPATCH_FOR_DECIMAL_TYPE(Decimal128)
+    DISPATCH_FOR_DECIMAL_TYPE(Decimal256)
+    DISPATCH_FOR_DECIMAL_TYPE(DateTime64)
 #undef DISPATCH_FOR_NUMERIC_TYPE
+#undef DISPATCH_FOR_DECIMAL_TYPE
 
     return nullptr;
 }

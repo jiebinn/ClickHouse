@@ -45,6 +45,18 @@ SELECT arraySort(a), arrayReverseSort(a);
 SELECT 'date and datetime';
 SELECT arraySort(materialize([toDate('2020-01-02'), toDate('2019-12-31'), toDate('2020-01-01')]));
 SELECT arrayReverseSort(materialize([toDateTime('2020-01-02 00:00:02', 'UTC'), toDateTime('2020-01-02 00:00:01', 'UTC')]));
+SELECT arraySort(materialize([toDateTime64('2020-01-02 00:00:01.002', 3, 'UTC'), toDateTime64('2020-01-02 00:00:01.001', 3, 'UTC'), toDateTime64('2020-01-01 23:59:59.999', 3, 'UTC')]));
+SELECT arrayReverseSort(materialize([toDateTime64('2020-01-02 00:00:01.002', 3, 'UTC'), toDateTime64('2020-01-02 00:00:01.001', 3, 'UTC'), toDateTime64('2020-01-01 23:59:59.999', 3, 'UTC')]));
+
+SELECT 'decimal types';
+WITH materialize(CAST(['3.3', '-1.1', '0', '999999.99', '-999999.99'], 'Array(Decimal32(2))')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3.3', '-1.1', '0', '999999999999.99', '-999999999999.99'], 'Array(Decimal64(2))')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3.3', '-1.1', '0', '99999999999999999999999999999999.99', '-99999999999999999999999999999999.99'], 'Array(Decimal128(2))')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
+WITH materialize(CAST(['3.3', '-1.1', '0', '999999999999999999999999999999999999999999999999999999999999999999999999.99', '-999999999999999999999999999999999999999999999999999999999999999999999999.99'], 'Array(Decimal256(2))')) AS a
+SELECT arraySort(a), arrayReverseSort(a);
 
 SELECT 'counting sort for long one-byte arrays';
 SELECT arraySort(arrayMap(x -> toUInt8(255 - x), range(256))) = arrayMap(x -> toUInt8(x), range(256)),
@@ -111,6 +123,26 @@ SELECT 'Int256', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, array
 FROM numbers(300);
 WITH arrayMap(x -> toBFloat16(toFloat32(toInt64(cityHash64(number, x) % 1000) - 500) / 8), range(number % 33)) AS a
 SELECT 'BFloat16', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toDecimal32(toInt32(cityHash64(number, x)) / 65536, 3), range(number % 33)) AS a
+SELECT 'Decimal32', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toDecimal64(toInt64(cityHash64(number, x)) / 4294967296, 6), range(number % 33)) AS a
+SELECT 'Decimal64', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toDecimal128(toInt64(cityHash64(number, x)), 3), range(number % 33)) AS a
+SELECT 'Decimal128', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toDecimal256(toInt128(toInt64(cityHash64(number, x))) * toInt128(cityHash64(number, x, 1)), 10), range(number % 33)) AS a
+SELECT 'Decimal256', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
+     + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
+FROM numbers(300);
+WITH arrayMap(x -> toDateTime64(cityHash64(number, x) % 100000000 / 1000, 3, 'UTC'), range(number % 33)) AS a
+SELECT 'DateTime64', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
      + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
 FROM numbers(300);
 WITH arrayMap(x -> if(cityHash64(number, x) % 5 = 0, NULL, toInt32(cityHash64(number, x))), range(number % 33)) AS a
