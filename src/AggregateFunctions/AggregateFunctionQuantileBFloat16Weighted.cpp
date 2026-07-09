@@ -100,13 +100,13 @@ Computes multiple approximate [quantiles](https://en.wikipedia.org/wiki/Quantile
 quantilesBFloat16Weighted(level1, level2, ...)(expr, weight)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
-        {"expr", "Column with numeric data.", {"(U)Int*", "Float*"}},
+        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}},
         {"weight", "Column with weights of sequence members.", {"(U)Int*", "Float*"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of approximate quantiles of the specified levels in the same order as the levels were specified.", {"Array(Float64)"}};
+    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of approximate quantiles of the specified levels in the same order as the levels were specified. For `Date` and `DateTime` inputs the output format matches the input format.", {"Array(Float64)", "Array(Date)", "Array(DateTime)"}};
     FunctionDocumentation::Examples examples_quantiles = {
     {
         "Computing multiple weighted bfloat16 quantiles",
