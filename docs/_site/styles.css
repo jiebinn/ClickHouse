@@ -2930,3 +2930,13 @@ a.mobile-nav-tabs-item[href$="/products/clickhouse-private/index"] {
 #sidebar a .flex-wrap > div {
     order: -1;
 }
+
+/* Cross out the sidebar entry text of deprecated endpoints (matching the
+   Swagger convention). The deprecated pill rendered from `deprecated: true`
+   frontmatter carries no semantic class or data attribute — the only stable
+   hook is Mintlify's hard-coded pill background utility (light `bg-[#FDEAD8]`,
+   always present in the class list even in dark mode). The title is the
+   .break-words span; the METHOD pill spans carry no .break-words. */
+#sidebar a:has(div[class*="bg-[#FDEAD8]"]) span.break-words {
+    text-decoration: line-through;
+}
