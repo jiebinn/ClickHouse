@@ -75,6 +75,8 @@ public:
         REPLICA_UNREADY,
         RELOAD_DICTIONARY,
         RELOAD_DICTIONARIES,
+        UNLOAD_DICTIONARY,
+        UNLOAD_DICTIONARIES,
         RELOAD_MODEL,
         RELOAD_MODELS,
         RELOAD_FUNCTION,
@@ -147,8 +149,6 @@ public:
         INSTRUMENT_ADD,
         INSTRUMENT_REMOVE,
         RESET_DDL_WORKER,
-        UNLOAD_DICTIONARY,
-        UNLOAD_DICTIONARIES,
         END
     };
 
