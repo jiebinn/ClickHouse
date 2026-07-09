@@ -746,25 +746,33 @@ struct ImplXxHash64
     static constexpr bool return_bigint_instead_of_fixedstring = false;
 };
 
+/// https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.xxhash64.html
 struct ImplXxHash64Spark
 {
     static constexpr auto name = "xxHash64Spark";
     using ReturnType = Int64;
     using uint128_t = CityHash_v1_0_2::uint128;
-    static constexpr size_t number_of_arguments = 1;
-    static constexpr bool use_default_implementation_for_nulls = false;
-    static constexpr bool only_string_arguments = true;
-    static constexpr Int64 null_hash = 42;
 
-    static Int64 apply(const char * s, const size_t len) { return bit_cast<Int64>(XXH_INLINE_XXH64(s, len, 42)); }
+    /// Some restrictions apply:
+    /// (1) While the Spark equivalent function supports >1 argument, only a single argument was verified
+    ///     to return the same result in ClickHouse and Spark.
+    /// (2) Only String and NULL arguments were verified to return the same result in ClickHouse and Spark.
+    /// (3) NULL arguments must return a custom hash value
+    static constexpr size_t number_of_arguments = 1; /// (1)
+    static constexpr bool use_default_implementation_for_nulls = false;
+    static constexpr bool check_all_arguments_are_strings = true; /// (2)
+    static constexpr Int64 custom_null_hash = 42; /// (3)
+
+    static auto apply(const char * s, const size_t len) { return XXH_INLINE_XXH64(s, len, 42); }
 
     /*
        With current implementation with more than 1 arguments it will give the results
        non-reproducible from outside of CH. (see comment on `ImplXxHash32`).
     */
-    static Int64 combineHashes(Int64 h1, Int64 h2)
+    static Int64 combineHashes(UInt64 /*h1*/, UInt64 /*h2*/)
     {
-        return bit_cast<Int64>(CityHash_v1_0_2::Hash128to64(uint128_t(bit_cast<UInt64>(h1), bit_cast<UInt64>(h2))));
+        /// return bit_cast<Int64>(CityHash_v1_0_2::Hash128to64(uint128_t(bit_cast<UInt64>(h1), bit_cast<UInt64>(h2))));
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "{} cannot be called with more than one argument", name);
     }
 
     static constexpr bool use_int_hash_for_pods = false;
@@ -965,7 +973,6 @@ public:
 
 private:
     using ToType = typename Impl::ReturnType;
-    static constexpr bool has_custom_null_hash = requires { Impl::null_hash; };
 
     template <typename FromType, bool first>
     void executeIntType(const KeyColumnsType & key_cols, const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
@@ -1367,8 +1374,8 @@ private:
             }
             else
             {
-                if constexpr (has_custom_null_hash)
-                    null_hash = Impl::null_hash;
+                if constexpr (requires { Impl::custom_null_hash; })
+                    null_hash = Impl::custom_null_hash;
                 else
                     null_hash = static_cast<ToType>(NULL_HASH);
             }
@@ -1519,37 +1526,26 @@ public:
     {
         return name;
     }
-
-    static constexpr bool has_fixed_number_of_arguments = requires { Impl::number_of_arguments; };
-    static constexpr bool has_only_string_arguments = []
-    {
-        if constexpr (requires { Impl::only_string_arguments; })
-            return Impl::only_string_arguments;
-        else
-            return false;
-    }();
-    static constexpr bool use_default_implementation_for_nulls = []
-    {
-        if constexpr (requires { Impl::use_default_implementation_for_nulls; })
-            return Impl::use_default_implementation_for_nulls;
-        else
-            return true;
-    }();
-
     bool isVariadic() const override
     {
-        return !has_fixed_number_of_arguments;
+        if constexpr (requires { Impl::number_of_arguments; })
+            return false;
+        else
+            return true;
     }
     size_t getNumberOfArguments() const override
     {
-        if constexpr (has_fixed_number_of_arguments)
+        if constexpr (requires { Impl::number_of_arguments; })
             return Impl::number_of_arguments;
         else
             return 0;
     }
     bool useDefaultImplementationForNulls() const override
     {
-        return use_default_implementation_for_nulls;
+        if constexpr (requires { Impl::use_default_implementation_for_nulls; })
+            return Impl::use_default_implementation_for_nulls;
+        else
+            return true;
     }
     bool useDefaultImplementationForConstants() const override { return true; }
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return true; }
@@ -1560,18 +1556,21 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if constexpr (has_only_string_arguments)
+        if constexpr (requires { Impl::check_all_arguments_are_strings; })
         {
-            for (const auto & argument : arguments)
+            if (Impl::check_all_arguments_are_strings)
             {
-                const DataTypePtr nested_type = removeNullable(argument);
-                const WhichDataType which(nested_type);
-                if (!which.isString() && !which.isNothing())
-                    throw Exception(
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                        "Illegal type {} of argument of function {}. Must be String or NULL",
-                        argument->getName(),
-                        getName());
+                for (const auto & argument : arguments)
+                {
+                    const DataTypePtr nested_type = removeNullable(argument);
+                    const WhichDataType which(nested_type);
+                    if (!which.isString() && !which.isNothing())
+                        throw Exception(
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                            "Illegal type {} of argument of function {}. Must be String or NULL",
+                            argument->getName(),
+                            getName());
+                }
             }
         }
 
