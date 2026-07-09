@@ -1922,7 +1922,7 @@ bool castColumnString(const IColumn * column, F && f)
     return castTypeToEither<ColumnString, ColumnFixedString>(column, std::forward<F>(f));
 }
 
-static bool isStringOrFixedStringColumn(const IColumn & column)
+bool isStringOrFixedStringColumn(const IColumn & column)
 {
     return typeid_cast<const ColumnString *>(&column) || typeid_cast<const ColumnFixedString *>(&column);
 }
