@@ -418,13 +418,13 @@ This function is equivalent to [`quantileInterpolatedWeighted`](/sql-reference/a
 quantilesInterpolatedWeighted(level1, level2, ...)(expr, weight)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
-        {"expr", "Expression over the column values resulting in numeric data types, Date or DateTime.", {"(U)Int*", "Float*", "Decimal*", "Date", "DateTime"}},
+        {"expr", "Expression over the column values resulting in numeric data types, `Date`, `DateTime` or `DateTime64`.", {"(U)Int*", "Float*", "Decimal*", "Date", "DateTime", "DateTime64"}},
         {"weight", "Column with weights of sequence members. Weight is a number of value occurrences.", {"UInt*"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified. For numeric data types the output format matches the input format.", {"Array((U)Int*)", "Array(Float*)", "Array(Decimal*)", "Array(Date)", "Array(DateTime)"}};
+    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified. For numeric data types the output format matches the input format.", {"Array((U)Int*)", "Array(Float*)", "Array(Decimal*)", "Array(Date)", "Array(DateTime)", "Array(DateTime64)"}};
     FunctionDocumentation::Examples examples_quantiles = {
     {
         "Computing multiple interpolated weighted quantiles",
