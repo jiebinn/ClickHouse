@@ -376,13 +376,13 @@ In this case, use the [`quantiles`](/sql-reference/aggregate-functions/reference
 quantileInterpolatedWeighted(level)(expr, weight)
     )";
     FunctionDocumentation::Arguments arguments = {
-        {"expr", "Expression over the column values resulting in numeric data types, Date or DateTime.", {"(U)Int*", "Float*", "Decimal*", "Date", "DateTime"}},
+        {"expr", "Expression over the column values resulting in numeric data types, `Date`, `DateTime` or `DateTime64`.", {"(U)Int*", "Int128", "UInt128", "Int256", "UInt256", "Float*", "Decimal*", "Date", "DateTime", "DateTime64"}},
         {"weight", "Column with weights of sequence members. Weight is a number of value occurrences.", {"UInt*"}}
     };
     FunctionDocumentation::Parameters parameters = {
         {"level", "Optional. Level of quantile. Constant floating-point number from 0 to 1. We recommend using a `level` value in the range of `[0.01, 0.99]`. Default value: 0.5. At `level=0.5` the function calculates median.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value = {"Quantile of the specified level.", {"Float64", "Date", "DateTime"}};
+    FunctionDocumentation::ReturnedValue returned_value = {"Quantile of the specified level. For numeric data types the output format matches the input format.", {"(U)Int*", "Int128", "UInt128", "Int256", "UInt256", "Float*", "Decimal*", "Date", "DateTime", "DateTime64"}};
     FunctionDocumentation::Examples examples = {
     {
         "Computing interpolated weighted quantile",

@@ -61,13 +61,13 @@ It works by building a [DD](https://www.vldb.org/pvldb/vol12/p2195-masson.pdf).
 quantileDD(relative_accuracy, [level])(expr)
     )";
     FunctionDocumentation::Arguments arguments = {
-        {"expr", "Column with numeric data.", {"(U)Int*", "Float*"}}
+        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}}
     };
     FunctionDocumentation::Parameters parameters = {
         {"relative_accuracy", "Relative accuracy of the quantile. Possible values are in the range from 0 to 1. The size of the sketch depends on the range of the data and the relative accuracy. The larger the range and the smaller the relative accuracy, the larger the sketch. The rough memory size of the sketch is `log(max_value/min_value)/relative_accuracy`. The recommended value is 0.001 or higher.", {"Float*"}},
         {"level", "Optional. Level of quantile. Possible values are in the range from 0 to 1. Default value: 0.5.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value = {"Approximate quantile of the specified level.", {"Float64"}};
+    FunctionDocumentation::ReturnedValue returned_value = {"Approximate quantile of the specified level. For `Date` and `DateTime` inputs the output format matches the input format.", {"Float64", "Date", "DateTime"}};
     FunctionDocumentation::Examples examples = {
     {
         "Computing quantile with DD sketch",

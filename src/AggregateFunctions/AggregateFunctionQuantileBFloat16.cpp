@@ -63,12 +63,12 @@ The function is a fast quantile estimator with a maximum relative error of `0.78
 quantileBFloat16[(level)](expr)
     )";
     FunctionDocumentation::Arguments arguments = {
-        {"expr", "Column with numeric data.", {"(U)Int*", "Float*"}}
+        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}}
     };
     FunctionDocumentation::Parameters parameters = {
         {"level", "Optional. Level of quantile. Possible values are in the range from 0 to 1. Default value: 0.5.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value = {"Approximate quantile of the specified level.", {"Float64"}};
+    FunctionDocumentation::ReturnedValue returned_value = {"Approximate quantile of the specified level. For `Date` and `DateTime` inputs the output format matches the input format.", {"Float64", "Date", "DateTime"}};
     FunctionDocumentation::Examples examples = {
     {
         "Computing quantile with bfloat16",
