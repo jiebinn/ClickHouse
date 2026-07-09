@@ -5,7 +5,15 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
 user="user04401_${CLICKHOUSE_DATABASE}"
-db=${CLICKHOUSE_DATABASE}
+# Use an explicit Atomic database so the _tmp_replace_* rename branch is exercised on every CI
+# shard. On the ordinary-database shard InterpreterCreateQuery routes CREATE OR REPLACE VIEW
+# through doCreateTable (drop+recreate) instead of doCreateOrReplaceTable: the rename branch this
+# test guards is reached only for Atomic/Replicated engines (InterpreterCreateQuery::createTable,
+# replace_view && engine in {Atomic, Replicated}).
+db="${CLICKHOUSE_DATABASE}_db"
+
+${CLICKHOUSE_CLIENT} --query "DROP DATABASE IF EXISTS $db"
+${CLICKHOUSE_CLIENT} --query "CREATE DATABASE $db ENGINE = Atomic"
 
 ${CLICKHOUSE_CLIENT} --query "DROP USER IF EXISTS $user"
 ${CLICKHOUSE_CLIENT} --query "CREATE USER $user"
@@ -33,5 +41,4 @@ ${CLICKHOUSE_CLIENT} --query "DROP USER $user" 2>&1 | grep -q "HAVE_DEPENDENT_OB
 ${CLICKHOUSE_CLIENT} --query "DROP VIEW $db.mv"
 ${CLICKHOUSE_CLIENT} --query "DROP USER $user" && echo "mv freed"
 
-${CLICKHOUSE_CLIENT} --query "DROP TABLE $db.mv_target"
-${CLICKHOUSE_CLIENT} --query "DROP TABLE $db.src"
+${CLICKHOUSE_CLIENT} --query "DROP DATABASE $db"
