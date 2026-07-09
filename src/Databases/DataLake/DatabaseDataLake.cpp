@@ -176,9 +176,9 @@ DatabaseDataLake::DatabaseDataLake(
 {
     validateSettings();
     /// On ATTACH (server startup / user `ATTACH DATABASE`) or internal creates (restore),
-    //  defer catalog construction to first use: building it can perform network I/O or credential validation
-    //  that must not block startup. On CREATE build eagerly so misconfiguration (including a restricted
-    //  server-credential catalog) is reported immediately.
+    ///  defer catalog construction to first use: building it can perform network I/O or credential validation
+    ///  that must not block startup. On CREATE build eagerly so misconfiguration (including a restricted
+    ///  server-credential catalog) is reported immediately.
     if (!lazy_init)
     {
         std::lock_guard lock(catalog_mutex);
