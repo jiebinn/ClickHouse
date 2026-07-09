@@ -512,10 +512,10 @@
         const status_ = status.toLowerCase();
 
         const isFailure =
-            (status_.includes('fail') || status_.includes('error') || status_.includes('dropped') || status_ === 'xpass')
+            (status_.includes('fail') || status_.includes('error') || status_.includes('dropped') || status_ === 'xpass' || status_ === 'slower')
             && status_ !== 'xfail';
         const isWarning =
-            status_.includes('pending') || status_.includes('running');
+            status_.includes('pending') || status_.includes('running') || status_ === 'unstable';
 
         if (filter === 'failures') {
             return isFailure;

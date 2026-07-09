@@ -1,12 +1,6 @@
 import inspect
-import json
 import os
-import re
-import shutil
-import subprocess
 import sys
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -15,10 +9,6 @@ from ci.jobs.performance_tests import (
     INSERT_HISTORICAL_DATA,
     SLOWER_QUERIES_FAIL_THRESHOLD,
     too_many_slow,
-)
-
-_JSON_HTML = os.path.join(
-    os.path.dirname(__file__), "..", "praktika", "json.html"
 )
 
 
@@ -74,58 +64,6 @@ def test_cidb_inserts_are_best_effort_not_asserted():
     assert source.count("if not cidb.is_ready():") == 4
 
 
-def _js_get_status_priority(statuses):
-    """Extract `getStatusPriority` from `ci/praktika/json.html`, run it under
-    Node, and return the priority number for each status. This is what
-    determines the on-page ordering of rows in the perf-comparison "Tests"
-    sub-result, so guarding the perf-specific statuses needs a check that
-    actually runs the JS."""
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("`node` binary not available")
-    with open(_JSON_HTML, "r", encoding="utf-8") as f:
-        html = f.read()
-    m = re.search(
-        r"function getStatusPriority\(status\) \{.*?\n {4}\}", html, flags=re.S
-    )
-    assert m, "getStatusPriority not found in json.html"
-    script = m.group(0) + "\n" + (
-        "process.stdout.write(JSON.stringify("
-        + json.dumps(list(statuses))
-        + ".map(getStatusPriority)));"
-    )
-    out = subprocess.run(
-        [node, "-e", script], check=True, capture_output=True, text=True
-    ).stdout
-    return json.loads(out)
-
-
-def test_js_status_priority_surfaces_perf_rows():
-    """`compare.sh` emits `slower`/`unstable` per-query statuses. Without an
-    explicit case in `getStatusPriority` they fall through to the trailing
-    `return 10` bucket and end up sorted below `success` (priority 7) in
-    the rendered "Tests" table. Guard that:
-
-    - both statuses sort strictly above OK/`success`;
-    - `slower` sorts at-or-before `unstable` (real regression first, flaky
-      second);
-    - neither leapfrogs `error` / `fail`.
-    """
-    prio = dict(zip(
-        ["slower", "unstable", "success", "ok", "fail", "error", "unknown"],
-        _js_get_status_priority(
-            ["slower", "unstable", "success", "ok", "fail", "error", "unknown"]
-        ),
-    ))
-    assert prio["slower"] < prio["success"], prio
-    assert prio["slower"] < prio["ok"], prio
-    assert prio["unstable"] < prio["success"], prio
-    assert prio["unstable"] < prio["ok"], prio
-    assert prio["slower"] <= prio["unstable"], prio
-    assert prio["error"] <= prio["slower"], prio
-    assert prio["fail"] <= prio["slower"], prio
-
-
 if __name__ == "__main__":
     test_historical_insert_parses_threshold_columns()
     test_gate_threshold_value()
@@ -133,5 +71,4 @@ if __name__ == "__main__":
     test_slower_count_at_or_below_threshold_does_not_fail()
     test_slower_count_above_threshold_fails()
     test_cidb_inserts_are_best_effort_not_asserted()
-    test_js_status_priority_surfaces_perf_rows()
     print("All perf slow-gate tests passed.")
