@@ -3,10 +3,11 @@
 Dependency-light release helpers.
 
 This module is deliberately kept free of the release toolchain's heavy imports
-(`github`, `boto3`, `unidiff`, ...). `create_release.py` drags in that whole
-stack at import time, none of which is shipped in the `CI Tests` docker image,
-so the pure release-decision logic lives here where the `ci/tests/` unit-test
-suite can import and exercise it hermetically.
+(`github`, `boto3`, `unidiff`, ...) and of the `ci.praktika` stack. The release
+driver `tests/ci/create_release.py` drags in the former at import time, none of
+which is shipped in the `CI Tests` docker image, so the pure release-decision
+logic lives here -- importable as `ci.jobs.scripts.release_checks` -- where the
+`ci/tests/` unit-test suite can exercise it hermetically.
 """
 
 

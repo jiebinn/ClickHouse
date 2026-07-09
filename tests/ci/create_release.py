@@ -107,6 +107,7 @@ import argparse
 import dataclasses
 import json
 import os
+import sys
 from contextlib import contextmanager
 from copy import copy
 from pathlib import Path
@@ -116,7 +117,6 @@ from ci_buddy import CIBuddy
 from ci_utils import GH, Envs, Shell
 from git_helper import GIT_PREFIX, Git
 from pr_info import Labels
-from release_checks import is_empty_patch_release
 from s3_helper import S3Helper
 from ssh import SSHAgent
 from version_helper import (
@@ -292,6 +292,16 @@ class ReleaseInfo:
                 # do not tag, so skip the check. This is checked before the
                 # out-of-order check below because "nothing to release" is the
                 # more fundamental condition.
+                #
+                # The guard lives in `ci/jobs/scripts/release_checks.py` so the
+                # `CI Tests` unit suite can exercise it without this module's
+                # release-only dependencies. This script runs from `tests/ci`
+                # with repo root off `sys.path`, so add it and import lazily.
+                repo_root = str(Path(__file__).resolve().parents[2])
+                if repo_root not in sys.path:
+                    sys.path.append(repo_root)
+                from ci.jobs.scripts.release_checks import is_empty_patch_release
+
                 if not _skip_out_of_order_check and is_empty_patch_release(
                     version.patch, version.tweak
                 ):
