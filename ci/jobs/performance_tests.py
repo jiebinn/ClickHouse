@@ -491,6 +491,24 @@ def get_perf_arch():
     Utils.raise_with_error("Unknown processor architecture")
 
 
+# `compare.sh` emits per-query rows with one of these statuses. Rows that need
+# attention float to the top; `success` sinks to the bottom. Any unknown /
+# future status defaults to 0 so it is surfaced at the top rather than hidden
+# under hundreds of successful rows.
+_PERF_ATTENTION_ORDER = {"slower": 1, "unstable": 2, "success": 3}
+
+
+def sort_perf_tests_attention_first(test_results):
+    """In-place stable sort putting attention-worthy rows first.
+
+    Called after ci-checks.tsv is turned into a list of `Result`s so the
+    "Tests" sub-result renders `slower`/`unstable` queries above the sea of
+    `success` rows. Stable sort preserves the original test / `::old`,
+    `::new` pair ordering within each bucket.
+    """
+    test_results.sort(key=lambda r: _PERF_ATTENTION_ORDER.get(r.status, 0))
+
+
 def build_perf_query_history_link(test_name, check_name):
     """Build a ClickHouse Play link showing performance history for a query on master."""
     table = Settings.CI_DB_TABLE_NAME or "checks"
@@ -1367,6 +1385,7 @@ def main():
                             duration=float(row["test_duration_ms"]) / 1000,
                         )
                     )
+            sort_perf_tests_attention_first(test_results)
             # results[-2] is a previuos subtask
             results[-2].results = test_results
         else:
