@@ -245,7 +245,10 @@ namespace
     void writeRandomType(const String & column_name, pcg64 & rng, WriteBuffer & buf, bool allow_suspicious_lc_types, size_t depth = 0)
     {
         if (allow_complex_types && depth > MAX_DEPTH)
-            writeRandomType<false>(column_name, rng, buf, depth);
+        {
+            writeRandomType<false>(column_name, rng, buf, allow_suspicious_lc_types, depth);
+            return;
+        }
 
         constexpr auto all_types = getAllTypes<allow_complex_types>();
         auto type = all_types[rng() % all_types.size()];
