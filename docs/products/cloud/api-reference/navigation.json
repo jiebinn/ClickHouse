@@ -8,44 +8,44 @@
         {
           "group": "Organization",
           "pages": [
-            "products/cloud/api-reference/organization/organization-get-list",
-            "products/cloud/api-reference/organization/organization-get",
-            "products/cloud/api-reference/organization/organization-update",
-            "products/cloud/api-reference/organization/activity-get-list",
-            "products/cloud/api-reference/organization/activity-get",
+            "GET /v1/organizations",
+            "GET /v1/organizations/{organizationId}",
+            "PATCH /v1/organizations/{organizationId}",
+            "GET /v1/organizations/{organizationId}/activities",
+            "GET /v1/organizations/{organizationId}/activities/{activityId}",
             "products/cloud/api-reference/organization/organization-private-endpoint-config-get-list",
-            "products/cloud/api-reference/organization/organization-byoc-infrastructure-create",
-            "products/cloud/api-reference/organization/organization-byoc-infrastructure-delete",
-            "products/cloud/api-reference/organization/organization-byoc-infrastructure-update"
+            "POST /v1/organizations/{organizationId}/byocInfrastructure",
+            "DELETE /v1/organizations/{organizationId}/byocInfrastructure/{byocInfrastructureId}",
+            "PATCH /v1/organizations/{organizationId}/byocInfrastructure/{byocInfrastructureId}"
           ]
         },
         {
           "group": "Billing",
           "pages": [
-            "products/cloud/api-reference/billing/usage-cost-get"
+            "GET /v1/organizations/{organizationId}/usageCost"
           ]
         },
         {
           "group": "User management",
           "pages": [
-            "products/cloud/api-reference/user-management/member-get-list",
-            "products/cloud/api-reference/user-management/member-get",
-            "products/cloud/api-reference/user-management/member-update",
-            "products/cloud/api-reference/user-management/member-delete",
-            "products/cloud/api-reference/user-management/invitation-get-list",
-            "products/cloud/api-reference/user-management/invitation-create",
-            "products/cloud/api-reference/user-management/invitation-get",
-            "products/cloud/api-reference/user-management/invitation-delete"
+            "GET /v1/organizations/{organizationId}/members",
+            "GET /v1/organizations/{organizationId}/members/{userId}",
+            "PATCH /v1/organizations/{organizationId}/members/{userId}",
+            "DELETE /v1/organizations/{organizationId}/members/{userId}",
+            "GET /v1/organizations/{organizationId}/invitations",
+            "POST /v1/organizations/{organizationId}/invitations",
+            "GET /v1/organizations/{organizationId}/invitations/{invitationId}",
+            "DELETE /v1/organizations/{organizationId}/invitations/{invitationId}"
           ]
         },
         {
           "group": "Role Management",
           "pages": [
-            "products/cloud/api-reference/role-management/organization-roles-get-list",
-            "products/cloud/api-reference/role-management/organization-role-post",
-            "products/cloud/api-reference/role-management/organization-role-get",
-            "products/cloud/api-reference/role-management/organization-role-patch",
-            "products/cloud/api-reference/role-management/organization-role-delete"
+            "GET /v1/organizations/{organizationId}/roles",
+            "POST /v1/organizations/{organizationId}/roles",
+            "GET /v1/organizations/{organizationId}/roles/{roleId}",
+            "PATCH /v1/organizations/{organizationId}/roles/{roleId}",
+            "DELETE /v1/organizations/{organizationId}/roles/{roleId}"
           ]
         }
       ]
@@ -56,26 +56,26 @@
         {
           "group": "Service",
           "pages": [
-            "products/cloud/api-reference/service/instance-get-list",
-            "products/cloud/api-reference/service/instance-create",
-            "products/cloud/api-reference/service/instance-get",
-            "products/cloud/api-reference/service/instance-update",
-            "products/cloud/api-reference/service/instance-delete",
-            "products/cloud/api-reference/service/instance-private-endpoint-config-get",
-            "products/cloud/api-reference/service/instance-query-endpoint-get",
-            "products/cloud/api-reference/service/instance-query-endpoint-delete",
-            "products/cloud/api-reference/service/instance-query-endpoint-upsert",
-            "products/cloud/api-reference/service/instance-state-update",
+            "GET /v1/organizations/{organizationId}/services",
+            "POST /v1/organizations/{organizationId}/services",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}",
+            "PATCH /v1/organizations/{organizationId}/services/{serviceId}",
+            "DELETE /v1/organizations/{organizationId}/services/{serviceId}",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/privateEndpointConfig",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/serviceQueryEndpoint",
+            "DELETE /v1/organizations/{organizationId}/services/{serviceId}/serviceQueryEndpoint",
+            "POST /v1/organizations/{organizationId}/services/{serviceId}/serviceQueryEndpoint",
+            "PATCH /v1/organizations/{organizationId}/services/{serviceId}/state",
             "products/cloud/api-reference/service/instance-scaling-update",
-            "products/cloud/api-reference/service/instance-replica-scaling-update",
-            "products/cloud/api-reference/service/instance-password-update",
-            "products/cloud/api-reference/service/instance-private-endpoint-create",
+            "PATCH /v1/organizations/{organizationId}/services/{serviceId}/replicaScaling",
+            "PATCH /v1/organizations/{organizationId}/services/{serviceId}/password",
+            "POST /v1/organizations/{organizationId}/services/{serviceId}/privateEndpoint",
             "products/cloud/api-reference/service/scaling-schedule-get",
             "products/cloud/api-reference/service/scaling-schedule-upsert",
             "products/cloud/api-reference/service/scaling-schedule-delete",
-            "products/cloud/api-reference/service/upgrade-window-get",
-            "products/cloud/api-reference/service/upgrade-window-update",
-            "products/cloud/api-reference/service/upgrade-window-delete",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/upgradeWindow",
+            "PUT /v1/organizations/{organizationId}/services/{serviceId}/upgradeWindow",
+            "DELETE /v1/organizations/{organizationId}/services/{serviceId}/upgradeWindow",
             "products/cloud/api-reference/service/service-clickhouse-settings-list-get",
             "products/cloud/api-reference/service/service-clickhouse-settings-update",
             "products/cloud/api-reference/service/service-clickhouse-settings-schema-get",
@@ -86,10 +86,10 @@
         {
           "group": "Backup",
           "pages": [
-            "products/cloud/api-reference/backup/backup-get-list",
-            "products/cloud/api-reference/backup/backup-get",
-            "products/cloud/api-reference/backup/backup-configuration-get",
-            "products/cloud/api-reference/backup/backup-configuration-update",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/backups",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/backups/{backupId}",
+            "GET /v1/organizations/{organizationId}/services/{serviceId}/backupConfiguration",
+            "PATCH /v1/organizations/{organizationId}/services/{serviceId}/backupConfiguration",
             "products/cloud/api-reference/backup/backup-bucket-get",
             "products/cloud/api-reference/backup/backup-bucket-create",
             "products/cloud/api-reference/backup/backup-bucket-update",
@@ -101,18 +101,18 @@
     {
       "group": "OpenAPI",
       "pages": [
-        "products/cloud/api-reference/openapi/openapi-key-get-list",
-        "products/cloud/api-reference/openapi/openapi-key-create",
-        "products/cloud/api-reference/openapi/openapi-key-get",
-        "products/cloud/api-reference/openapi/openapi-key-update",
-        "products/cloud/api-reference/openapi/openapi-key-delete"
+        "GET /v1/organizations/{organizationId}/keys",
+        "POST /v1/organizations/{organizationId}/keys",
+        "GET /v1/organizations/{organizationId}/keys/{keyId}",
+        "PATCH /v1/organizations/{organizationId}/keys/{keyId}",
+        "DELETE /v1/organizations/{organizationId}/keys/{keyId}"
       ]
     },
     {
       "group": "Prometheus",
       "pages": [
-        "products/cloud/api-reference/prometheus/organization-prometheus-get",
-        "products/cloud/api-reference/prometheus/instance-prometheus-get",
+        "GET /v1/organizations/{organizationId}/prometheus",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/prometheus",
         "products/cloud/api-reference/prometheus/postgres-org-prometheus-get",
         "products/cloud/api-reference/prometheus/postgres-instance-prometheus-get"
       ]
@@ -120,23 +120,23 @@
     {
       "group": "ClickPipes",
       "pages": [
-        "products/cloud/api-reference/clickpipes/click-pipe-get-list",
-        "products/cloud/api-reference/clickpipes/click-pipe-create",
-        "products/cloud/api-reference/clickpipes/click-pipe-get",
-        "products/cloud/api-reference/clickpipes/click-pipe-update",
-        "products/cloud/api-reference/clickpipes/click-pipe-delete",
-        "products/cloud/api-reference/clickpipes/click-pipe-settings-get",
-        "products/cloud/api-reference/clickpipes/click-pipe-settings-update",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipes",
+        "POST /v1/organizations/{organizationId}/services/{serviceId}/clickpipes",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}",
+        "PATCH /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}",
+        "DELETE /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}/settings",
+        "PUT /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}/settings",
         "products/cloud/api-reference/clickpipes/click-pipe-schema-discovery",
-        "products/cloud/api-reference/clickpipes/click-pipe-scaling-update",
-        "products/cloud/api-reference/clickpipes/click-pipe-state-update",
-        "products/cloud/api-reference/clickpipes/click-pipe-cdc-scaling-get",
-        "products/cloud/api-reference/clickpipes/click-pipe-cdc-scaling-update",
-        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-get-list",
-        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-create",
-        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-get",
-        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-delete",
-        "products/cloud/api-reference/clickpipes/click-pipe-reverse-private-endpoint-update"
+        "PATCH /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}/scaling",
+        "PATCH /v1/organizations/{organizationId}/services/{serviceId}/clickpipes/{clickPipeId}/state",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipesCdcScaling",
+        "PATCH /v1/organizations/{organizationId}/services/{serviceId}/clickpipesCdcScaling",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipesReversePrivateEndpoints",
+        "POST /v1/organizations/{organizationId}/services/{serviceId}/clickpipesReversePrivateEndpoints",
+        "GET /v1/organizations/{organizationId}/services/{serviceId}/clickpipesReversePrivateEndpoints/{reversePrivateEndpointId}",
+        "DELETE /v1/organizations/{organizationId}/services/{serviceId}/clickpipesReversePrivateEndpoints/{reversePrivateEndpointId}",
+        "PATCH /v1/organizations/{organizationId}/services/{serviceId}/clickpipesReversePrivateEndpoints/{reversePrivateEndpointId}"
       ]
     },
     {

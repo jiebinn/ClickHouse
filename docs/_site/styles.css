@@ -2915,3 +2915,18 @@ a.mobile-nav-tabs-item[href$="/products/clickhouse-private"],
 a.mobile-nav-tabs-item[href$="/products/clickhouse-private/index"] {
     display: none !important;
 }
+
+/* ============================================
+   Sidebar maturity badges before the entry text
+   ============================================ */
+
+/* API reference sidebar entries carry maturity pills — `tag` frontmatter
+   (Beta / Private preview, rendered as .nav-tag-pill) and `deprecated`
+   frontmatter (a plain pill div). Both are div wrappers that follow the
+   title <span> inside the entry's flex-wrap container; the title is the
+   only non-div child there, so ordering div children first moves every
+   pill in front of the text without touching the METHOD pill (which
+   lives outside this container, as a direct child of the <a>). */
+#sidebar a .flex-wrap > div {
+    order: -1;
+}

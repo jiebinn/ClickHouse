@@ -8,12 +8,17 @@ allows a `tag` badge on navigation *groups*, not on individual OpenAPI operation
 entries. As a result a group badge could only be coarse, which is wrong whenever
 a group mixes beta and non-beta endpoints.
 
-To get a per-endpoint badge in the sidebar, each operation needs its own `.mdx`
-page whose frontmatter carries the operation reference and (optionally) a `tag`
-or `deprecated` flag. This script generates one such page per operation, writes
-the whole navigation subtree as a single fragment
-(`docs/products/cloud/api-reference/navigation.json`), and rewires the consuming
-files (`docs.json` and `products/cloud/navigation.json`) to reference that one
+To get a per-endpoint badge in the sidebar, an operation needs its own `.mdx`
+page whose frontmatter carries the operation reference and a `tag` or
+`deprecated` flag. This script generates such a page for every operation that
+needs a badge; all other (GA) operations are referenced as plain
+`"METHOD /path"` strings in the navigation. The mix is deliberate: Mintlify
+bulk-appends every spec operation to a group that has an `openapi` field unless
+at least one of the group's pages is a string-form operation reference (MDX
+pages do not count), so an all-MDX navigation would render the whole tag tree a
+second time. The navigation subtree is written as a single fragment
+(`docs/products/cloud/api-reference/navigation.json`), and the consuming files
+(`docs.json` and `products/cloud/navigation.json`) reference that one
 definition via `$ref` so the navigation is never duplicated.
 
 The navigation grouping mirrors the spec's `x-tagGroups`/`tags` (the same
@@ -125,6 +130,11 @@ def iter_operations(spec: dict):
             }
 
 
+def needs_page(entry: dict) -> bool:
+    """Whether an operation needs its own MDX page (i.e. carries a badge)."""
+    return bool(entry["badge"] or entry["deprecated"])
+
+
 def page_content(entry: dict) -> str:
     """Render the MDX frontmatter for a single operation page."""
     lines = [
@@ -150,6 +160,10 @@ def build_fragment(spec: dict, entries_by_tag: dict, openapi_source: str) -> dic
     directly.
     """
     def page_ref(entry: dict) -> str:
+        # String-form refs for GA operations: at least one of these must be
+        # present so Mintlify skips bulk auto-population of the openapi group.
+        if not needs_page(entry):
+            return f"{entry['method']} {entry['path']}"
         return f"{API_REF_DIR}/{dir_slug(entry['tag'])}/{file_slug(entry['operation_id'])}"
 
     def pages_for(tag: str) -> list:
@@ -247,16 +261,20 @@ def main() -> int:
     expected_files: dict[Path, str] = {}
     badge_counts = {"Beta": 0, "Private preview": 0}
     deprecated_count = 0
+    total_operations = 0
     for entry in iter_operations(spec):
+        total_operations += 1
         entries_by_tag.setdefault(entry["tag"], []).append(entry)
-        rel = Path(API_REF_DIR) / dir_slug(entry["tag"]) / f"{file_slug(entry['operation_id'])}.mdx"
-        if rel in expected_files:
-            raise SystemExit(f"Duplicate generated page path: {rel}")
-        expected_files[rel] = page_content(entry)
         if entry["badge"]:
             badge_counts[entry["badge"]] += 1
         if entry["deprecated"]:
             deprecated_count += 1
+        if not needs_page(entry):
+            continue
+        rel = Path(API_REF_DIR) / dir_slug(entry["tag"]) / f"{file_slug(entry['operation_id'])}.mdx"
+        if rel in expected_files:
+            raise SystemExit(f"Duplicate generated page path: {rel}")
+        expected_files[rel] = page_content(entry)
 
     # The navigation fragment is the single source of truth for the group.
     fragment = build_fragment(spec, entries_by_tag, openapi_source)
@@ -287,7 +305,8 @@ def main() -> int:
 
     total_pages = len(expected_files) - 1  # minus the fragment
     print(
-        f"{total_pages} operations | Beta {badge_counts['Beta']} | "
+        f"{total_operations} operations ({total_pages} badge pages) | "
+        f"Beta {badge_counts['Beta']} | "
         f"Private preview {badge_counts['Private preview']} | deprecated {deprecated_count}"
     )
 
