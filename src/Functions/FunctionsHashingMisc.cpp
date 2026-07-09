@@ -551,7 +551,7 @@ For the 32-bit version see [`xxHash32`](#xxHash32)
     FunctionDocumentation::Description xxHash64Spark_description = R"(
 Calculates a [xxHash](http://cyan4973.github.io/xxHash/) from a string using the same seed as Spark.
 
-This function is similar to [`xxHash64`](#xxHash64), but uses seed `42` and returns the result as `Int64`.
+This function is the same as [`xxHash64`](#xxHash64), but it uses seed `42` and returns the result as `Int64`.
 Only `String` and `NULL` inputs are supported.
 For `NULL`, the function returns `42`, matching Spark's seed behavior.
 )";

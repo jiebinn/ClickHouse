@@ -962,7 +962,8 @@ public:
     static constexpr auto name = Impl::name;
     static constexpr UInt128 NULL_HASH = UInt128({0xc58ad2da03d9a871ul, 0x5715f196cbea7a40ul});
 
-    /// Keep default implementation of `useDefaultImplementationForNulls` for compatibility unless an implementation opts out.
+    /// Keep default implementation of `useDefaultImplementationForNulls` for compatibility unless an implementation opts
+    /// out via `Impl::use_default_implementation_for_nulls`.
     /// E.g. `someHash(NULL)` is `NULL`, but `someHash(tuple(NULL))` is not `NULL`.
 
 private:
