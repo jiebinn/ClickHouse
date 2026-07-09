@@ -423,7 +423,11 @@ def main() -> None:
             mentions = f"<@{FELIXOID}>"
             if has_broken_packages:
                 mentions += f" <!subteam^{CI_TEAM}|@ci-team>"
-            errors_text = "\n".join(str(e) for e in errors)
+            # Truncate to the tail: failures appear at the end of the output.
+            errors_text = "\n".join(
+                (s if len(s) <= 200 else f"...{s[-200:]}")
+                for s in (str(e) for e in errors)
+            )
             CIBuddy().post_job_error(
                 f"{mentions} Official docker update failed:\n{errors_text}",
                 with_instance_info=True,
