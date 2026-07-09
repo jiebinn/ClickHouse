@@ -22,6 +22,7 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InternalTextLogsQueue.h>
+#include <Interpreters/ProcessList.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Client/ConnectionEstablisher.h>
 #include <Client/MultiplexedConnections.h>
@@ -56,6 +57,8 @@ namespace Setting
     extern const SettingsBool use_hedged_requests;
     extern const SettingsBool push_external_roles_in_interserver_queries;
     extern const SettingsMilliseconds parallel_replicas_connect_timeout_ms;
+    extern const SettingsUInt64 max_network_bandwidth;
+    extern const SettingsUInt64 max_network_bytes;
 }
 
 namespace ErrorCodes
@@ -72,6 +75,31 @@ namespace FailPoints
 {
     extern const char remote_query_executor_cancel_before_send[];
 }
+
+ThrottlerPtr getThrottler(const ContextPtr & context)
+{
+    const Settings & settings = context->getSettingsRef();
+
+    ThrottlerPtr user_level_throttler;
+    if (auto process_list_element = context->getProcessListElement())
+        user_level_throttler = process_list_element->getUserNetworkThrottler();
+
+    /// Network bandwidth limit, if needed.
+    ThrottlerPtr throttler;
+    if (settings[Setting::max_network_bandwidth] || settings[Setting::max_network_bytes])
+    {
+        throttler = std::make_shared<Throttler>(
+            settings[Setting::max_network_bandwidth],
+            settings[Setting::max_network_bytes],
+            "Limit for bytes to send or receive over network exceeded.",
+            user_level_throttler);
+    }
+    else
+        throttler = user_level_throttler;
+
+    return throttler;
+}
+
 
 RemoteQueryExecutor::RemoteQueryExecutor(
     const String & query_,

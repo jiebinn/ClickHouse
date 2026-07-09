@@ -73,8 +73,6 @@ namespace Setting
     extern const SettingsUInt64 max_memory_usage_for_user;
     extern const SettingsUInt64 max_skip_unavailable_shards_num;
     extern const SettingsFloat max_skip_unavailable_shards_ratio;
-    extern const SettingsUInt64 max_network_bandwidth;
-    extern const SettingsUInt64 max_network_bytes;
     extern const SettingsMaxThreads max_threads;
     extern const SettingsNonZeroUInt64 max_parallel_replicas;
     extern const SettingsUInt64 offset;
@@ -320,30 +318,6 @@ ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr c
         /* distributed_settings= */ {});
 }
 
-
-static ThrottlerPtr getThrottler(const ContextPtr & context)
-{
-    const Settings & settings = context->getSettingsRef();
-
-    ThrottlerPtr user_level_throttler;
-    if (auto process_list_element = context->getProcessListElement())
-        user_level_throttler = process_list_element->getUserNetworkThrottler();
-
-    /// Network bandwidth limit, if needed.
-    ThrottlerPtr throttler;
-    if (settings[Setting::max_network_bandwidth] || settings[Setting::max_network_bytes])
-    {
-        throttler = std::make_shared<Throttler>(
-            settings[Setting::max_network_bandwidth],
-            settings[Setting::max_network_bytes],
-            "Limit for bytes to send or receive over network exceeded.",
-            user_level_throttler);
-    }
-    else
-        throttler = user_level_throttler;
-
-    return throttler;
-}
 
 AdditionalShardFilterGenerator
 getShardFilterGeneratorForCustomKey(const Cluster & cluster, ContextPtr context, const ColumnsDescription & columns)
