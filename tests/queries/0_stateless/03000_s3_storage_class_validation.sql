@@ -13,6 +13,7 @@ SELECT count() FROM s3('http://localhost:11111/test/a.tsv', 'TSV', 'a UInt8, b U
 SELECT count() FROM s3('http://localhost:11111/test/a.tsv', 'TSV', 'a UInt8, b UInt8, c UInt8', storage_class_name='INTELLIGENT_TIERING');
 SELECT count() FROM s3('http://localhost:11111/test/a.tsv', 'TSV', 'a UInt8, b UInt8, c UInt8', storage_class_name='ONEZONE_IA');
 SELECT count() FROM s3('http://localhost:11111/test/a.tsv', 'TSV', 'a UInt8, b UInt8, c UInt8', storage_class_name='GLACIER_IR');
+SELECT count() FROM s3('http://localhost:11111/test/a.tsv', 'TSV', 'a UInt8, b UInt8, c UInt8', storage_class_name='EXPRESS_ONEZONE');
 
 -- Archival classes require an asynchronous restore before an object can be read, so they remain rejected.
 SELECT 'Testing rejected archival S3 storage classes';
