@@ -124,7 +124,7 @@ In this case, consider possibility of using [`quantilesTDigest`](/sql-reference/
 quantilesTDigestWeighted(level1, level2, ...)(expr, weight)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
-        {"expr", "Expression over the column values resulting in numeric data types, Date or DateTime.", {"(U)Int*", "Float*", "Decimal*", "Date", "DateTime"}},
+        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}},
         {"weight", "Column with weights of sequence elements. Weight is a number of value occurrences.", {"UInt*"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {

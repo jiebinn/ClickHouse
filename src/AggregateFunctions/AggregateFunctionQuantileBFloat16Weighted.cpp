@@ -101,7 +101,7 @@ quantilesBFloat16Weighted(level1, level2, ...)(expr, weight)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
         {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}},
-        {"weight", "Column with weights of sequence members.", {"(U)Int*", "Float*"}}
+        {"weight", "Column with weights of sequence members. Weight is a number of value occurrences.", {"UInt*"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
