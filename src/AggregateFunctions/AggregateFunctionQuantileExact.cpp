@@ -114,12 +114,12 @@ To get exact values, all the passed values are combined into an array, which is 
 quantilesExact(level1, level2, ...)(expr)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
-        {"expr", "Expression over the column values resulting in numeric data types, `Date`, `DateTime` or `DateTime64`.", {"(U)Int*", "Float*", "Decimal*", "Date", "DateTime", "DateTime64"}}
+        {"expr", "Expression over the column values resulting in numeric data types, `Date`, `DateTime` or `DateTime64`.", {"(U)Int*", "Int128", "UInt128", "Int256", "UInt256", "Float*", "Decimal*", "Date", "DateTime", "DateTime64"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {
         {"level", "Levels of quantiles. One or more constant floating-point numbers from 0 to 1. We recommend using `level` values in the range of `[0.01, 0.99]`.", {"Float*"}}
     };
-    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified. For numeric data types the output format matches the input format.", {"Array((U)Int*)", "Array(Float*)", "Array(Decimal*)", "Array(Date)", "Array(DateTime)", "Array(DateTime64)"}};
+    FunctionDocumentation::ReturnedValue returned_value_quantiles = {"Array of quantiles of the specified levels in the same order as the levels were specified. For numeric data types the output format matches the input format.", {"Array((U)Int*)", "Array(Int128)", "Array(UInt128)", "Array(Int256)", "Array(UInt256)", "Array(Float*)", "Array(Decimal*)", "Array(Date)", "Array(DateTime)", "Array(DateTime64)"}};
     FunctionDocumentation::Examples examples_quantiles = {
     {
         "Computing multiple exact quantiles",

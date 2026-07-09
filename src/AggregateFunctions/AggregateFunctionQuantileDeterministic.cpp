@@ -199,7 +199,7 @@ This function is equivalent to [`quantileDeterministic`](/sql-reference/aggregat
 quantilesDeterministic(level1, level2, ...)(expr, determinator)
     )";
     FunctionDocumentation::Arguments arguments_quantiles = {
-        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Float*", "Date", "DateTime"}},
+        {"expr", "Expression over the column values resulting in numeric data types, `Date` or `DateTime`.", {"(U)Int*", "Int128", "UInt128", "Int256", "UInt256", "Float*", "Date", "DateTime"}},
         {"determinator", "Number whose hash is used instead of a random number generator in the reservoir sampling algorithm to make the result of sampling deterministic.", {"UInt*"}}
     };
     FunctionDocumentation::Parameters parameters_quantiles = {
