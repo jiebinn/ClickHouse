@@ -337,7 +337,6 @@ def main() -> int:
 
     docs_dir = Path(args.docs_dir)
     api_ref_dir = docs_dir / API_REF_DIR
-    fragment_path = docs_dir / FRAGMENT_REL
 
     spec = load_spec(args.spec)
 
