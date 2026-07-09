@@ -71,7 +71,10 @@
         "./**/GOVERNANCE.md",
         "./**/AGENTS.md",
         "./**/OWNERS.md",
-        "./**/MAINTAINERS.md"
+        "./**/MAINTAINERS.md",
+        "./**/changelogs/**/*.md",
+        "./**/en/**/*.md",
+        "./**/en/**/*.mdx"
       ]
     }
   },

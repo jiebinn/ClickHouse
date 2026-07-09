@@ -20,7 +20,6 @@ drafts/
 _site/styles/
 
 # Legacy content in the docs folder
-/*/_description_templates/
 /*/changelogs/
 /*/en/
 /get-started/quickstarts/_TEMPLATE.mdx
