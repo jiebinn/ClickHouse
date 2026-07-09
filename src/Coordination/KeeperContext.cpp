@@ -472,18 +472,8 @@ void KeeperContext::initializeFeatureFlags(const Poco::Util::AbstractConfigurati
                 "ttl_gc_period_ms must be greater than 0 when TTL nodes are enabled, got {}", ttl_gc_period_ms);
     }
 
-    /// The container GC thread is only started when CREATE_CONTAINER is enabled (see
-    /// KeeperDispatcher::initialize), so this check is gated the same way. A non-positive
-    /// period would turn its interruptible wait into a tight busy loop.
     if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER))
     {
-        const uint64_t write_version = getCoordinationSettings()[CoordinationSetting::write_snapshot_version];
-        if (write_version < SnapshotVersion::V9)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS,
-                "Feature flag CREATE_CONTAINER requires write_snapshot_version >= {}, but it is set to {}. "
-                "Bump write_snapshot_version after every replica has been upgraded.",
-                static_cast<int>(SnapshotVersion::V9), write_version);
-
         const auto container_gc_period_ms = getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
         if (container_gc_period_ms <= 0)
             throw Exception(ErrorCodes::BAD_ARGUMENTS,

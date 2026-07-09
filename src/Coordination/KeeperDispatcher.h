@@ -78,16 +78,19 @@ private:
     KeeperContextPtr keeper_context;
 
     /// Flag to signal TCP handlers that they should close connections.
-    /// Set before the full shutdown() to allow handlers to exit promptly.
+    /// Not to be confused with keeper_context->isShutdownCalled(), which happens later.
+    /// This flag means we should avoid taking new requests, while existing requests and RAFT etc
+    /// may keep running normally. Then after client sessions are closed shutdown() is called to
+    /// stop all activity and join threads.
     std::atomic<bool> shutting_down{false};
 
-    /// Wakes the TTL/container garbage collector threads from their inter-tick wait, so
-    /// shutdown does not have to block for a full GC period (up to `container_gc_period_ms`,
-    /// 60s by default). Woken from both `signalShutdown` and `shutdown`.
-    std::mutex background_wait_mutex;
-    std::condition_variable background_wait_cv;
+    /// Notified when shutting_down (not to be confused with keeper_context->isShutdownCalled())
+    /// becomes true. Wakes up interruptibleSleep().
+    std::mutex early_shutdown_wait_mutex;
+    std::condition_variable early_shutdown_wait_cv;
 
-    /// Sleep for `period` between GC-loop ticks, returning early once shutdown is requested.
+    /// Sleep for `period`, returning early if `shutting_down` becomes true.
+    /// Useful for containerGarbageCollectorThread that sleeps for a minute by default.
     void interruptibleSleep(std::chrono::milliseconds period);
 
     /// Thread clean disconnected sessions from memory
@@ -106,7 +109,7 @@ private:
     void checkReconfigCommandPreconditions(Poco::JSON::Object::Ptr reconfig_command);
     void checkReconfigCommandActions(Poco::JSON::Object::Ptr reconfig_command);
 
-    void garbageCollectorThread(size_t batch_size);
+    void ttlGarbageCollectorThread(size_t batch_size);
     void containerGarbageCollectorThread(size_t batch_size, UInt64 max_never_used_interval_ms);
 
     void onSessionIDResponse(const Coordination::ZooKeeperResponsePtr & response) noexcept;

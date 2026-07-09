@@ -1863,33 +1863,6 @@ TYPED_TEST(CoordinationTest, TestStorageSnapshotTTLRoundTrip)
     EXPECT_EQ(expired[0].first, "/ttl_node");
 }
 
-TYPED_TEST(CoordinationTest, ContainerSnapshotRequiresV9)
-{
-    using namespace Coordination;
-    using Storage [[maybe_unused]] = DB::KeeperStorage;
-
-    ChangelogDirTest test("./snapshots");
-    this->setSnapshotDirectory("./snapshots");
-
-    DB::KeeperSnapshotManager manager(3, this->keeper_context, this->enable_compression);
-    Storage storage(500, "", this->keeper_context);
-
-    const int64_t session_id = 1;
-    int64_t zxid = 0;
-
-    auto create_request = std::make_shared<ZooKeeperCreateRequest>();
-    create_request->path = "/container_node";
-    create_request->is_container = true;
-
-    storage.preprocessRequest(create_request, session_id, /*time=*/0, ++zxid);
-    auto responses = storage.processRequest(create_request, session_id, zxid);
-    ASSERT_EQ(responses[0].response->error, Error::ZOK);
-    ASSERT_FALSE(storage.container_paths.empty());
-
-    DB::KeeperStorageSnapshot snapshot(&storage, zxid, nullptr, DB::SnapshotVersion::V8);
-    EXPECT_THROW(manager.serializeSnapshotToBuffer(snapshot), DB::Exception);
-}
-
 TYPED_TEST(CoordinationTest, SerializeSnapshotToDiskCleansPartialFilesOnOpenException)
 {
     ChangelogDirTest snapshots("./snapshots");

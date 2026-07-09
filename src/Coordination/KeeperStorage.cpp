@@ -343,7 +343,6 @@ uint64_t calculateDigest(std::string_view path, const Node & node)
     hash.update(node.stats.version);
     hash.update(node.stats.cversion);
     hash.update(node.stats.aversion);
-    /// ephemeralOwner() also carries the container sentinel (Long.MIN_VALUE), covering all node kinds.
     hash.update(node.stats.ephemeralOwner());
     hash.update(node.numChildren());
     hash.update(node.stats.pzxid);
@@ -351,6 +350,8 @@ uint64_t calculateDigest(std::string_view path, const Node & node)
     hash.update(node.stats.isTTL());
     if (node.stats.isTTL())
         hash.update(node.stats.ttl());
+
+    /// (No need to hash isContainer(), it's implied by ephemeralOwner() special value.)
 
     auto digest = hash.get64();
 
@@ -1688,8 +1689,9 @@ static Coordination::ZooKeeperResponsePtr process(const Coordination::ZooKeeperC
     if (create_delta_it != deltas.end())
     {
         created_path = create_delta_it->path;
-        /// Container create replies as Create2 (see makeResponse), gated below on is_container.
-        if (response->getOpNum() == Coordination::OpNum::Create2 || response->getOpNum() == Coordination::OpNum::CreateTTL)
+        if (response->getOpNum() == Coordination::OpNum::Create2 ||
+            response->getOpNum() == Coordination::OpNum::CreateTTL ||
+            response->getOpNum() == Coordination::OpNum::CreateContainer)
         {
             const auto & create_delta = std::get<CreateNodeDelta>(create_delta_it->operation);
             auto & zstat = static_cast<Coordination::ZooKeeperCreate2Response &>(*response).zstat;
@@ -1848,8 +1850,10 @@ static Coordination::Error preprocess(
         if (!node->stats.isTTL() || time < node->stats.destroyTime())
             return {};
     }
-    /// Matches ZooKeeper's deleteContainer check (still a container, still empty). GC eligibility
-    /// itself was decided at sampling time in collectContainerCandidates and is not re-derived here.
+    /// Similarly re-check container deletions. This has ABA problem: the container could be removed
+    /// and re-created since the GC request was issued. In this case we may delete a newly created
+    /// node too early, before container_gc_max_never_used_interval_ms elapsed. This is ok and
+    /// not worth fixing, and ZooKeeper behaves the same way.
     if (is_container_gc_remove)
     {
         if (!node->stats.isContainer() || node->numChildren() != 0)

@@ -197,7 +197,7 @@ void KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration & conf
     const auto & keeper_coordination_settings = keeper_context->getCoordinationSettings();
     size_t batch_size = keeper_coordination_settings[CoordinationSetting::ttl_gc_batch_size];
     if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL))
-        ttl_garbage_collector_thread = ThreadFromGlobalPool([this, batch_size] { garbageCollectorThread(batch_size); });
+        ttl_garbage_collector_thread = ThreadFromGlobalPool([this, batch_size] { ttlGarbageCollectorThread(batch_size); });
     if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_CONTAINER))
     {
         size_t container_batch_size = keeper_coordination_settings[CoordinationSetting::container_gc_batch_size];
@@ -217,18 +217,12 @@ void KeeperDispatcher::shutdown(bool closed_all_connections)
     try
     {
         {
+            signalShutdown();
+
             if (!keeper_context || !keeper_context->setShutdownCalled())
                 return;
 
             LOG_DEBUG(log, "Shutting down storage dispatcher");
-
-            /// `shutdown_called` is now set (via setShutdownCalled() above); wake the GC
-            /// threads from their inter-tick wait so they observe it instead of sleeping
-            /// out their tick.
-            {
-                std::lock_guard lock(background_wait_mutex);
-            }
-            background_wait_cv.notify_all();
 
             const auto & feature_flags = keeper_context->getFeatureFlags();
             if (feature_flags.isEnabled(KeeperFeatureFlag::CREATE_TTL) && ttl_garbage_collector_thread.joinable())
@@ -295,18 +289,14 @@ void KeeperDispatcher::snapshotThread()
     }
 }
 
-void KeeperDispatcher::garbageCollectorThread(size_t batch_size)
+void KeeperDispatcher::ttlGarbageCollectorThread(size_t batch_size)
 {
     DB::setThreadName(ThreadName::KEEPER_TTL_GARBAGE_COLLECTOR);
 
-    const auto & shutdown_called = keeper_context->isShutdownCalled();
     Int32 next_gc_xid = 0;
 
-    while (true)
+    while (!isShuttingDown())
     {
-        if (shutdown_called)
-            return;
-
         try
         {
             if (server->checkInit() && isLeader())
@@ -348,26 +338,19 @@ void KeeperDispatcher::garbageCollectorThread(size_t batch_size)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
-        if (isShuttingDown())
-            return;
         interruptibleSleep(std::chrono::milliseconds(
             keeper_context->getCoordinationSettings()[CoordinationSetting::ttl_gc_period_ms].totalMilliseconds()));
     }
-
 }
 
 void KeeperDispatcher::containerGarbageCollectorThread(size_t batch_size, UInt64 max_never_used_interval_ms)
 {
     DB::setThreadName(ThreadName::KEEPER_CONTAINER_GARBAGE_COLLECTOR);
 
-    const auto & shutdown_called = keeper_context->isShutdownCalled();
     Int32 next_gc_xid = 0;
 
-    while (true)
+    while (!isShuttingDown())
     {
-        if (shutdown_called)
-            return;
-
         try
         {
             if (server->checkInit() && isLeader())
@@ -404,9 +387,6 @@ void KeeperDispatcher::containerGarbageCollectorThread(size_t batch_size, UInt64
         {
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
-        if (isShuttingDown())
-            return;
-
         interruptibleSleep(std::chrono::milliseconds(
             keeper_context->getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds()));
     }
@@ -414,20 +394,19 @@ void KeeperDispatcher::containerGarbageCollectorThread(size_t batch_size, UInt64
 
 void KeeperDispatcher::interruptibleSleep(std::chrono::milliseconds period)
 {
-    const auto & shutdown_called = keeper_context->isShutdownCalled();
-    std::unique_lock lock(background_wait_mutex);
-    background_wait_cv.wait_for(lock, period, [&] { return shutdown_called || isShuttingDown(); });
+    std::unique_lock lock(early_shutdown_wait_mutex);
+    early_shutdown_wait_cv.wait_for(lock, period, [&] { return shutting_down.load(); });
 }
 
 void KeeperDispatcher::signalShutdown()
 {
-    shutting_down.store(true, std::memory_order_relaxed);
-    /// Wake the GC threads so they observe the shutdown signal without sleeping out the
-    /// rest of the tick. Take the mutex briefly to avoid a lost wakeup.
+    if (shutting_down.exchange(true))
+        return; // already called
+
     {
-        std::lock_guard lock(background_wait_mutex);
+        std::lock_guard lock(early_shutdown_wait_mutex);
     }
-    background_wait_cv.notify_all();
+    early_shutdown_wait_cv.notify_all();
 }
 
 bool KeeperDispatcher::putRequest(const Coordination::ZooKeeperRequestPtr & request, int64_t session_id, bool use_xid_64)
@@ -458,17 +437,13 @@ void KeeperDispatcher::registerSession(int64_t session_id, ZooKeeperResponseCall
 
 void KeeperDispatcher::sessionCleanerTask()
 {
-    const auto & shutdown_called = keeper_context->isShutdownCalled();
     /// TODO: Avoid spamming repeated Close requests for all sessions every
     ///       dead_session_check_period_ms if leader is stuck. Maybe keep a set of recently started
     ///       Close requests here, and don't produce a new request if it's been less than e.g.
     ///       operation_timeout_ms (20x longer than dead_session_check_period_ms by default) since
     ///       the previous attempt.
-    while (true)
+    while (!isShuttingDown())
     {
-        if (shutdown_called)
-            return;
-
         try
         {
             /// Only leader node must check dead sessions
@@ -501,8 +476,8 @@ void KeeperDispatcher::sessionCleanerTask()
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
 
-        auto time_to_sleep = keeper_context->getCoordinationSettings()[CoordinationSetting::dead_session_check_period_ms].totalMilliseconds();
-        std::this_thread::sleep_for(std::chrono::milliseconds(time_to_sleep));
+        interruptibleSleep(std::chrono::milliseconds(
+            keeper_context->getCoordinationSettings()[CoordinationSetting::dead_session_check_period_ms].totalMilliseconds()));
     }
 }
 

@@ -190,9 +190,8 @@ TYPED_TEST(CoordinationTest, Create2WithContainerFlagRejected)
     EXPECT_THROW(request_read->readImpl(rbuf), Coordination::Exception);
 }
 
-TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
+TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagRejected)
 {
-    /// ZooKeeper derives container semantics from the flag, not the opnum (see readImpl).
     DB::WriteBufferFromNuraftBuffer wbuf;
     Coordination::write(std::string{"/container"}, wbuf); /// path
     Coordination::write(std::string{}, wbuf);             /// data
@@ -201,34 +200,7 @@ TYPED_TEST(CoordinationTest, PlainCreateWithContainerFlagAccepted)
 
     auto request_read = Coordination::ZooKeeperRequestFactory::instance().get(Coordination::OpNum::Create);
     DB::ReadBufferFromNuraftBuffer rbuf(wbuf.getBuffer());
-    request_read->readImpl(rbuf);
-    auto & create_read = dynamic_cast<Coordination::ZooKeeperCreateRequest &>(*request_read);
-    EXPECT_TRUE(create_read.is_container);
-    EXPECT_FALSE(create_read.is_sequential);
-    EXPECT_FALSE(create_read.is_ephemeral);
-    EXPECT_FALSE(create_read.include_ttl);
-    EXPECT_EQ(create_read.getOpNum(), Coordination::OpNum::CreateContainer);
-    EXPECT_EQ(create_read.getWireOpNum(), Coordination::OpNum::Create);
-
-    /// The client sent plain Create, so it expects a path-only CreateResponse back, not the
-    /// Create2Response (path + Stat) that getOpNum() == CreateContainer would otherwise select.
-    auto response = create_read.makeResponse();
-    EXPECT_EQ(dynamic_cast<Coordination::ZooKeeperCreate2Response *>(response.get()), nullptr);
-}
-
-TYPED_TEST(CoordinationTest, ClientBuiltCreateIfNotExistsResponseMatchesOpNum)
-{
-    /// Client-built requests (e.g. zkutil::makeCreateRequest) never go through readImpl, so
-    /// getWireOpNum() must fall back to getOpNum() for them, not some unrelated default.
-    auto request = std::make_shared<Coordination::ZooKeeperCreateRequest>();
-    request->path = "/path";
-    request->not_exists = true;
-
-    EXPECT_EQ(request->getOpNum(), Coordination::OpNum::CreateIfNotExists);
-    EXPECT_EQ(request->getWireOpNum(), Coordination::OpNum::CreateIfNotExists);
-
-    auto response = request->makeResponse();
-    EXPECT_EQ(response->getOpNum(), Coordination::OpNum::CreateIfNotExists);
+    EXPECT_THROW(request_read->readImpl(rbuf), Coordination::Exception);
 }
 
 template <typename StateMachine>

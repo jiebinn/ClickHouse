@@ -77,9 +77,6 @@ struct ZooKeeperRequest : virtual Request
 
     virtual OpNum getOpNum() const = 0;
     virtual int32_t tryGetOpNum() const { return static_cast<int32_t>(getOpNum()); }
-    /// Opnum as it was on the wire, for responses/log entries. Differs from getOpNum() only for
-    /// ZooKeeperCreateRequest, where getOpNum() may be reclassified from the create-mode flags.
-    virtual OpNum getWireOpNum() const { return getOpNum(); }
 
     /// Writes length, xid, op_num, then the rest.
     void write(WriteBuffer & out, bool use_xid_64, bool supports_tracing = false) const;
@@ -247,11 +244,6 @@ struct ZooKeeperCreateRequest final : public CreateRequest, ZooKeeperRequest
     /// used only during restore from zookeeper log
     int32_t parent_cversion = -1;
 
-    /// Set by readImpl when is_container came from the CONTAINER create-mode flag on a wire opnum
-    /// other than CreateContainer (plain Create/CreateIfNotExists). Never set for client-built
-    /// requests (they don't go through readImpl), so getWireOpNum() defaults to getOpNum() there.
-    bool container_from_flag = false;
-
     ZooKeeperCreateRequest() = default;
     explicit ZooKeeperCreateRequest(const CreateRequest & base) : CreateRequest(base) {}
 
@@ -264,13 +256,6 @@ struct ZooKeeperCreateRequest final : public CreateRequest, ZooKeeperRequest
         if (is_container)
             return OpNum::CreateContainer;
         return not_exists ? OpNum::CreateIfNotExists : OpNum::Create;
-    }
-
-    OpNum getWireOpNum() const override
-    {
-        if (container_from_flag)
-            return not_exists ? OpNum::CreateIfNotExists : OpNum::Create;
-        return getOpNum();
     }
 
     void writeImpl(WriteBuffer & out) const override;

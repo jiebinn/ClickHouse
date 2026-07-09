@@ -330,25 +330,18 @@ void ZooKeeperCreateRequest::readImpl(ReadBuffer & in)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
             "CreateTTL opnum and create-mode flag disagree on TTL");
 
-    /// A plain Create + CONTAINER flag is valid (ZooKeeper derives the mode from the flag);
-    /// only a CreateContainer opnum without the CONTAINER flag is rejected.
-    if (from_create_container_opnum && !is_container)
+    /// Similarly expect containerness to match between opnum and flags.
+    /// (Vanilla zookeeper server also accepts requests with `opnum == Create && flags == CONTAINER`,
+    ///  handles them incorrectly: it silently ignores the CONTAINER flag and creates a non-container
+    ///  node: https://github.com/go-zookeeper/zk/issues/165 . So let's reject such requests.)
+    if (from_create_container_opnum != is_container)
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
-            "CreateContainer opnum requires the CONTAINER create-mode flag");
+            "CreateContainer opnum and create-mode flag disagree on CONTAINER-ness");
 
-    /// Create2 sets include_stats; that must not coexist with a TTL create mode.
-    if (include_stats && include_ttl)
+    /// Create2 sets include_stats; that must not coexist with a TTL or CONTAINER create mode.
+    if (include_stats && (include_ttl || is_container))
         throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
-            "Create2 must not carry a TTL create-mode flag");
-
-    /// Nor with a CONTAINER create mode: getOpNum() prioritizes include_stats over is_container,
-    /// so a Create2 opnum carrying the CONTAINER flag would validate and log as Create2 (gated by
-    /// CREATE_WITH_STATS) while still creating a container node (gated separately by CREATE_CONTAINER).
-    if (include_stats && is_container)
-        throw Coordination::Exception(Coordination::Error::ZBADARGUMENTS,
-            "Create2 must not carry a CONTAINER create-mode flag");
-
-    container_from_flag = is_container && !from_create_container_opnum;
+            "Create2 must not carry a TTL or CONTAINER create-mode flag");
 
     if (include_ttl)
         Coordination::read(ttl, in);
@@ -384,8 +377,6 @@ size_t ZooKeeperCreateResponse::sizeImpl() const
 
 void ZooKeeperCreate2Response::readImpl(ReadBuffer & in)
 {
-    /// Mirror writeImpl: the base ZooKeeperCreateResponse::readImpl reads only path_created and
-    /// would leave zstat default and the buffer mid-stream for Create2/CreateTTL/CreateContainer.
     Coordination::read(path_created, in);
     Coordination::read(zstat, in);
 }
@@ -1461,17 +1452,15 @@ ZooKeeperResponsePtr ZooKeeperRemoveRequest::makeResponse() const
 
 ZooKeeperResponsePtr ZooKeeperCreateRequest::makeResponse() const
 {
-    /// Keyed on the wire opnum, not getOpNum(): a client that sent e.g. plain Create with the
-    /// CONTAINER flag still expects the plain path-only CreateResponse back.
-    const auto wire_op_num = getWireOpNum();
+    const auto op_num = getOpNum();
 
-    if (wire_op_num == OpNum::CreateTTL)
+    if (op_num == OpNum::CreateTTL)
         return std::make_shared<ZooKeeperCreateTTLResponse>();
 
-    if (wire_op_num == OpNum::Create2 || wire_op_num == OpNum::CreateContainer)
+    if (op_num == OpNum::Create2 || op_num == OpNum::CreateContainer)
         return std::make_shared<ZooKeeperCreate2Response>();
 
-    if (wire_op_num == OpNum::CreateIfNotExists)
+    if (op_num == OpNum::CreateIfNotExists)
         return std::make_shared<ZooKeeperCreateIfNotExistsResponse>();
 
     return std::make_shared<ZooKeeperCreateResponse>();
