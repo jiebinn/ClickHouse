@@ -9,7 +9,7 @@
 DROP TABLE IF EXISTS test_reverse_no_final_mark;
 CREATE TABLE test_reverse_no_final_mark (ts DateTime('UTC')) ENGINE = MergeTree
 ORDER BY ts DESC
-SETTINGS index_granularity = 1, index_granularity_bytes = 0, add_minmax_index_for_numeric_columns = 0;
+SETTINGS index_granularity = 1, index_granularity_bytes = 0, add_minmax_index_for_numeric_columns = 0, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0;
 
 INSERT INTO test_reverse_no_final_mark SELECT toDateTime('2026-03-30 00:00:00', 'UTC') + number * 3600 FROM numbers(24);
 
@@ -37,7 +37,7 @@ DROP TABLE test_reverse_no_final_mark;
 DROP TABLE IF EXISTS test_reverse_multi;
 CREATE TABLE test_reverse_multi (ts DateTime('UTC')) ENGINE = MergeTree
 ORDER BY (toYYYYMM(ts) DESC, toDate(ts) DESC, ts DESC)
-SETTINGS index_granularity = 1, index_granularity_bytes = 0, add_minmax_index_for_numeric_columns = 0;
+SETTINGS index_granularity = 1, index_granularity_bytes = 0, add_minmax_index_for_numeric_columns = 0, min_rows_for_wide_part = 0, min_bytes_for_wide_part = 0;
 
 INSERT INTO test_reverse_multi SELECT toDateTime('2026-03-30 00:00:00', 'UTC') + toIntervalDay(intDiv(number, 4)) + toIntervalHour((number % 4) * 6) FROM numbers(24);
 
