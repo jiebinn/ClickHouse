@@ -835,6 +835,37 @@ TEST_F(ReaderExecutorTest, DecryptsAcrossManyWindows)
     EXPECT_EQ(String(out.begin(), out.end()), plaintext);
 }
 
+TEST_F(ReaderExecutorTest, DecryptsAcrossBlobBoundary)
+{
+    /// A single encrypted file (header + ciphertext) split across two objects. The header lives in
+    /// the first object and the payload spans both, so this exercises the physical shift
+    /// `position + data_start_offset` and `findObjectAt` crossing an object boundary while decrypting.
+    String key(16, 'm');
+    const FileEncryption::InitVector iv(UInt128{0x55});
+    const size_t plaintext_size = 5000;
+    String plaintext(plaintext_size, '\0');
+    for (size_t i = 0; i < plaintext_size; ++i)
+        plaintext[i] = static_cast<char>((i * 17 + 3) & 0xFF);
+
+    const String file_bytes = makeEncryptedFile(key, iv, plaintext);  // 64-byte header + ciphertext
+    const size_t split = FileEncryption::Header::kSize + 2000;        // header + prefix in the first object
+    ASSERT_GT(file_bytes.size(), split);
+
+    StoredObjects objects{
+        writeBytesObject(tmp_dir, "part_a.enc", file_bytes.substr(0, split)),
+        writeBytesObject(tmp_dir, "part_b.enc", file_bytes.substr(split))};
+
+    /// A small block forces windows to reach and cross the object boundary.
+    ReaderExecutor executor(std::make_shared<LocalSourceReader>(), objects,
+        ReaderExecutor::Options{.block_size = 1024});
+    executor.addDecryptionLayer("/m", [&](UInt128, const String &) { return key; });
+    executor.initDecryption();
+
+    auto out = drain(executor);
+    ASSERT_EQ(out.size(), plaintext.size());
+    EXPECT_EQ(String(out.begin(), out.end()), plaintext);
+}
+
 TEST_F(ReaderExecutorTest, DecryptsMultiLayer)
 {
     /// Two encryption layers stacked, in the layout a legacy `DiskEncrypted`-over-`DiskEncrypted`
