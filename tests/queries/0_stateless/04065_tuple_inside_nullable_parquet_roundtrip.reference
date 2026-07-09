@@ -23,6 +23,23 @@ INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_both.parquet', 'Par
 -- null map cannot be separated from the element null map. Reject rather than lose data.
 SELECT c0 FROM file(currentDatabase() || '_04065_both.parquet', 'Parquet', 'c0 Nullable(Tuple(Nullable(UInt32), String))'); -- { serverError TYPE_MISMATCH }
 DROP TABLE test_nullable_tuple_both;
+-- Physically-nullable struct (all-REQUIRED leaves) read as Nullable(Tuple) with a leaf hint that
+-- materializes the first leaf as Nullable. decodePrimitiveColumn moves the shared group null map
+-- into the leaf's ColumnNullable, so the group null map must be preserved separately or the middle
+-- (struct-level NULL) row would be silently returned as a non-null tuple. Middle row must stay NULL.
+DROP TABLE IF EXISTS test_nullable_tuple_leaf_nullable;
+CREATE TABLE test_nullable_tuple_leaf_nullable (c0 Nullable(Tuple(UInt32, String))) ENGINE = Memory;
+INSERT INTO test_nullable_tuple_leaf_nullable VALUES ((1, 'a')), (NULL), ((3, 'c'));
+INSERT INTO TABLE FUNCTION file(currentDatabase() || '_04065_leaf_nullable.parquet', 'Parquet', 'c0 Nullable(Tuple(UInt32, String))') SELECT c0 FROM test_nullable_tuple_leaf_nullable;
+SELECT c0 FROM file(currentDatabase() || '_04065_leaf_nullable.parquet', 'Parquet', 'c0 Nullable(Tuple(Nullable(UInt32), String))');
+(1,'a')
+\N
+(3,'c')
+SELECT c0 IS NULL FROM file(currentDatabase() || '_04065_leaf_nullable.parquet', 'Parquet', 'c0 Nullable(Tuple(Nullable(UInt32), String))');
+0
+1
+0
+DROP TABLE test_nullable_tuple_leaf_nullable;
 -- Non-nullable struct with nullable elements
 DROP TABLE IF EXISTS test_nullable_tuple_elem;
 CREATE TABLE test_nullable_tuple_elem (c0 Tuple(Nullable(UInt32), String)) ENGINE = Memory;

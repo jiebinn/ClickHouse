@@ -363,6 +363,14 @@ struct Reader
 
         MutableColumnPtr null_map;
 
+        /// For a leaf of a physically-nullable struct read as Nullable(Tuple(...)) (see
+        /// PrimitiveColumnInfo::group_nullable): the group's definition-level null map, moved here
+        /// in decodePrimitiveColumn before any leaf-level Nullable wrapping can consume `null_map`.
+        /// formOutputColumn reads it from the group's first leaf to wrap the assembled ColumnTuple
+        /// in ColumnNullable. Kept separate from `null_map` so it survives even when the leaf itself
+        /// is materialized as Nullable(...) (which moves `null_map` into the leaf's ColumnNullable).
+        MutableColumnPtr group_null_map;
+
         /// If this primitive column is inside an array, this is the offsets for `ColumnArray`s at
         /// all nesting levels, from outer to inner. Index is repetition level - 1.
         /// Derived from parquet's repetition/definition levels. See comment on LevelInfo.
