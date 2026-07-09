@@ -370,29 +370,33 @@ TEST(PerCPUMemory, RepeatedAllocFreePairsDoNotDrift)
     EXPECT_EQ(total_memory_tracker.get() - before, 0);
 }
 
-#if defined(OS_LINUX)
-/// The switcher flushes the thread's per-CPU contribution across its scope instead of preserving it.
-TEST(PerCPUMemory, SwitcherFlushesPerCpuState)
+/// Switching the tracker parent must give the switched scope its own per-CPU contribution and
+/// restore the previous one afterwards.
+TEST(PerCPUMemory, SwitcherPreservesPerCpuState)
 {
     resetTrackers();
 
     auto & thread = CurrentThread::get();
-
-    std::ignore = CurrentMemoryTracker::allocNoThrow(PerCPUMemory::DEFAULT_THREAD_BUFFER + 1);
-    EXPECT_GT(thread.per_cpu_untracked_memory.contributed, 0);
+    thread.per_cpu_untracked_memory.contributed = 64 * 1024;
+    thread.per_cpu_untracked_memory.contributed_on_cpu = 0;
 
     MemoryTracker other{VariableContext::Process};
     {
         MemoryTrackerSwitcher switcher(&other);
-        EXPECT_EQ(thread.per_cpu_untracked_memory.contributed, 0);
-        std::ignore = CurrentMemoryTracker::allocNoThrow(PerCPUMemory::DEFAULT_THREAD_BUFFER + 1);
-        EXPECT_GT(thread.per_cpu_untracked_memory.contributed, 0);
-    }
-    EXPECT_EQ(thread.per_cpu_untracked_memory.contributed, 0);
 
+        EXPECT_EQ(thread.per_cpu_untracked_memory.contributed, 0);
+        EXPECT_EQ(thread.per_cpu_untracked_memory.contributed_on_cpu, -1);
+
+        std::ignore = CurrentMemoryTracker::allocNoThrow(2 * 1024);
+    }
+
+    EXPECT_EQ(thread.per_cpu_untracked_memory.contributed, 64 * 1024);
+    EXPECT_EQ(thread.per_cpu_untracked_memory.contributed_on_cpu, 0);
+
+    /// Clear the synthetic contribution so it is not backed out of a real counter later.
+    thread.per_cpu_untracked_memory = {};
     resetTrackers();
 }
-#endif
 
 TEST(PerCPUMemory, ConcurrentAllocFreeAcrossThreadsDoesNotDrift)
 {
