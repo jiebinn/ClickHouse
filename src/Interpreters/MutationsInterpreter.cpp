@@ -866,7 +866,10 @@ void MutationsInterpreter::prepare(bool dry_run)
             auto column_to_update = alter ? getColumnToUpdateExpression(*alter) : std::unordered_map<String, ASTPtr>{};
 
             /// Compute partition+predicate once per command (reusing the same parse); cloned per assignment below.
-            ASTPtr base_condition = getPartitionAndPredicateExpressionForMutationCommand(alter.get());
+            /// For a single command with returned mutated rows it is already checked by the prefilter.
+            ASTPtr base_condition = condition_checked_by_prefilter
+                ? nullptr
+                : getPartitionAndPredicateExpressionForMutationCommand(alter.get());
 
             for (const auto & [column_name, update_expr] : column_to_update)
             {
@@ -917,9 +920,6 @@ void MutationsInterpreter::prepare(bool dry_run)
                 bool skip_nested_validation = source.getMergeTreeData()
                     && !(*source.getMergeTreeData()->getSettings())[MergeTreeSetting::share_nested_offsets];
 
-                /// Keep Nested validation when the original 'if' wrapper is omitted.
-                boost::intrusive_ptr<ASTFunction> nested_validation;
-
                 if (!skip_nested_validation && isArray(type) && !Nested::splitName(column_name).second.empty())
                 {
                     boost::intrusive_ptr<ASTFunction> function = nullptr;
@@ -941,21 +941,18 @@ void MutationsInterpreter::prepare(bool dry_run)
 
                     if (function)
                     {
-                        if (condition_checked_by_prefilter)
-                            nested_validation = function;
-                        else
-                            condition = makeASTOperator("and", condition, function);
+                        condition = condition ? makeASTOperator("and", condition, function) : function;
                     }
                 }
 
                 ASTPtr updated_column;
                 if (condition_checked_by_prefilter)
                 {
-                    if (nested_validation)
+                    if (condition)
                     {
                         /// Use validation result as the condition to keep its side effect.
                         updated_column = makeASTFunction("if",
-                            nested_validation,
+                            condition,
                             makeASTFunction("_CAST",
                                 update_expr->clone(),
                                 type_literal),
