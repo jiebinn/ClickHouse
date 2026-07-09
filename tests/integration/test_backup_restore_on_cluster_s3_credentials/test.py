@@ -82,6 +82,15 @@ def new_backup_destination():
     return f"S3('http://minio1:9001/root/backup_on_cluster_{backup_id_counter}')"
 
 
+def new_backup_destination_with_keys():
+    global backup_id_counter
+    backup_id_counter += 1
+    return (
+        f"S3('http://minio1:9001/root/backup_on_cluster_{backup_id_counter}', "
+        f"'{minio_access_key}', '{minio_secret_key}')"
+    )
+
+
 def create_and_fill_table():
     node1.query(
         "CREATE TABLE tbl ON CLUSTER 'cluster' (x UInt64) "
@@ -138,3 +147,20 @@ def test_restriction_still_applies_to_untrusted_users():
         f"BACKUP TABLE tbl TO {backup_destination} SETTINGS internal = true"
     )
     assert "Setting 'internal' cannot be set explicitly" in error, error
+
+
+def test_untrusted_initiator_cannot_reach_server_credentials_on_other_hosts():
+    # The fix propagates the initiator's `s3_allow_server_credentials_in_user_queries` to the other hosts
+    # so a trusted on-cluster backup works. This must not let an untrusted initiator reach the server
+    # credentials on those hosts. The base backup is opened lazily during entry collection, which for an
+    # ON CLUSTER backup happens on the per-host (internal) operations, not on the initiator. So a backup
+    # with explicit credentials for the destination (accepted, they are explicit) but a bare-URL base backup
+    # (which resolves the server's own credentials) exercises the restriction specifically on the other host.
+    create_and_fill_table()
+    destination = new_backup_destination_with_keys()
+    base_backup = new_backup_destination()  # bare URL: relies on server-managed credentials
+
+    error = node1.query_and_get_error(
+        f"BACKUP TABLE tbl ON CLUSTER 'cluster' TO {destination} SETTINGS base_backup = {base_backup}"
+    )
+    assert "server-managed credentials" in error or "ACCESS_DENIED" in error, error

@@ -101,10 +101,7 @@ void registerBackupEngineS3(BackupFactory & factory)
             /// collection's operator-provisioned keys; honor it only when the same query also overrode the base
             /// key pair (mirrors `StorageS3Configuration::fromNamedCollection`). A `role_arn` from the stored
             /// collection definition is left in place (a role-only collection then reaches the central rejection).
-            /// Internal (per-host ON CLUSTER) operations defer the restriction to the initiator, which has
-            /// already opened the same destination under its own user settings (see `BackupReaderS3`).
-            if (!params.is_internal_backup
-                && params.context->shouldRestrictUserQueryS3Credentials() && collection->isQueryOverridden("role_arn")
+            if (params.context->shouldRestrictUserQueryS3Credentials() && collection->isQueryOverridden("role_arn")
                 && !(collection->isQueryOverridden("access_key_id") && collection->isQueryOverridden("secret_access_key")))
             {
                 role_arn.clear();
