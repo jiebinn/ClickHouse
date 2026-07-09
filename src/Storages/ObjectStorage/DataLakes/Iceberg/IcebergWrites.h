@@ -45,6 +45,8 @@ namespace DB
 
 String removeEscapedSlashes(const String & json_str);
 
+String stringifyJSON(const Poco::Dynamic::Var & json, unsigned indent = 0);
+
 /// Per-file column statistics carried over verbatim from a source manifest entry during a manifest-only rewrite.
 struct DataFileColumnStatistics
 {
