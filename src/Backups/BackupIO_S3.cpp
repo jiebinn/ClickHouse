@@ -128,6 +128,7 @@ private:
         String external_id,
         bool gcp_oauth_supplied_by_query,
         bool from_named_collection,
+        bool restrict_server_credentials,
         const S3Settings & settings,
         const ContextPtr & context)
     {
@@ -155,7 +156,7 @@ private:
         /// Drop them: the explicit-key form must not send the server's material alongside the query's keys, and
         /// the bare-URL form that resolves to an anonymous/NOSIGN client must stay genuinely anonymous rather
         /// than still sending operator headers or encryption keys. A named collection is handled by its caller.
-        if (!from_named_collection && context->shouldRestrictUserQueryS3Credentials())
+        if (!from_named_collection && restrict_server_credentials)
         {
             sse_customer_key.clear();
             sse_kms_config = {};
@@ -185,7 +186,7 @@ private:
         const bool drop_role_on_server_keys
             = !from_named_collection && role_arn_supplied_by_query && !base_keys_supplied_by_query;
         if (!role_arn.empty() && (drop_inherited_role || drop_role_on_server_keys)
-            && context->shouldRestrictUserQueryS3Credentials())
+            && restrict_server_credentials)
         {
             role_arn.clear();
             role_session_name.clear();
@@ -239,7 +240,7 @@ private:
         /// server bearer token to the user-chosen endpoint. A query-supplied `gcp_oauth` is left in place (and
         /// reaches the central `getCredentialsProvider` rejection when it has no ADC triple).
         if (boost::iequals(client_configuration.http_client, "gcp_oauth")
-            && !gcp_oauth_supplied_by_query && context->shouldRestrictUserQueryS3Credentials())
+            && !gcp_oauth_supplied_by_query && restrict_server_credentials)
         {
             client_configuration.http_client.clear();
             client_configuration.service_account.clear();
@@ -271,7 +272,7 @@ private:
 
         /// BACKUP/RESTORE TO S3 is driven by user SQL, so it must not be able to reuse the server's own
         /// S3 credentials.
-        credentials_configuration.forbid_implicit_credentials = context->shouldRestrictUserQueryS3Credentials();
+        credentials_configuration.forbid_implicit_credentials = restrict_server_credentials;
 
         auto shared_cache = S3::ClientCacheRegistry::instance().getOrCreateCacheForKey(s3_uri.endpoint, s3_uri.bucket);
 
@@ -377,6 +378,13 @@ BackupReaderS3::BackupReaderS3(
     , s3_uri(s3_uri_)
     , data_source_description{DataSourceType::ObjectStorage, ObjectStorageType::S3, MetadataStorageType::None, s3_uri.endpoint, false, false, ""}
 {
+    /// An internal operation is the per-host continuation of a `BACKUP`/`RESTORE ON CLUSTER` (the `internal`
+    /// flag cannot be set by a user); its initiator has already opened the same destination under its own
+    /// user settings, so the credential restriction was enforced there. Do not re-check it against this
+    /// host's context: with the initiator's user absent here, that context falls back to the default
+    /// profile, whose constraints may pin the setting and would wrongly reject the whole operation.
+    const bool restrict_server_credentials = !is_internal_backup && context_->shouldRestrictUserQueryS3Credentials();
+
     s3_settings.loadFromConfig(context_->getConfigRef(), "s3", context_->getSettingsRef());
 
     if (auto endpoint_settings = context_->getStorageS3Settings().getSettings(
@@ -392,7 +400,7 @@ BackupReaderS3::BackupReaderS3(
         /// `updateIfChanged` cannot clear non-scalar fields, so under the restriction first drop the server
         /// `<s3>`/endpoint request-auth material (headers/access headers and SSE-C/SSE-KMS keys); a URL-only
         /// collection then stays anonymous and an explicit-key collection does not inherit the server SSE keys.
-        if (context_->shouldRestrictUserQueryS3Credentials())
+        if (restrict_server_credentials)
             s3_settings.auth_settings.clearServerManagedRequestAuth();
         s3_settings.auth_settings.updateIfChanged(*named_collection_auth);
     }
@@ -403,7 +411,7 @@ BackupReaderS3::BackupReaderS3(
     /// A `gcp_oauth` is server-managed unless the named collection supplied it itself (see makeS3Client).
     const bool gcp_oauth_supplied_by_query = named_collection_auth
         && boost::iequals(String((*named_collection_auth)[S3AuthSetting::http_client]), "gcp_oauth");
-    client = makeS3Client(s3_uri_, access_key_id_, secret_access_key_, role_arn, role_session_name, external_id, gcp_oauth_supplied_by_query, /* from_named_collection */ named_collection_auth.has_value(), s3_settings, context_);
+    client = makeS3Client(s3_uri_, access_key_id_, secret_access_key_, role_arn, role_session_name, external_id, gcp_oauth_supplied_by_query, /* from_named_collection */ named_collection_auth.has_value(), restrict_server_credentials, s3_settings, context_);
 
     if (auto blob_storage_system_log = context_->getBlobStorageLog())
         blob_storage_log = std::make_shared<BlobStorageLogWriter>(blob_storage_system_log);
@@ -497,6 +505,10 @@ BackupWriterS3::BackupWriterS3(
     , s3_capabilities(getCapabilitiesFromConfig(context_->getConfigRef(), "s3"))
     , disk_client_factory(S3BackupClientCreator(context_))
 {
+    /// See the explanation in `BackupReaderS3`: internal operations defer the credential restriction to
+    /// the initiator, which has already opened the same destination under its own user settings.
+    const bool restrict_server_credentials = !is_internal_backup && context_->shouldRestrictUserQueryS3Credentials();
+
     s3_settings.loadFromConfig(context_->getConfigRef(), "s3", context_->getSettingsRef());
 
     if (auto endpoint_settings = context_->getStorageS3Settings().getSettings(
@@ -512,7 +524,7 @@ BackupWriterS3::BackupWriterS3(
         /// `updateIfChanged` cannot clear non-scalar fields, so under the restriction first drop the server
         /// `<s3>`/endpoint request-auth material (headers/access headers and SSE-C/SSE-KMS keys); a URL-only
         /// collection then stays anonymous and an explicit-key collection does not inherit the server SSE keys.
-        if (context_->shouldRestrictUserQueryS3Credentials())
+        if (restrict_server_credentials)
             s3_settings.auth_settings.clearServerManagedRequestAuth();
         s3_settings.auth_settings.updateIfChanged(*named_collection_auth);
     }
@@ -524,7 +536,7 @@ BackupWriterS3::BackupWriterS3(
     /// A `gcp_oauth` is server-managed unless the named collection supplied it itself (see makeS3Client).
     const bool gcp_oauth_supplied_by_query = named_collection_auth
         && boost::iequals(String((*named_collection_auth)[S3AuthSetting::http_client]), "gcp_oauth");
-    client = makeS3Client(s3_uri_, access_key_id_, secret_access_key_, role_arn, role_session_name, external_id, gcp_oauth_supplied_by_query, /* from_named_collection */ named_collection_auth.has_value(), s3_settings, context_);
+    client = makeS3Client(s3_uri_, access_key_id_, secret_access_key_, role_arn, role_session_name, external_id, gcp_oauth_supplied_by_query, /* from_named_collection */ named_collection_auth.has_value(), restrict_server_credentials, s3_settings, context_);
 
     if (auto blob_storage_system_log = context_->getBlobStorageLog())
     {
