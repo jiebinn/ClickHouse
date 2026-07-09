@@ -2000,7 +2000,8 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 
                         create_field_ref(range.begin, key_col, left);
 
-                        right = POSITIVE_INFINITY;
+                        /// If reverse_flags[key_col] is true, the right points to sparse_key_left[sparse_pos].
+                        right = reverse_flags[key_col] ? NEGATIVE_INFINITY : POSITIVE_INFINITY;
                     }
                 }
                 else
@@ -2049,9 +2050,11 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                     if ((*index_columns)[i].column)
                         create_field_ref(range.begin, i, left);
                     else
-                        left = index_bounds[i].left;
+                        /// If reverse_flags[i] is true, the left points to index_right[i].
+                        left = reverse_flags[i] ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
 
-                    right = index_bounds[i].right;
+                    /// If reverse_flags[i] is true, the right points to index_left[i].
+                    right = reverse_flags[i] ? NEGATIVE_INFINITY : POSITIVE_INFINITY;
                 }
             }
             else
@@ -2067,8 +2070,11 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                     }
                     else
                     {
-                        left = index_bounds[i].left;
-                        right = index_bounds[i].right;
+                        /// If reverse_flags[i] is true, the left points to index_right[i].
+                        left = reverse_flags[i] ? POSITIVE_INFINITY : NEGATIVE_INFINITY;
+                        
+                        /// If reverse_flags[i] is true, the right points to index_left[i].
+                        right = reverse_flags[i] ? NEGATIVE_INFINITY : POSITIVE_INFINITY;
                     }
                 }
             }
