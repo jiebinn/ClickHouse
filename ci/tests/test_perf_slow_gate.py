@@ -1,6 +1,12 @@
 import inspect
+import json
 import os
+import re
+import shutil
+import subprocess
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -8,20 +14,12 @@ import ci.jobs.performance_tests as performance_tests
 from ci.jobs.performance_tests import (
     INSERT_HISTORICAL_DATA,
     SLOWER_QUERIES_FAIL_THRESHOLD,
-    sort_perf_tests_attention_first,
     too_many_slow,
 )
 
-
-class _StubResult:
-    """Minimal Result-like stub - only .status/.name are read by the sort."""
-
-    def __init__(self, name, status):
-        self.name = name
-        self.status = status
-
-    def __repr__(self):
-        return f"({self.status}, {self.name})"
+_JSON_HTML = os.path.join(
+    os.path.dirname(__file__), "..", "praktika", "json.html"
+)
 
 
 def test_historical_insert_parses_threshold_columns():
@@ -76,72 +74,56 @@ def test_cidb_inserts_are_best_effort_not_asserted():
     assert source.count("if not cidb.is_ready():") == 4
 
 
-def _make_perf_rows():
-    """Reproduce the shape produced by ci-checks.tsv: alphabetical by test name,
-    with ``::old`` and ``::new`` sides adjacent and sharing a status. The four
-    non-``success`` rows are buried among successes so we can see them move."""
-    return [
-        _StubResult("aggregation_in_order_2 #0::old", "success"),
-        _StubResult("aggregation_in_order_2 #0::new", "success"),
-        _StubResult("aggregation_in_order_2 #1::old", "success"),
-        _StubResult("aggregation_in_order_2 #1::new", "success"),
-        _StubResult("fixed_hash_table_parallel_merge #0::old", "slower"),
-        _StubResult("fixed_hash_table_parallel_merge #0::new", "slower"),
-        _StubResult("group_by_high_card #0::old", "success"),
-        _StubResult("group_by_high_card #0::new", "success"),
-        _StubResult("hash_table_sizes_stats_small #25::old", "unstable"),
-        _StubResult("hash_table_sizes_stats_small #25::new", "unstable"),
-        _StubResult("window_functions #5::old", "success"),
-        _StubResult("window_functions #5::new", "success"),
-    ]
+def _js_get_status_priority(statuses):
+    """Extract `getStatusPriority` from `ci/praktika/json.html`, run it under
+    Node, and return the priority number for each status. This is what
+    determines the on-page ordering of rows in the perf-comparison "Tests"
+    sub-result, so guarding the perf-specific statuses needs a check that
+    actually runs the JS."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("`node` binary not available")
+    with open(_JSON_HTML, "r", encoding="utf-8") as f:
+        html = f.read()
+    m = re.search(
+        r"function getStatusPriority\(status\) \{.*?\n {4}\}", html, flags=re.S
+    )
+    assert m, "getStatusPriority not found in json.html"
+    script = m.group(0) + "\n" + (
+        "process.stdout.write(JSON.stringify("
+        + json.dumps(list(statuses))
+        + ".map(getStatusPriority)));"
+    )
+    out = subprocess.run(
+        [node, "-e", script], check=True, capture_output=True, text=True
+    ).stdout
+    return json.loads(out)
 
 
-def test_sort_puts_slower_and_unstable_at_the_top():
-    rows = _make_perf_rows()
-    sort_perf_tests_attention_first(rows)
-    # The four attention-worthy rows must appear first, `slower` before
-    # `unstable`, and each `::old`/`::new` pair kept adjacent.
-    assert [r.name for r in rows[:4]] == [
-        "fixed_hash_table_parallel_merge #0::old",
-        "fixed_hash_table_parallel_merge #0::new",
-        "hash_table_sizes_stats_small #25::old",
-        "hash_table_sizes_stats_small #25::new",
-    ], rows
-    assert [r.status for r in rows[:4]] == ["slower", "slower", "unstable", "unstable"]
-    # Everything after is `success`, in the original ci-checks.tsv order
-    # (stable sort preserves within-bucket ordering).
-    assert [r.name for r in rows[4:]] == [
-        "aggregation_in_order_2 #0::old",
-        "aggregation_in_order_2 #0::new",
-        "aggregation_in_order_2 #1::old",
-        "aggregation_in_order_2 #1::new",
-        "group_by_high_card #0::old",
-        "group_by_high_card #0::new",
-        "window_functions #5::old",
-        "window_functions #5::new",
-    ]
+def test_js_status_priority_surfaces_perf_rows():
+    """`compare.sh` emits `slower`/`unstable` per-query statuses. Without an
+    explicit case in `getStatusPriority` they fall through to the trailing
+    `return 10` bucket and end up sorted below `success` (priority 7) in
+    the rendered "Tests" table. Guard that:
 
-
-def test_sort_surfaces_unknown_status_at_the_top():
-    # A new status added to `compare.sh` without also updating the sort key
-    # must NOT sink below hundreds of successful rows - we would rather be
-    # noisy than silently hide a regression signal.
-    rows = [
-        _StubResult("something_ok::old", "success"),
-        _StubResult("something_ok::new", "success"),
-        _StubResult("weird_new_status::old", "error"),
-        _StubResult("weird_new_status::new", "error"),
-    ]
-    sort_perf_tests_attention_first(rows)
-    assert [r.status for r in rows] == ["error", "error", "success", "success"]
-
-
-def test_sort_is_stable_when_all_success():
-    # No-op behaviour: an all-`success` list must come out in the same order.
-    rows = [_StubResult(f"t #{i}::old", "success") for i in range(6)]
-    original = [r.name for r in rows]
-    sort_perf_tests_attention_first(rows)
-    assert [r.name for r in rows] == original
+    - both statuses sort strictly above OK/`success`;
+    - `slower` sorts at-or-before `unstable` (real regression first, flaky
+      second);
+    - neither leapfrogs `error` / `fail`.
+    """
+    prio = dict(zip(
+        ["slower", "unstable", "success", "ok", "fail", "error", "unknown"],
+        _js_get_status_priority(
+            ["slower", "unstable", "success", "ok", "fail", "error", "unknown"]
+        ),
+    ))
+    assert prio["slower"] < prio["success"], prio
+    assert prio["slower"] < prio["ok"], prio
+    assert prio["unstable"] < prio["success"], prio
+    assert prio["unstable"] < prio["ok"], prio
+    assert prio["slower"] <= prio["unstable"], prio
+    assert prio["error"] <= prio["slower"], prio
+    assert prio["fail"] <= prio["slower"], prio
 
 
 if __name__ == "__main__":
@@ -151,7 +133,5 @@ if __name__ == "__main__":
     test_slower_count_at_or_below_threshold_does_not_fail()
     test_slower_count_above_threshold_fails()
     test_cidb_inserts_are_best_effort_not_asserted()
-    test_sort_puts_slower_and_unstable_at_the_top()
-    test_sort_surfaces_unknown_status_at_the_top()
-    test_sort_is_stable_when_all_success()
+    test_js_status_priority_surfaces_perf_rows()
     print("All perf slow-gate tests passed.")
