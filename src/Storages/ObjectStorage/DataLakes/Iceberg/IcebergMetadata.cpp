@@ -486,7 +486,10 @@ bool IcebergMetadata::optimize(
 }
 
 bool IcebergMetadata::optimizeManifestFiles(
-       const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+       const StorageMetadataPtr & metadata_snapshot,
+       ContextPtr context,
+       std::shared_ptr<DataLake::ICatalog> catalog,
+       const StorageID & storage_id)
 {
     if (context->getSettingsRef()[Setting::allow_experimental_iceberg_compaction])
     {
@@ -506,7 +509,9 @@ bool IcebergMetadata::optimizeManifestFiles(
             data_lake_settings,
             sample_block,
             context,
-            write_format);
+            write_format,
+            catalog,
+            storage_id);
 
         return true;
     }

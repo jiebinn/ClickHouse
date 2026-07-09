@@ -67,7 +67,7 @@ BlockIO InterpreterOptimizeQuery::execute()
         if (!iceberg_metadata)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "OPTIMIZE MANIFEST is only supported for Iceberg tables");
 
-        iceberg_metadata->optimizeManifestFiles(metadata_snapshot, getContext());
+        iceberg_metadata->optimizeManifestFiles(metadata_snapshot, getContext(), object_storage_table->getCatalog(), table_id);
         return {};
 #else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "OPTIMIZE MANIFEST is only supported for Iceberg tables");

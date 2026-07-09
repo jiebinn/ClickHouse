@@ -27,7 +27,9 @@ void compactIcebergManifests(
     const DataLakeStorageSettings & data_lake_settings,
     DB::SharedHeader sample_block_,
     DB::ContextPtr context_,
-    const String & write_format);
+    const String & write_format,
+    std::shared_ptr<DataLake::ICatalog> catalog,
+    const StorageID & table_id);
 
 #endif
 }

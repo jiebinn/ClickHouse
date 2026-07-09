@@ -7,6 +7,7 @@
 #include <Core/Settings.h>
 #include <Disks/DiskObjectStorage/ObjectStorages/StoredObject.h>
 #include <Formats/FormatFactory.h>
+#include <Databases/DataLake/Common.h>
 #include <Formats/FormatParserSharedResources.h>
 #include <IO/CompressionMethod.h>
 #include <Interpreters/FileCache/FileSegment.h>
@@ -390,7 +391,9 @@ static bool writeConsolidatedManifestFile(
     SharedHeader sample_block_,
     String write_format,
     CompressionMethod compression_method,
-    const DataLakeStorageSettings & data_lake_settings)
+    const DataLakeStorageSettings & data_lake_settings,
+    std::shared_ptr<DataLake::ICatalog> catalog,
+    const StorageID & table_id)
 {
     auto log = getLogger("IcebergManifestConsolidation");
 
@@ -865,7 +868,11 @@ static bool writeConsolidatedManifestFile(
             LOG_INFO(log, "Committing metadata file: {}",
                      path_resolver.resolve(generated_metadata_info.path));
 
-            if (!writeMetadataFileAndVersionHint(
+            /// A transactional catalog is the source of truth for the current metadata; for it the storage-side
+            /// version hint is irrelevant, so only write the metadata file + version hint when no such catalog owns the table.
+            const bool catalog_writes_metadata_file = catalog && catalog->isTransactional();
+            if (!catalog_writes_metadata_file
+                && !writeMetadataFileAndVersionHint(
                     path_resolver,
                     generated_metadata_info,
                     json_representation,
@@ -877,6 +884,19 @@ static bool writeConsolidatedManifestFile(
                 LOG_INFO(log, "Metadata commit conflict detected, cleaning up temporary files");
                 cleanup();
                 return false;
+            }
+
+            /// Advance the catalog pointer to the new metadata so catalog-based readers see the compacted snapshot.
+            if (catalog)
+            {
+                auto catalog_filename = path_resolver.resolveForCatalog(generated_metadata_info.path);
+                const auto & [namespace_name, table_name] = DataLake::parseTableName(table_id.getTableName());
+                if (!catalog->updateMetadata(namespace_name, table_name, catalog_filename, new_snapshot.snapshot))
+                {
+                    LOG_INFO(log, "Metadata commit conflict detected via catalog, cleaning up temporary files");
+                    cleanup();
+                    return false;
+                }
             }
         }
     }
@@ -1186,7 +1206,9 @@ void compactIcebergManifests(
     const DataLakeStorageSettings & data_lake_settings,
     SharedHeader sample_block_,
     ContextPtr context_,
-    const String & write_format)
+    const String & write_format,
+    std::shared_ptr<DataLake::ICatalog> catalog,
+    const StorageID & table_id)
 {
     auto log = getLogger("IcebergManifestCompaction");
     LOG_INFO(log, "Starting manifest-only compaction for Iceberg table");
@@ -1249,7 +1271,9 @@ void compactIcebergManifests(
                 sample_block_,
                 write_format,
                 persistent_table_components.metadata_compression_method,
-                data_lake_settings))
+                data_lake_settings,
+                catalog,
+                table_id))
         {
             // Invalidate metadata cache so the next reader picks up the new state
             if (persistent_table_components.metadata_cache)
