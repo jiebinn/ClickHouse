@@ -372,6 +372,16 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("--dry-run", action="store_true", help="do not create anything")
+    parser.add_argument(
+        "--skip-images",
+        action="store_true",
+        help="skip the update_library_images stage",
+    )
+    parser.add_argument(
+        "--skip-docs",
+        action="store_true",
+        help="skip the update_docs stage",
+    )
     return parser.parse_args()
 
 
@@ -387,17 +397,23 @@ def main() -> None:
     gh = GitHub(token, create_cache_dir=False)
     repos = LibraryRepos.get_repos(gh, args)
     errors = []
-    try:
-        update_library_images(repos, args.dry_run)
-    except Exception as e:
-        logging.error("update_library_images failed: %s", e)
-        errors.append(e)
+    if args.skip_images:
+        logging.info("Skipping update_library_images stage")
+    else:
+        try:
+            update_library_images(repos, args.dry_run)
+        except Exception as e:
+            logging.error("update_library_images failed: %s", e)
+            errors.append(e)
 
-    try:
-        update_docs(repos, args.dry_run)
-    except Exception as e:
-        logging.error("update_docs failed: %s", e)
-        errors.append(e)
+    if args.skip_docs:
+        logging.info("Skipping update_docs stage")
+    else:
+        try:
+            update_docs(repos, args.dry_run)
+        except Exception as e:
+            logging.error("update_docs failed: %s", e)
+            errors.append(e)
 
     if errors:
         if IS_CI:
