@@ -114,6 +114,8 @@ public:
 
     /// Like getFileInfosForAllHosts, but iterates the infos in place instead of copying them all
     /// (a backup can contain millions). The default implementation copies.
+    /// The callback may run while an internal coordination mutex is held, so it must not be expensive
+    /// or call back into IBackupCoordination (that would risk deadlocks and long critical sections).
     virtual void forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const;
 
     /// Starts writing a specified file, the function returns false if that file is already being written concurrently.
