@@ -187,6 +187,22 @@ SELECT category, sum(value) AS total FROM test_a1 GROUP BY category HAVING group
 ORDER BY category
 SETTINGS enable_analyzer = 1, analyzer_compatibility_allow_non_aggregate_in_having = 1;
 
+-- A.10 - nested AND from explicit parens: non-aggregate sibling must move to WHERE.
+-- The parser builds `and(and(service='svc1', sum>0), sum<100)`; without flattening the
+-- nested `and` is kept in HAVING and `service='svc1'` raises NOT_AN_AGGREGATE.
+SELECT 'A.10 nested AND with parens';
+SELECT category, sum(value) AS total FROM test_a1 GROUP BY category
+HAVING (service = 'svc1' AND sum(value) > 0) AND sum(value) < 100
+ORDER BY category
+SETTINGS enable_analyzer = 1, analyzer_compatibility_allow_non_aggregate_in_having = 1;
+
+-- A.11 - deeply nested AND chain `((a AND b) AND c) AND d`: recursion must reach every leaf.
+SELECT 'A.11 deeply nested AND chain';
+SELECT category, sum(value) AS total FROM test_a1 GROUP BY category
+HAVING ((service = 'svc1' AND sum(value) > 0) AND sum(value) < 100) AND category != 'zzz'
+ORDER BY category
+SETTINGS enable_analyzer = 1, analyzer_compatibility_allow_non_aggregate_in_having = 1;
+
 DROP TABLE test_a1;
 DROP TABLE test_a2;
 DROP TABLE test_a3;

@@ -35,3 +35,9 @@ b	30
 A.9 grouping conjunct stays, sibling moves to WHERE
 a	10
 b	30
+A.10 nested AND with parens
+a	10
+b	30
+A.11 deeply nested AND chain
+a	10
+b	30

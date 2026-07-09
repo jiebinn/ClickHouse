@@ -5944,11 +5944,33 @@ void tryMoveNonAggregateHavingPredicatesToWhere(const QueryTreeNodePtr & query_n
 
     auto & having_node = query_node_typed.getHaving();
 
+    /// The parser builds left-associative binary `and` trees, so `(a AND b) AND c`
+    /// arrives as `and(and(a, b), c)`. Flatten the whole chain into atomic conjuncts,
+    /// mirroring the legacy `splitConjunctionsAst` used by `PredicateExpressionsOptimizer`.
+    /// Without this, a nested `and` containing an aggregate is classified as a single
+    /// `KeepInHaving` conjunct and its non-aggregate siblings stay trapped in `HAVING`.
     QueryTreeNodes conjuncts;
-    if (auto * having_function = having_node->as<FunctionNode>(); having_function && having_function->getFunctionName() == "and")
-        conjuncts = having_function->getArguments().getNodes();
-    else
-        conjuncts.push_back(having_node);
+    {
+        QueryTreeNodes worklist{having_node};
+        while (!worklist.empty())
+        {
+            auto current = std::move(worklist.back());
+            worklist.pop_back();
+
+            auto * current_function = current->as<FunctionNode>();
+            if (current_function && current_function->getFunctionName() == "and")
+            {
+                const auto & args = current_function->getArguments().getNodes();
+                /// Reverse-iterate into the LIFO worklist to preserve left-to-right order.
+                for (auto it = args.rbegin(); it != args.rend(); ++it)
+                    worklist.push_back(*it);
+            }
+            else
+            {
+                conjuncts.push_back(std::move(current));
+            }
+        }
+    }
 
     std::vector<HavingConjunctMoveAction> classifications;
     classifications.reserve(conjuncts.size());
