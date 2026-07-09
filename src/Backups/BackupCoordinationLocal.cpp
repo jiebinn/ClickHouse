@@ -122,6 +122,14 @@ BackupFileInfos BackupCoordinationLocal::getFileInfosForAllHosts() const
     return file_infos.getFileInfosForAllHosts();
 }
 
+void BackupCoordinationLocal::forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const
+{
+    /// The callback runs under the mutex; the only user is the finalization of a backup, which runs
+    /// after all file infos have been added.
+    std::lock_guard lock{file_infos_mutex};
+    file_infos.forEachFileInfoForAllHosts(callback);
+}
+
 bool BackupCoordinationLocal::startWritingFile(size_t data_file_index)
 {
     std::lock_guard lock{writing_files_mutex};

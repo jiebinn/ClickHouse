@@ -1,6 +1,7 @@
 #pragma once
 
 #include <exception>
+#include <functional>
 #include <Core/Types.h>
 
 
@@ -110,6 +111,11 @@ public:
     virtual void addFileInfos(BackupFileInfos && file_infos) = 0;
     virtual BackupFileInfos getFileInfos() const = 0;
     virtual BackupFileInfos getFileInfosForAllHosts() const = 0;
+
+    /// Calls `callback` for each file info of all hosts. Unlike getFileInfosForAllHosts, overrides
+    /// iterate the infos in place instead of materializing a copy of all of them (a backup can
+    /// contain millions). The default implementation falls back to copying.
+    virtual void forEachFileInfoForAllHosts(const std::function<void(const BackupFileInfo &)> & callback) const;
 
     /// Starts writing a specified file, the function returns false if that file is already being written concurrently.
     virtual bool startWritingFile(size_t data_file_index) = 0;
