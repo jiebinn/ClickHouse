@@ -2263,7 +2263,7 @@
                         ],
                         "root": "products/cloud/guides/index"
                       },
-                      { "$ref": "./products/cloud/api-reference/navigation.json" }
+                      { "group": "API reference", "openapi": { "source": "_specs/cloud-openapi.json", "directory": "products/cloud/api-reference" }, "pages": { "$ref": "./products/cloud/api-reference/navigation.json" } }
                     ]
                   },
                   {

@@ -27,6 +27,10 @@
     "json": {
       "include": [
         "./docs.json"
+      ],
+      "exclude": [
+        "./_specs/**",
+        "./products/cloud/api-reference/navigation.json"
       ]
     },
     "js": {
