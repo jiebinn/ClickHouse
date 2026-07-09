@@ -184,7 +184,7 @@ MergeTreeIndexConditionText::MergeTreeIndexConditionText(
     {
         for (const auto & search_query : element.text_search_queries)
         {
-            all_search_tokens_set.insert(search_query->tokens.begin(), search_query->tokens.end());
+            all_search_tokens_set.insert(search_query->getTokens().begin(), search_query->getTokens().end());
             all_search_queries[search_query->getHash()] = search_query;
         }
 
@@ -321,7 +321,7 @@ TextSearchQueryPtr MergeTreeIndexConditionText::createTextSearchQuery(const Acti
 
 std::optional<String> MergeTreeIndexConditionText::replaceToVirtualColumn(const TextSearchQuery & query, const String & index_name)
 {
-    if (query.tokens.empty() && query.patterns.empty() && query.direct_read_mode == TextIndexDirectReadMode::Hint)
+    if (query.getTokens().empty() && query.getPatterns().empty() && query.getDirectReadMode() == TextIndexDirectReadMode::Hint)
         return std::nullopt;
 
     auto query_hash = query.getHash();
@@ -331,7 +331,7 @@ std::optional<String> MergeTreeIndexConditionText::replaceToVirtualColumn(const 
         return std::nullopt;
 
     auto hash_str = getSipHash128AsHexString(query_hash);
-    String virtual_column_name = fmt::format("{}{}_{}_{}", TEXT_INDEX_VIRTUAL_COLUMN_PREFIX, index_name, query.function_name, hash_str);
+    String virtual_column_name = fmt::format("{}{}_{}_{}", TEXT_INDEX_VIRTUAL_COLUMN_PREFIX, index_name, query.getFunctionName(), hash_str);
 
     virtual_column_to_search_query[virtual_column_name] = it->second;
     return virtual_column_name;
@@ -496,7 +496,7 @@ std::string MergeTreeIndexConditionText::getDescription() const
 
 bool MergeTreeIndexConditionText::hasSearchPatterns() const
 {
-    return std::ranges::any_of(all_search_queries, [](const auto & query) { return !query.second->patterns.empty(); });
+    return std::ranges::any_of(all_search_queries, [](const auto & query) { return !query.second->getPatterns().empty(); });
 }
 
 bool MergeTreeIndexConditionText::traverseAtomNode(const RPNBuilderTreeNode & node, RPNElement & out) const
@@ -1107,6 +1107,7 @@ bool MergeTreeIndexConditionText::traverseFunctionNode(
                 std::move(unique_tokens),
                 std::vector<OptimizedRegularExpression>{},
                 std::move(phrase_tokens));
+
             out.function = RPNElement::FUNCTION_HAS_PHRASE;
             out.text_search_queries.emplace_back(std::move(query));
             return true;

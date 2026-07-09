@@ -51,21 +51,27 @@ struct TextSearchQuery
         std::vector<OptimizedRegularExpression> patterns_ = {},
         VectorWithMemoryTracking<String> phrase_tokens_ = {});
 
-    String function_name;
-    TextSearchMode search_mode;
-    TextIndexDirectReadMode direct_read_mode;
-    VectorWithMemoryTracking<String> tokens;
-    std::vector<OptimizedRegularExpression> patterns;
-    /// not sorted, not deduplicated
-    VectorWithMemoryTracking<String> phrase_tokens;
-
+    const String & getFunctionName() const { return function_name; }
+    TextSearchMode getSearchMode() const { return search_mode; }
+    TextIndexDirectReadMode getDirectReadMode() const { return direct_read_mode; }
+    const VectorWithMemoryTracking<String> & getTokens() const { return tokens; }
+    const std::vector<OptimizedRegularExpression> & getPatterns() const { return patterns; }
+    const VectorWithMemoryTracking<String> & getPhraseTokens() const { return phrase_tokens; }
     UInt128 getHash() const { return hash; }
 
 private:
     UInt128 calculateHash() const;
 
+    /// Fields are immutable after construction, otherwise the precomputed hash becomes stale.
+    String function_name;
+    TextSearchMode search_mode;
+    TextIndexDirectReadMode direct_read_mode;
+    /// Sorted in the constructor.
+    VectorWithMemoryTracking<String> tokens;
+    std::vector<OptimizedRegularExpression> patterns;
+    /// Not sorted, not deduplicated.
+    VectorWithMemoryTracking<String> phrase_tokens;
     /// Precomputed in the constructor because getHash is called on hot paths.
-    /// Fields must not be mutated after construction, otherwise the hash becomes stale.
     UInt128 hash;
 };
 
