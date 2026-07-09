@@ -1516,8 +1516,8 @@ ColumnPtr FunctionCast::repackQBit(
     const size_t to_num_columns = to_element_size * to_num_strides;
 
     /// Allocate the target bit-plane FixedStrings, zero-filled and grouped as [stride group][bit plane] to match
-    /// createColumn / convertArrayToQBit. The zero fill is what leaves the extra Float32 planes (and any trailing
-    /// padding bits) zero; every other byte is overwritten below.
+    /// createColumn / convertArrayToQBit. The zero fill is what leaves the extra Float32 planes (Float32 <- BFloat16)
+    /// zero; every occupied byte is overwritten below, and the same-stride path re-clears the padding bits it copies.
     MutableColumns dst_columns(to_num_columns);
     VectorWithMemoryTracking<UInt8 *> dst_data(to_num_columns);
     for (size_t c = 0; c < to_num_columns; ++c)
@@ -1536,12 +1536,27 @@ ColumnPtr FunctionCast::repackQBit(
 
     if (from_stride == to_stride)
     {
-        /// The stride is unchanged, so the two layouts have byte-identical bit planes (including any trailing padding
-        /// when the stride is not a multiple of 8). Copy each shared plane wholesale. This is the Float32 <-> BFloat16
-        /// case; a same-stride same-element-type cast is the identity and never reaches here.
+        /// The stride is unchanged, so the shared bit planes have byte-identical layouts. Copy each one wholesale. This
+        /// is the Float32 <-> BFloat16 case; a same-stride same-element-type cast is the identity and never reaches here.
+        ///
+        /// When the stride is not a multiple of 8 each bit plane ends in a partial byte whose top bits are unused
+        /// padding. A tuple-backed source (a QBit value from a VALUES / IN section) is not required to zero that padding
+        /// -- convertFieldToType checks only the string count and length -- so copying the plane wholesale would carry
+        /// stray padding bits into the target. The reconstruct-and-convert path always leaves them zero and QBit equality
+        /// compares the raw bytes, so we must clear them here to keep the fast path's output canonical. The padded byte is
+        /// the one at offset 0 of each stride group (it holds the group's highest dimensions, matching the else branch's
+        /// `dst_off`); its low `to_stride % 8` bits are the valid ones. Every other byte is fully occupied.
+        const size_t padding_bits = to_bytes * 8 - to_stride;
+        const UInt8 valid_mask = static_cast<UInt8>(0xFF >> padding_bits);
         for (size_t group = 0; group < to_num_strides; ++group)
             for (size_t b = 0; b < shared_planes; ++b)
-                std::memcpy(dst_data[group * to_element_size + b], src_data[group * from_element_size + b], rows * to_bytes);
+            {
+                UInt8 * d = dst_data[group * to_element_size + b];
+                std::memcpy(d, src_data[group * from_element_size + b], rows * to_bytes);
+                if (padding_bits)
+                    for (size_t row = 0; row < rows; ++row)
+                        d[row * to_bytes] &= valid_mask;
+            }
     }
     else
     {

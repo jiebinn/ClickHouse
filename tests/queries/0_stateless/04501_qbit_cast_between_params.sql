@@ -102,3 +102,33 @@ SELECT accurateCastOrNull([0.1, 0.2, 0.3, 0.4]::QBit(BFloat16, 4), 'QBit(Float32
 SELECT 'accurate* stride-only change is lossless (byte-permutation fast path stays valid)';
 SELECT accurateCastOrNull(range(16)::Array(Float32)::QBit(Float32, 16, 8), 'QBit(Float32, 16)') IS NULL;
 SELECT accurateCastOrNull(range(16)::Array(Float32)::QBit(Float32, 16, 8), 'QBit(Float32, 16)')::Array(Float32) = range(16)::Array(Float32);
+
+
+SELECT 'Same-stride Float32/BFloat16 fast path clears trailing padding bits (dimension not a multiple of 8)';
+-- A tuple-backed QBit from a VALUES / IN section is not required to zero the unused padding bits of the final partial
+-- byte: convertFieldToType checks only the tuple's element count and each string's length. When the dimension is not a
+-- multiple of 8 (here 3, so bits 3..7 of the single byte are padding), the same-stride Float32 <-> BFloat16 byte-repack
+-- copies each plane wholesale, so it must clear those bits afterwards to stay canonical -- the reconstruct-and-convert
+-- path always leaves them zero and QBit equality compares the raw bytes. Poison bit 3 (a padding bit) of the most
+-- significant plane of the source, then check the cast agrees with building the target QBit directly and that the value
+-- is unchanged (padding bits carry no dimension, so they never affect the represented vector).
+-- Narrowing Float32 -> BFloat16 (the AI's cited QBit(Float32, N) -> QBit(BFloat16, N) case).
+SELECT CAST(qbit AS QBit(BFloat16, 3)) = [1, 2, 3]::QBit(BFloat16, 3),
+       CAST(qbit AS QBit(BFloat16, 3))::Array(BFloat16) = [1, 2, 3]::Array(BFloat16)
+FROM format('Values', 'qbit QBit(Float32, 3)', '(tuple(
+    reinterpretAsFixedString(toUInt8(bitOr(reinterpretAsUInt8([1, 2, 3]::QBit(Float32, 3).1), 8))), [1, 2, 3]::QBit(Float32, 3).2, [1, 2, 3]::QBit(Float32, 3).3, [1, 2, 3]::QBit(Float32, 3).4,
+    [1, 2, 3]::QBit(Float32, 3).5, [1, 2, 3]::QBit(Float32, 3).6, [1, 2, 3]::QBit(Float32, 3).7, [1, 2, 3]::QBit(Float32, 3).8,
+    [1, 2, 3]::QBit(Float32, 3).9, [1, 2, 3]::QBit(Float32, 3).10, [1, 2, 3]::QBit(Float32, 3).11, [1, 2, 3]::QBit(Float32, 3).12,
+    [1, 2, 3]::QBit(Float32, 3).13, [1, 2, 3]::QBit(Float32, 3).14, [1, 2, 3]::QBit(Float32, 3).15, [1, 2, 3]::QBit(Float32, 3).16,
+    [1, 2, 3]::QBit(Float32, 3).17, [1, 2, 3]::QBit(Float32, 3).18, [1, 2, 3]::QBit(Float32, 3).19, [1, 2, 3]::QBit(Float32, 3).20,
+    [1, 2, 3]::QBit(Float32, 3).21, [1, 2, 3]::QBit(Float32, 3).22, [1, 2, 3]::QBit(Float32, 3).23, [1, 2, 3]::QBit(Float32, 3).24,
+    [1, 2, 3]::QBit(Float32, 3).25, [1, 2, 3]::QBit(Float32, 3).26, [1, 2, 3]::QBit(Float32, 3).27, [1, 2, 3]::QBit(Float32, 3).28,
+    [1, 2, 3]::QBit(Float32, 3).29, [1, 2, 3]::QBit(Float32, 3).30, [1, 2, 3]::QBit(Float32, 3).31, [1, 2, 3]::QBit(Float32, 3).32))');
+-- Widening BFloat16 -> Float32 (the shared planes are copied and masked; the extra low planes stay zero).
+SELECT CAST(qbit AS QBit(Float32, 3)) = [1, 2, 3]::QBit(Float32, 3),
+       CAST(qbit AS QBit(Float32, 3))::Array(Float32) = [1, 2, 3]::Array(Float32)
+FROM format('Values', 'qbit QBit(BFloat16, 3)', '(tuple(
+    reinterpretAsFixedString(toUInt8(bitOr(reinterpretAsUInt8([1, 2, 3]::QBit(BFloat16, 3).1), 8))), [1, 2, 3]::QBit(BFloat16, 3).2, [1, 2, 3]::QBit(BFloat16, 3).3, [1, 2, 3]::QBit(BFloat16, 3).4,
+    [1, 2, 3]::QBit(BFloat16, 3).5, [1, 2, 3]::QBit(BFloat16, 3).6, [1, 2, 3]::QBit(BFloat16, 3).7, [1, 2, 3]::QBit(BFloat16, 3).8,
+    [1, 2, 3]::QBit(BFloat16, 3).9, [1, 2, 3]::QBit(BFloat16, 3).10, [1, 2, 3]::QBit(BFloat16, 3).11, [1, 2, 3]::QBit(BFloat16, 3).12,
+    [1, 2, 3]::QBit(BFloat16, 3).13, [1, 2, 3]::QBit(BFloat16, 3).14, [1, 2, 3]::QBit(BFloat16, 3).15, [1, 2, 3]::QBit(BFloat16, 3).16))');
