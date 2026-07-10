@@ -284,6 +284,26 @@ def test_generate_with_api_key_sends_auth_header(started_cluster):
     assert last_request()["headers"].get("authorization") == "Bearer test-key"
 
 
+def test_generate_model_override_with_default_credentials(started_cluster):
+    """`map('model', ...)` overrides the collection's model on the actual request, even when the
+    collection itself is selected via `ai_function_text_default_credentials` rather than the map."""
+    instance.query(
+        "SELECT aiGenerate('hi', map('model', 'override-model'))",
+        settings={**AI_SETTINGS, "ai_function_text_default_credentials": "ai_mock"},
+    )
+    assert json.loads(last_request()["body"])["model"] == "override-model"
+
+
+def test_embed_model_override_with_default_credentials(started_cluster):
+    """Same for aiEmbed: `map('model', ...)` overrides the embedding model on the request, with the
+    collection selected via `ai_function_embedding_default_credentials`."""
+    instance.query(
+        "SELECT aiEmbed('hi', map('model', 'override-embed-model'))",
+        settings={**AI_SETTINGS, "ai_function_embedding_default_credentials": "ai_embed"},
+    )
+    assert json.loads(last_request()["body"])["model"] == "override-embed-model"
+
+
 # ---------------------------------------------------------------------------
 # aiClassify
 # ---------------------------------------------------------------------------
