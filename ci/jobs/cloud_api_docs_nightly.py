@@ -66,15 +66,23 @@ def open_or_refresh_pr():
     if not Shell.check(" && ".join(push), verbose=True):
         return False
 
-    # Create the PR if none exists; a force-push already refreshed an open one,
-    # so a failure here just means the PR is already open.
-    Shell.check(
+    # A force-push already refreshed any open PR, so a PR is created only when
+    # none exists. The existence probe is explicit rather than `gh pr create
+    # || true`: that would swallow every creation failure (auth scopes, branch
+    # permissions, body validation, GitHub outages) and let the job go green
+    # while the drift never reaches reviewers.
+    existing = Shell.get_output(
+        f"gh pr list --head {BOT_BRANCH} --base master --state open "
+        "--json number --jq '.[].number'"
+    ).strip()
+    if existing:
+        print(f"PR #{existing} already open; branch refreshed")
+        return True
+    return Shell.check(
         f"gh pr create --base master --head {BOT_BRANCH} "
-        f"--title {shlex.quote(PR_TITLE)} --body {shlex.quote(PR_BODY)} "
-        "|| echo 'PR already open; branch refreshed'",
+        f"--title {shlex.quote(PR_TITLE)} --body {shlex.quote(PR_BODY)}",
         verbose=True,
     )
-    return True
 
 
 if __name__ == "__main__":
