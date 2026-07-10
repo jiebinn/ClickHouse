@@ -127,10 +127,13 @@ void MergeTreeIndexGranuleSet::deserializeBinary(ReadBuffer & istr, MergeTreeInd
         serializations[i]->deserializeBinaryBulkStatePrefix(settings, state, nullptr);
         serializations[i]->deserializeBinaryBulkWithMultipleStreams(elem.column, 0, rows_to_read, settings, state, nullptr);
 
-        if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(elem.column.get()))
-            column_nullable->getExtremesNullLast(min_val, max_val, 0, elem.column->size());
+        /// Unwrap LowCardinality so LowCardinality(Nullable(T)) exposes its ColumnNullable and keeps
+        /// the NULL sentinel via getExtremesNullLast; otherwise IS NULL can wrongly prune granules.
+        const auto column = elem.column->convertToFullColumnIfLowCardinality();
+        if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.get()))
+            column_nullable->getExtremesNullLast(min_val, max_val, 0, column->size());
         else
-            elem.column->getExtremes(min_val, max_val, 0, elem.column->size());
+            column->getExtremes(min_val, max_val, 0, column->size());
 
         set_hyperrectangle.emplace_back(min_val, true, max_val, true);
     }
@@ -284,10 +287,13 @@ void MergeTreeIndexAggregatorSet::update(const Block & block, size_t * pos, size
             auto filtered_column = block.getByName(index_columns[i]).column->filter(filter, block.rows());
             columns[i]->insertRangeFrom(*filtered_column, 0, filtered_column->size());
 
-            if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(filtered_column.get()))
-                column_nullable->getExtremesNullLast(field_min, field_max, 0, filtered_column->size());
+            /// Unwrap LowCardinality so LowCardinality(Nullable(T)) exposes its ColumnNullable and keeps
+            /// the NULL sentinel via getExtremesNullLast; otherwise IS NULL can wrongly prune granules.
+            const auto extremes_column = filtered_column->convertToFullColumnIfLowCardinality();
+            if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(extremes_column.get()))
+                column_nullable->getExtremesNullLast(field_min, field_max, 0, extremes_column->size());
             else
-                filtered_column->getExtremes(field_min, field_max, 0, filtered_column->size());
+                extremes_column->getExtremes(field_min, field_max, 0, extremes_column->size());
 
             if (set_hyperrectangle.size() <= i)
             {

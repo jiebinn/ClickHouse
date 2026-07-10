@@ -274,11 +274,15 @@ void IMergeTreeDataPart::MinMaxIndex::update(const Block & block, const NamesAnd
     {
         FieldRef min_value;
         FieldRef max_value;
-        const ColumnWithTypeAndName & column = block.getColumnOrSubcolumnByName(column_name);
-        if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.column.get()))
-            column_nullable->getExtremesNullLast(min_value, max_value, 0, column.column->size());
+        const ColumnWithTypeAndName & column_and_type = block.getColumnOrSubcolumnByName(column_name);
+        /// Unwrap LowCardinality so that LowCardinality(Nullable(T)) exposes its ColumnNullable and
+        /// takes the getExtremesNullLast path below (which records the +inf NULL sentinel). Otherwise
+        /// mixed NULL/non-NULL parts lose the sentinel and IS NULL wrongly prunes whole parts.
+        const auto column = column_and_type.column->convertToFullColumnIfLowCardinality();
+        if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.get()))
+            column_nullable->getExtremesNullLast(min_value, max_value, 0, column->size());
         else
-            column.column->getExtremes(min_value, max_value, 0, column.column->size());
+            column->getExtremes(min_value, max_value, 0, column->size());
 
         if (!initialized)
             hyperrectangle.emplace_back(min_value, true, max_value, true);

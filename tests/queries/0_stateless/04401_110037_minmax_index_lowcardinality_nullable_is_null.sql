@@ -109,3 +109,51 @@ INSERT INTO t_lc SELECT number, concat('value_', toString(number)) FROM numbers(
 SELECT count() > 0 FROM (EXPLAIN indexes = 1 SELECT * FROM t_lc WHERE s = 'absent_zzz') WHERE explain ILIKE '%Granules: 0/%';
 
 DROP TABLE t_lc;
+
+-- Sibling code path: part/partition minmax (IMergeTreeDataPart::MinMaxIndex::update).
+-- A partition-key dependency on a LowCardinality(Nullable(String)) column must keep the NULL
+-- sentinel, otherwise `WHERE s IS NULL` wrongly prunes parts that contain NULLs.
+DROP TABLE IF EXISTS t_part_lcn;
+
+CREATE TABLE t_part_lcn
+(
+    id UInt64,
+    s LowCardinality(Nullable(String))
+)
+ENGINE = MergeTree
+ORDER BY id
+PARTITION BY ifNull(s, '__none__')
+SETTINGS index_granularity = 64, allow_nullable_key = 1;
+
+INSERT INTO t_part_lcn
+SELECT number, if(number % 17 = 0, NULL, concat('value_', toString(number % 3)))
+FROM numbers(8192)
+SETTINGS max_insert_threads = 1;
+
+SELECT count() FROM t_part_lcn WHERE s IS NULL SETTINGS use_skip_indexes = 0;
+SELECT count() FROM t_part_lcn WHERE s IS NULL;
+
+DROP TABLE t_part_lcn;
+
+-- Sibling code path: set index min-max hyperrectangle (MergeTreeIndexGranuleSet).
+DROP TABLE IF EXISTS t_set_lcn;
+
+CREATE TABLE t_set_lcn
+(
+    id UInt64,
+    s LowCardinality(Nullable(String)),
+    INDEX s_set s TYPE set(0) GRANULARITY 1
+)
+ENGINE = MergeTree
+ORDER BY id
+SETTINGS index_granularity = 64;
+
+INSERT INTO t_set_lcn
+SELECT number, if(number % 17 = 0, NULL, concat('value_', toString(number)))
+FROM numbers(8192)
+SETTINGS max_insert_threads = 1;
+
+SELECT count() FROM t_set_lcn WHERE s IS NULL SETTINGS use_skip_indexes = 0;
+SELECT count() FROM t_set_lcn WHERE s IS NULL;
+
+DROP TABLE t_set_lcn;
