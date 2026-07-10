@@ -315,6 +315,45 @@ def test_generate_empty_model_override_with_default_credentials(started_cluster)
     assert json.loads(last_request()["body"])["model"] == ""
 
 
+# Setting every credential/config key in the params map at once. `ai_mock` carries an api_key,
+# `ai_no_key` does not, so the auth header proves which collection was actually contacted.
+_ALL_PARAMS_QUERY = (
+    "SELECT aiGenerate('hi', map("
+    "'credentials', 'ai_mock', 'model', 'map-model', 'max_tokens', '7', "
+    "'temperature', '0.9', 'system_prompt', 'be terse'))"
+)
+
+
+def _assert_all_params_applied():
+    req = last_request()
+    body = json.loads(req["body"])
+    # `credentials` picked `ai_mock` (keyed) — proves the map won over any default setting.
+    assert req["headers"].get("authorization") == "Bearer test-key"
+    assert body["model"] == "map-model"
+    assert body["max_tokens"] == 7
+    assert abs(body["temperature"] - 0.9) < 1e-4
+    assert body["messages"][0]["role"] == "system"
+    assert body["messages"][0]["content"] == "be terse"
+
+
+def test_generate_all_map_params_override_setting(started_cluster):
+    """Every param passed in the map overrides a default-credentials setting that points at a
+    different collection: `credentials` (proven via the auth header) plus `model` / `max_tokens` /
+    `temperature` / `system_prompt` all take effect."""
+    instance.query(
+        _ALL_PARAMS_QUERY,
+        settings={**AI_SETTINGS, "ai_function_text_default_credentials": "ai_no_key"},
+    )
+    _assert_all_params_applied()
+
+
+def test_generate_all_map_params_without_setting(started_cluster):
+    """The same map, with no default-credentials setting at all: the map supplies everything,
+    including `credentials`, and all keys take effect."""
+    instance.query(_ALL_PARAMS_QUERY, settings=AI_SETTINGS)
+    _assert_all_params_applied()
+
+
 # ---------------------------------------------------------------------------
 # aiClassify
 # ---------------------------------------------------------------------------
