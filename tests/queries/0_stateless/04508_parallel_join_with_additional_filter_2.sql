@@ -16,6 +16,7 @@ SET query_plan_join_swap_table = 0;
 SET parallel_hash_join_threshold = 1;
 SET max_threads = 16;
 SET max_block_size = 2;
+SET parallel_non_joined_rows_processing = 1;
 
 SELECT '---- RIGHT ANTI HASH';
 SELECT t2.* FROM t1 RIGHT ANTI JOIN t2 ON t1.key = t2.key AND t1.a < t2.a ORDER BY ALL SETTINGS join_algorithm = 'hash';
