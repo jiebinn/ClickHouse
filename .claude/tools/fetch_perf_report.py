@@ -34,6 +34,8 @@ Examples:
 """
 
 import argparse
+import gzip
+import io
 import json
 import os
 import re
@@ -51,22 +53,54 @@ from urllib.error import HTTPError
 # HTTP helpers
 # ---------------------------------------------------------------------------
 
+def maybe_decompress(data):
+    """Transparently decompress `data` (bytes) if it is zstd- or gzip-framed.
+
+    CI uploads text artifacts larger than a threshold as zstd (see
+    ci/praktika/s3.py), so the same object can arrive either plain or compressed.
+    Detected by magic bytes, so it works regardless of the URL suffix.
+    """
+    if data[:4] == b"\x28\xb5\x2f\xfd":  # zstd magic
+        try:
+            import zstandard  # optional dependency
+            return zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)).read()
+        except ImportError:
+            proc = subprocess.run(["zstd", "-dcq"], input=data, capture_output=True, timeout=120)
+            if proc.returncode != 0:
+                raise RuntimeError(f"zstd decompression failed: {proc.stderr.decode('utf-8', 'replace')}")
+            return proc.stdout
+    if data[:2] == b"\x1f\x8b":  # gzip magic
+        return gzip.decompress(data)
+    return data
+
+
+def _read_url_bytes(url):
+    """GET `url`, falling back to `url + '.zst'` on 404/403, and return decompressed bytes."""
+    candidates = [url] if url.endswith(".zst") else [url, url + ".zst"]
+    last_error = None
+    for candidate in candidates:
+        try:
+            with urlopen(candidate, timeout=60) as resp:
+                return maybe_decompress(resp.read())
+        except HTTPError as e:
+            last_error = f"HTTP {e.code}: {e.reason} for {candidate}"
+    raise RuntimeError(last_error)
+
+
 def fetch_url(url):
-    """Fetch a URL and return its body as text."""
-    try:
-        with urlopen(url, timeout=60) as resp:
-            return resp.read().decode("utf-8")
-    except HTTPError as e:
-        raise RuntimeError(f"HTTP {e.code}: {e.reason} for {url}")
+    """Fetch a URL and return its body as text (transparently decompressed)."""
+    return _read_url_bytes(url).decode("utf-8")
 
 
 def download_url(url, dest):
-    """Download a URL to a file using curl. Returns True on success."""
-    result = subprocess.run(
-        ["curl", "-sfL", "-o", dest, url],
-        capture_output=True, timeout=120,
-    )
-    return result.returncode == 0
+    """Download a URL to a file, transparently decompressing. Returns True on success."""
+    try:
+        data = _read_url_bytes(url)
+    except RuntimeError:
+        return False
+    with open(dest, "wb") as f:
+        f.write(data)
+    return True
 
 
 # ---------------------------------------------------------------------------

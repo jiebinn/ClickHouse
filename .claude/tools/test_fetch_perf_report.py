@@ -152,7 +152,20 @@ def test_summary_counts():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def test_maybe_decompress_handles_plain_gzip_zstd():
+    import gzip as _gzip
+    import subprocess as _sp
+
+    plain = b"metric\tleft\tright\nmemory_usage\t100\t90\n"
+    assert fpr.maybe_decompress(plain) == plain
+    assert fpr.maybe_decompress(_gzip.compress(plain)) == plain
+    zst = _sp.run(["zstd", "-cq"], input=plain, capture_output=True).stdout
+    assert zst[:4] == b"\x28\xb5\x2f\xfd"  # sanity: really zstd-framed
+    assert fpr.maybe_decompress(zst) == plain
+
+
 if __name__ == "__main__":
     test_classification_matches_compare_sh()
     test_summary_counts()
+    test_maybe_decompress_handles_plain_gzip_zstd()
     print("All fetch_perf_report tests passed (or skipped).")
