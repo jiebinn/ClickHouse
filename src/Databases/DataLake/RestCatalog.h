@@ -89,8 +89,17 @@ public:
 
     ICatalog::CredentialsRefreshCallback getCredentialsConfigurationCallback(const DB::StorageID & storage_id) override;
 
-    String getClientId() const { return client_id; }
-    String getClientSecret() const { return client_secret; }
+    struct AuthState
+    {
+        std::optional<DB::HTTPHeaderEntry> auth_header;
+        std::string client_id;
+        std::string client_secret;
+        std::string tenant_id;
+        std::string bearer_token;
+    };
+    using AuthStateVersion = MultiVersion<AuthState>::Version;
+
+    AuthStateVersion getAuthStateSnapshot() const { return auth_state.get(); }
 
 protected:
     RestCatalog(
@@ -121,13 +130,10 @@ protected:
     /// Catalog configuration settings from /v1/config endpoint.
     Config config;
 
-    /// Auth headers of format: "Authorization": "<auth_scheme> <token>"
-    std::optional<DB::HTTPHeaderEntry> auth_header;
+    MultiVersion<AuthState> auth_state{std::make_unique<const AuthState>()};
 
     /// Parameters for OAuth (common for REST catalog).
     bool update_token_if_expired = false;
-    std::string client_id;
-    std::string client_secret;
     std::string auth_scope;
     std::string oauth_server_uri;
     bool oauth_server_use_request_body;
@@ -190,7 +196,7 @@ protected:
 
     std::pair<std::shared_ptr<IStorageCredentials>, String> getCredentialsAndEndpoint(Poco::JSON::Object::Ptr object, const String & location) const;
 
-    AccessToken retrieveAccessToken() const;
+    AccessToken retrieveAccessToken(const std::string & client_id, const std::string & client_secret) const;
 };
 
 class OneLakeCatalog : public RestCatalog
@@ -213,17 +219,11 @@ public:
         return DB::DatabaseDataLakeCatalogType::ICEBERG_ONELAKE;
     }
 
-    String getTenantId() const { return tenant_id; }
-
-    String getBearerToken() const;
-
     DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const override;
 
-protected:
-    /// Parameters for OneLake OAuth.
-    const std::string tenant_id;
-    /// Set from `onelake_bearer_token`.
-    String bearer_token;
+    void applySettingsChanges(const DB::SettingsChanges & changes) override;
+
+    static void validateSettingsChanges(const DB::SettingsChanges & changes, bool bearer_mode);
 };
 
 class BigLakeCatalog : public RestCatalog

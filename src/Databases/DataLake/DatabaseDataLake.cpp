@@ -49,6 +49,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTDataType.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Common/FailPoint.h>
 #include <Common/HTTPHeaderFilter.h>
 
@@ -166,7 +167,7 @@ DatabaseDataLake::DatabaseDataLake(
     bool lazy_init)
     : IDatabase(database_name_)
     , url(url_)
-    , settings(settings_)
+    , database_settings(std::make_unique<const DatabaseDataLakeSettings>(settings_))
     , database_engine_definition(database_engine_definition_)
     , table_engine_definition(table_engine_definition_)
     , log(getLogger("DatabaseDataLake(" + database_name_ + ")"))
@@ -188,6 +189,9 @@ DatabaseDataLake::DatabaseDataLake(
 
 void DatabaseDataLake::validateSettings()
 {
+    const auto settings_version = database_settings.get();
+    const DatabaseDataLakeSettings & settings = *settings_version;
+
     if (settings[DatabaseDataLakeSetting::catalog_type].value == DB::DatabaseDataLakeCatalogType::GLUE)
     {
         if (settings[DatabaseDataLakeSetting::region].value.empty())
@@ -207,6 +211,9 @@ void DatabaseDataLake::initialize() const
 {
     /// Caller holds `catalog_mutex`: this runs either from the constructor (CREATE, eager)
     /// or from `getCatalog` on first access (ATTACH, lazy).
+    const auto settings_version = database_settings.get();
+    const DatabaseDataLakeSettings & settings = *settings_version;
+
     if (settings[DatabaseDataLakeSetting::catalog_type].value == DatabaseDataLakeCatalogType::NONE)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unspecified catalog type");
 
@@ -592,6 +599,9 @@ std::shared_ptr<StorageObjectStorageConfiguration> DatabaseDataLake::getConfigur
 
 std::string DatabaseDataLake::getStorageEndpointForTable(const DataLake::TableMetadata & table_metadata) const
 {
+    const auto settings_version = database_settings.get();
+    const DatabaseDataLakeSettings & settings = *settings_version;
+
     auto endpoint_from_settings = settings[DatabaseDataLakeSetting::storage_endpoint].value;
     if (endpoint_from_settings.empty())
         return table_metadata.getLocation();
@@ -616,6 +626,9 @@ StoragePtr DatabaseDataLake::tryGetTable(const String & name, ContextPtr context
 
 StoragePtr DatabaseDataLake::tryGetTableImpl(const String & name, ContextPtr context_, bool lightweight, bool ignore_if_not_iceberg) const
 {
+    const auto settings_version = database_settings.get();
+    const DatabaseDataLakeSettings & settings = *settings_version;
+
     auto catalog = getCatalog();
     auto table_metadata = DataLake::TableMetadata().withSchema().withLocation().withDataLakeSpecificProperties();
     if (settings[DatabaseDataLakeSetting::force_add_bucket])
@@ -768,11 +781,12 @@ StoragePtr DatabaseDataLake::tryGetTableImpl(const String & name, ContextPtr con
         auto rest_catalog = std::static_pointer_cast<DataLake::OneLakeCatalog>(catalog);
         if (!rest_catalog)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Catalog is not equals to one lake");
+        const auto auth = rest_catalog->getAuthStateSnapshot();
         azure_configuration->setInitializationAsOneLake(
-            rest_catalog->getClientId(),
-            rest_catalog->getClientSecret(),
-            rest_catalog->getTenantId(),
-            rest_catalog->getBearerToken(),
+            auth->client_id,
+            auth->client_secret,
+            auth->tenant_id,
+            auth->bearer_token,
             settings[DatabaseDataLakeSetting::onelake_use_blob_endpoint].value
         );
 #else
@@ -1086,11 +1100,73 @@ void DatabaseDataLake::checkDatabase() const
     LOG_TEST(log, "Database '{}' is OK", getDatabaseName());
 }
 
+void DatabaseDataLake::applySettingsChanges(const SettingsChanges & settings_changes, ContextPtr /*query_context*/)
+{
+    const auto current_settings = database_settings.get();
+
+    /// This check in some sense duplicate check in ICatalog, because it's a valid case when
+    /// catalog can be unitilized here, and we actually use alter to "resurrect it". For example provide
+    /// proper credentials with settings.
+    DataLake::CatalogSettingsAlterValidatorFactory::instance().validate(*current_settings, settings_changes);
+
+    auto new_settings = std::make_unique<DatabaseDataLakeSettings>(*current_settings);
+    new_settings->applyChanges(settings_changes);
+
+    ASTPtr new_engine_definition;
+    {
+        std::lock_guard lock(mutex);
+        new_engine_definition = database_engine_definition->clone();
+    }
+    auto * storage = new_engine_definition->as<ASTStorage>();
+    if (!storage)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Database engine definition of database {} is not a storage AST", getDatabaseName());
+
+    if (storage->settings)
+    {
+        auto & stored_changes = storage->settings->changes;
+        for (const auto & change : settings_changes)
+        {
+            auto it = std::find_if(stored_changes.begin(), stored_changes.end(),
+                                   [&](const auto & prev) { return prev.name == change.name; });
+            if (it != stored_changes.end())
+                it->value = change.value;
+            else
+                stored_changes.push_back(change);
+        }
+    }
+    else
+    {
+        auto storage_settings_ast = make_intrusive<ASTSetQuery>();
+        storage_settings_ast->is_standalone = false;
+        storage_settings_ast->changes = settings_changes;
+        storage->set(storage->settings, storage_settings_ast);
+    }
+
+    {
+        std::lock_guard lock(catalog_mutex);
+        if (catalog_impl)
+            catalog_impl->applySettingsChanges(settings_changes);
+        else
+            catalog_unavailable_reason.clear();
+    }
+
+    database_settings.set(std::move(new_settings));
+    {
+        std::lock_guard lock(mutex);
+        database_engine_definition = new_engine_definition;
+    }
+
+    DatabaseCatalog::instance().updateMetadataFile(getDatabaseName(), getCreateDatabaseQuery());
+}
+
 ASTPtr DatabaseDataLake::getCreateTableQueryImpl(
     const String & name,
     ContextPtr /* context_ */,
     bool throw_on_error) const
 {
+    const auto settings_version = database_settings.get();
+    const DatabaseDataLakeSettings & settings = *settings_version;
+
     auto catalog = getCatalog();
     auto table_metadata = DataLake::TableMetadata().withLocation().withSchema();
     if (settings[DatabaseDataLakeSetting::force_add_bucket])

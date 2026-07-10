@@ -10,12 +10,38 @@
 #include <Databases/DataLake/DatabaseDataLakeStorageType.h>
 #include <Poco/JSON/Object.h>
 
+#include <functional>
+#include <unordered_map>
+
+namespace DB
+{
+struct DatabaseDataLakeSettings;
+}
+
 namespace DataLake
 {
 
 using StorageType = DB::DatabaseDataLakeStorageType;
 StorageType parseStorageTypeFromLocation(const std::string & location);
 StorageType parseStorageTypeFromString(const std::string &type);
+
+/// Registry of `ALTER DATABASE ... MODIFY SETTING` validators. Each catalog that
+/// supports altering settings registers its own validator; catalog types without
+/// a registered validator do not support altering settings and get `NOT_IMPLEMENTED`.
+class CatalogSettingsAlterValidatorFactory
+{
+public:
+    using Validator = std::function<void(const DB::DatabaseDataLakeSettings & current_settings, const DB::SettingsChanges & changes)>;
+
+    static CatalogSettingsAlterValidatorFactory & instance();
+
+    void registerValidator(DB::DatabaseDataLakeCatalogType catalog_type, Validator validator);
+
+    void validate(const DB::DatabaseDataLakeSettings & current_settings, const DB::SettingsChanges & changes) const;
+
+private:
+    std::unordered_map<DB::DatabaseDataLakeCatalogType, Validator> validators;
+};
 
 struct DataLakeSpecificProperties
 {
@@ -238,6 +264,8 @@ public:
     {
         return std::nullopt;
     }
+
+    virtual void applySettingsChanges(const DB::SettingsChanges & changes);
 
 protected:
     /// List tables directly in `namespace_name` (non-recursive), as fully-qualified

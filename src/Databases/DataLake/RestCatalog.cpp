@@ -15,6 +15,7 @@
 
 #if USE_AVRO
 #include <Databases/DataLake/RestCatalog.h>
+#include <Databases/DataLake/DatabaseDataLakeSettings.h>
 #include <Databases/DataLake/StorageCredentials.h>
 
 #include <base/find_symbols.h>
@@ -49,6 +50,7 @@
 #include <Poco/StreamCopier.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/FailPoint.h>
+#include <fmt/ranges.h>
 
 
 namespace DB::ErrorCodes
@@ -68,6 +70,11 @@ namespace DB::Setting
 namespace DB::FailPoints
 {
     extern const char check_database_datalake_negative[];
+}
+
+namespace DB::DatabaseDataLakeSetting
+{
+    extern const DatabaseDataLakeSettingsString onelake_bearer_token;
 }
 
 namespace DataLake
@@ -181,16 +188,18 @@ RestCatalog::RestCatalog(
     , oauth_server_uri(oauth_server_uri_)
     , oauth_server_use_request_body(oauth_server_use_request_body_)
 {
+    auto initial_auth_state = std::make_unique<AuthState>();
     if (!catalog_credential_.empty())
     {
-        std::tie(client_id, client_secret) = parseCatalogCredential(catalog_credential_);
+        std::tie(initial_auth_state->client_id, initial_auth_state->client_secret) = parseCatalogCredential(catalog_credential_);
         update_token_if_expired = true;
     }
     else if (!auth_header_.empty())
     {
-        auth_header = parseAuthHeader(auth_header_);
-        validateAuthHeaders(auth_header.value());
+        initial_auth_state->auth_header = parseAuthHeader(auth_header_);
+        validateAuthHeaders(initial_auth_state->auth_header.value());
     }
+    auth_state.set(std::move(initial_auth_state));
     config = loadConfig();
 }
 
@@ -269,22 +278,24 @@ DB::HTTPHeaderEntries RestCatalog::getAuthHeaders(bool update_token) const
         throw DB::Exception(DB::ErrorCodes::FAULT_INJECTED, "Injecting fault when checking database");
     });
 
+    const auto auth = auth_state.get();
+
     /// Option 1: user specified auth header manually.
     /// Header has format: 'Authorization: <scheme> <token>'.
-    if (auth_header.has_value())
+    if (auth->auth_header.has_value())
     {
-        return DB::HTTPHeaderEntries{auth_header.value()};
+        return DB::HTTPHeaderEntries{auth->auth_header.value()};
     }
 
     /// Option 2: user provided grant_type, client_id and client_secret.
     /// We would make OAuthClientCredentialsRequest
     /// https://github.com/apache/iceberg/blob/3badfe0c1fcf0c0adfc7aa4a10f0b50365c48cf9/open-api/rest-catalog-open-api.yaml#L3498C5-L3498C34
-    if (!client_id.empty())
+    if (!auth->client_id.empty())
     {
         auto current = access_token.get();
         if (!current || update_token)
         {
-            access_token.set(std::make_unique<AccessToken>(retrieveAccessToken()));
+            access_token.set(std::make_unique<AccessToken>(retrieveAccessToken(auth->client_id, auth->client_secret)));
             current = access_token.get();
         }
 
@@ -307,27 +318,30 @@ OneLakeCatalog::OneLakeCatalog(
     bool oauth_server_use_request_body_,
     DB::ContextPtr context_)
     : RestCatalog(warehouse_, base_url_, auth_scope_, oauth_server_uri_, oauth_server_use_request_body_, context_)
-    , tenant_id(onelake_tenant_id)
 {
+    auto initial_auth_state = std::make_unique<AuthState>();
+    initial_auth_state->tenant_id = onelake_tenant_id;
     if (!bearer_token_.empty())
     {
         /// Pre-obtained token scoped to https://storage.azure.com. Used for both catalog header
         /// and Azure Blob access. Does not support refresh.
-        bearer_token = bearer_token_;
-        auth_header = DB::HTTPHeaderEntry("Authorization", "Bearer " + bearer_token);
-        validateAuthHeaders(auth_header.value());
+        initial_auth_state->bearer_token = bearer_token_;
+        initial_auth_state->auth_header = DB::HTTPHeaderEntry("Authorization", "Bearer " + bearer_token_);
+        validateAuthHeaders(initial_auth_state->auth_header.value());
     }
     else
     {
-        client_id = onelake_client_id;
-        client_secret = onelake_client_secret;
+        initial_auth_state->client_id = onelake_client_id;
+        initial_auth_state->client_secret = onelake_client_secret;
         update_token_if_expired = true;
         // Get token before loading config so getAuthHeaders() can work
-        if (!client_id.empty() && !client_secret.empty())
+        if (!initial_auth_state->client_id.empty() && !initial_auth_state->client_secret.empty())
         {
-            access_token.set(std::make_unique<AccessToken>(retrieveAccessToken()));
+            access_token.set(std::make_unique<AccessToken>(
+                retrieveAccessToken(initial_auth_state->client_id, initial_auth_state->client_secret)));
         }
     }
+    auth_state.set(std::move(initial_auth_state));
     config = loadConfig();
 }
 
@@ -338,12 +352,91 @@ DB::HTTPHeaderEntries OneLakeCatalog::getAuthHeaders(bool update_token) const
     return headers;
 }
 
-String OneLakeCatalog::getBearerToken() const
+void OneLakeCatalog::validateSettingsChanges(const DB::SettingsChanges & changes, bool bearer_mode)
 {
-    return bearer_token;
+    static const std::unordered_set<std::string> bearer_mode_settings = {"onelake_tenant_id", "onelake_bearer_token"};
+    static const std::unordered_set<std::string> client_mode_settings = {"onelake_tenant_id", "onelake_client_id", "onelake_client_secret"};
+
+    const auto & alterable_settings = bearer_mode ? bearer_mode_settings : client_mode_settings;
+    for (const auto & change : changes)
+    {
+        if (!alterable_settings.contains(change.name))
+            throw DB::Exception(
+                DB::ErrorCodes::BAD_ARGUMENTS,
+                "Setting `{}` cannot be altered for a OneLake catalog with {} authentication "
+                "(the authentication mode is fixed when the database is created; "
+                "alterable settings are: {})",
+                change.name,
+                bearer_mode ? "bearer token" : "client credentials",
+                fmt::join(alterable_settings, ", "));
+
+        if (change.value.getType() != DB::Field::Types::String)
+            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` must be a string", change.name);
+
+        if (change.value.safeGet<String>().empty())
+            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` cannot be set to an empty value", change.name);
+    }
 }
 
-AccessToken RestCatalog::retrieveAccessToken() const
+void OneLakeCatalog::applySettingsChanges(const DB::SettingsChanges & changes)
+{
+    AuthState new_state = *auth_state.get();
+    const bool bearer_mode = !new_state.bearer_token.empty();
+
+    validateSettingsChanges(changes, bearer_mode);
+
+    for (const auto & change : changes)
+    {
+        if (change.name == "onelake_tenant_id")
+            new_state.tenant_id = change.value.safeGet<String>();
+        else if (change.name == "onelake_bearer_token")
+            new_state.bearer_token = change.value.safeGet<String>();
+        else if (change.name == "onelake_client_id")
+            new_state.client_id = change.value.safeGet<String>();
+        else if (change.name == "onelake_client_secret")
+            new_state.client_secret = change.value.safeGet<String>();
+        else
+            throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Unexpected setting `{}` after validation", change.name);
+    }
+
+    std::optional<AccessToken> new_token;
+    if (bearer_mode)
+    {
+        new_state.auth_header = DB::HTTPHeaderEntry("Authorization", "Bearer " + new_state.bearer_token);
+        validateAuthHeaders(new_state.auth_header.value());
+    }
+    else
+    {
+        const auto old_state = auth_state.get();
+        if (new_state.client_id != old_state->client_id || new_state.client_secret != old_state->client_secret)
+        {
+            new_token = retrieveAccessToken(new_state.client_id, new_state.client_secret);
+        }
+    }
+
+    auth_state.set(std::make_unique<const AuthState>(std::move(new_state)));
+    if (new_token)
+        access_token.set(std::make_unique<AccessToken>(std::move(*new_token)));
+}
+
+namespace
+{
+
+[[maybe_unused]] const bool onelake_settings_alter_validator_registered = []
+{
+    CatalogSettingsAlterValidatorFactory::instance().registerValidator(
+        DB::DatabaseDataLakeCatalogType::ICEBERG_ONELAKE,
+        [](const DB::DatabaseDataLakeSettings & current_settings, const DB::SettingsChanges & changes)
+        {
+            const bool bearer_mode = !current_settings[DB::DatabaseDataLakeSetting::onelake_bearer_token].value.empty();
+            OneLakeCatalog::validateSettingsChanges(changes, bearer_mode);
+        });
+    return true;
+}();
+
+}
+
+AccessToken RestCatalog::retrieveAccessToken(const std::string & client_id, const std::string & client_secret) const
 {
     static constexpr auto oauth_tokens_endpoint = "oauth/tokens";
 

@@ -258,4 +258,78 @@ TEST(RestCatalog, EmptyReturnsTrueWhenNoTablesExist)
     EXPECT_TRUE(restCatalogEmpty(CatalogShape::Empty));
 }
 
+TEST(RestCatalog, ApplySettingsChangesNotSupported)
+{
+    RestCatalogTestServer server(CatalogShape::Empty);
+    auto context = DB::Context::createCopy(getContext().context);
+    context->makeQueryContext();
+
+    RestCatalog catalog(
+        "warehouse",
+        server.getUrl(),
+        /* catalog_credential */"",
+        /* auth_scope */"",
+        /* auth_header */"",
+        /* oauth_server_uri */"",
+        /* oauth_server_use_request_body */false,
+        context);
+
+    DB::SettingsChanges changes;
+    changes.emplace_back("onelake_bearer_token", "token");
+    EXPECT_THROW(catalog.applySettingsChanges(changes), DB::Exception);
+}
+
+TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
+{
+    RestCatalogTestServer server(CatalogShape::Empty);
+    auto context = DB::Context::createCopy(getContext().context);
+    context->makeQueryContext();
+
+    OneLakeCatalog catalog(
+        "warehouse",
+        server.getUrl(),
+        /* onelake_tenant_id */"tenant-1",
+        /* onelake_client_id */"",
+        /* onelake_client_secret */"",
+        /* bearer_token */"token-1",
+        /* auth_scope */"",
+        /* oauth_server_uri */"",
+        /* oauth_server_use_request_body */false,
+        context);
+
+    const auto snapshot_before = catalog.getAuthStateSnapshot();
+    EXPECT_EQ(snapshot_before->tenant_id, "tenant-1");
+    EXPECT_EQ(snapshot_before->bearer_token, "token-1");
+    ASSERT_TRUE(snapshot_before->auth_header.has_value());
+    EXPECT_EQ(snapshot_before->auth_header->value, "Bearer token-1");
+
+    DB::SettingsChanges changes;
+    changes.emplace_back("onelake_bearer_token", "token-2");
+    changes.emplace_back("onelake_tenant_id", "tenant-2");
+    catalog.applySettingsChanges(changes);
+
+    const auto snapshot_after = catalog.getAuthStateSnapshot();
+    EXPECT_EQ(snapshot_after->tenant_id, "tenant-2");
+    EXPECT_EQ(snapshot_after->bearer_token, "token-2");
+    ASSERT_TRUE(snapshot_after->auth_header.has_value());
+    EXPECT_EQ(snapshot_after->auth_header->value, "Bearer token-2");
+
+    EXPECT_EQ(snapshot_before->tenant_id, "tenant-1");
+    EXPECT_EQ(snapshot_before->bearer_token, "token-1");
+
+    DB::SettingsChanges mode_switch;
+    mode_switch.emplace_back("onelake_tenant_id", "tenant-3");
+    mode_switch.emplace_back("onelake_client_id", "client-1");
+    EXPECT_THROW(catalog.applySettingsChanges(mode_switch), DB::Exception);
+    EXPECT_EQ(catalog.getAuthStateSnapshot()->tenant_id, "tenant-2");
+
+    DB::SettingsChanges unknown_setting;
+    unknown_setting.emplace_back("warehouse", "other");
+    EXPECT_THROW(catalog.applySettingsChanges(unknown_setting), DB::Exception);
+
+    DB::SettingsChanges empty_value;
+    empty_value.emplace_back("onelake_bearer_token", "");
+    EXPECT_THROW(catalog.applySettingsChanges(empty_value), DB::Exception);
+}
+
 #endif
