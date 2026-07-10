@@ -166,7 +166,10 @@ void MergeTreeIndexAggregatorMinMax::update(const Block & block, size_t * pos, s
     for (size_t i = 0; i < index_sample_block.columns(); ++i)
     {
         auto index_column_name = index_sample_block.getByPosition(i).name;
-        const auto & column = block.getByName(index_column_name).column;
+        /// Unwrap LowCardinality so that LowCardinality(Nullable(T)) exposes its ColumnNullable and
+        /// takes the getExtremesNullLast path below. Otherwise NULL presence is not recorded in the
+        /// index (the +inf sentinel is lost for mixed granules), and IS NULL wrongly prunes granules.
+        const auto column = block.getByName(index_column_name).column->convertToFullColumnIfLowCardinality();
         if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.get()))
             column_nullable->getExtremesNullLast(field_min, field_max, range_start, range_end);
         else
