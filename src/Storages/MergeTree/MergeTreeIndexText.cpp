@@ -1548,7 +1548,9 @@ void MergeTreeIndexAggregatorText::update(const Block & block, size_t * pos, siz
         const IColumn & column_data = column_array.getData();
         const auto & column_offsets = column_array.getOffsets();
 
-        const bool data_is_nullable = column_data.isNullable();
+        /// isNullable() is false for LowCardinality(Nullable), so use the helper that also
+        /// covers it, otherwise getDataAt() below throws on NULL array elements.
+        const bool data_is_nullable = isColumnNullableOrLowCardinalityNullable(column_data);
 
         for (size_t i = offset; i < offset + rows_read; ++i)
         {
