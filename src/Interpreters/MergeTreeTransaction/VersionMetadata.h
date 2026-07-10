@@ -169,6 +169,7 @@ public:
     /// up together with the main file. If only this file is present (no final file), the creating
     /// transaction never committed, so the part must be treated as rolled back.
     inline static constexpr auto TMP_TXN_VERSION_METADATA_FILE_NAME = "txn_version.txt.tmp";
+
 protected:
     /// Loads `VersionInfo` from persistent storage with error handling.
     /// Handles cases like missing metadata file, creates default values if needed.
