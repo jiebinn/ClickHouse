@@ -535,7 +535,7 @@ CREATE TABLE tab
 )
 ENGINE = MergeTree
 ORDER BY tuple()
-SETTINGS allow_experimental_text_index_positions = 1;
+SETTINGS allow_experimental_text_index_phrase_search = 1;
 
 DROP TABLE tab;
 
@@ -548,7 +548,7 @@ CREATE TABLE tab
 )
 ENGINE = MergeTree
 ORDER BY tuple()
-SETTINGS allow_experimental_text_index_positions = 1; -- { serverError BAD_ARGUMENTS }
+SETTINGS allow_experimental_text_index_phrase_search = 1; -- { serverError BAD_ARGUMENTS }
 
 CREATE TABLE tab
 (
@@ -557,7 +557,7 @@ CREATE TABLE tab
 )
 ENGINE = MergeTree
 ORDER BY tuple()
-SETTINGS allow_experimental_text_index_positions = 1; -- { serverError BAD_ARGUMENTS }
+SETTINGS allow_experimental_text_index_phrase_search = 1; -- { serverError BAD_ARGUMENTS }
 
 SELECT 'Types are incorrect.';
 
