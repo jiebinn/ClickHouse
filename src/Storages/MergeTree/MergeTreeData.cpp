@@ -1936,7 +1936,17 @@ void MergeTreeData::PartLoadingTree::add(const MergeTreePartInfo & info, const S
 
         auto version_path = fs::path(relative_data_path) / part_name / VersionMetadata::TXN_VERSION_METADATA_FILE_NAME;
         if (!part_disk->existsFile(version_path))
+        {
+            /// Mirror VersionMetadataOnDisk::loadMetadata: a lone txn_version.txt.tmp (no final
+            /// txn_version.txt) means the creating transaction never renamed its metadata into place,
+            /// i.e. it was interrupted before commit. Such a part is rolled back, so classify it as
+            /// such here too — otherwise it would be treated as a non-transactional part and an
+            /// intersecting committed peer would fall through to the LOGICAL_ERROR path below.
+            auto tmp_version_path = fs::path(relative_data_path) / part_name / VersionMetadata::TMP_TXN_VERSION_METADATA_FILE_NAME;
+            if (part_disk->existsFile(tmp_version_path))
+                return RollbackStatus::RolledBack;
             return RollbackStatus::NoMetadata;
+        }
 
         try
         {
