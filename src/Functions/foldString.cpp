@@ -230,7 +230,7 @@ Applies standard Unicode case folding. Preserves compatibility characters that a
         "Basic case folding",
         "SELECT caseFoldUTF8('Straße')",
         R"(
-┌─caseFoldUTF8('Straße')─┐
+┌─caseFoldUTF8('Straße')──┐
 │ strasse                 │
 └─────────────────────────┘
 )"
@@ -251,7 +251,7 @@ stripping combining marks (Unicode category Mn), then recomposing via NFC.
         "Basic accent removal",
         "SELECT removeDiacriticsUTF8('café résumé naïve')",
         R"(
-┌─removeDiacriticsUTF8('café résumé naïve')─┐
+┌─removeDiacriticsUTF8('café résumé naïve')──┐
 │ cafe resume naive                          │
 └────────────────────────────────────────────┘
 )"

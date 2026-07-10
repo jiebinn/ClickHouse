@@ -563,7 +563,7 @@ INSERT INTO test FORMAT JSONEachRow {"json" : {"a" : 42}}, {"json" : {"b" : "Hel
 SELECT json, JSONSharedDataPathsWithTypes(json) FROM test;
             )",
             R"(
-┌─json─────────────────────────────────┬─JSONSharedDataPathsWithTypes(json)─┐
+┌─json─────────────────────────────────┬─JSONSharedDataPathsWithTypes(json)──┐
 │ {"a":"42"}                           │ {}                                  │
 │ {"b":"Hello"}                        │ {'b':'String'}                      │
 │ {"a":["1","2","3"],"c":"2020-01-01"} │ {'c':'Date'}                        │

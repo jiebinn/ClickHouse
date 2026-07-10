@@ -2532,7 +2532,7 @@ It parses a String argument using a format String. Returns a DateTime64 type whi
 SELECT parseDateTime64('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')
         )",
         R"(
-┌─parseDateTime64('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')─┐
+┌─parseDateTime64('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')──┐
 │                                       2025-01-04 23:00:00.123       │
 └─────────────────────────────────────────────────────────────────────┘
         )"
@@ -2560,7 +2560,7 @@ Same as [`parseDateTime64`](#parseDateTime64) but returns zero date when it enco
 SELECT parseDateTime64OrZero('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')
         )",
         R"(
-┌─parseDateTime64OrZero('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')─┐
+┌─parseDateTime64OrZero('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')──┐
 │                                             2025-01-04 23:00:00.123       │
 └───────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2588,7 +2588,7 @@ Same as [`parseDateTime64`](#parseDateTime64) but returns `NULL` when it encount
 SELECT parseDateTime64OrNull('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')
         )",
         R"(
-┌─parseDateTime64OrNull('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')─┐
+┌─parseDateTime64OrNull('2025-01-04 23:00:00.123', '%Y-%m-%d %H:%i:%s.%f')──┐
 │                                            2025-01-04 23:00:00.123        │
 └───────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2621,7 +2621,7 @@ Refer to [Joda Time documentation](https://joda-time.sourceforge.net/apidocs/org
 SELECT parseDateTimeInJodaSyntax('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')
         )",
         R"(
-┌─parseDateTimeInJodaSyntax('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')─┐
+┌─parseDateTimeInJodaSyntax('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')──┐
 │                                                      2025-01-04 23:00:00 │
 └──────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2649,7 +2649,7 @@ Same as [`parseDateTimeInJodaSyntax`](#parseDateTimeInJodaSyntax) but returns ze
 SELECT parseDateTimeInJodaSyntaxOrZero('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')
         )",
         R"(
-┌─parseDateTimeInJodaSyntaxOrZero('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')─┐
+┌─parseDateTimeInJodaSyntaxOrZero('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')──┐
 │                                                          2025-01-04 23:00:00   │
 └────────────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2677,7 +2677,7 @@ Same as [`parseDateTimeInJodaSyntax`](#parseDateTimeInJodaSyntax) but returns `N
 SELECT parseDateTimeInJodaSyntaxOrNull('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')
         )",
         R"(
-┌─parseDateTimeInJodaSyntaxOrNull('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')─┐
+┌─parseDateTimeInJodaSyntaxOrNull('2025-01-04 23:00:00', 'yyyy-MM-dd HH:mm:ss')──┐
 │                                                         2025-01-04 23:00:00    │
 └────────────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2710,7 +2710,7 @@ Refer to [Joda Time documentation](https://joda-time.sourceforge.net/apidocs/org
 SELECT parseDateTime64InJodaSyntax('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')
         )",
         R"(
-┌─parseDateTime64InJodaSyntax('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')─┐
+┌─parseDateTime64InJodaSyntax('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')──┐
 │                                                          2025-01-04 23:00:00.123   │
 └────────────────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2738,7 +2738,7 @@ Same as [`parseDateTime64InJodaSyntax`](#parseDateTime64InJodaSyntax) but return
 SELECT parseDateTime64InJodaSyntaxOrZero('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')
         )",
         R"(
-┌─parseDateTime64InJodaSyntaxOrZero('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')─┐
+┌─parseDateTime64InJodaSyntaxOrZero('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')──┐
 │                                                              2025-01-04 23:00:00.123     │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
         )"
@@ -2766,7 +2766,7 @@ Same as [`parseDateTime64InJodaSyntax`](#parseDateTime64InJodaSyntax) but return
 SELECT parseDateTime64InJodaSyntaxOrNull('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')
         )",
         R"(
-┌─parseDateTime64InJodaSyntaxOrNull('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')─┐
+┌─parseDateTime64InJodaSyntaxOrNull('2025-01-04 23:00:00.123', 'yyyy-MM-dd HH:mm:ss.SSS')──┐
 │                                                             2025-01-04 23:00:00.123      │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
         )"

@@ -183,8 +183,8 @@ SELECT toUTCTimestamp(toDateTime('2023-03-16'), 'Asia/Shanghai')
         )",
         R"(
 ┌─toUTCTimestamp(toDateTime('2023-03-16'), 'Asia/Shanghai')─┐
-│                                     2023-03-15 16:00:00 │
-└─────────────────────────────────────────────────────────┘
+│                                     2023-03-15 16:00:00   │
+└───────────────────────────────────────────────────────────┘
         )"}
     };
     FunctionDocumentation::IntroducedIn introduced_in_toUTCTimestamp = {23, 8};
@@ -211,8 +211,8 @@ SELECT fromUTCTimestamp(toDateTime64('2023-03-16 10:00:00', 3), 'Asia/Shanghai')
         )",
         R"(
 ┌─fromUTCTimestamp(toDateTime64('2023-03-16 10:00:00',3), 'Asia/Shanghai')─┐
-│                                                 2023-03-16 18:00:00.000 │
-└─────────────────────────────────────────────────────────────────────────┘
+│                                                 2023-03-16 18:00:00.000  │
+└──────────────────────────────────────────────────────────────────────────┘
         )"}
     };
     FunctionDocumentation::IntroducedIn introduced_in_fromUTCTimestamp = {22, 1};

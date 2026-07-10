@@ -262,14 +262,14 @@ because "brown" appears between "quick" and "fox".
         = {{"Phrase match",
             "SELECT hasPhrase('the quick brown fox jumps', 'quick brown')",
             R"(
-┌─hasPhrase('the quick brown fox jumps', 'quick brown')─┐
+┌─hasPhrase('the quick brown fox jumps', 'quick brown')──┐
 │                                                      1 │
 └────────────────────────────────────────────────────────┘
         )"},
            {"Non-consecutive tokens",
             "SELECT hasPhrase('the quick brown fox jumps', 'quick fox')",
             R"(
-┌─hasPhrase('the quick brown fox jumps', 'quick fox')─┐
+┌─hasPhrase('the quick brown fox jumps', 'quick fox')──┐
 │                                                    0 │
 └──────────────────────────────────────────────────────┘
         )"}};

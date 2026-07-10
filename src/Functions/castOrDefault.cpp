@@ -891,7 +891,7 @@ If the string cannot be converted to a valid UUID, the function returns the prov
 SELECT toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'));
         )",
         R"(
-┌─toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'))─┐
+┌─toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'))──┐
 │ 61f0c404-5cb3-11e7-907b-a6006ad3dba0                                                                     │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         )"
@@ -902,7 +902,7 @@ SELECT toUUIDOrDefault('61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-
 SELECT toUUIDOrDefault('-----61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'));
         )",
         R"(
-┌─toUUIDOrDefault('-----61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'))─┐
+┌─toUUIDOrDefault('-----61f0c404-5cb3-11e7-907b-a6006ad3dba0', toUUID('59f0c404-5cb3-11e7-907b-a6006ad3dba0'))──┐
 │ 59f0c404-5cb3-11e7-907b-a6006ad3dba0                                                                          │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         )"
