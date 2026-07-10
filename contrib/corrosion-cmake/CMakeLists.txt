@@ -145,7 +145,14 @@ if (SANITIZE STREQUAL "memory")
 elseif (SANITIZE STREQUAL "thread")
     set(RUST_CARGO_BUILD_STD "-Zbuild-std=std,panic_abort,core,alloc")
     list(APPEND RUSTFLAGS "-Zsanitizer=thread")
-elseif (SANITIZE STREQUAL "address")
+elseif (SANITIZE STREQUAL "address" OR SANITIZE STREQUAL "address,undefined")
+    # Rust has no UBSan, so for the combined ASan+UBSan build only ASan is applied.
+    # Besides the sanitizer instrumentation itself, `-Zsanitizer=address` makes cargo expose
+    # `CARGO_CFG_SANITIZE=address` to build scripts, which `wasmtime` translates into
+    # `--cfg asan`. Under that cfg `wasmtime` skips its per-thread `sigaltstack` setup, whose
+    # TLS destructor munmaps the stack without `sigaltstack(SS_DISABLE)` and thereby makes
+    # ASan's `UnsetAlternateSignalStack` unmap the same (by then reused) address range at
+    # thread exit, destroying pages of live heap allocations.
     set(RUST_CARGO_BUILD_STD "-Zbuild-std=std,panic_abort,core,alloc")
     list(APPEND RUSTFLAGS "-Zsanitizer=address")
 endif()
