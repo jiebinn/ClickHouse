@@ -6,8 +6,8 @@
 
 SET allow_experimental_analyzer = 1;
 
-DROP TABLE IF EXISTS t_obexpr;
 DROP VIEW IF EXISTS v_obexpr;
+DROP TABLE IF EXISTS t_obexpr;
 
 CREATE TABLE t_obexpr (id UInt64, ts DateTime) ENGINE = MergeTree ORDER BY (id, ts);
 INSERT INTO t_obexpr SELECT number, toDateTime(1600000000 + number) FROM numbers(100);
