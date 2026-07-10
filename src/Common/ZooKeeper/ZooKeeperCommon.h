@@ -314,6 +314,13 @@ struct ZooKeeperCreateTTLResponse final : ZooKeeperCreate2Response
     OpNum getOpNum() const override { return OpNum::CreateTTL; }
 };
 
+struct ZooKeeperCreateContainerResponse final : ZooKeeperCreate2Response
+{
+    using ZooKeeperCreate2Response::ZooKeeperCreate2Response;
+
+    OpNum getOpNum() const override { return OpNum::CreateContainer; }
+};
+
 struct ZooKeeperRemoveRequest final : RemoveRequest, ZooKeeperRequest
 {
     ZooKeeperRemoveRequest() = default;
