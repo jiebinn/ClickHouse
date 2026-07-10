@@ -33,9 +33,9 @@ These functions perform ASCII case-insensitive key matching when extracting valu
 They work identically to their case-sensitive counterparts, except that object keys are matched without regard to case.
 When multiple keys match with different cases, the first match is returned.
 
-:::note
+<Note>
 These functions may be less performant than their case-sensitive counterparts, so use the regular JSONExtract functions if possible.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

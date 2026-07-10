@@ -38,10 +38,10 @@ Each test can be one of two types: `.sql` and `.sh`.
 SQL tests are generally preferable to `.sh` tests.
 You should use `.sh` tests only when you have to test some feature that cannot be exercised from pure SQL, such as piping some input data into `clickhouse-client` or testing `clickhouse-local`.
 
-:::note
+<Note>
 A common mistake when testing data types `DateTime` and `DateTime64` is assuming that the server uses a specific time zone (e.g. "UTC"). This is not the case, time zones in CI test runs
 are deliberately randomized. The easiest workaround is to specify the time zone for test values explicitly, e.g. `toDateTime64(val, 3, 'Europe/Amsterdam')`.
-:::
+</Note>
 
 ### Running a test locally {#running-a-test-locally}
 
@@ -160,7 +160,7 @@ cd <repository>/tests/config
 sudo ./install.sh
 ```
 
-:::note
+<Note>
 Tests should be
 - be minimal: only create the minimally needed tables, columns and, complexity,
 - be fast: not take longer than a few seconds (better: sub-seconds),
@@ -169,7 +169,7 @@ Tests should be
 - be exhaustive: cover corner cases like zeros, nulls, empty sets, exceptions (negative tests, use syntax `-- { serverError xyz }` and `-- { clientError xyz }` for that),
 - clean up tables at the end of the test (in case of leftovers),
 - make sure the other tests don't test the same stuff (i.e. grep first).
-:::
+</Note>
 
 ### Templated tests with Jinja {#templated-tests-with-jinja}
 
@@ -457,9 +457,9 @@ When building with clang in debug mode, debug version of `libc++` is used that a
 
 ## Sanitizers {#sanitizers}
 
-:::note
+<Note>
 If the process (ClickHouse server or client) crashes at startup when running it locally, you might need to disable address space layout randomization: `sudo sysctl kernel.randomize_va_space=0`
-:::
+</Note>
 
 ### Address sanitizer {#address-sanitizer}
 

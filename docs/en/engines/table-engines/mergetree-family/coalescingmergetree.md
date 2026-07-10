@@ -10,9 +10,10 @@ show_related_blogs: true
 doc_type: 'reference'
 ---
 
-:::note Available from version 25.6
+<Note>
+**Available from version 25.6**
 This table engine is available from version 25.6 and higher in both OSS and Cloud.
-:::
+</Note>
 
 This engine inherits from [MergeTree](/engines/table-engines/mergetree-family/mergetree). The key difference is in how data parts are merged: for `CoalescingMergeTree` tables, ClickHouse replaces all rows with the same primary key (or more precisely, the same [sorting key](../../../engines/table-engines/mergetree-family/mergetree.md)) with a single row that contains the latest non-NULL values for each column.
 
@@ -51,9 +52,9 @@ When creating a `CoalescingMergeTree` table the same [clauses](../../../engines/
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-:::note
+<Note>
 Do not use this method in new projects and, if possible, switch the old projects to the method described above.
-:::
+</Note>
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -124,7 +125,7 @@ SELECT * FROM test_table FINAL ORDER BY key;
 
 Using the `FINAL` modifier forces ClickHouse to apply merge logic at query time, ensuring you get the correct, coalesced "latest" value for each column. This is the safest and most accurate method when querying from a CoalescingMergeTree table.
 
-:::note
+<Note>
 
 An approach with `GROUP BY` may return incorrect results if the underlying parts have not been fully merged.
 
@@ -132,7 +133,7 @@ An approach with `GROUP BY` may return incorrect results if the underlying parts
 SELECT key, last_value(value_int), last_value(value_string), last_value(value_date)  FROM test_table GROUP BY key; -- Not recommended.
 ```
 
-:::
+</Note>
 
 ## Tuple element aggregation {#tuple-element-aggregation}
 
@@ -143,9 +144,9 @@ The same rules apply to the flattened sub-columns as to regular columns:
 - Sub-columns that belong to a `Tuple` in the sorting key or partition key are excluded from coalescing.
 - If `columns` is specified, only sub-columns of the listed `Tuple` columns are coalesced.
 
-:::note
+<Note>
 This setting is immutable and must be specified at table creation time.
-:::
+</Note>
 
 ```sql
 CREATE TABLE coalescing_tuples

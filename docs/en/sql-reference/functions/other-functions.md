@@ -12,9 +12,9 @@ import DeprecatedBadge from '@theme/badges/DeprecatedBadge';
 
 # Other functions
 
-:::note
+<Note>
 The function documentation below is generated from the `system.functions` system table.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

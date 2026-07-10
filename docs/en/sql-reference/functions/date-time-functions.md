@@ -24,9 +24,9 @@ SELECT
 └─────────────────────┴────────────┴────────────┴─────────────────────┘
 ```
 
-:::note
+<Note>
 For SQL standard compatibility the following functions, `NOW`, `CURRENT_TIMESTAMP`, `LOCALTIME`, `LOCALTIMESTAMP`, `TODAY`, and `CURRENT_DATE` can be used without parentheses.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

@@ -9,9 +9,9 @@ doc_type: 'reference'
 
 The `users` section of the `users.xml` configuration file contains user settings.
 
-:::note
+<Note>
 ClickHouse also supports [SQL-driven workflow](/operations/access-rights#access-control-usage) for managing users. We recommend using it.
-:::
+</Note>
 
 Structure of the `users` section:
 
@@ -347,9 +347,9 @@ To open access for user from any network, specify:
 <ip>::/0</ip>
 ```
 
-:::note
+<Note>
 It's insecure to open access from any network unless you have a firewall properly configured or the server is not directly connected to Internet.
-:::
+</Note>
 
 To open access only from localhost, specify:
 

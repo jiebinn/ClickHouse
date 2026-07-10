@@ -8,10 +8,10 @@ doc_type: 'reference'
 
 All functions in this section search case-sensitively by default. Case-insensitive search is usually provided by separate function variants.
 
-:::note
+<Note>
 Case-insensitive search follows the lowercase-uppercase rules of the English language. E.g. Uppercased `i` in the English language is
 `I` whereas in the Turkish language it is `İ` - results for languages other than English may be unexpected.
-:::
+</Note>
 
 Functions in this section also assume that the searched string (referred to in this section as `haystack`) and the search string (referred to in this section as `needle`) are single-byte encoded text. If this assumption is
 violated, no exception is thrown and results are undefined. Search with UTF-8 encoded strings is usually provided by separate function
@@ -21,9 +21,9 @@ results are undefined. Note that no automatic Unicode normalization is performed
 
 [General strings functions](string-functions.md) and [functions for replacing in strings](string-replace-functions.md) are described separately.
 
-:::note
+<Note>
 The documentation below is generated from the `system.functions` system table.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

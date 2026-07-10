@@ -83,7 +83,7 @@ For tuple subtraction: [tupleMinus](../../sql-reference/functions/tuple-function
 
 ### is not distinct from operator (`<=>`) {#is-not-distinct-from}
 
-:::note
+<Note>
 From 25.10 you can use `<=>` in the same way as any other operator.
 Before 25.10 it could only be used in JOIN expressions, for example:
 
@@ -97,7 +97,7 @@ SELECT * FROM a AS a1 JOIN a AS a2 ON a1.x <=> a2.x;
 │ ClickHouse │ ClickHouse │
 └────────────┴────────────┘
 ```
-:::
+</Note>
 
 The `<=>` operator is the `NULL`-safe equality operator, equivalent to `IS NOT DISTINCT FROM`.
 It works like the regular equality operator (`=`), but it treats `NULL` values as comparable.
@@ -203,9 +203,10 @@ The array form is recognised for the comparison operators `=`, `==`, `!=`, `<>`,
 
 The string-search predicates work because `MatchImpl` (the implementation behind `LIKE` / `ILIKE` / `REGEXP`) supports a constant haystack with a non-constant needle. For example, `'abc' LIKE SOME(['a%', 'b%'])` is rewritten to `arrayExists(x -> 'abc' LIKE x, ['a%', 'b%'])`, and `'abc' NOT LIKE ALL(['x%', 'y%'])` to `arrayAll(x -> 'abc' NOT LIKE x, ['x%', 'y%'])`. This matches one string against several patterns; for matching with a single combined pass you can still use a multi-pattern search function such as `multiMatchAny` (regular expressions) or `multiSearchAny` (substrings).
 
-:::note `ANY` is not supported for the array form
+<Note>
+**`ANY` is not supported for the array form**
 Only `SOME` and `ALL` accept an array right-hand side. `ANY` is excluded because `any` is also an aggregate function, so an expression of the shape `expr = any(x)` keeps its function-call meaning. Use `SOME` for the array quantifier.
-:::
+</Note>
 
 ```sql title="Query"
 SELECT
@@ -221,7 +222,8 @@ SELECT
 └──────────┴────────────────┴──────────────────┴───────────┘
 ```
 
-:::note `NULL` handling differs from the subquery form
+<Note>
+**`NULL` handling differs from the subquery form**
 Because the array form is rewritten in the parser (where query settings such as `transform_null_in` are not available, and a per-row array column cannot use the analyzer's null-safe `IN` path), it uses the two-valued semantics of `has` (for `=` / `<>`) and `arrayExists` / `arrayAll` (which fold an unknown `NULL` comparison result to `0`). This can differ from the subquery form, whose `NULL` handling is lowered through `IN` / `NOT IN` and depends on `transform_null_in`:
 
 ```sql
@@ -230,7 +232,7 @@ SELECT NULL <> ALL([NULL]);   -- NOT has([NULL], NULL)              -> 0
 SELECT NULL < SOME([1]);      -- arrayExists(x -> NULL < x, [1])    -> 0
 SELECT NULL > ALL([1]);       -- arrayAll(x -> NULL > x, [1])       -> 0
 ```
-:::
+</Note>
 
 ## Operators for Working with Dates and Times {#operators-for-working-with-dates-and-times}
 
@@ -336,9 +338,9 @@ Types of intervals:
 
 You can also use a string literal when setting the `INTERVAL` value. For example, `INTERVAL 1 HOUR` is identical to the `INTERVAL '1 hour'` or `INTERVAL '1' hour`.
 
-:::tip
+<Tip>
 Intervals with different types can't be combined. You can't use expressions like `INTERVAL 4 DAY 1 HOUR`. Specify intervals in units that are smaller or equal to the smallest unit of the interval, for example, `INTERVAL 25 HOUR`. You can use consecutive operations, like in the example below.
-:::
+</Tip>
 
 Examples:
 
@@ -372,9 +374,9 @@ SELECT now() AS current_date_time, current_date_time + INTERVAL '4' day + INTERV
 └─────────────────────┴────────────────────────────────────────────────────────────┘
 ```
 
-:::note
+<Note>
 The `INTERVAL` syntax or `addDays` function are always preferred. Simple addition or subtraction (syntax like `now() + ...`) doesn't consider time settings. For example, daylight saving time.
-:::
+</Note>
 
 Examples:
 
@@ -406,9 +408,9 @@ The result type depends on the operand types:
 | `Date32` | `Time` | `DateTime64(0)` |
 | `Date32` | `Time64(s)` | `DateTime64(s)` |
 
-:::note
+<Note>
 The result uses the [session timezone](../../operations/settings/settings.md#session_timezone) (or server default timezone if no session timezone is set). The [`date_time_overflow_behavior`](../../operations/settings/settings-formats.md#date_time_overflow_behavior) setting controls what happens when the result is outside the representable range.
-:::
+</Note>
 
 Examples:
 
@@ -456,9 +458,9 @@ The postfix operators `AT TIME ZONE` and `AT LOCAL` convert a `DateTime` or `Dat
 
 `AT LOCAL` uses the current [session timezone](../../operations/settings/settings.md#session_timezone) (or the server default if no session timezone is set). On `Distributed` tables, `session_timezone` must be explicitly set; when it is empty, `timeZone()` is shard-local and cannot be used as a constant `toTimeZone` argument, causing an `ILLEGAL_COLUMN` exception.
 
-:::note
+<Note>
 Unlike PostgreSQL, where `timestamp without time zone AT TIME ZONE zone` re-interprets the wall-clock value as being in the given zone before converting, ClickHouse always keeps the same absolute point in time and only changes the timezone label used for display. Both forms are equivalent to `toTimeZone` and do not alter the underlying timestamp.
-:::
+</Note>
 
 `AT TIME ZONE` has operator precedence 13 (above `*`/`/`/`%` at 12, and above `+`/`-` at 11), matching PostgreSQL. This means `a * ts AT TIME ZONE 'tz'` binds as `a * (ts AT TIME ZONE 'tz')`, and `ts + interval AT TIME ZONE 'tz'` binds as `ts + (interval AT TIME ZONE 'tz')`. To apply timezone conversion after arithmetic, use explicit parentheses:
 

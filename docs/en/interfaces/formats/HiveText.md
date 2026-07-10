@@ -35,11 +35,12 @@ than Hive's nested delimiters. In particular, a column of type
 representation (for example, `"['a','b','c']"`), not from values separated by
 the Hive collection delimiter `\x02`.
 
-:::note Nested delimiter settings have no effect
+<Note>
+**Nested delimiter settings have no effect**
 The [`input_format_hive_text_collection_items_delimiter`](#format-settings) and
 [`input_format_hive_text_map_keys_delimiter`](#format-settings) settings are
 accepted for compatibility but are currently not used during parsing.
-:::
+</Note>
 
 By default, rows are allowed to have a variable number of fields (see
 [`input_format_hive_text_allow_variable_number_of_columns`](#format-settings)):

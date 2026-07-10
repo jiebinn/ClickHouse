@@ -27,12 +27,12 @@ Parameters set in a named collection can be overridden in SQL, this is shown in 
 below. This ability can be limited using `[NOT] OVERRIDABLE` keywords and XML attributes
 and/or the configuration option `allow_named_collection_override_by_default`.
 
-:::warning
+<Warning>
 If override is allowed, it may be possible for users without administrative access to
 figure out the credentials that you are trying to hide.
 If you are using named collections with that purpose, you should disable
 `allow_named_collection_override_by_default` (which is enabled by default).
-:::
+</Warning>
 
 ## Storing named collections in the system database {#storing-named-collections-in-the-system-database}
 
@@ -69,9 +69,9 @@ To manage named collections with DDL a user must have the `named_collection_cont
 </clickhouse>
 ```
 
-:::tip
+<Tip>
 In the above example the `password_sha256_hex` value is the hexadecimal representation of the SHA256 hash of the password.  This configuration for the user `default` has the attribute `replace=true` as in the default configuration has a plain text `password` set, and it is not possible to have both plain text and sha256 hex passwords set for a user.
-:::
+</Tip>
 
 ### Storage for named collections {#storage-for-named-collections}
 
@@ -200,9 +200,9 @@ INSERT INTO FUNCTION s3(s3_mydata, filename = 'test_file.tsv.gz',
 SELECT * FROM numbers(10000);
 ```
 
-:::tip
+<Tip>
 The first argument to the `s3()` function above is the name of the collection, `s3_mydata`.  Without named collections, the access key ID, secret, format, and URL would all be passed in every call to the `s3()` function.
-:::
+</Tip>
 
 #### S3 table {#s3-table}
 
@@ -267,9 +267,9 @@ SELECT count() FROM mysql(mymysql, table = 'test');
 │       3 │
 └─────────┘
 ```
-:::note
+<Note>
 The named collection does not specify the `table` parameter, so it is specified in the function call as `table = 'test'`.
-:::
+</Note>
 
 #### MySQL table {#mysql-table}
 
@@ -282,9 +282,9 @@ SELECT count() FROM mytable;
 └─────────┘
 ```
 
-:::note
+<Note>
 The DDL overrides the named collection setting for connection_pool_size.
-:::
+</Note>
 
 #### MySQL database {#mysql-database}
 
@@ -391,9 +391,9 @@ SELECT * FROM mypgtable;
 └───┘
 ```
 
-:::note
+<Note>
 PostgreSQL copies data from the named collection when the table is being created. A change in the collection does not affect the existing tables.
-:::
+</Note>
 
 ### Example of using named collections with database with engine PostgreSQL {#example-of-using-named-collections-with-database-with-engine-postgresql-1}
 
@@ -616,9 +616,9 @@ SELECT count() FROM mytable;
 └─────────┘
 ```
 
-:::note
+<Note>
 The DDL overrides the named collection setting for options.
-:::
+</Note>
 
 #### MongoDB Dictionary {#mongodb-dictionary}
 
@@ -640,6 +640,6 @@ SELECT dictGet('dict', 'b', 2);
 └─────────────────────────┘
 ```
 
-:::note
+<Note>
 The named collection specifies `my_collection` for the collection name. In the function call it is overwritten by `collection = 'my_dict'` to select another collection.
-:::
+</Note>

@@ -48,9 +48,9 @@ Additional join types available in ClickHouse are:
 | `ASOF JOIN`, `LEFT ASOF JOIN`               | Joining sequences with a non-exact match. `ASOF JOIN` usage is described below.                                                           |
 | `PASTE JOIN`                                | Performs a horizontal concatenation of two tables.                                                                                          |
 
-:::note
+<Note>
 When [join_algorithm](../../../operations/settings/settings.md#join_algorithm) is set to `partial_merge`, `RIGHT JOIN` and `FULL JOIN` are supported only with `ALL` strictness (`SEMI`, `ANTI`, `ANY`, and `ASOF` are not supported).
-:::
+</Note>
 
 ## Settings {#settings}
 
@@ -81,9 +81,9 @@ Rows are joined if the whole complex condition is met. If the conditions are not
 
 The `OR` operator inside the `ON` clause works using the hash join algorithm — for each `OR` argument with join keys for `JOIN`, a separate hash table is created, so memory consumption and query execution time grow linearly with an increase in the number of expressions `OR` of the `ON` clause.
 
-:::note
+<Note>
 If a condition references columns from different tables, then only the equality operator (`=`) is supported so far.
-:::
+</Note>
 
 **Example**
 
@@ -152,13 +152,13 @@ SELECT a, b, val FROM t1 INNER JOIN t2 ON t1.a = t2.key OR t1.b = t2.key;
 
 Query with `INNER` type of a join and conditions with `OR` and `AND`:
 
-:::note
+<Note>
 
 By default, non-equal conditions are supported as long as they use columns from the same table.
 For example, `t1.a = t2.key AND t1.b > 0 AND t2.b > t2.c`, because `t1.b > 0` uses columns only from `t1` and `t2.b > t2.c` uses columns only from `t2`.
 However, you can try experimental support for conditions like `t1.a = t2.key AND t1.b > t2.key`, check out the section below for more details.
 
-:::
+</Note>
 
 ```sql title="Query"
 SELECT a, b, val FROM t1 INNER JOIN t2 ON t1.a = t2.key OR t1.b = t2.key AND t2.val > 3;
@@ -325,10 +325,10 @@ For example, consider the following tables:
 
 `ASOF JOIN` can take the timestamp of a user event from `table_1` and find an event in `table_2` where the timestamp is closest to the timestamp of the event from `table_1` corresponding to the closest match condition. Equal timestamp values are the closest if available. Here, the `user_id` column can be used for joining on equality and the `ev_time` column can be used for joining on the closest match. In our example, `event_1_1` can be joined with `event_2_1` and `event_1_2` can be joined with `event_2_3`, but `event_2_2` can't be joined.
 
-:::note
+<Note>
 `ASOF JOIN` is supported only by `hash` and `full_sorting_merge` join algorithms.
 It's **not** supported in the [Join](../../../engines/table-engines/special/join.md) table engine.
-:::
+</Note>
 
 ## PASTE JOIN usage {#paste-join-usage}
 

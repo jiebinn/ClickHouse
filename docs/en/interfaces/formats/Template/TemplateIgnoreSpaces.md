@@ -21,9 +21,9 @@ Also allows specifying empty placeholders (`${}` or `${:None}`) to split some de
 Such placeholders are used only for skipping whitespace characters.
 It's possible to read `JSON` using this format if the values of columns have the same order in all rows.
 
-:::note
+<Note>
 This format is suitable only for input.
-:::
+</Note>
 
 ## Example usage {#example-usage}
 

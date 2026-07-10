@@ -11,11 +11,11 @@ The `CHECK TABLE` query in ClickHouse is used to perform a validation check on a
 
 Particularly it compares actual file sizes with the expected values which are stored on the server. If the file sizes do not match the stored values, it means the data is corrupted. This can be caused, for example, by a system crash during query execution.
 
-:::warning
+<Warning>
 The `CHECK TABLE` query may read all the data in the table and hold some resources, making it resource-intensive.
 Consider the potential impact on performance and resource utilization before executing this query.
 This query will not improve performance of the system and you should not execute it if you are not sure of what you are doing.
-:::
+</Warning>
 
 ## Syntax {#syntax}
 
@@ -109,9 +109,9 @@ DB::Exception: No such data part '201003_111_222_0' to check in table 'default.t
 
 ### Receiving a 'Corrupted' Result {#receiving-a-corrupted-result}
 
-:::warning
+<Warning>
 Disclaimer: The procedure described here, including the manual manipulating or removing files directly from the data directory, is for experimental or development environments only. Do **not** attempt this on a production server, as it may lead to data loss or other unintended consequences.
-:::
+</Warning>
 
 Remove the existing checksum file:
 

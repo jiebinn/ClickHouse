@@ -63,10 +63,10 @@ Use decimal values between 0 and 1 to select a percentage of rows:
 | `LIMIT 1 OFFSET 0.5` | The median row |
 | `LIMIT 0.25 OFFSET 0.5` | Third quartile (25% of rows after skipping the first 50%) |
 
-:::note
+<Note>
 - Fractions must be [Float64](../../data-types/float.md) values greater than 0 and less than 1.
 - Fractional row counts are rounded to the next whole number.
-:::
+</Note>
 
 ## Combining limit types {#combining-limit-types}
 

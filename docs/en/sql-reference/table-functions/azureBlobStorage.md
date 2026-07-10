@@ -85,9 +85,9 @@ Arguments can also be passed using [named collections](/operations/named-collect
 | `client_id`                      | No       | Client ID for authentication.                                                                          |
 | `tenant_id`                      | No       | Tenant ID for authentication.                                                                          |
 
-:::note
+<Note>
 Named collection key names differ from positional function argument names: `container` (not `container_name`) and `blob_path` (not `blobpath`).
-:::
+</Note>
 
 **Example:**
 

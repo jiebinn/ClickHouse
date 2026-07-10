@@ -17,9 +17,9 @@ doc_type: 'reference'
 
 Differs from the [`TabSeparated`](/interfaces/formats/TabSeparated) format in that rows are written without escaping.
 
-:::note
+<Note>
 When parsing with this format, tabs or line-feeds are not allowed in each field.
-:::
+</Note>
 
 For a comparison of the `TabSeparatedRaw` format and the `RawBlob` format see: [Raw Formats Comparison](../RawBLOB.md/#raw-formats-comparison)
 

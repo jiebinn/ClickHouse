@@ -7,9 +7,10 @@ title: 'How to Build ClickHouse on Linux'
 doc_type: 'guide'
 ---
 
-:::info This build guide is for contributors modifying ClickHouse itself.
+<Info>
+**This build guide is for contributors modifying ClickHouse itself.**
 If you are not changing ClickHouse source code, you can install pre-built ClickHouse as described in [Quick Start](https://clickhouse.com/docs/get-started/quick-start).
-:::
+</Info>
 
 ClickHouse can be build on the following platforms:
 
@@ -56,10 +57,10 @@ GCC or other compilers are not supported.
 
 ## Install the Rust compiler (optional) {#install-the-rust-compiler-optional}
 
-:::note
+<Note>
 Rust is an optional dependency of ClickHouse.
 If Rust is not installed, some features of ClickHouse will be omitted from compilation.
-:::
+</Note>
 
 First, follow the steps in the official [Rust documentation](https://www.rust-lang.org/tools/install) to install `rustup`.
 
@@ -98,9 +99,9 @@ Also, internal exceptions of type `LOGICAL_ERROR` crash immediately instead of f
 cmake -D CMAKE_BUILD_TYPE=Debug ..
 ```
 
-:::note
+<Note>
 If you wish to use a debugger such as gdb, add `-D DEBUG_O_LEVEL="0"` to the above command to remove all compiler optimizations, which can interfere with gdb's ability to view/access variables.
-:::
+</Note>
 
 Run ninja to build:
 
@@ -120,17 +121,18 @@ You can control the number of parallel build jobs using parameter `-j`:
 ninja -j 1 clickhouse
 ```
 
-:::note
+<Note>
 `clickhouse-server`, `clickhouse-client`, and similar binaries are symbolic links in the `programs/` directory that point to the `clickhouse` executable after the build is completed.
+</Note>
 
-:::tip
+<Tip>
 CMake provides shortcuts for above commands:
 
 ```sh
 cmake -S . -B build  # configure build, run from repository top-level directory
 cmake --build build  # compile
 ```
-:::
+</Tip>
 
 ## Running the ClickHouse Executable {#running-the-clickhouse-executable}
 

@@ -94,10 +94,10 @@ In the example below, `SQL_` is chosen as the custom prefix:
 <custom_settings_prefixes>SQL_</custom_settings_prefixes>
 ```
 
-:::note
+<Note>
 In ClickHouse Cloud it is not possible to specify a custom prefix.
 All custom user settings begin with prefix `SQL_`.
-:::
+</Note>
 
 To define a custom setting use the `SET` command:
 

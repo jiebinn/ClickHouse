@@ -28,10 +28,10 @@ geohashEncode(longitude, latitude, [precision])
 - `latitude` — Latitude part of the coordinate you want to encode. Floating in range `[-90°, 90°]`. [Float](../../data-types/float.md).
 - `precision` (optional) — Length of the resulting encoded string. Defaults to `12`. Integer in the range `[1, 12]`. [Int8](../../data-types/int-uint.md).
 
-:::note
+<Note>
 - All coordinate parameters must be of the same type: either `Float32` or `Float64`.
 - For the `precision` parameter, any value less than `1` or greater than `12` is silently converted to `12`.
-:::
+</Note>
 
 **Returned values**
 
@@ -99,18 +99,18 @@ geohashesInBox(longitude_min, latitude_min, longitude_max, latitude_max, precisi
 - `latitude_max` — Maximum latitude. Range: `[-90°, 90°]`. [Float](../../data-types/float.md).
 - `precision` — Geohash precision. Range: `[1, 12]`. [UInt8](../../data-types/int-uint.md).
 
-:::note    
+<Note>
 All coordinate parameters must be of the same type: either `Float32` or `Float64`.
-:::
+</Note>
 
 **Returned values**
 
 - Array of precision-long strings of geohash-boxes covering provided area, you should not rely on order of items. [Array](../../data-types/array.md)([String](../../data-types/string.md)).
 - `[]` - Empty array if minimum latitude and longitude values aren't less than corresponding maximum values.
 
-:::note    
+<Note>
 Function throws an exception if resulting array is over 10'000'000 items long.
-:::
+</Note>
 
 **Example**
 

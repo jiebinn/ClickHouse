@@ -79,10 +79,10 @@ If procfs is supported and enabled on the system, ClickHouse server collects the
 - `OSReadBytes`
 - `OSWriteBytes`
 
-:::note
+<Note>
 `OSIOWaitMicroseconds` is disabled by default in Linux kernels starting from 5.14.x.
 You can enable it using `sudo sysctl kernel.task_delayacct=1` or by creating a `.conf` file in `/etc/sysctl.d/` with `kernel.task_delayacct = 1`
-:::
+</Note>
 
 ## System tables in ClickHouse Cloud {#system-tables-in-clickhouse-cloud}
 
@@ -174,9 +174,10 @@ ORDER BY most_recent DESC
 Peak memory usage: 28.45 MiB.
 ```
 
-:::note Don't rely on the numerical suffix for ordering
+<Note>
+**Don't rely on the numerical suffix for ordering**
 While the numeric suffix on tables can suggest the order of data, it should never be relied upon. For this reason, always use the merge table function combined with a date filter when targeting specific date ranges.
-:::
+</Note>
 
 Importantly, these tables are still **local to each node**.
 
@@ -186,9 +187,9 @@ To comprehensively view the entire cluster, users can leverage the [`clusterAllR
 
 This approach is particularly valuable for monitoring and debugging cluster-wide operations, ensuring users can effectively analyze the health and performance of their ClickHouse Cloud deployment.
 
-:::note
+<Note>
 ClickHouse Cloud provides clusters of multiple replicas for redundancy and failover. This enables its features, such as dynamic autoscaling and zero-downtime upgrades. At a certain moment in time, new nodes could be in the process of being added to the cluster or removed from the cluster. To skip these nodes, add `SETTINGS skip_unavailable_shards = 1` to queries using `clusterAllReplicas` as shown below.
-:::
+</Note>
 
 For example, consider the difference when querying the `query_log` table - often essential to analysis.
 

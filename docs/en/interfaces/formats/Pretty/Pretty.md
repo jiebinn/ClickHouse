@@ -54,9 +54,9 @@ SELECT 'String with \'quotes\' and \t character' AS Escaping_test
 To avoid dumping too much data to the terminal, only the first `10,000` rows are printed. 
 If the number of rows is greater than or equal to `10,000`, the message "Showed first 10 000" is printed.
 
-:::note
+<Note>
 This format is only appropriate for outputting a query result, but not for parsing data.
-:::
+</Note>
 
 The Pretty format supports outputting total values (when using `WITH TOTALS`) and extremes (when 'extremes' is set to 1). 
 In these cases, total values and extreme values are output after the main data, in separate tables. 

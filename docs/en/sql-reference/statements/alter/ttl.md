@@ -7,9 +7,9 @@ title: 'Manipulations with Table TTL'
 doc_type: 'reference'
 ---
 
-:::note
+<Note>
 If you are looking for details on using TTL for managing old data, check out the [Manage Data with TTL](/guides/developer/ttl.md) user guide. The docs below demonstrate how to alter or remove an existing TTL rule.
-:::
+</Note>
 
 ## MODIFY TTL {#modify-ttl}
 

@@ -28,10 +28,10 @@ There are no other rules for escaping characters.
 $ clickhouse-client --format_csv_delimiter="|" --query="INSERT INTO test.csv FORMAT CSV" < data.csv
 ```
 
-:::note
+<Note>
 By default, the delimiter is `,` 
 See the [format_csv_delimiter](/operations/settings/settings-formats.md/#format_csv_delimiter) setting for more information.
-:::
+</Note>
 
 When parsing, all values can be parsed either with or without quotes. Both double and single quotes are supported.
 

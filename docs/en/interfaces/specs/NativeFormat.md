@@ -19,9 +19,9 @@ This page describes the bytes inside a Block — the columnar payload — and th
 
 All multi-byte integer fields are little-endian. Signed integers use two's complement.
 
-:::tip
+<Tip>
 For a user-facing introduction to the `Native` format (with `curl` examples), see the [Native format page](/interfaces/formats/Native). This specification is the lower-level wire reference.
-:::
+</Tip>
 
 ## Overview {#overview}
 
@@ -184,9 +184,10 @@ A Column appears `num_columns` times within a Block.
 
 A decoder dispatches on the `type` string. Type strings often carry parameters in parentheses; the decoder strips the `(...)` suffix to find the base type and then parses the parameters for size, scale, or inner-type decisions. Parsing a parameter list with nested types (a `Tuple` inside an `Array`, say) needs a depth-aware comma splitter that tracks parenthesis nesting rather than a naive split on `,`.
 
-:::note Binary type encoding
+<Note>
+**Binary type encoding**
 The `type` field is a textual `String` only in the default mode. When the query setting `output_format_native_encode_types_in_binary_format = 1` is set, this field is instead a **binary type encoding** — the same tag-based encoding documented in [data type binary encoding](/sql-reference/data-types/data-types-binary-encoding) — and flattened `Dynamic` type lists use the same binary encoding for their per-type names. A decoder that always reads field 2 as a length-prefixed string would treat the first binary type tag as a string length and desynchronize, so it must know which mode the stream uses.
-:::
+</Note>
 
 ```mermaid
 flowchart TD
@@ -389,9 +390,10 @@ The trouble only starts if you raise the output revision on purpose. A `SELECT .
 | `INSERT ... FORMAT Native` over HTTP | n/a | `0` (fixed, ignores `client_protocol_version`) | Never read |
 | `INTO OUTFILE` / file / `clickhouse-client` `FORMAT Native` | `0` | `0` | Absent (but `LowCardinality` is kept — see note above) |
 
-:::note Protocol revision vs serialization version
+<Note>
+**Protocol revision vs serialization version**
 Do not confuse the protocol revision with the [serialization version](#serialization-version-concept). The revision here is connection- or request-wide and never appears in the bytes. The serialization version is per column, carried by [versioned types](#versioned-types), and is written into every non-empty block. The revision decides whether a feature is there at all; the serialization version, once you are inside a versioned column, picks which variant of that one type's encoding follows.
-:::
+</Note>
 
 ## Data types {#data-types}
 
@@ -571,9 +573,9 @@ F0 B0 00 00              Int32 LE = 45296
 95 2C B3 02 00 00 00 00  Int64 LE = 45296789
 ```
 
-:::note
+<Note>
 `Time` and `Time64` are experimental and require `allow_experimental_time_time64_type = 1` on the server.
-:::
+</Note>
 
 #### Interval {#interval}
 
@@ -1066,12 +1068,12 @@ So a `Point` column is decoded exactly as `Tuple(Float64, Float64)` (rendering a
 
 `SimpleAggregateFunction(func, T)` is an alias for its value type `T`. It stores an already-finalized aggregate value, so its wire form and rendering are exactly those of `T` (`SimpleAggregateFunction(sum, UInt64)` is decoded as `UInt64`). Only the single-value-type form is an alias this way; the underlying type may itself be a composite.
 
-:::note
+<Note>
 Two related types are **not** aliases. They are valid `Native` column types — a client can receive an `AggregateFunction` column from a `-State` combinator or distributed aggregation, for instance — but each carries its own specialized payload that is outside the scope of this page:
 
 - `AggregateFunction(func, ...)` holds an *intermediate* aggregation state (not a finalized value); its binary layout is specific to the aggregate function and version.
 - `QBit(T, N[, stride])` stores a vector with its bit planes transposed for vector-search workloads; its on-wire stream layout (group-major `FixedString` bit-plane streams, `element_size * (N / stride)` of them with an explicit `stride`) and its binary type encoding (tag `0x36`, or `0x37` `QBitWithStride` when `stride != N`) are documented on the [`QBit` data type page](/sql-reference/data-types/qbit) and in the [binary type encoding](/sql-reference/data-types/data-types-binary-encoding) reference, so a `Native` reader does not have to recover them from the C++ source.
-:::
+</Note>
 
 ### Versioned types {#versioned-types}
 
@@ -1182,9 +1184,9 @@ The keys are indices into the dict; each index is `1 << key_type_code` bytes (1,
 
 The state prefix is read at the start of every block whose row count is greater than zero — header blocks (rows = 0) and empty blocks emit nothing. Within a block, `keys_count` equals the row count, `dict_size` equals the number of values in the dict stream, and each key fits in `1 << key_type_code` bytes.
 
-:::note
+<Note>
 In the `Native` format each block ships a **self-contained, block-local dictionary** — there is no cross-block dictionary state. The Native writer sets `low_cardinality_max_dictionary_size = 0`, so `SerializationLowCardinality` never builds a shared dictionary: every non-empty block writes its keys as block-local additional keys with `NeedGlobalDictionaryBit` unset (metadata `0x600`), and the Native reader rejects `NeedGlobalDictionaryBit` when `native_format` is true. A decoder must therefore reset the dictionary at each block and read the `dict_size` entries present in that block; carrying a dictionary over from a previous block would misread the next block's keys. (Persisting an LC dictionary across blocks is a MergeTree on-disk concern, not the Native wire layout.)
-:::
+</Note>
 
 `LowCardinality(String)` with values `['a', 'b', 'a', 'c', 'b']`:
 
@@ -1263,9 +1265,9 @@ To reconstruct, walk the discriminators left to right while keeping a per-type r
 
 The state prefix (the mode `UInt64`) is read at the start of every block with rows > 0; header and empty blocks emit nothing. Each non-NULL discriminator is less than the number of variant types, and variant type `i` is decoded for exactly `count[i]` rows.
 
-:::note
+<Note>
 Variant elements that are themselves stateful (`LowCardinality`, `Variant`, `Dynamic`, `JSON`) emit their own state prefix in the per-element state-prefix phase, after the mode `UInt64`. Leaf types and the plain composites (`Array`, `Tuple`, `Map` of leaf types) have empty state prefixes and compose freely.
-:::
+</Note>
 
 `Variant(String, UInt64)` with values `[42, 'hi', NULL]` (canonical order sorts `String` before `UInt64`, so discriminator 0 = String, 1 = UInt64):
 
@@ -1311,9 +1313,10 @@ Type string: `Dynamic` or `Dynamic(max_types=N)`. The `max_types` parameter boun
 - Over the native TCP protocol at its negotiated revision the default is **V2**. The `Native` writer leaves statistics disabled, so a default `V2` payload carries no per-variant statistics — after the type list come the nested `Variant` prefix and data directly. (Per-variant statistics are a MergeTree on-disk concern, not part of the Native wire.)
 - The query setting `output_format_native_use_flattened_dynamic_and_json_serialization = 1` overrides both and emits **FLATTENED (version 3)** regardless of revision.
 
-:::note Scope
+<Note>
+**Scope**
 This page specifies only the **`FLATTENED`** layout. The non-flat `V1`/`V2`/`V3` binary layouts are the internal/on-disk representation (binary-encoded type lists, per-variant statistics) and are **not** specified here. A client that wants to decode `Dynamic` using this page must request `FLATTENED` by setting `output_format_native_use_flattened_dynamic_and_json_serialization = 1`; the layout below assumes that setting. Because the version byte heads the prefix, a decoder can detect the actual encoding it received and reject `V1`/`V2`/`V3` if it only implements `FLATTENED`.
-:::
+</Note>
 
 The **FLATTENED (version 3)** layout selected by that setting:
 
@@ -1334,9 +1337,9 @@ The discriminator width is the smallest unsigned integer that can index `num_typ
 
 The state prefix (version + type list) is read at the start of every block with rows > 0; header and empty blocks emit nothing.
 
-:::note
+<Note>
 Runtime types whose serialization is stateful (`LowCardinality`, `Variant`, `Dynamic`, `JSON`) carry nested state prefixes after the type-name list.
-:::
+</Note>
 
 The runtime type list normally follows the `Variant` canonicalization — the regular variant slots are written in `DataTypeVariant` (type-name) order, so the wire order does not follow insertion order. It is **not always** globally sorted, however: types that overflowed into the shared variant (for example under `Dynamic(max_types=N)`) are appended after the regular slots in first-seen order, so the tail of the list can break type-name order. A decoder must therefore treat the transmitted type list as authoritative for discriminator assignment and must not re-sort it itself. For rows `[42::UInt64, "hi", NULL]` the two types are `String` and `UInt64`, and `"String"` sorts before `"UInt64"`, so the discriminators are `0` = String, `1` = UInt64, `2` = NULL:
 
@@ -1460,9 +1463,9 @@ On the native TCP protocol, compression is per-query, not per-connection. The Qu
 
 Over HTTP there is no Query packet: the `compress=1` query parameter selects framed output for that request, and `decompress=1` declares that the request body is framed. The `compress=1` output is written with the server's default codec (`LZ4`) rather than `network_compression_method`; the `decompress=1` reader takes the codec from each frame's method byte, so any codec is accepted on input.
 
-:::note
+<Note>
 With compression on, the server may also route columns through the parallel block-marshalling / `ColumnBLOB` path (`PARALLEL_BLOCK_MARSHALLING`, v54478) for blocks with more than one row. An implementation that compresses INSERT data must be prepared to handle (or explicitly opt out of) that path to avoid a desynchronized stream.
-:::
+</Note>
 
 ## Glossary {#glossary}
 

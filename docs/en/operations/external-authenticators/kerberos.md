@@ -64,13 +64,13 @@ With filtering by realm:
 </clickhouse>
 ```
 
-:::note
+<Note>
 You can define only one `kerberos` section. The presence of multiple `kerberos` sections will force ClickHouse to disable Kerberos authentication.
-:::
+</Note>
 
-:::note
+<Note>
 `principal` and `realm` sections cannot be specified at the same time. The presence of both `principal` and `realm` sections will force ClickHouse to disable Kerberos authentication.
-:::
+</Note>
 
 ## Kerberos as an external authenticator for existing users {#kerberos-as-an-external-authenticator-for-existing-users}
 
@@ -108,13 +108,14 @@ Example (goes into `users.xml`):
 </clickhouse>
 ```
 
-:::note
+<Note>
 Note that Kerberos authentication cannot be used alongside with any other authentication mechanism. The presence of any other sections like `password` alongside `kerberos` will force ClickHouse to shutdown.
-:::
+</Note>
 
-:::info Reminder
+<Info>
+**Reminder**
 Note, that now, once user `my_user` uses `kerberos`, Kerberos must be enabled in the main `config.xml` file as described previously.
-:::
+</Info>
 
 ### Enabling Kerberos using SQL {#enabling-kerberos-using-sql}
 

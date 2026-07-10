@@ -40,11 +40,11 @@ cat config.d/page_cache.yaml
 page_cache_max_size: 100G
 ```
 
-:::note
+<Note>
 The userspace page cache will use up to the specified amount of memory, but
 this memory amount is not reserved. The memory will be evicted when it is needed
 for other server needs.
-:::
+</Note>
 
 Next, enable its usage on the query-level:
 

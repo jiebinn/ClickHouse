@@ -63,14 +63,14 @@ The following aggregate functions are supported:
 - [`minMap` (`minMappedArrays`)](/sql-reference/aggregate-functions/reference/minMappedArrays.md)
 - [`maxMap` (`maxMappedArrays`)](/sql-reference/aggregate-functions/reference/maxMappedArrays.md)
 
-:::note
+<Note>
 Values of the `SimpleAggregateFunction(func, Type)` have the same `Type`, 
 so unlike with the `AggregateFunction` type there is no need to apply 
 `-Merge`/`-State` combinators.
 
 The `SimpleAggregateFunction` type has better performance than the `AggregateFunction`
 for the same aggregate functions.
-:::
+</Note>
 
 ## Example {#example}
 

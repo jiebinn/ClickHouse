@@ -34,9 +34,9 @@ Arguments also can be passed using [named collections](/operations/named-collect
 
 A table object with the same columns as the original PostgreSQL table.
 
-:::note
+<Note>
 In the `INSERT` query to distinguish table function `postgresql(...)` from table name with column names list you must use keywords `FUNCTION` or `TABLE FUNCTION`. See examples below.
-:::
+</Note>
 
 ## Implementation Details {#implementation-details}
 
@@ -57,19 +57,19 @@ SELECT * FROM postgresql('localhost:5432', 'test', query('SELECT a, b FROM t1 JO
 
 This is useful to push down joins, aggregations or any other processing to PostgreSQL. Such a table is read-only: `INSERT` into it is not allowed. The same syntax is supported by the [`PostgreSQL`](/engines/table-engines/integrations/postgresql) table engine.
 
-:::note
+<Note>
 The subquery form `(SELECT ...)` is parsed by ClickHouse and re-serialized in the PostgreSQL dialect (PostgreSQL identifier quoting and string-literal escaping) before being sent to the server. It must therefore be valid ClickHouse SQL. To pass PostgreSQL-specific syntax that ClickHouse does not parse, use the `query('...')` form, whose text is sent to PostgreSQL verbatim.
 
 Any outer `WHERE`, `LIMIT`, aggregation, etc. of the surrounding ClickHouse query is **not** pushed down into the passed query — it is applied in ClickHouse after the full query result is fetched. To restrict the data read from PostgreSQL, put the filter inside the passed query. With [`external_table_strict_query = 1`](/operations/settings/settings#external_table_strict_query) an outer filter that cannot be pushed down is rejected with an exception instead of being applied locally.
-:::
+</Note>
 
 `INSERT` queries on PostgreSQL side run as `COPY "table_name" (field1, field2, ... fieldN) FROM STDIN` inside PostgreSQL transaction with auto-commit after each `INSERT` statement.
 
 PostgreSQL Array types converts into ClickHouse arrays.
 
-:::note
+<Note>
 Be careful, in PostgreSQL an array data type column like Integer[] may contain arrays of different dimensions in different rows, but in ClickHouse it is only allowed to have multidimensional arrays of the same dimension in all rows.
-:::
+</Note>
 
 Supports multiple replicas that must be listed by `|`. For example:
 

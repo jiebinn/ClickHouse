@@ -21,9 +21,9 @@ The `/webterminal` endpoint is enabled by default and is controlled by the `enab
 </clickhouse>
 ```
 
-:::note
+<Note>
 `enable_webterminal` replaces the former `allow_experimental_webterminal` setting. The old name is still honored for backward compatibility when `enable_webterminal` is not set.
-:::
+</Note>
 
 ## Authentication {#authentication}
 

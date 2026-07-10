@@ -18,9 +18,9 @@ doc_type: 'reference'
 Differs from the [`TabSeparatedWithNamesAndTypes`](./TabSeparatedWithNamesAndTypes.md) format,
 in that the rows are written without escaping.
 
-:::note
+<Note>
 When parsing with this format, tabs or line-feeds are not allowed in each field.
-:::
+</Note>
 
 ## Example usage {#example-usage}
 

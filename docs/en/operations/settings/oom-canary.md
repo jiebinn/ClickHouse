@@ -12,10 +12,10 @@ import ExperimentalBadge from '@theme/badges/ExperimentalBadge';
 
 <ExperimentalBadge/>
 
-:::note
+<Note>
 The OOM canary is experimental and disabled by default. Its behavior may change
 between ClickHouse versions until production validation is complete.
-:::
+</Note>
 
 ## Overview {#overview}
 
@@ -72,12 +72,13 @@ worse.
   `CAP_IPC_LOCK` or a sufficient `RLIMIT_MEMLOCK`; if it fails the canary logs a
   warning and its memory may be swapped out, weakening it as an OOM target.
 
-:::warning memory.oom.group
+<Warning>
+**memory.oom.group**
 If cgroup v2 `memory.oom.group` is enabled for the server's cgroup, the kernel
 kills the entire cgroup as one unit on an OOM — the server dies together with the
 canary and the response never runs. The canary cannot protect the server in this
 mode; a warning is logged at startup.
-:::
+</Warning>
 
 ## Configuration {#configuration}
 

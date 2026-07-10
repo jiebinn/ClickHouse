@@ -16,9 +16,9 @@ If a setting with the specified name does not exist, then the query raises an ex
 ALTER TABLE [db].name [ON CLUSTER cluster] MODIFY|RESET SETTING ...
 ```
 
-:::note    
+<Note>
 These queries can be applied to [MergeTree](../../../engines/table-engines/mergetree-family/mergetree.md) tables only.
-:::
+</Note>
 
 ## MODIFY SETTING {#modify-setting}
 

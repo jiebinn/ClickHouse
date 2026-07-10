@@ -13,9 +13,9 @@ import CloudOnlyBadge from '@theme/badges/CloudOnlyBadge';
 
 Creates a masking policy, which allows dynamically transforming or masking column values for specific users or roles when they query a table.
 
-:::tip
+<Tip>
 Masking policies provide column-level data security by transforming sensitive data at query time without modifying the stored data.
-:::
+</Tip>
 
 Syntax:
 
@@ -57,9 +57,9 @@ In the `TO` section, specify which users and roles the policy should apply to.
 - `TO ALL`: Apply to all users
 - `TO ALL EXCEPT user1, user2`: Apply to all users except specified ones
 
-:::note
+<Note>
 Unlike row policies, masking policies do not affect users who don't have the policy applied. If no masking policy applies to a user, they see the original data.
-:::
+</Note>
 
 ## PRIORITY Clause {#priority-clause}
 
@@ -84,7 +84,8 @@ PRIORITY 10;
 -- analyst sees 'low@priority.com' because it's applied last
 ```
 
-:::note Performance Considerations
+<Note>
+**Performance Considerations**
 - Masking policies may impact query performance depending on expression complexity
 - Some optimizations may be disabled for tables with active masking policies
-:::
+</Note>

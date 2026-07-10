@@ -14,9 +14,9 @@ The `executable` table function creates a table based on the output of a user-de
 
 You can optionally include one or more input queries that stream their results to **stdin** for the script to read.
 
-:::note
+<Note>
 A key advantage between ordinary UDF functions and the `executable` table function and `Executable` table engine is that ordinary UDF functions cannot change the row count. For example, if the input is 100 rows, then the result must return 100 rows. When using the `executable` table function or `Executable` table engine, your script can make any data transformations you want, including complex aggregations.
-:::
+</Note>
 
 ## Syntax {#syntax}
 
@@ -31,9 +31,9 @@ executable(script_name, format, structure, [input_query...] [,SETTINGS ...])
 - `structure`: the table schema of the generated table
 - `input_query`: an optional query (or collection or queries) whose results are passed to the script via **stdin**
 
-:::note
+<Note>
 If you are going to invoke the same script repeatedly with the same input queries, consider using the [`Executable` table engine](../../engines/table-engines/special/executable.md).
-:::
+</Note>
 
 The following Python script is named `generate_random.py` and is saved in the `user_scripts` folder. It reads in a number `i` and prints `i` random strings, with each string preceded by a number that is separated by a tab:
 

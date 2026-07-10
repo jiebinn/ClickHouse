@@ -286,9 +286,9 @@ ENGINE = engine
 PRIMARY KEY(expr1[, expr2,...]);
 ```
 
-:::tip
+<Tip>
 You can't combine both ways in one query.
-:::
+</Tip>
 
 ## Constraints {#constraints}
 
@@ -372,9 +372,9 @@ ALTER TABLE codec_example MODIFY COLUMN float_value CODEC(Default);
 
 Codecs can be combined in a pipeline, for example, `CODEC(Delta, Default)`.
 
-:::tip
+<Tip>
 You can't decompress ClickHouse database files with external utilities like `lz4`. Instead, use the special [clickhouse-compressor](https://github.com/ClickHouse/ClickHouse/tree/master/programs/compressor) utility.
-:::
+</Tip>
 
 Compression is supported for the following table engines:
 
@@ -445,9 +445,9 @@ The codec accepts an optional variant argument:
 - `ALP(STD)` — Standard ALP variant. Represents each value as an exact scaled integer using decimal powers, then compresses the resulting integers with Frame-of-Reference and bit-packing. Non-representable values are stored as raw exceptions. Works best for numbers originating from decimals (e.g., measurements, prices).
 - `ALP(RD)` — Real Doubles variant. Reinterprets each value's bit pattern and splits it into a high part (sign + exponent + top mantissa bits) and a low part. High parts are dictionary-encoded (up to 8 entries), low parts are bit-packed. Works best when many values share the same high bits.
 
-:::note
+<Note>
 This codec is experimental and requires `SET allow_experimental_codecs = 1` to use.
-:::
+</Note>
 
 #### FPC {#fpc}
 
@@ -484,13 +484,13 @@ Encryption codecs:
 
 These codecs use a fixed nonce and encryption is therefore deterministic. This makes it compatible with deduplicating engines such as [ReplicatedMergeTree](../../../engines/table-engines/mergetree-family/replication.md) but has a weakness: when the same data block is encrypted twice, the resulting ciphertext will be exactly the same so an adversary who can read the disk can see this equivalence (although only the equivalence, without getting its content).
 
-:::note
+<Note>
 Most engines including the "\*MergeTree" family create index files on disk without applying codecs. This means plaintext will appear on disk if an encrypted column is indexed.
-:::
+</Note>
 
-:::note
+<Note>
 If you perform a SELECT query mentioning a specific value in an encrypted column (such as in its WHERE clause), the value may appear in [system.query_log](../../../operations/system-tables/query_log.md). You may want to disable the logging.
-:::
+</Note>
 
 **Example**
 
@@ -502,9 +502,9 @@ CREATE TABLE mytable
 ENGINE = MergeTree ORDER BY x;
 ```
 
-:::note
+<Note>
 If compression needs to be applied, it must be explicitly specified. Otherwise, only encryption will be applied to data.
-:::
+</Note>
 
 **Example**
 
@@ -518,9 +518,9 @@ ENGINE = MergeTree ORDER BY x;
 
 ## Temporary Tables {#temporary-tables}
 
-:::note
+<Note>
 Please note that temporary tables are not replicated. As a result, there is no guarantee that data inserted into a temporary table will be available in other replicas. The primary use case where temporary tables can be useful is for querying or joining small external datasets during a single session.
-:::
+</Note>
 
 ClickHouse supports temporary tables which have the following characteristics:
 
@@ -550,10 +550,10 @@ It's possible to use tables with [ENGINE = Memory](../../../engines/table-engine
 
 The `REPLACE` statement allows you to update a table [atomically](/concepts/glossary#atomicity).
 
-:::note
+<Note>
 This statement is supported for the [`Atomic`](../../../engines/database-engines/atomic.md) and [`Replicated`](../../../engines/database-engines/replicated.md) database engines, 
 which are the default database engines for ClickHouse and ClickHouse Cloud respectively.
-:::
+</Note>
 
 Ordinarily, if you need to delete some data from a table, 
 you can create a new table and fill it with a `SELECT` statement that does not retrieve unwanted data, 
@@ -589,9 +589,9 @@ WHERE CounterID <12345;
 {CREATE [OR REPLACE] | REPLACE} TABLE [db.]table_name
 ```
 
-:::note
+<Note>
 All syntax forms for the `CREATE` statement also work for this statement. Invoking `REPLACE` for a non-existent table will cause an error.
-:::
+</Note>
 
 ### Examples: {#examples}
 
@@ -728,7 +728,7 @@ ENGINE = engine
 COMMENT 'Comment'
 ```
 
-:::note
+<Note>
 The `COMMENT` clause must be specified **after** any storage-specific clauses such as `PARTITION BY`, `ORDER BY`, and storage-specific `SETTINGS`.
 
 After the `COMMENT` clause, only query-specific `SETTINGS` (like `max_threads`, etc.) will be parsed, not storage-related settings.
@@ -738,7 +738,7 @@ This means the correct clause order is:
 - storage clauses
 - `COMMENT`
 - query settings (if any)
-:::
+</Note>
 
 **Example**
 

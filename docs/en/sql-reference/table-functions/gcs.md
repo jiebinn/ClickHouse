@@ -22,10 +22,11 @@ gcs(url [, NOSIGN | hmac_key, hmac_secret] [,format] [,structure] [,compression_
 gcs(named_collection[, option=value [,..]])
 ```
 
-:::tip GCS
+<Tip>
+**GCS**
 The GCS Table Function integrates with Google Cloud Storage by using the GCS XML API and HMAC keys. 
 See the [Google interoperability docs]( https://cloud.google.com/storage/docs/interoperability) for more details about the endpoint and HMAC.
-:::
+</Tip>
 
 ## Arguments {#arguments}
 
@@ -38,7 +39,8 @@ See the [Google interoperability docs]( https://cloud.google.com/storage/docs/in
 | `structure`                  | Structure of the table. Format `'column1_name column1_type, column2_name column2_type, ...'`.                                                                                            |
 | `compression_method`         | Parameter is optional. Supported values: `none`, `gzip` or `gz`, `brotli` or `br`, `xz` or `LZMA`, `zstd` or `zst`. By default, it will autodetect compression method by file extension. |
 
-:::note GCS
+<Note>
+**GCS**
 The GCS path is in this format as the endpoint for the Google XML API is different than the JSON API:
 
 ```text
@@ -46,7 +48,7 @@ The GCS path is in this format as the endpoint for the Google XML API is differe
 ```
 
 and not ~~https://storage.cloud.google.com~~.
-:::
+</Note>
 
 Arguments can also be passed using [named collections](/operations/named-collections.md). In this case `url`, `format`, `structure`, `compression_method` work in the same way, and some extra parameters are supported:
 
@@ -134,9 +136,9 @@ FROM gcs('https://storage.googleapis.com/clickhouse_public_datasets/my-test-buck
 └─────────┘
 ```
 
-:::warning
+<Warning>
 If your listing of files contains number ranges with leading zeros, use the construction with braces for each digit separately or use `?`.
-:::
+</Warning>
 
 Count the total amount of rows in files named `file-000.csv`, `file-001.csv`, ... , `file-999.csv`:
 

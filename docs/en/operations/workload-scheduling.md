@@ -129,17 +129,17 @@ CREATE OR REPLACE WORKLOAD all SETTINGS max_io_requests = 100, max_bytes_per_sec
 
 Also note that workload or resource could not be dropped if it is referenced from another workload. To update a definition of a workload use `CREATE OR REPLACE WORKLOAD` query.
 
-:::note
+<Note>
 Workload settings are translated into a proper set of scheduling nodes. For lower-level details, see the description of the scheduling node [types and options](#hierarchy).
-:::
+</Note>
 
 ## Workload markup {#workload-markup}
 
 Queries can be marked with setting `workload` to distinguish different workloads. If `workload` is not set, then the value "default" is used. Note that you are able to specify the other value using settings profiles. Setting constraints can be used to make `workload` constant if you want all queries from the user to be marked with fixed value of `workload` setting.
 
-:::warning
+<Warning>
 Query setting `workload` can only refer to leaf workloads (i.e. workloads without children).
-:::
+</Warning>
 
 ```sql
 SELECT count() FROM my_table WHERE value = 42 SETTINGS workload = 'production'
@@ -194,13 +194,13 @@ CPU scheduling is not supported for merges and mutations yet.
 
 To provide fair allocations for workload it is necessary to perform preemption and down-scaling during query execution. Preemption is enabled with `cpu_slot_preemption` server setting. If it is enabled, every thread renews its CPU slot periodically (according to `cpu_slot_quantum_ns` server setting). Such a renewal can block execution if CPU is overloaded. When execution is blocked for a prolonged time (see `cpu_slot_preemption_timeout_ms` server setting), the query scales down and the number of concurrently running threads decreases dynamically. Note that CPU time fairness is guaranteed between workloads, but between queries inside the same workload it might be violated in some corner cases.
 
-:::warning
+<Warning>
 Slot scheduling provides a way to control [query concurrency](/operations/settings/settings.md#max_threads) but does not guarantee fair CPU time allocation unless server setting `cpu_slot_preemption` is set to `true`, otherwise fairness is provided based on number of CPU slot allocations among competing workloads. It does not imply equal amount of CPU seconds because without preemption CPU slot may be held indefinitely. A thread acquires a slot at the beginning and release when work is done.
-:::
+</Warning>
 
-:::note
+<Note>
 Declaring CPU resource disables effect of [`concurrent_threads_soft_limit_num`](server-configuration-parameters/settings.md#concurrent_threads_soft_limit_num) and [`concurrent_threads_soft_limit_ratio_to_cores`](server-configuration-parameters/settings.md#concurrent_threads_soft_limit_ratio_to_cores) settings. Instead, workload setting `max_concurrent_threads` is used to limit the number of CPUs allocated for a specific workload. To achieve the previous behavior create only WORKER THREAD resource, set `max_concurrent_threads` for the workload `all` to the same value as `concurrent_threads_soft_limit_num` and use `workload = "all"` query setting. This configuration corresponds to [`concurrent_threads_scheduler`](server-configuration-parameters/settings.md#concurrent_threads_scheduler) setting set "fair_round_robin" value.
-:::
+</Note>
 
 ## Threads vs. CPUs {#threads_vs_cpus}
 
@@ -208,9 +208,9 @@ There are two ways to control CPU consumption of a workload:
 * Thread number limit: `max_concurrent_threads` and `max_concurrent_threads_ratio_to_cores`
 * CPU throttling: `max_cpus`, `max_cpu_share` and `max_burst_cpu_seconds`
 
-:::warning
+<Warning>
 CPU throttling settings are active only if `cpu_slot_preemption` server setting is enabled and ignored otherwise.
-:::
+</Warning>
 
 The first allows one to dynamically control how many threads are spawned for a query, depending on the current server load. It effectively lowers what `max_threads` query setting dictates. The second throttles CPU consumption of the workload using token bucket algorithm. It does not affect thread number directly, but throttles the total CPU consumption of all threads in the workload.
 
@@ -235,15 +235,15 @@ CREATE WORKLOAD development IN all SETTINGS max_cpu_share = 0.3
 
 Here we limit the total number of threads for all queries to be x2 of the available CPUs. Admin workload is limited to exactly two threads at most, regardless of the number of available CPUs. Admin has priority -1 (less than default 0) and it gets any CPU slot first if required. When the admin does not run queries, CPU resources are divided among production and development workloads. Guaranteed shares of CPU time are based on weights (4 to 1): At least 80% goes to production (if required), and at least 20% goes to development (if required). While weights form guarantees, CPU throttling forms limits: production is not limited and can consume 100%, while development has a limit of 30%, which is applied even if there are no queries from other workloads. Production workload is not a leaf, so its resources are split among analytics and ingestion according to weights (3 to 1). It means that analytics has a guarantee of at least 0.8 * 0.75 = 60%, and based on `max_cpu_share`, it has a limit of 70% of total CPU resources. While ingestion is left with a guarantee of at least 0.8 * 0.25 = 20%, it has no upper limit.
 
-:::note
+<Note>
 If you want to maximize CPU utilization on your ClickHouse server, avoid using `max_cpus` and `max_cpu_share` for the root workload `all`. Instead, set a higher value for `max_concurrent_threads`. For example, on a system with 8 CPUs, set `max_concurrent_threads = 16`. This allows 8 threads to run CPU tasks while 8 other threads can handle I/O operations. Additional threads will create CPU pressure, ensuring scheduling rules are enforced. In contrast, setting `max_cpus = 8` will never create CPU pressure because the server cannot exceed the 8 available CPUs.
-:::
+</Note>
 
 ## Memory reservations {#memory-reservations}
 
-:::note
+<Note>
 Memory reservation scheduling is experimental. It takes effect only when a `MEMORY RESERVATION` resource exists, and its SQL surface and behavior may change in future releases. It is not yet supported for merges and mutations, and eviction of a running query is best-effort: it takes effect at the query's next memory sync point rather than instantly.
-:::
+</Note>
 
 To enable memory reservations for workloads create MEMORY RESERVATION resource and set at least one limit for the total memory reserved using workload settings:
 
@@ -288,9 +288,9 @@ Every workload with a `max_memory` limit ensures that the total memory allocated
 * Pending allocation cannot kill an allocation of the same precedence. Note that running allocations of the same precedence may evict each other based on normalized memory usage.
 If eviction is prevented or does not free enough memory, the new allocation is blocked until enough memory is freed. These rules allow queueing of excessive queries based on memory pressure and provide a convenient way to avoid MEMORY_LIMIT_EXCEEDED errors.
 
-:::note
+<Note>
 Workload limits are independent from other ways to limit memory consumption like [max_memory_usage](/operations/settings/settings.md#max_memory_usage) query setting. They could be used together to achieve better control over memory consumption. It is possible to set independent memory limits based on users (not workloads). This is less flexible and does not provide features like memory reservation and queueing of pending queries. See [Memory overcommit](settings/memory-overcommit.md)
-:::
+</Note>
 
 Workload setting `max_waiting_queries` limits the number of pending allocations for the workload. When the limit is reached, the server returns an error `SERVER_OVERLOADED`. Note that `max_waiting_queries` is not inherited by children workloads and makes sense only for leaf workloads.
 
@@ -333,9 +333,9 @@ Workload settings `max_queries_per_second` and `max_burst_queries` limit the num
 
 Workload setting `max_waiting_queries` limits the number of waiting queries for the workload. When the limit is reached, the server returns an error `SERVER_OVERLOADED`. Note that `max_waiting_queries` is not inherited by children workloads and makes sense only for leaf workloads.
 
-:::note
+<Note>
 Blocked queries will wait indefinitely and do not appear in `SHOW PROCESSLIST` until all constraints are satisfied.
-:::
+</Note>
 
 ## Workloads and resources storage {#workload_entity_storage}
 
@@ -378,9 +378,9 @@ Another use case is different configuration for different nodes in a heterogeneo
 
 To enforce all queries to follow resource scheduling policies there is a server setting `throw_on_unknown_workload`. If it is set to `true` then every query is required to use valid `workload` query setting, otherwise `RESOURCE_ACCESS_DENIED` exception is thrown. If it is set to `false` then such a query does not use resource scheduler, i.e. it will get unlimited access to any `RESOURCE`. Query setting 'use_concurrency_control = 0' allows query to avoid CPU scheduler and get unlimited access to CPU. To enforce CPU scheduling create a setting constraint to keep 'use_concurrency_control' read-only constant value.
 
-:::note
+<Note>
 Do not set `throw_on_unknown_workload` to `true` unless `CREATE WORKLOAD default` is executed. It could lead to server startup issues if a query without explicit setting `workload` is executed during startup.
-:::
+</Note>
 
 ### Scheduling nodes hierarchy {#hierarchy}
 

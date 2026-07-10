@@ -40,9 +40,9 @@ Different client and server versions are compatible with one another, but some f
 
 ## Run {#run}
 
-:::note
+<Note>
 If you only downloaded but did not install ClickHouse, use `./clickhouse client` instead of `clickhouse-client`.
-:::
+</Note>
 
 To connect to a ClickHouse server, run:
 
@@ -114,9 +114,9 @@ The format looks like this:
 
 See the [section on configuration files](#configuration_files) for more information.
 
-:::note
+<Note>
 To concentrate on the query syntax, the rest of the examples leave off the connection details (`--host`, `--port`, etc.). Remember to add them when you use the commands.
-:::
+</Note>
 
 ## Interactive mode {#interactive-mode}
 
@@ -215,11 +215,11 @@ You can use the following aliases from within the REPL:
 
 The full list with all available keyboard shortcuts is available at [replxx](https://github.com/AmokHuginnsson/replxx/blob/1f149bf/src/replxx_impl.cxx#L262).
 
-:::tip
+<Tip>
 To configure the correct work of the meta key (Option) on MacOS:
 
 iTerm2: Go to Preferences -> Profile -> Keys -> Left Option key and click Esc+
-:::
+</Tip>
 
 ## Batch mode {#batch-mode}
 
@@ -869,9 +869,9 @@ All command-line options can be specified directly on the command line or as def
 | `--tls-sni-override <server name>`       | If using TLS, the server name (SNI) to pass in the handshake.                                                                                                                                                                                                                                                                                                    | The host provided via `-h` or `--host`.                                                                                                        |
 | `-u [ --user ] <username>`       | The database user to connect as.                                                                                                                                                                                                                                                                                                   | `default`                                                                                                        |
 
-:::note
+<Note>
 Instead of the `--host`, `--port`, `--user` and `--password` options, the client also supports [connection strings](#connection_string).
-:::
+</Note>
 
 ### Query options {#command-line-options-query}
 

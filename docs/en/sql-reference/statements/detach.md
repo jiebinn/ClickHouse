@@ -64,9 +64,9 @@ Received exception from server (version 21.4.1):
 Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Table default.test does not exist.
 ```
 
-:::note
+<Note>
 In ClickHouse Cloud users should use the `PERMANENTLY` clause e.g. `DETACH TABLE <table> PERMANENTLY`. If this clause is not used, tables will be reattached on cluster restart e.g. during upgrades.
-:::
+</Note>
 
 **See Also**
 

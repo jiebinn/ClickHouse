@@ -8,7 +8,7 @@ title: 'Float32 | Float64 | BFloat16 Types'
 doc_type: 'reference'
 ---
 
-:::note
+<Note>
 If you need accurate calculations, in particular if you work with financial or business data requiring a high precision, you should consider using [Decimal](../data-types/decimal.md) instead. 
 
 [Floating Point Numbers](https://en.wikipedia.org/wiki/IEEE_754) might lead to inaccurate results as illustrated below:
@@ -38,7 +38,7 @@ SELECT sumKahan(my_float), sumKahan(my_decimal) FROM float_vs_decimal;
 │         499693.605 │           499693.605 │
 └────────────────────┴──────────────────────┘
 ```
-:::
+</Note>
 
 The equivalent types in ClickHouse and in C are given below:
 
@@ -161,6 +161,6 @@ It is useful for machine learning and AI applications.
 ClickHouse supports conversions between `Float32` and `BFloat16` which 
 can be done using the [`toFloat32()`](../functions/type-conversion-functions.md/#toFloat32) or [`toBFloat16`](../functions/type-conversion-functions.md/#toBFloat16) functions.
 
-:::note
+<Note>
 Most other operations are not supported.
-:::
+</Note>

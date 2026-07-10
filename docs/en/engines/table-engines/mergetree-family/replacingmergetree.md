@@ -14,9 +14,9 @@ Data deduplication occurs only during a merge. Merging occurs in the background 
 
 Thus, `ReplacingMergeTree` is suitable for clearing out duplicate data in the background in order to save space, but it does not guarantee the absence of duplicates.
 
-:::note
+<Note>
 A detailed guide on ReplacingMergeTree, including best practices and how to optimize performance, is available [here](/guides/replacing-merge-tree).
-:::
+</Note>
 
 ## Creating a table {#creating-a-table}
 
@@ -36,9 +36,9 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
 
 For a description of request parameters, see [statement description](../../../sql-reference/statements/create/table.md).
 
-:::note
+<Note>
 Uniqueness of rows is determined by the `ORDER BY` table section, not `PRIMARY KEY`.
-:::
+</Note>
 
 ## ReplacingMergeTree parameters {#replacingmergetree-parameters}
 
@@ -100,7 +100,7 @@ SELECT * FROM mySecondReplacingMT FINAL;
 
   Column data type — `UInt8`.
 
-:::note
+<Note>
 `is_deleted` can only be enabled when `ver` is used.
 
 No matter the operation on the data, the version should be increased. If two inserted rows have the same version number, the last inserted row is kept.
@@ -114,7 +114,7 @@ To permanently drop such delete rows, enable the table setting `allow_experiment
 all into a single part and remove any delete rows.
 
 2. Manually run `OPTIMIZE TABLE table [PARTITION partition | PARTITION ID 'partition_id'] FINAL CLEANUP`.
-:::
+</Note>
 
 Example:
 ```sql
@@ -157,9 +157,9 @@ When creating a `ReplacingMergeTree` table the same [clauses](../../../engines/t
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-:::note
+<Note>
 Do not use this method in new projects and, if possible, switch old projects to the method described above.
-:::
+</Note>
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]

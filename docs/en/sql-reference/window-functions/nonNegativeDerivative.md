@@ -13,11 +13,11 @@ This is a ClickHouse-specific window function, not part of standard SQL.
 For each row, the derivative is computed against the *previous row in the window's evaluation order*, which is determined by the window's `ORDER BY` clause - not by `timestamp_column`.
 The `timestamp_column` argument is read only to measure the elapsed time between the current row and that previous row; it does not order the rows itself.
 
-:::warning
+<Warning>
 `nonNegativeDerivative` does not order rows by `timestamp_column`; the window's `ORDER BY` does.
 For the formula below to apply, `timestamp_column` must be strictly increasing in the window's evaluation order, so you should normally order the window by `timestamp_column` ascending (for example `... OVER (ORDER BY ts ASC)` together with `nonNegativeDerivative(metric, ts)`).
 Whenever the elapsed time between the current row and the previous row is non-positive - which happens with `ORDER BY timestamp_column DESC` or with duplicate (equal) timestamps - the function returns `0` for that row instead of following the formula.
-:::
+</Warning>
 
 The result is the rate of change of the metric per `INTERVAL`, with any negative value clamped to `0`.
 This is useful for monotonically increasing metrics, such as counters, where a decrease usually indicates a reset rather than a real negative rate.

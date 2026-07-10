@@ -9,12 +9,13 @@ doc_type: 'guide'
 
 A nested data structure is like a table inside a cell. The parameters of a nested data structure – the column names and types – are specified the same way as in a [CREATE TABLE](../../../sql-reference/statements/create/table.md) query. Each table row can correspond to any number of rows in a nested data structure.
 
-:::tip[Avoid using dots in column names]
+<Tip>
+**Avoid using dots in column names**
 Column names containing dots, columns sharing a common dot-prefix, and columns with the `Array` type can each be interpreted as part of a flattened Nested structure when `flatten_nested = 1` (the default). This can cause unexpected array-length validation on inserts and renaming restrictions.
 
 Avoid using dots in column names if possible.
 Use underscores (`_`) or another separator instead of dots in column names unless you intentionally need `Nested` semantics.
-:::
+</Tip>
 
 Example:
 
@@ -102,9 +103,9 @@ LIMIT 10
     └────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-:::tip
+<Tip>
 It is easiest to think of a nested data structure as a set of multiple column arrays of equal length.
-:::
+</Tip>
 
 ### Filtering Nested columns in WHERE {#filtering-nested-columns-in-where}
 

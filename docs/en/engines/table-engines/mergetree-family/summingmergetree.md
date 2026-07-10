@@ -46,9 +46,9 @@ When creating a `SummingMergeTree` table the same [clauses](../../../engines/tab
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-:::note
+<Note>
 Do not use this method in new projects and, if possible, switch the old projects to the method described above.
-:::
+</Note>
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -200,9 +200,9 @@ The same rules apply to the flattened sub-columns as to regular columns:
 - If `columns` is specified, only sub-columns of the listed `Tuple` columns are summed.
 - If all numeric sub-columns of a row are zero after summation, the row is deleted.
 
-:::note
+<Note>
 This setting is immutable and must be specified at table creation time.
-:::
+</Note>
 
 ```sql
 CREATE TABLE summing_tuples

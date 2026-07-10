@@ -8,9 +8,9 @@ doc_type: 'reference'
 
 You can use functions described in this chapter to introspect [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) and [DWARF](https://en.wikipedia.org/wiki/DWARF) for query profiling.
 
-:::note
+<Note>
 These functions are slow and may impose security considerations.
-:::
+</Note>
 
 For proper operation of introspection functions:
 

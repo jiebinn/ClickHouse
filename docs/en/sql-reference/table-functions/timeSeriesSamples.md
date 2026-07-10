@@ -29,6 +29,6 @@ SELECT * FROM timeSeriesSamples('db_name.time_series_table');
 SELECT * FROM timeSeriesSamples('db_name', 'time_series_table');
 ```
 
-:::note
+<Note>
 The function `timeSeriesSamples` has an alias `timeSeriesData` which is kept for backwards compatibility.
-:::
+</Note>

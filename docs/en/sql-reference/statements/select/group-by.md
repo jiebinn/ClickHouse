@@ -14,9 +14,9 @@ doc_type: 'reference'
 
 When you want to group data in the table by column numbers instead of column names, enable the setting [enable_positional_arguments](/operations/settings/settings#enable_positional_arguments).
 
-:::note
+<Note>
 There's an additional way to run aggregation over a table. If a query contains table columns only inside aggregate functions, the `GROUP BY clause` can be omitted, and aggregation by an empty set of keys is assumed. Such queries always return exactly one row.
-:::
+</Note>
 
 ## NULL Processing {#null-processing}
 
@@ -58,9 +58,9 @@ The subtotals are calculated in the reverse order: at first subtotals are calcul
 
 In the subtotals rows the values of already "grouped" key expressions are set to `0` or empty line.
 
-:::note
+<Note>
 Mind that [HAVING](/sql-reference/statements/select/having.md) clause can affect the subtotals results.
-:::
+</Note>
 
 **Example**
 
@@ -124,9 +124,9 @@ SELECT year, month, day, count(*) FROM t GROUP BY year, month, day WITH ROLLUP;
 
 In the subtotals rows the values of all "grouped" key expressions are set to `0` or empty line.
 
-:::note
+<Note>
 Mind that [HAVING](/sql-reference/statements/select/having.md) clause can affect the subtotals results.
-:::
+</Note>
 
 **Example**
 
@@ -223,9 +223,9 @@ This extra row is only produced in `JSON*`, `TabSeparated*`, and `Pretty*` forma
 - In `Template` format, the row is output according to specified template.
 - In the other formats it is not available.
 
-:::note
+<Note>
 totals is output in the results of `SELECT` queries, and is not output in `INSERT INTO ... SELECT`.
-:::
+</Note>
 
 `WITH TOTALS` can be run in different ways when [HAVING](/sql-reference/statements/select/having.md) is present. The behavior depends on the `totals_mode` setting.
 

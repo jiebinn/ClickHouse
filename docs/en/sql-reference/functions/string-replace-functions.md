@@ -9,9 +9,9 @@ keywords: ['string replacement']
 
 [General strings functions](string-functions.md) and [functions for searching in strings](string-search-functions.md) are described separately.
 
-:::note
+<Note>
 The documentation below is generated from the `system.functions` system table.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

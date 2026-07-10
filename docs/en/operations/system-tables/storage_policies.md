@@ -52,20 +52,21 @@ rule.
    volume is selected according to its `load_balancing` policy
    (`round_robin` or `least_used`).
 
-:::note Override
+<Note>
+**Override**
 If `min_free_disk_bytes_to_perform_insert` or
 `min_free_disk_ratio_to_perform_insert` is non-zero, the precedence above
 is bypassed. `INSERT` tries only the volume with the lowest
 `volume_priority` and throws `NOT_ENOUGH_SPACE` if no disk in that volume
 meets the threshold. Inserts into the `system` database are exempt.
-:::
+</Note>
 
-:::note
+<Note>
 `perform_ttl_move_on_insert` is read from the **TTL destination** volume,
 not from the source volume. For a `TO DISK 'X'` rule, the flag is read
 from the volume that contains disk `X`. Setting it on any other volume of
 the policy has no effect on the insert path.
-:::
+</Note>
 
 To force inserts to honour `volume_priority` even when an "already
 expired" TTL move rule applies, set `perform_ttl_move_on_insert = 0` on

@@ -88,9 +88,9 @@ SELECT groupNumericIndexedVectorStateIf('BSI', 32, 0)(UserID, PlayTime, day = '2
 └─────┴──────────────────────────────────────────────────────────────────────────┴───────────────────────────────────────┘
 ```
 
-:::note
+<Note>
 The documentation below is generated from the `system.functions` system table.
-:::
+</Note>
 
 <!-- 
 the tags below are used to generate the documentation from system tables, and should not be removed.

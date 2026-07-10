@@ -151,11 +151,11 @@ cat collatz.wasm | clickhouse client -q "
   SELECT 'collatz', code FROM input('code String') FORMAT RawBlob"
 ```
 
-:::note
+<Note>
 This pattern relies on the underlying distributed-write path visiting every replica within each shard, which only happens when the cluster is configured with `internal_replication=false`. With `internal_replication=true` (the default for clusters that use `ReplicatedMergeTree` to drive replication themselves), the insert is delivered to a single healthy replica per shard, and `system.webassembly_modules` is not replicated by that path — so some replicas will still be missing the module. In that configuration you need to insert against each replica individually, for example by iterating over `system.clusters` and writing via `remote(...)` per host, or by copying the binary into `user_scripts/wasm/` on every host.
 
 You can inspect `internal_replication` for a cluster with `SELECT cluster, shard_num, internal_replication FROM system.clusters`.
-:::
+</Note>
 
 After the fanned-out insert, the module is present on every replica and `CREATE FUNCTION ... ON CLUSTER` succeeds:
 
@@ -262,9 +262,9 @@ WebAssembly does not distinguish between signed and unsigned arguments, but rath
 
 ### ABI BUFFERED_V1
 
-:::note
+<Note>
 This ABI is experimental and subject to change in future releases.
-:::
+</Note>
 
 Processes entire blocks at once using a (de)serialization through WASM memory. Supports any argument and return types.
 

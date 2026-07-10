@@ -42,9 +42,10 @@ Every JWT presented to ClickHouse must contain the following claims:
 
 The `kid` (key ID) header claim is also required when JWKS-based key resolution is used.
 
-:::note JWKS mode supports RSA keys only
+<Note>
+**JWKS mode supports RSA keys only**
 While static-key providers accept any of `HS256`, `RS256`, or `ES256`, JWKS-based providers only accept JWKs whose `kty` is `RSA` (i.e., tokens signed with `RS256`). Tokens signed with HMAC (`HS256`) or EC (`ES256`) keys cannot be verified against a JWKS endpoint and will be rejected.
-:::
+</Note>
 
 ### Other recognized claims {#other-recognized-claims}
 
@@ -128,9 +129,9 @@ Reference the user by their current username:
 ALTER SETTINGS PROFILE my_profile ADD TO 'JWT::ClickHouse::my-service-id::jane.doe::<claims-hash>';
 ```
 
-:::note
+<Note>
 The username and UUID for a given identity can be found in the `name` and `id` columns of `system.users` while the user is active.
-:::
+</Note>
 
 Note that `ALTER USER` does not work on JWT users directly, as they are read-only. To assign settings profiles, quotas, or policies, use the `ALTER SETTINGS PROFILE`, `ALTER QUOTA`, or `ALTER ROW POLICY` statements as shown above.
 
@@ -172,9 +173,9 @@ Use the `--jwt` flag with `clickhouse-client` to authenticate with a pre-obtaine
 clickhouse-client --host your-instance.clickhouse.cloud --secure --jwt '<your_jwt_token>'
 ```
 
-:::note
+<Note>
 The `--jwt` flag is mutually exclusive with `--user`. When `--jwt` is specified, the username is derived from the token.
-:::
+</Note>
 
 ### HTTP interface {#http-interface}
 
@@ -185,9 +186,9 @@ curl -H 'Authorization: Bearer <your_jwt_token>' \
     'https://your-instance.clickhouse.cloud:8443/?query=SELECT+currentUser()'
 ```
 
-:::warning
+<Warning>
 Always send JWTs over HTTPS. A Bearer token sent over plain HTTP is exposed to anyone on the network path and is equivalent to leaking the credential.
-:::
+</Warning>
 
 ### OAuth2 device code login {#oauth2-device-code-login}
 

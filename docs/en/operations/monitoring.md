@@ -14,9 +14,9 @@ import Image from '@theme/IdealImage';
 
 # Monitoring
 
-:::note
+<Note>
 The monitoring data outlined in this guide is accessible in ClickHouse Cloud. In addition to being displayed through the built-in dashboard described below, both basic and advanced performance metrics can also be viewed directly in the main service console.
-:::
+</Note>
 
 You can monitor:
 

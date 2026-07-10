@@ -178,9 +178,9 @@ DROP TABLE IF EXISTS paimon_mv_dest SYNC;
 DROP TABLE IF EXISTS paimon_mv_source SYNC;
 ```
 
-:::note
+<Note>
 Stop the MV before dropping it to prevent background refresh from blocking DDL operations.
-:::
+</Note>
 
 ## Limitations {#limitations}
 

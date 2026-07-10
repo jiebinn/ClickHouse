@@ -25,9 +25,9 @@ ClickHouse supports several types of user defined functions (UDFs):
 
 <BetaBadge/>
 
-:::note
+<Note>
 In ClickHouse Cloud, executable UDFs are in public beta and are created through the Cloud console UI. See [User-defined functions in Cloud](/cloud/features/user-defined-functions) for the Cloud-specific workflow.
-:::
+</Note>
 
 ClickHouse can call any external executable program or script to process data.
 
@@ -488,9 +488,9 @@ Refer to the documentation on [WebAssembly User Defined Functions](wasm_udf.md) 
 <CloudNotSupportedBadge/>
 <ExperimentalBadge/>
 
-:::note
+<Note>
 This is an experimental feature that may change in backward-incompatible ways in future releases. Enable it with the [`allow_experimental_executable_udf_drivers`](../../operations/server-configuration-parameters/settings.md#allow_experimental_executable_udf_drivers) server setting.
-:::
+</Note>
 
 A *driver* is an operator-supplied adapter that turns a user code snippet into a runnable [executable UDF](#executable-user-defined-functions). When a function is created with `ENGINE = DriverName(...)`, ClickHouse runs the driver's `create_command`, passing it the function signature and the code body; the driver compiles or otherwise processes the body and prints an executable UDF configuration, which ClickHouse then stores and loads.
 

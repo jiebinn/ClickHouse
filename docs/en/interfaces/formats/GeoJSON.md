@@ -316,9 +316,9 @@ SELECT id, geometry, properties FROM london;
 
 ### Limitations {#writing-limitations}
 
-:::note
+<Note>
 ClickHouse's geo types carry no coordinate reference system, so the output assumes coordinates are already WGS84 longitude/latitude in `[longitude, latitude]` order, as [RFC 7946](https://datatracker.ietf.org/doc/html/rfc7946#section-4) requires. No reprojection or axis swap is performed, so projected coordinates — or data stored as `(latitude, longitude)` — produce structurally valid but non-conformant GeoJSON.
-:::
+</Note>
 
 The output reflects only what ClickHouse stores:
 

@@ -16,11 +16,12 @@ The expression following the `WHERE` clause is often used with [comparison](/sql
 
 The `WHERE` expression is evaluated on the ability to use indexes and partition pruning, if the underlying table engine supports that.
 
-:::note PREWHERE
+<Note>
+**PREWHERE**
 There is also a filtering optimization called [`PREWHERE`](../../../sql-reference/statements/select/prewhere.md).
 Prewhere is an optimization to apply filtering more efficiently.
 It is enabled by default even if `PREWHERE` clause is not specified explicitly.
-:::
+</Note>
 
 ## Testing for `NULL` {#testing-for-null}
 

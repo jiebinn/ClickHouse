@@ -47,9 +47,9 @@ ENGINE = PostgreSQL('host:port', 'database', 'user', 'password'[, `schema`, `use
 | INTEGER          | Nullable([Int32](../../sql-reference/data-types/int-uint.md))|
 | ARRAY            | [Array](../../sql-reference/data-types/array.md)             |
 
-:::note
+<Note>
 PostgreSQL `numeric(p, 0)` with a precision `p` greater than 76 (the maximum supported by `Decimal256`) — for example `numeric(78, 0)`, commonly used to store 256-bit integers — is mapped to [`Int256`](../../sql-reference/data-types/int-uint.md) instead of `Decimal`. Values that do not fit into the `Int256` range are rejected with an error.
-:::
+</Note>
 
 ## Examples of use {#examples-of-use}
 

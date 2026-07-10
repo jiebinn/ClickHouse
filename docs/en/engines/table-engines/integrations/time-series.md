@@ -23,12 +23,12 @@ metric_name1[tag1=value1, tag2=value2, ...] = {timestamp1: value1, timestamp2: v
 metric_name2[...] = ...
 ```
 
-:::info
+<Info>
 This is an experimental feature that may change in backwards-incompatible ways in the future releases.
 Enable usage of the TimeSeries table engine
 with [allow_experimental_time_series_table](/operations/settings/settings#allow_experimental_time_series_table) setting.
 Input the command `set allow_experimental_time_series_table = 1`.
-:::
+</Info>
 
 ## Syntax {#syntax}
 
@@ -40,9 +40,9 @@ CREATE TABLE name [(columns)] ENGINE=TimeSeries
 [METRICS db.metrics_table_name | [METRICS INNER COLUMNS (...)] [METRICS INNER ENGINE engine(arguments)]]
 ```
 
-:::note
+<Note>
 The keyword `SAMPLES` has an alias `DATA` which is kept for backwards compatibility.
-:::
+</Note>
 
 ## Usage {#usage}
 

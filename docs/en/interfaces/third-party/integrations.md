@@ -8,10 +8,11 @@ title: 'Integration Libraries from Third-party Developers'
 doc_type: 'reference'
 ---
 
-:::warning Disclaimer
+<Warning>
+**Disclaimer**
 ClickHouse, Inc. does **not** maintain the tools and libraries listed below and haven't done extensive testing to ensure their quality.
 For official integrations please see the [integrations page](/integrations).
-:::
+</Warning>
 
 ## Infrastructure products {#infrastructure-products}
 

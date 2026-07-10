@@ -6,11 +6,11 @@ title: 'Functions for Working with Embedded Dictionaries'
 doc_type: 'reference'
 ---
 
-:::note
+<Note>
 In order for the functions below to work, the server config must specify the paths and addresses for getting all the embedded dictionaries. The dictionaries are loaded at the first call of any of these functions. If the reference lists can't be loaded, an exception is thrown.
 
 As such, the examples shown in this section will throw an exception in [ClickHouse Fiddle](https://fiddle.clickhouse.com/) and in quick release and production deployments by default, unless first configured.
-:::
+</Note>
 
 For information about creating reference lists, see the section ["Dictionaries"](../statements/create/dictionary/embedded).
 

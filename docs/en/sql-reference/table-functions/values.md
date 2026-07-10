@@ -11,9 +11,9 @@ doc_type: 'reference'
 The `Values` table function allows you to create temporary storage which fills 
 columns with values. It is useful for quick testing or generating sample data.
 
-:::note
+<Note>
 Values is a case-insensitive function. I.e. `VALUES` or `values` are both valid.
-:::
+</Note>
 
 ## Syntax {#syntax}
 
@@ -42,11 +42,11 @@ VALUES(
 - `(value1_row1, value2_row1)`. [Tuples](/sql-reference/data-types/tuple) 
    containing values of any type.
 
-:::note
+<Note>
 Comma separated tuples can be replaced by single values as well. In this case
 each value is taken to be a new row. See the [examples](#examples) section for
 details.
-:::
+</Note>
 
 ## Returned value {#returned-value}
 
@@ -222,10 +222,10 @@ FROM (VALUES (1, 'a'), (2, 'b')) AS t1(id, val)
 JOIN (VALUES (1, 'x'), (2, 'y')) AS t2(id, val2) ON t1.id = t2.id;
 ```
 
-:::note
+<Note>
 Column aliases after `AS t(col1, col2, ...)` follow the standard SQL syntax for
 naming columns of derived tables. If omitted, columns are named `c1`, `c2`, etc.
-:::
+</Note>
 
 ## See also {#see-also}
 

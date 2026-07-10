@@ -63,9 +63,9 @@ COMMENT 'Comment'
 
 <CloudNotSupportedBadge/>
 
-:::note
+<Note>
 Creating a dictionary with a configuration file is not applicable to ClickHouse Cloud. Please use DDL (see above), and create your dictionary as the `default` user.
-:::
+</Note>
 
 The dictionary configuration file has the following format:
 

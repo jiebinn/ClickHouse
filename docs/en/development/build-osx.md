@@ -8,9 +8,10 @@ keywords: ['MacOS', 'Mac', 'build']
 doc_type: 'guide'
 ---
 
-:::info This build guide is for contributors modifying ClickHouse itself.
+<Info>
+**This build guide is for contributors modifying ClickHouse itself.**
 If you are not changing ClickHouse source code, you can install pre-built ClickHouse as described in [Quick Start](https://clickhouse.com/docs/get-started/quick-start).
-:::
+</Info>
 
 ClickHouse can be compiled on macOS x86_64 (Intel) and arm64 (Apple Silicon) using on macOS 10.15 (Catalina) or higher.
 
@@ -29,10 +30,10 @@ brew update
 brew install ccache cmake ninja libtool gettext llvm lld binutils grep findutils nasm bash rust rustup
 ```
 
-:::note
+<Note>
 Apple uses a case-insensitive file system by default. While this usually does not affect compilation (especially scratch makes will work), it can confuse file operations like `git mv`.
 For serious development on macOS, make sure that the source code is stored on a case-sensitive disk volume, e.g. see [these instructions](https://brianboyko.medium.com/a-case-sensitive-src-folder-for-mac-programmers-176cc82a3830).
-:::
+</Note>
 
 ## Build ClickHouse {#build-clickhouse}
 
@@ -47,18 +48,18 @@ cmake --build build
 # The resulting binary will be created at: build/programs/clickhouse
 ```
 
-:::note
+<Note>
 If you are running into `ld: archive member '/' not a mach-o file in ...` errors during linking, you may need
 to use llvm-ar by setting flag `-DCMAKE_AR=/opt/homebrew/opt/llvm/bin/llvm-ar`.
-:::
+</Note>
 
 ## Caveats {#caveats}
 
 If you intend to run `clickhouse-server`, make sure to increase the system's `maxfiles` variable.
 
-:::note
+<Note>
 You'll need to use sudo.
-:::
+</Note>
 
 To do so, create the `/Library/LaunchDaemons/limit.maxfiles.plist` file with the following content:
 

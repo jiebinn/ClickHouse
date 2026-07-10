@@ -20,12 +20,12 @@ ClickHouse and Keeper allow you to control sampling using configs, query setting
 - Query the current heap profile directly from SQL using [`system.jemalloc_profile_text`](#fetching-heap-profiles-from-sql) (26.2+).
 - Flush heap profiles to disk and analyze them with [`jeprof`](#analyzing-heap-profile-files-with-jeprof).
 
-:::note
+<Note>
 
 This guide is applicable for versions 25.9+.
 For older versions, please check [allocation profiling for versions before 25.9](/operations/allocation-profiling-old.md).
 
-:::
+</Note>
 
 ## Sampling allocations {#sampling-allocations}
 
@@ -41,9 +41,10 @@ To sample and profile allocations, start ClickHouse/Keeper with the `jemalloc_en
 
 You can also enable sampling per query using the `jemalloc_enable_profiler` setting.
 
-:::warning Warning
+<Warning>
+**Warning**
 Because ClickHouse is an allocation-heavy application, jemalloc sampling may incur performance overhead.
-:::
+</Warning>
 
 ## Storing jemalloc samples in `system.trace_log` {#storing-jemalloc-samples-in-system-trace-log}
 
@@ -56,9 +57,10 @@ To enable it globally, use the `jemalloc_collect_global_profile_samples_in_trace
 </clickhouse>
 ```
 
-:::warning Warning
+<Warning>
+**Warning**
 Because ClickHouse is an allocation-heavy application, collecting all samples in system.trace_log may incur high load.
-:::
+</Warning>
 
 You can also enable it per query using the `jemalloc_collect_profile_samples_in_trace_log` setting.
 
@@ -82,10 +84,10 @@ Ok.
 Peak memory usage: 12.65 MiB.
 ```
 
-:::note
+<Note>
 If ClickHouse was started with `jemalloc_enable_global_profiler`, you don't have to enable `jemalloc_enable_profiler`.
 Same is true for `jemalloc_collect_global_profile_samples_in_trace_log` and `jemalloc_collect_profile_samples_in_trace_log`.
-:::
+</Note>
 
 Flush the `system.trace_log`:
 
@@ -182,9 +184,9 @@ ORDER BY per_trace_sum ASC
 
 ## Jemalloc web UI {#jemalloc-web-ui}
 
-:::note
+<Note>
 This section is applicable for versions 26.2+.
-:::
+</Note>
 
 ClickHouse provides a built-in web UI for viewing jemalloc memory statistics at the `/jemalloc` HTTP endpoint.
 It displays live memory metrics with charts, including allocated, active, resident, and mapped memory, as well as per-arena and per-bin statistics.
@@ -220,11 +222,12 @@ The Keeper UI is available on the HTTP control port. This port is **disabled by 
 
 Once enabled, the UI provides the same visualizations as the server — Summary, Allocations, Arenas, Operations, Global Profiler, and Raw Output — except for the Query Profiler tab which requires SQL and `system.trace_log`.
 
-:::warning Security
+<Warning>
+**Security**
 The Keeper HTTP control port does not have application-level authentication. Unlike the ClickHouse Server jemalloc UI — where all data queries go through the SQL HTTP handler and require user/password credentials — the Keeper REST API endpoints are unauthenticated. This is consistent with other Keeper HTTP control endpoints (commands, storage, dashboard).
 
 Restrict access to this port using network-level controls: bind Keeper to localhost, use firewall rules, or place it behind a reverse proxy with authentication. When no `listen_host` is configured, Keeper defaults to listening on localhost only.
-:::
+</Warning>
 
 Keeper also exposes REST API endpoints for programmatic access:
 
@@ -237,9 +240,9 @@ Keeper also exposes REST API endpoints for programmatic access:
 
 ## Fetching heap profiles from SQL {#fetching-heap-profiles-from-sql}
 
-:::note
+<Note>
 This section is applicable for versions 26.2+.
-:::
+</Note>
 
 The `system.jemalloc_profile_text` system table lets you fetch and view the current jemalloc heap profile directly from SQL, without needing external tools or flushing to disk first.
 
@@ -360,11 +363,11 @@ You can then analyze it directly with `jeprof`:
 jeprof /tmp/jemalloc_clickhouse.12345.0.heap.symbolized --output_format [ > output_file]
 ```
 
-:::note
+<Note>
 
 **No binary required**: When using symbolized profiles (`.symbolized` files), you don't need to provide the ClickHouse binary path to `jeprof`. This makes it much easier to analyze profiles on different machines or after the binary has been updated.
 
-:::
+</Note>
 
 If you have an older non-symbolized heap profile and still have access to the ClickHouse binary, you can use the traditional approach:
 
@@ -372,7 +375,7 @@ If you have an older non-symbolized heap profile and still have access to the Cl
 jeprof path/to/clickhouse path/to/heap/profile --output_format [ > output_file]
 ```
 
-:::note
+<Note>
 
 For non-symbolized profiles, `jeprof` uses `addr2line` to generate stacktraces which can be really slow.
 If that's the case, it is recommended to install an [alternative implementation](https://github.com/gimli-rs/addr2line) of the tool.
@@ -388,7 +391,7 @@ Alternatively, `llvm-addr2line` works equally well (But note, that `llvm-objdump
 
 And later use it like this `jeprof --tools addr2line:/usr/bin/llvm-addr2line,nm:/usr/bin/llvm-nm,objdump:/usr/bin/objdump,c++filt:/usr/bin/llvm-cxxfilt`
 
-:::
+</Note>
 
 When comparing two profiles, you can use the `--base` argument:
 
@@ -464,9 +467,10 @@ It is recommended to check `jemalloc`s [reference page](https://jemalloc.net/jem
 
 ClickHouse/Keeper expose `jemalloc` related metrics in many different ways.
 
-:::warning Warning
+<Warning>
+**Warning**
 It's important to be aware that none of these metrics are synchronized with each other and values may drift.
-:::
+</Warning>
 
 ### System table `asynchronous_metrics` {#system-table-asynchronous_metrics}
 

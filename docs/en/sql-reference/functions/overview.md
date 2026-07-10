@@ -11,9 +11,9 @@ There are at least\* two types of functions - regular functions (they are just c
 
 In this section we discuss regular functions. For aggregate functions, see the section "Aggregate functions".
 
-:::note 
+<Note>
 There is a third type of function that the ['arrayJoin' function](../functions/array-join.md) belongs to. And [table functions](../table-functions/index.md) can also be mentioned separately.
-:::
+</Note>
 
 ## Strong Typing {#strong-typing}
 

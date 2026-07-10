@@ -7,9 +7,10 @@ title: 'Quotas'
 doc_type: 'guide'
 ---
 
-:::note Quotas in ClickHouse Cloud
+<Note>
+**Quotas in ClickHouse Cloud**
 Quotas are supported in ClickHouse Cloud but must be created using the [DDL syntax](/sql-reference/statements/create/quota). The XML configuration approach documented below is **not supported**.
-:::
+</Note>
 
 Quotas allow you to limit resource usage over a period of time or track the use of resources.
 Quotas are set up in the user config, which is usually 'users.xml'.

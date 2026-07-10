@@ -82,13 +82,13 @@ Setting fields:
 | `query` | The custom query. Optional. |
 | `enable_compression` | Enables zlib compression for the MySQL protocol connection. When set to `1`, ClickHouse requests protocol-level compression from the MySQL server. Can also be set per-replica inside `<replica>`. Default value: `0`. |
 
-:::note
+<Note>
 The `table` or `where` fields cannot be used together with the `query` field. And either one of the `table` or `query` fields must be declared.
-:::
+</Note>
 
-:::note
+<Note>
 There is no explicit parameter `secure`. When establishing an SSL-connection security is mandatory.
-:::
+</Note>
 
 MySQL can be connected to on a local host via sockets. To do this, set `host` and `socket`.
 

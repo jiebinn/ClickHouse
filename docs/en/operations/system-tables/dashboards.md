@@ -12,10 +12,10 @@ doc_type: 'reference'
 Contains queries used by `/dashboard` page accessible though [HTTP interface](/interfaces/http).
 This table can be useful for monitoring and troubleshooting. The table contains a row for every chart in a dashboard.
 
-:::note
+<Note>
 `/dashboard` page can render queries not only from `system.dashboards`, but from any table with the same schema.
 This can be useful to create custom dashboards.
-:::
+</Note>
 
 ## Columns {#columns}
 

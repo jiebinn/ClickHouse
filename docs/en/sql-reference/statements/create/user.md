@@ -63,14 +63,14 @@ Password complexity requirements can be edited in [config.xml](/operations/confi
 </clickhouse>
 ```
 
-:::note
+<Note>
 In ClickHouse Cloud, by default, passwords must meet the following complexity requirements:
 - Be at least 12 characters long
 - Contain at least 1 numeric character
 - Contain at least 1 uppercase character
 - Contain at least 1 lowercase character
 - Contain at least 1 special character
-:::
+</Note>
 
 ## Examples {#examples}
 
@@ -86,9 +86,9 @@ In ClickHouse Cloud, by default, passwords must meet the following complexity re
     CREATE USER name2 IDENTIFIED WITH plaintext_password BY 'my_password'
     ```
 
-    :::tip
+    <Tip>
     The password is stored in a SQL text file in `/var/lib/clickhouse/access`, so it's not a good idea to use `plaintext_password`. Try `sha256_password` instead, as demonstrated next...
-    :::
+    </Tip>
 
 3. The most common option is to use a password that is hashed using SHA-256. ClickHouse will hash the password for you when you specify `IDENTIFIED WITH sha256_password`. For example:
 
@@ -103,9 +103,9 @@ In ClickHouse Cloud, by default, passwords must meet the following complexity re
     ATTACH USER name3 IDENTIFIED WITH sha256_hash BY '0C268556C1680BEF0640AAC1E7187566704208398DA31F03D18C74F5C5BE5053' SALT '4FB16307F5E10048196966DD7E6876AE53DE6A1D1F625488482C75F14A5097C7';
     ```
 
-    :::tip
+    <Tip>
     If you have already created a hash value and corresponding salt value for a username, then you can use `IDENTIFIED WITH sha256_hash BY 'hash'` or `IDENTIFIED WITH sha256_hash BY 'hash' SALT 'salt'`. For identification with `sha256_hash` using `SALT` - hash must be calculated from concatenation of 'password' and 'salt'.
-    :::
+    </Tip>
 
 4. The `double_sha1_password` is not typically needed, but comes in handy when working with clients that require it (like the MySQL interface):
 
@@ -134,11 +134,11 @@ In ClickHouse Cloud, by default, passwords must meet the following complexity re
 
     The work factor must be between 4 and 31, with a default value of 12.
 
-   :::warning
+   <Warning>
    For applications with high-frequency authentication,
    consider alternative authentication methods due to
    bcrypt's computational overhead at higher work factors.
-   :::
+   </Warning>
 
 6. The type of the password can also be omitted:
 
@@ -182,9 +182,9 @@ Another way of specifying host is to use `@` syntax following the username. Exam
 - `CREATE USER mira@'localhost'` — Equivalent to the `HOST LOCAL` syntax.
 - `CREATE USER mira@'192.168.%.%'` — Equivalent to the `HOST LIKE` syntax.
 
-:::tip
+<Tip>
 ClickHouse treats `user_name@'address'` as a username as a whole. Thus, technically you can create multiple users with the same `user_name` and different constructions after `@`. However, we do not recommend to do so.
-:::
+</Tip>
 
 ## VALID UNTIL Clause {#valid-until-clause}
 
@@ -199,9 +199,9 @@ Examples:
 - `CREATE USER name1 VALID UNTIL 'infinity'`
 - `CREATE USER name1 IDENTIFIED WITH plaintext_password BY 'no_expiration', bcrypt_password BY 'expiration_set' VALID UNTIL '2025-01-01'`
 
-:::note
+<Note>
 The datetime string is parsed by `parseDateTimeBestEffort`, which only recognizes the timezone tokens `UTC`, `GMT`, `Z`, `MSK`, `MSD`, and numeric offsets such as `+09:00` or `-05:00`. Named IANA timezones like `Asia/Tokyo` or `Europe/London` are not supported, and a fixed offset is not equivalent to an IANA zone for regions that observe daylight saving time, so you must compute the correct offset for the specific date you are encoding.
-:::
+</Note>
 
 ## GRANTEES Clause {#grantees-clause}
 

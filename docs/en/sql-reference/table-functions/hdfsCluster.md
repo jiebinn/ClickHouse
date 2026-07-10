@@ -54,9 +54,9 @@ SELECT count(*)
 FROM hdfsCluster('cluster_simple', 'hdfs://hdfs1:9000/{some,another}_dir/*', 'TSV', 'name String, value UInt32')
 ```
 
-:::note
+<Note>
 If your listing of files contains number ranges with leading zeros, use the construction with braces for each digit separately or use `?`.
-:::
+</Note>
 
 ## Related {#related}
 

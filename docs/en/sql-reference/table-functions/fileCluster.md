@@ -13,10 +13,10 @@ doc_type: 'reference'
 
 Enables simultaneous processing of files matching a specified path across multiple nodes within a cluster. The initiator establishes connections to worker nodes, expands globs in the file path, and delegates file-reading tasks to worker nodes. Each worker node is querying the initiator for the next file to process, repeating until all tasks are completed (all files are read).
 
-:::note    
+<Note>
 This function will operate _correctly_ only in case the set of files matching the initially specified path is identical across all nodes, and their content is consistent among different nodes.  
 In case these files differ between nodes, the return value cannot be predetermined and depends on the order in which worker nodes request tasks from the initiator.
-:::
+</Note>
 
 ## Syntax {#syntax}
 

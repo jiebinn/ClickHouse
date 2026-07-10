@@ -8,10 +8,10 @@ doc_type: 'reference'
 
 ## Overview {#overview}
 
-:::note
+<Note>
 The functions mentioned in this section are optimized for maximum performance and for the most part do not follow the RFC-3986 standard.
 Functions which implement RFC-3986 have `RFC` appended to their function name and are generally slower.
-:::
+</Note>
 
 You can generally use the non-`RFC` function variants when working with publicly registered domains that contain neither user strings nor `@` symbols.
 The table below details which symbols in a URL can (`✔`) or cannot (`✗`) be parsed by the respective `RFC` and non-`RFC` variants:
@@ -41,9 +41,9 @@ There are two types of URL functions:
 - Functions that extract parts of a URL. If the relevant part isn't present in a URL, an empty string is returned.
 - Functions that remove part of a URL. If the URL does not have anything similar, the URL remains unchanged.
 
-:::note
+<Note>
 The functions below are generated from the `system.functions` system table.
-:::
+</Note>
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

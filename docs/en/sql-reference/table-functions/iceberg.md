@@ -43,9 +43,9 @@ A table with the specified structure for reading data in the specified Iceberg t
 SELECT * FROM icebergS3('http://test.s3.amazonaws.com/clickhouse-bucket/test_table', 'test', 'test')
 ```
 
-:::important
+<Warning>
 ClickHouse currently supports reading v1 and v2 of the Iceberg format via the `icebergS3`, `icebergAzure`, `icebergHDFS` and `icebergLocal` table functions and `IcebergS3`, `icebergAzure`, `IcebergHDFS` and `IcebergLocal` table engines.
-:::
+</Warning>
 
 ## Defining a named collection {#defining-a-named-collection}
 
@@ -74,9 +74,9 @@ DESCRIBE icebergS3(iceberg_conf, filename = 'test_table')
 
 Iceberg tables can also be used with various data catalogs, such as the [REST Catalog](https://iceberg.apache.org/rest-catalog-spec/), [AWS Glue Data Catalog](https://docs.aws.amazon.com/prescriptive-guidance/latest/serverless-etl-aws-glue/aws-glue-data-catalog.html) and [Unity Catalog](https://www.unitycatalog.io/).
 
-:::important
+<Warning>
 When using a catalog, most users will want to use the `DataLakeCatalog` database engine, which connects ClickHouse to your catalog to discover your tables. You can use this database engine instead of manually creating individual tables with `IcebergS3` table engine.
-:::
+</Warning>
 
 To use them, create a table with the `IcebergS3` engine and provide the necessary settings.
 
@@ -534,9 +534,9 @@ By default, which snapshots to keep is determined by the [retention policy](#ice
 - `snapshot_ids = [id1, id2, ...]` — expires exactly the listed snapshot IDs (except snapshots referenced by current snapshot, branches, or tags). This mode bypasses the retention policy entirely and cannot be combined with `retention_period` or `retain_last`.
 - `dry_run = 1` — computes what would be expired and returns metrics without writing new metadata or deleting files.
 
-:::note
+<Note>
 `retention_period` and `retain_last` override only the **table-level** retention defaults. Per-ref (branch/tag) retention overrides configured in the Iceberg table properties (e.g., `refs.<branch>.min-snapshots-to-keep`) are never overridden — they always take effect as specified in the table metadata.
-:::
+</Note>
 
 **Example:**
 
@@ -625,13 +625,13 @@ GRANT ALTER TABLE EXECUTE ON my_iceberg_table TO my_user;
 GRANT ALTER TABLE ON my_iceberg_table TO my_user;
 ```
 
-:::note
+<Note>
 - Only Iceberg format version 2 tables are supported (v1 snapshots do not guarantee `manifest-list`, which is required to safely identify files for cleanup)
 - The current snapshot is always preserved, even if it is older than the specified timestamp
 - Requires the `allow_insert_into_iceberg` setting to be enabled
 - Requires the `allow_experimental_expire_snapshots` setting to be enabled
 - The catalog's own authorization (REST catalog auth, AWS Glue IAM, etc.) is enforced independently when ClickHouse updates the metadata
-:::
+</Note>
 
 ### Remove Orphan Files {#iceberg-remove-orphan-files}
 
@@ -707,13 +707,13 @@ The command returns a table with `metric_name` and `metric_value` columns showin
 | `allow_iceberg_remove_orphan_files` | `Bool` | `false` | Gate setting to enable the feature (experimental). |
 | `iceberg_orphan_files_older_than_seconds` | `UInt64` | `259200` (3 days) | Default `older_than` threshold in seconds when the argument is omitted. |
 
-:::note
+<Note>
 - **Requires Iceberg format version 2 (or higher).** Version 1 tables are rejected because they lack `manifest-list` pointers in snapshots, which are needed to safely determine the reachable file set. Running the command on a v1 table returns a `BAD_ARGUMENTS` error.
 - Requires both `allow_insert_into_iceberg` and `allow_iceberg_remove_orphan_files` settings to be enabled
 - It is recommended to run `expire_snapshots` before `remove_orphan_files` so that files uniquely referenced by expired snapshots are cleaned up first
 - Use `dry_run = 1` to preview orphan files before deletion
 - The `older_than` threshold protects against deleting files from in-progress writes — the default 3-day threshold provides a generous safety margin
-:::
+</Note>
 
 ## See Also {#see-also}
 

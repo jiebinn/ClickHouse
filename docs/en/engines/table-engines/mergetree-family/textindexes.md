@@ -64,9 +64,9 @@ Text indexes are generally available (GA) in ClickHouse version 26.2 and newer.
 In these versions, no special settings need to be configured to use the text index.
 We strongly recommend using ClickHouse versions >= 26.2 for production use cases.
 
-:::note
+<Note>
 Text indexes can be used with any ClickHouse version >= 26.2, regardless of the [compatibility](../../../operations/settings/settings#compatibility) setting.
-:::
+</Note>
 
 To create a text index use the following syntax:
 
@@ -163,14 +163,14 @@ ALTER TABLE table DROP INDEX text_idx;
 
 All available tokenizers are listed in [system.tokenizers](../../../operations/system-tables/tokenizers.md).
 
-:::note
+<Note>
 The `splitByString` tokenizer applies the split separators left-to-right.
 This can create ambiguities.
 For example, the separator strings `['%21', '%']` will cause `%21abc` to be tokenized as `['abc']`, whereas switching both separators strings `['%', '%21']` will output `['21abc']`.
 In the most cases, you want that matching prefers longer separators first.
 This can generally be done by passing the separator strings in order of descending length.
 If the separator strings happen to form a [prefix code](https://en.wikipedia.org/wiki/Prefix_code), they can be passed in arbitrary order.
-:::
+</Note>
 
 To understand how a tokenizer split the input string, you can use the [tokens](/sql-reference/functions/splitting-merging-functions.md/#tokens) and [tokensForLikePattern](/sql-reference/functions/splitting-merging-functions.md/#tokensForLikePattern) functions:
 
@@ -187,7 +187,6 @@ SELECT tokens('abc def', 'ngrams', 3);
 *Working with non-ASCII inputs.*
 Text indexes can be built on top of text data in any language and character set.
 For non-ASCII text, the `asciiCJK` tokenizer is recommended as it correctly handles Unicode word boundaries including CJK characters.
-:::
 
 **Preprocessor argument (optional)**. The preprocessor refers to an expression which is applied to the input string before tokenization.
 
@@ -216,13 +215,13 @@ Examples:
 
 Usage of non-deterministic functions is disallowed.
 
-:::note
+<Note>
 Preprocessors are in principle equivalent to wrapping the index column or expression by the preprocessor expression.
 For example, the `lower` preprocessor in `INDEX idx col TYPE text(tokenizer = 'splitByNonAlpha', preprocessor = lower(col))` can be emulated by `INDEX idx lower(col) TYPE text(tokenizer = 'splitByNonAlpha')`.
 The latter form has the disadvantage that the emulated preprocessor is only applied if it matches the filter condition in the WHERE clause.
 For example, `WHERE hasAllTokens(lower(col), [...])` matches while `WHERE hasAllTokens(col, [...])` does not.
 For an optimal user experience, we therefore recommend using preprocessor expressions.
-:::
+</Note>
 
 Functions [hasToken](/sql-reference/functions/string-search-functions.md/#hasToken), [hasAllTokens](/sql-reference/functions/string-search-functions.md/#hasAllTokens), [hasAnyTokens](/sql-reference/functions/string-search-functions.md/#hasAnyTokens), and [hasPhrase](/sql-reference/functions/string-search-functions.md/#hasPhrase) use the preprocessor to first transform the search term before tokenizing it.
 Note that because the preprocessor is only applied on the text index path, results from these functions may differ between queries that use the text index and queries that do not (e.g. `SETTINGS use_skip_indexes = 0`).
@@ -474,10 +473,10 @@ The on-disk format is not yet stable, so this parameter is experimental and may 
 Creating an index with `positions = 1` therefore requires the MergeTree setting [`allow_experimental_text_index_positions`](/operations/settings/merge-tree-settings#allow_experimental_text_index_positions) to be enabled.
 Set `positions = 0` (the default) to keep the posting-list-only storage; text indexes created without this argument remain position-less.
 
-:::warning
+<Warning>
 This argument is experimental and should only be used for testing.
 Set MergeTree setting [`allow_experimental_text_index_positions`](/operations/settings/merge-tree-settings#allow_experimental_text_index_positions) to enable storing positions.
-:::
+</Warning>
 
 <details markdown="1">
 
@@ -557,11 +556,11 @@ An explicitly specified index granularity is ignored.
 Using a text index in SELECT queries is straightforward as common string search functions will leverage the index automatically.
 If no index exists on a column or table part, the string search functions will fall back to slow brute-force scans.
 
-:::note
+<Note>
 We recommend using functions `hasAnyTokens` and `hasAllTokens` to search the text index, please see [below](#functions-example-hasanytokens-hasalltokens).
 These functions work with all available tokenizers and all possible preprocessor and postprocessor expressions.
 As the other supported functions historically preceded the text index, they had to retain their legacy behavior in many cases (e.g. no preprocessor or postprocessor support).
-:::
+</Note>
 
 ### Supported functions {#functions-support}
 
@@ -593,19 +592,19 @@ Example:
 SELECT * from table WHERE str IN ('Hello', 'World');
 ```
 
-:::note
+<Note>
 `NOT IN` (`notIn`) is not supported by the text index.
-:::
+</Note>
 
 #### `LIKE` and `match` {#functions-example-like-match}
 
-:::note
+<Note>
 These functions currently use the text index for filtering only if the index tokenizer is either `splitByNonAlpha`, `ngrams` or `sparseGrams`.
-:::
+</Note>
 
-:::note
+<Note>
 `NOT LIKE` (`notLike`) is not supported by the text index.
-:::
+</Note>
 
 In order to use `LIKE` ([like](/sql-reference/functions/string-search-functions.md/#like)) and the [match](/sql-reference/functions/string-search-functions.md/#match) function with text indexes, ClickHouse must be able to extract complete tokens from the search term.
 For the index with `ngrams` tokenizer, this is the case if the length of the searched strings between wildcards is equal or longer than the ngram length.
@@ -688,12 +687,12 @@ SELECT count() FROM table WHERE endsWith(comment, ' olap engine');
 
 #### `hasToken` {#functions-example-hastoken}
 
-:::note
+<Note>
 `hasToken` has certain pitfalls when used for lookups in text indexes with non-`splitByNonAlpha` tokenizers and/or preprocessor/postprocessor expressions.
 We recommend using `hasAnyTokens` and `hasAllTokens` instead.
 
 The case-insensitive variants `hasTokenCaseInsensitive` and `hasTokenCaseInsensitiveOrNull` are not text-index-aware — they always run as a full row scan even on text-indexed columns. For case-insensitive matching, use a `lower(...)` preprocessor or postprocessor and combine it with `hasToken` / `hasAllTokens` / `hasAnyTokens`.
-:::
+</Note>
 
 Function [hasToken](/sql-reference/functions/string-search-functions.md/#hasToken) matches against a single given token.
 
@@ -1062,12 +1061,12 @@ A text index build using `JSONAllValues` indexes these text representations acro
 This index can then accelerate queries that filter on individual JSON subcolumns.
 When a query filters on a specific subcolumn (e.g. `data.user_name = 'alice'`), the text index can quickly skip rows (and granules) that do not contain the search tokens in any of their JSON values.
 
-:::note
+<Note>
 The index may produce false positives when different JSON paths contain the same tokens.
 For example, if row 1 has `{"a": "hello", "b": "world"}` and a query searches for `data.a = 'world'`, the text index cannot distinguish that `world` belongs to path `b`, not `a`.
 In such cases, the index will not skip the row, and the filter on the actual column data will handle the final evaluation.
 This is the same behavior as with other text index use cases where the index acts as a fast pre-filter.
-:::
+</Note>
 
 ##### Creating the index {#json-all-values-creating-the-index}
 

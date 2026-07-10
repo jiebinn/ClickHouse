@@ -56,9 +56,9 @@ When creating a `GraphiteMergeTree` table, the same [clauses](../../../engines/t
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-:::note
+<Note>
 Do not use this method in new projects and, if possible, switch old projects to the method described above.
-:::
+</Note>
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -130,13 +130,13 @@ default
     ...
 ```
 
-:::important
+<Warning>
 Patterns must be strictly ordered:
 
 1. Patterns without `function` or `retention`.
 1. Patterns with both `function` and `retention`.
 1. Pattern `default`.
-:::
+</Warning>
 
 When processing a row, ClickHouse checks the rules in the `pattern` sections. Each of `pattern` (including `default`) sections can contain `function` parameter for aggregation, `retention` parameters or both. If the metric name matches the `regexp`, the rules from the `pattern` section (or sections) are applied; otherwise, the rules from the `default` section are used.
 
@@ -264,6 +264,6 @@ Valid values:
 </graphite_rollup>
 ```
 
-:::note
+<Note>
 Data rollup is performed during merges. Usually, for old partitions, merges are not started, so for rollup it is necessary to trigger an unscheduled merge using [optimize](../../../sql-reference/statements/optimize.md). Or use additional tools, for example [graphite-ch-optimizer](https://github.com/innogames/graphite-ch-optimizer).
-:::
+</Note>

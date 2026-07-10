@@ -9,11 +9,11 @@ doc_type: 'reference'
 
 Returns a value evaluated at the row that is offset rows after the current row within the ordered frame.
 
-:::warning
+<Warning>
 `leadInFrame` behavior differs from the standard SQL `lead` window function.
 Clickhouse window function `leadInFrame` respects the window frame.
 To get behavior identical to the `lead`, use `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.
-:::
+</Warning>
 
 **Syntax**
 

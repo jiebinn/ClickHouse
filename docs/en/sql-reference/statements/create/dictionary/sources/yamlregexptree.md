@@ -15,11 +15,11 @@ The `YAMLRegExpTree` source loads a regular expression tree from a YAML file on 
 It is designed exclusively for use with the [`regexp_tree`](../layouts/regexp-tree.md) dictionary layout
 and provides hierarchical regex-to-attribute mappings for pattern-based lookups such as user agent parsing.
 
-:::note
+<Note>
 The `YAMLRegExpTree` source is only available in ClickHouse Open Source.
 For ClickHouse Cloud, export the dictionary to CSV and load it via a [ClickHouse table source](./clickhouse.md) instead.
 See [Using regexp_tree dictionaries in ClickHouse Cloud](../layouts/regexp-tree#use-regular-expression-tree-dictionary-in-clickhouse-cloud) for details.
-:::
+</Note>
 
 ## Configuration {#configuration}
 

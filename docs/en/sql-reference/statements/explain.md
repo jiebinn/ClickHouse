@@ -196,13 +196,13 @@ Settings:
 - `compact` — When enabled, hides expression steps and detailed action info (inputs, functions, aliases, and output positions) from the plan. Only has an effect when `actions = 1`. Default: 1.
 - `pretty` — Prints the plan tree using line-drawing characters (├──, └──, │) instead of indentation to visualize the hierarchy. Also formats join step properties inline. Default: 1.
 
-:::note
+<Note>
 By default, `explain_query_plan_default = 'pretty'`, so `actions`, `compact`, and `pretty` are initialized to `1` and the plan is rendered in the compact, pretty, action-annotated form. Specifying any of these options explicitly in the `EXPLAIN` statement (for example, `EXPLAIN actions = 0, compact = 0, pretty = 0 SELECT ...`) always overrides the default.
 
 Prior to ClickHouse 26.7 the defaults for `actions`, `compact`, and `pretty` were `0`. You can still get that output by setting `explain_query_plan_default = 'legacy'` (globally or in per-query `SETTINGS`), or by setting `compatibility` to any version older than `26.7`.
 
 The `json` and `distributed` options do not enable the `pretty` defaults (`actions`, `compact`, and `pretty`), even when `explain_query_plan_default = 'pretty'`. To include action details in their output, set `actions = 1` manually.
-:::
+</Note>
 
 Example:
 
@@ -224,9 +224,9 @@ Limit (preliminary LIMIT)
          Output: number
 ```
 
-:::note
+<Note>
 Step and query cost estimation is not supported.
-:::
+</Note>
 
 When `json = 1`, the query plan is represented in JSON format. Every node is a dictionary that always has the keys `Node Type`, `Node Id`, and `Plans`. `Node Type` is a string with the step name, and `Node Id` is a unique step identifier (the step name with a numeric suffix, e.g. `Union_10`). `Plans` is an array with child step descriptions. Other optional keys may be added depending on node type and settings.
 
@@ -503,9 +503,9 @@ Expression ((Project names + Projection))
 
 With `distributed` = 1, the output includes not only the local query plan but also the query plans that will be executed on remote nodes. This is useful for analyzing and debugging distributed queries.
 
-:::note
+<Note>
 `distributed` is rendered only in the legacy (non-`pretty`) form, because the `pretty` output does not integrate the remote shard plans into the plan tree. For this reason, enabling `distributed` automatically disables the `pretty` defaults (`actions`, `compact`, and `pretty`), regardless of `explain_query_plan_default`. You can still set `actions=1` manually. The `distributed` option is also not supported together with `json`.
-:::
+</Note>
 
 Example with distributed table:
 
@@ -676,9 +676,9 @@ Settings:
 - `pretty` — see [EXPLAIN PLAN](#explain-plan) section. Default: 1.
 - `processors` — For `EXPLAIN ANALYZE`, prints an additional line per stage with the per-processor elapsed time distribution: `min`, `median`, `max`, and `sum`. Useful to spot load skew across parallel processors. Default: 0.
 
-:::note
+<Note>
 The current version of `EXPLAIN ANALYZE` doesn't support queries executed in distributed mode.
-:::
+</Note>
 
 Example:
 
@@ -741,15 +741,15 @@ Rows and bytes are reported once for the whole step (the `I/O` line). Time and p
 - `parallelism <avg>/<max>` — average number of CPU threads working within this stage at once, out of the maximum it could use. A value near max means the stage was well parallelized; near 1 means it ran mostly serially.
 - `Stage (<stage>)` — the name of the stage. A step with a single stage prints the time line directly, without a `Stage (...)` label. Steps with several stages print one labeled line per stage, e.g. `Aggregating` shows `Stage (partial aggregation)` and `Stage (final aggregation)`, and a hash join shows `Stage (build)` and `Stage (probe)`.
 
-:::note
+<Note>
 ClickHouse parallelizes not only execution of tasks within a plan step, but also the execution of plan steps. The `parallelism` metric reflects only the work of this step. Other steps may run concurrently, so this number does not show how the step's parallelism compares to the whole query.
-:::
+</Note>
 
-:::note
+<Note>
 The maximum number in `parallelism` is computed as a minimum between:
 1. total number of tasks within the plan step;
 2. The maximum number of query processing threads set in `max_threads`.
-:::
+</Note>
 
 With `processors = 1`, an extra line is printed under each stage, showing the distribution of elapsed time across the stage's processors:
 
@@ -930,6 +930,6 @@ PARTITION BY toYYYYMM(assumeNotNull(created))
 └─────────────────────────────────────────────────────────┘
 ```
 
-:::note
+<Note>
 The validation is not complete, so a successful query does not guarantee that the override would not cause issues.
-:::
+</Note>

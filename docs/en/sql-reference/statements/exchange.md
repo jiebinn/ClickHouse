@@ -10,9 +10,9 @@ doc_type: 'reference'
 Exchanges the names of two tables or dictionaries atomically.
 This task can also be accomplished with a [`RENAME`](./rename.md) query using a temporary name, but the operation is not atomic in that case.
 
-:::note    
+<Note>
 The `EXCHANGE` query is supported by the [`Atomic`](../../engines/database-engines/atomic.md) and [`Shared`](/cloud/reference/shared-catalog#shared-database-engine) database engines only.
-:::
+</Note>
 
 **Syntax**
 
@@ -34,9 +34,9 @@ EXCHANGE TABLES [db0.]table_A AND [db1.]table_B [ON CLUSTER cluster]
 
 You can exchange multiple table pairs in a single query by separating them with commas.
 
-:::note
+<Note>
 When exchanging multiple table pairs, the exchanges are performed **sequentially, not atomically**. If an error occurs during the operation, some table pairs may have been exchanged while others have not.
-:::
+</Note>
 
 **Example**
 

@@ -71,6 +71,6 @@ Set a large enough cache size. You need to experiment to select the number of ce
 3.  Assess memory consumption using the `system.dictionaries` table.
 4.  Increase or decrease the number of cells until the required memory consumption is reached.
 
-:::note
+<Note>
 ClickHouse is not recommended as a source for this layout. Dictionary lookups require random point reads, which are not the access pattern ClickHouse is optimized for.
-:::
+</Note>
