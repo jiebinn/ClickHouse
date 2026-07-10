@@ -341,6 +341,7 @@
                             "group": "Troubleshooting",
                             "pages": [
                               "concepts/features/performance/troubleshoot/debugging-memory-issues",
+                              "concepts/features/performance/troubleshoot/oom-canary",
                               "concepts/features/performance/troubleshoot/performance-test",
                               "concepts/features/performance/troubleshoot/sampling-query-profiler"
                             ]
@@ -405,7 +406,6 @@
                               "concepts/features/configuration/settings/query-complexity",
                               "concepts/features/configuration/settings/permissions-for-queries",
                               "concepts/features/configuration/settings/memory-overcommit",
-                              "concepts/features/configuration/settings/oom-canary",
                               "concepts/features/configuration/settings/server-overload",
                               "concepts/features/configuration/settings/tcp-connection-limits",
                               "concepts/features/configuration/settings/alternative-query-languages"
