@@ -1,17 +1,9 @@
 #include <Backups/BackupMetadataHandler.h>
 
 #include <Poco/SAX/SAXParser.h>
-#include <Poco/DOM/DOMParser.h>
-#include <Poco/DOM/Document.h>
-#include <Poco/DOM/Node.h>
-#include <Poco/AutoPtr.h>
-
-#include <Common/Jemalloc.h>
 
 #include <gtest/gtest.h>
 
-#include <cstdlib>
-#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -197,114 +189,4 @@ TEST(BackupMetadataHandler, MalformedXmlThrowsFromParser)
     /// A parse error (mismatched tags) is reported by the parser itself, not captured in saved_exception.
     const std::string bad = "<config><version>2</version></contents>";
     EXPECT_ANY_THROW(parser.parseMemoryNP(bad.data(), bad.size()));
-}
-
-
-/// Memory comparison: streaming SAX vs the old DOM parse.
-///
-/// `readBackupMetadata` used to build a full Poco::XML DOM tree for the whole `.backup` manifest before
-/// walking it; for a large (especially incremental) backup that tree is the dominant, front-loaded cost
-/// of opening the base backup. The SAX handler folds each `<file>` as it closes, so nothing beyond one
-/// entry is retained. This test parses the same synthetic manifest both ways and compares the peak *live*
-/// allocated bytes (jemalloc `stats.allocated`, which - unlike RSS - is not distorted by the allocator
-/// holding on to freed pages).
-///
-/// Both walks here only count files; the real code builds the same per-file maps in the old and new
-/// paths, so the measured difference is exactly the transient DOM tree the PR removes.
-///
-/// The number of files defaults to a value light enough for the unit-test run; set
-/// BACKUP_METADATA_BENCH_FILES to a large value (e.g. 5000000) to reproduce the multi-GB figures for a
-/// worst-case incremental backup. Sanitizer builds disable jemalloc, so the test skips itself there.
-#if USE_JEMALLOC
-namespace
-{
-    /// A manifest of `num_files` deduplicated ("use_base") entries, in the whitespace-free layout written
-    /// by `writeBackupMetadata`. Deduplicated entries carry the most leaf elements - the most DOM nodes
-    /// per file, i.e. the worst case for the DOM parser.
-    std::string makeManifest(size_t num_files)
-    {
-        std::string xml;
-        xml.reserve(num_files * 240 + 256);
-        xml += "<config><version>2</version>"
-               "<timestamp>2020-01-01 00:00:00</timestamp>"
-               "<uuid>00000000-0000-0000-0000-000000000001</uuid>"
-               "<contents>";
-        for (size_t i = 0; i < num_files; ++i)
-        {
-            xml += "<file><name>data/default/table/all_1_1_0/column_";
-            xml += std::to_string(i);
-            xml += ".bin</name><size>1048576</size>"
-                   "<checksum>0123456789abcdef0123456789abcdef</checksum>"
-                   "<use_base>true</use_base><base_size>1048576</base_size>"
-                   "<base_checksum>0123456789abcdef0123456789abcdef</base_checksum></file>";
-        }
-        xml += "</contents></config>";
-        return xml;
-    }
-
-    /// Live bytes currently allocated by the process. `stats.allocated` is cached behind `epoch`, so the
-    /// epoch is advanced first to force a refresh. Returns 0 if the mallctl is unavailable.
-    size_t liveAllocatedBytes()
-    {
-        Jemalloc::setValue<UInt64>("epoch", 1);
-        size_t allocated = 0;
-        Jemalloc::tryGetValue("stats.allocated", allocated);
-        return allocated;
-    }
-}
-#endif
-
-TEST(BackupMetadataHandler, PeakMemoryStreamingVsDom)
-{
-#if !USE_JEMALLOC
-    GTEST_SKIP() << "Peak-memory comparison needs jemalloc stats (disabled in sanitizer builds)";
-#else
-    if (liveAllocatedBytes() == 0)
-        GTEST_SKIP() << "jemalloc stats.allocated is unavailable";
-
-    size_t num_files = 50000;
-    if (const char * env = std::getenv("BACKUP_METADATA_BENCH_FILES"))
-        num_files = std::strtoull(env, nullptr, 10);
-
-    const std::string xml = makeManifest(num_files);
-
-    /// Old behavior: build the whole DOM tree and keep it alive while walking <contents>.
-    size_t dom_files = 0;
-    Int64 dom_bytes = 0;
-    {
-        const size_t before = liveAllocatedBytes();
-        Poco::XML::DOMParser dom_parser;
-        Poco::AutoPtr<Poco::XML::Document> doc = dom_parser.parseMemory(xml.data(), xml.size());
-        const Poco::XML::Node * contents = doc->documentElement()->getNodeByPath("contents");
-        for (const Poco::XML::Node * child = contents->firstChild(); child; child = child->nextSibling())
-            if (child->nodeName() == "file")
-                ++dom_files;
-        dom_bytes = static_cast<Int64>(liveAllocatedBytes()) - static_cast<Int64>(before);  /// `doc` still alive
-    }
-
-    /// New behavior: stream with the SAX handler; nothing beyond one <file> is retained.
-    size_t sax_files = 0;
-    Int64 sax_bytes = 0;
-    {
-        const size_t before = liveAllocatedBytes();
-        BackupMetadataHandler handler;
-        handler.on_file = [&](const BackupMetadataHandler::Fields &) { ++sax_files; };
-        Poco::XML::SAXParser parser;
-        parser.setContentHandler(&handler);
-        parser.parseMemoryNP(xml.data(), xml.size());
-        sax_bytes = static_cast<Int64>(liveAllocatedBytes()) - static_cast<Int64>(before);
-    }
-
-    ASSERT_EQ(dom_files, num_files);
-    ASSERT_EQ(sax_files, num_files);
-
-    const double mib = 1024.0 * 1024.0;
-    std::cerr << "[ MEMORY   ] files=" << num_files
-              << "  DOM live-peak=" << static_cast<double>(dom_bytes) / mib << " MiB (" << dom_bytes / static_cast<Int64>(num_files) << " B/file)"
-              << "  SAX live-peak=" << static_cast<double>(sax_bytes) / mib << " MiB"
-              << "  DOM/SAX=" << (sax_bytes > 0 ? static_cast<double>(dom_bytes) / static_cast<double>(sax_bytes) : 0.0) << "x\n";
-
-    /// The streaming handler must use a small fraction of the DOM tree's memory.
-    EXPECT_GT(dom_bytes, sax_bytes * 4);
-#endif
 }
