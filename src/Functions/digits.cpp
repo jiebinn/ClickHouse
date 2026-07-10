@@ -35,7 +35,7 @@ struct DigitRange
     Int64 count; // Number of digits to take from position first inclusive
 };
 
-std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int64 length, bool has_length)
+std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int128 length, bool has_length)
 {
     if (offset == 0)
         throw Exception(ErrorCodes::ZERO_ARRAY_OR_TUPLE_INDEX, "Indices in number are 1-based");
@@ -55,7 +55,7 @@ std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int64 
 
     if (length < 0)
     {
-        Int64 last = total_digits + length; // Negative length: absolute end position
+        const Int128 last = total_digits + length; // Negative length: absolute end position
         if (last < 1)
             return std::nullopt;
 
@@ -63,7 +63,7 @@ std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int64 
         if (last < first)
             return std::nullopt;
 
-        return DigitRange{first, last - first + 1};
+        return DigitRange{first, static_cast<Int64>(last - first + 1)};
     }
 
     if (first <= 0)
@@ -78,10 +78,10 @@ std::optional<DigitRange> getDigitRange(Int64 total_digits, Int64 offset, Int64 
         first = 1;
     }
 
-    return DigitRange{first, std::min<Int64>(length, total_digits - first + 1)};
+    return DigitRange{first, static_cast<Int64>(std::min<Int128>(length, total_digits - first + 1))};
 }
 
-UInt64 extractDigits(UInt64 num, Int64 offset, Int64 length, bool has_length)
+UInt64 extractDigits(UInt64 num, Int64 offset, Int128 length, bool has_length)
 {
     const Int64 total_digits = common::digits10(num);
     const auto range = getDigitRange(total_digits, offset, length, has_length);
@@ -204,9 +204,9 @@ public:
                         else
                             magnitude = static_cast<UInt64>(num);
                         Int64 offset = getClampedInt64(*offset_column, i);
-                        Int64 length = 0;
+                        Int128 length = 0;
                         if (has_length)
-                            length = getClampedInt64(*length_column, i);
+                            length = getWideInt(*length_column, i);
                         result_data[i] = extractDigits(magnitude, offset, length, has_length);
                     }
                     return true;
@@ -221,12 +221,20 @@ public:
 
     static Int64 getClampedInt64(const IColumn & col, size_t index)
     {
-        // digits() only cares about magnitude and any offset/length past 20 has the same effect
-        // so clamping UInt64 to INT64_MAX is safe.
         if (col.getDataType() == TypeIndex::UInt64
             && col.getUInt(index) > static_cast<UInt64>(std::numeric_limits<Int64>::max()))
             return std::numeric_limits<Int64>::max();
         return col.getInt(index);
+    }
+
+    /// Preserves the full range of a 64-bit argument without a lossy clamp,
+    /// Needed for `length`, which is reduced by up to ~2^63 off-edge
+    /// positions when the offset is very negative, so its exact value above INT64_MAX is observable
+    static Int128 getWideInt(const IColumn & col, size_t index)
+    {
+        if (col.getDataType() == TypeIndex::UInt64)
+            return static_cast<Int128>(col.getUInt(index));
+        return static_cast<Int128>(col.getInt(index));
     }
 };
 
