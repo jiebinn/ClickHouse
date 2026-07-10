@@ -260,7 +260,13 @@ def build_tree(docs_root, dest):
                 anchors = collect_snippet_anchors(raw, docs_root, root, set())
                 # Non-<a> element ids (e.g. <div id="...">) are valid fragment
                 # targets too, but lychee doesn't extract them -- add them here.
-                anchors |= {m.group(1) for m in ELEMENT_ID_RE.finditer(raw)}
+                # Scan with code samples and MDX comments stripped (same
+                # hygiene as the snippet and redirect paths), so ids that never
+                # render are not advertised.
+                anchors |= {
+                    m.group(1)
+                    for m in ELEMENT_ID_RE.finditer(strip_code_blocks(strip_mdx_comments(raw)))
+                }
                 if anchors:
                     text += "\n\n" + "".join(
                         f'<a id="{a}"></a>\n' for a in sorted(anchors)
