@@ -1,6 +1,7 @@
 #include <Access/RowPolicy.h>
 #include <Common/Exception.h>
 #include <Common/quoteString.h>
+#include <Functions/FunctionFactory.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <boost/range/algorithm/equal.hpp>
@@ -16,12 +17,15 @@ namespace ErrorCodes
 
 namespace
 {
-    /// `arrayJoin` inside a nested subquery has its own scope and does not multiply the outer rows.
+    /// arrayJoin changes the number of rows. Resolve the function name to its canonical form so
+    /// aliases (such as the case-insensitive unnest) are caught too. A call inside a nested
+    /// subquery has its own scope and does not multiply the outer rows, so it is skipped.
     bool expressionContainsArrayJoin(const ASTPtr & ast)
     {
         if (!ast)
             return false;
-        if (const auto * function = ast->as<ASTFunction>(); function && function->name == "arrayJoin")
+        if (const auto * function = ast->as<ASTFunction>();
+            function && getFunctionCanonicalNameIfAny(function->name) == "arrayJoin")
             return true;
         for (const auto & child : ast->children)
         {
