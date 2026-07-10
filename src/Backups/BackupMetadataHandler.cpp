@@ -16,12 +16,14 @@ void BackupMetadataHandler::startElement(
     {
         current_text.clear();
         const String & name = qname.empty() ? local_name : qname;
-        if (name == "contents")
+        /// Gate callbacks by exact position so a misplaced <file>/<contents> is ignored. `path` holds the
+        /// ancestors; <contents> directly under the root fires on_header (all header leaves collected by then).
+        if (name == "contents" && path.size() == 1)
         {
             if (on_header)
                 on_header(header_fields);
         }
-        else if (name == "file")
+        else if (name == "file" && path.size() == 2 && path[1] == "contents")
             file_fields.clear();
         path.push_back(name);
     }
@@ -41,19 +43,15 @@ void BackupMetadataHandler::endElement(
     try
     {
         const String & name = qname.empty() ? local_name : qname;
-        const size_t depth = path.size();
-        if (name == "file")
+        /// On a closing tag `path.back() == name`. Gate by exact position (see startElement).
+        if (name == "file" && path.size() == 3 && path[1] == "contents")
         {
             if (on_file)
                 on_file(file_fields);
         }
-        else if (name == "contents")
-        {
-            /// Nothing to collect; header was already applied when it opened.
-        }
-        else if (depth == 2)  /// header leaf: <config>/<name>
+        else if (path.size() == 2 && name != "contents")  /// header leaf: <root>/<leaf>
             header_fields[name] = current_text;
-        else if (depth == 4)  /// file leaf: <config>/<contents>/<file>/<name>
+        else if (path.size() == 4 && path[1] == "contents" && path[2] == "file")  /// file leaf
             file_fields[name] = current_text;
         current_text.clear();
         if (!path.empty())

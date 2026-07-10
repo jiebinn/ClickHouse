@@ -13,7 +13,6 @@
 #include <base/hex.h>
 #include <Common/logger_useful.h>
 #include <Common/quoteString.h>
-#include <Common/XMLUtils.h>
 #include <Core/UUID.h>
 #include <IO/Archives/IArchiveReader.h>
 #include <IO/Archives/IArchiveWriter.h>
@@ -30,6 +29,7 @@
 #include <Poco/Util/XMLConfiguration.h>
 #include <Poco/SAX/SAXParser.h>
 
+#include <charconv>
 #include <filesystem>
 
 
@@ -575,6 +575,31 @@ void BackupImpl::readBackupMetadata()
     num_entries = 0;
     size_of_entries = 0;
 
+    bool contents_seen = false;
+
+    /// Strict parsers: reject trailing garbage / unknown boolean text (fail closed with BACKUP_DAMAGED)
+    /// instead of DB::parse's lenient truncation (e.g. <size>12x34</size> read as 12).
+    auto to_uint64 = [&](const String & value, const String & key) -> UInt64
+    {
+        UInt64 result = 0;
+        const char * begin = value.data();
+        const char * end = begin + value.size();
+        auto [ptr, ec] = std::from_chars(begin, end, result);
+        if (ec != std::errc{} || ptr != end)
+            throw Exception(
+                ErrorCodes::BACKUP_DAMAGED, "Backup {}: Cannot parse <{}> value {}", backup_name_for_logging, key, quoteString(value));
+        return result;
+    };
+    auto to_bool = [&](const String & value, const String & key) -> bool
+    {
+        if (value == "true" || value == "1")
+            return true;
+        if (value == "false" || value == "0")
+            return false;
+        throw Exception(
+            ErrorCodes::BACKUP_DAMAGED, "Backup {}: Cannot parse <{}> boolean value {}", backup_name_for_logging, key, quoteString(value));
+    };
+
     BackupMetadataHandler handler;
 
     handler.on_header = [&](const BackupMetadataHandler::Fields & h)
@@ -588,7 +613,7 @@ void BackupImpl::readBackupMetadata()
             return it->second;
         };
 
-        version = parse<int>(req("version"));
+        version = static_cast<int>(to_uint64(req("version"), "version"));
         if ((version < INITIAL_BACKUP_VERSION) || (version > CURRENT_BACKUP_VERSION))
             throw Exception(
                 ErrorCodes::BACKUP_VERSION_NOT_SUPPORTED, "Backup {}: Version {} is not supported", backup_name_for_logging, version);
@@ -603,7 +628,8 @@ void BackupImpl::readBackupMetadata()
             /// The marker is honored only when the base backup locator itself comes from the metadata:
             /// if the locator was overridden with the `base_backup` setting, the override is used as is.
             auto it = h.find(BASE_BACKUP_COPY_S3_CREDENTIALS_FROM_BACKUP);
-            base_backup_copy_s3_credentials_from_backup = (it != h.end()) && (it->second == "true" || it->second == "1");
+            base_backup_copy_s3_credentials_from_backup
+                = (it != h.end()) && to_bool(it->second, BASE_BACKUP_COPY_S3_CREDENTIALS_FROM_BACKUP);
         }
 
         if (h.contains("base_backup_uuid"))
@@ -613,6 +639,8 @@ void BackupImpl::readBackupMetadata()
             original_endpoint = req("original_endpoint");
         if (h.contains("original_namespace"))
             original_namespace = req("original_namespace");
+
+        contents_seen = true;
     };
 
     /// `readBackupMetadata` runs under `mutex` (TSA_REQUIRES), and `on_file` is invoked synchronously from
@@ -636,23 +664,21 @@ void BackupImpl::readBackupMetadata()
         auto get_bool = [&](const String & key, bool def)
         {
             auto it = f.find(key);
-            if (it == f.end())
-                return def;
-            return it->second == "true" || it->second == "1";
+            return it == f.end() ? def : to_bool(it->second, key);
         };
 
         BackupFileInfo info;
         info.file_name = req("name");
         validateFileNameFromBackup(info.file_name, "name", backup_name_for_logging);
         info.object_key = opt("object_key", "");
-        info.size = parse<UInt64>(req("size"));
+        info.size = to_uint64(req("size"), "size");
         if (info.size)
         {
             info.checksum = unhexChecksum(req("checksum"));
 
             bool use_base = get_bool("use_base", false);
             auto base_size_it = f.find("base_size");
-            info.base_size = (base_size_it != f.end()) ? parse<UInt64>(base_size_it->second) : (use_base ? info.size : 0);
+            info.base_size = (base_size_it != f.end()) ? to_uint64(base_size_it->second, "base_size") : (use_base ? info.size : 0);
             if (info.base_size)
                 use_base = true;
 
@@ -709,11 +735,27 @@ void BackupImpl::readBackupMetadata()
 
     Poco::XML::SAXParser xml_parser;
     xml_parser.setContentHandler(&handler);
-    xml_parser.parseMemoryNP(str.data(), str.size());
+    try
+    {
+        xml_parser.parseMemoryNP(str.data(), str.size());
+    }
+    catch (...)
+    {
+        /// A callback exception captured earlier is the root cause; prefer it over a secondary XML parse
+        /// error that a callback failure may have led to.
+        if (handler.saved_exception)
+            std::rethrow_exception(handler.saved_exception);
+        throw;
+    }
 
     /// Callbacks must not throw through expat; a captured exception is rethrown here.
     if (handler.saved_exception)
         std::rethrow_exception(handler.saved_exception);
+
+    /// A well-formed but incomplete manifest (no <contents>) leaves the header unapplied - version/uuid
+    /// unset - and must be rejected instead of being treated as an empty backup.
+    if (!contents_seen)
+        throw Exception(ErrorCodes::BACKUP_DAMAGED, "Backup {}: Metadata has no <contents>", backup_name_for_logging);
 
     uncompressed_size = size_of_entries + str.size();
     compressed_size = uncompressed_size;
