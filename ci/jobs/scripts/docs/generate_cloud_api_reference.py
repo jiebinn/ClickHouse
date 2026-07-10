@@ -82,7 +82,9 @@ HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "tra
 def load_spec(source: str) -> dict:
     """Load the OpenAPI spec from a URL or a local file path."""
     if re.match(r"^https?://", source):
-        with urllib.request.urlopen(source) as response:  # noqa: S310 (trusted URL)
+        # Explicit timeout: this runs in the nightly workflow, and a hung TCP
+        # connection would otherwise pin a runner until the workflow timeout.
+        with urllib.request.urlopen(source, timeout=60) as response:  # noqa: S310 (trusted URL)
             return json.loads(response.read())
     return json.loads(Path(source).read_text(encoding="utf-8"))
 
