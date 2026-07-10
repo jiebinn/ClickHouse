@@ -22,10 +22,10 @@ The following types can be compared:
 - tuples (lexicographic comparison)
 - arrays (lexicographic comparison)
 
-<Note>
+:::note
 Strings are compared byte-by-byte. This may lead to unexpected results if one of the strings contains UTF-8 encoded multi-byte characters.
 A string S1 which has another string S2 as prefix is considered longer than S2.
-</Note>
+:::
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

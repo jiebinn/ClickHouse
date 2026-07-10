@@ -16,7 +16,7 @@ which can be expensive. To avoid storing data locally, various storage options a
 
 <br/>
 
-<Note>
+:::note 
 ClickHouse also has support for external table engines, which are different from 
 the external storage option described on this page, as they allow reading data 
 stored in some general file format (like Parquet). On this page we are describing 
@@ -25,7 +25,7 @@ storage configuration for the ClickHouse `MergeTree` family or `Log` family tabl
 1. to work with data stored on `Amazon S3` disks, use the [S3](/engines/table-engines/integrations/s3.md) table engine.
 2. to work with data stored in Azure Blob Storage, use the [AzureBlobStorage](/engines/table-engines/integrations/azureBlobStorage.md) table engine.
 3. to work with data in the Hadoop Distributed File System (unsupported), use the [HDFS](/engines/table-engines/integrations/hdfs.md) table engine.
-</Note>
+:::
 
 ## Configure external storage {#configuring-external-storage}
 
@@ -189,11 +189,11 @@ The MergeTree setting `refresh_parts_interval` enables periodic refresh of the l
 
 For automatic part refreshing, ensure the metadata is shared or use a table-level disk with `table_disk = true` as above. Relying only on `refresh_parts_interval` with replica-local metadata will not refresh parts as expected.
 
-<Note>
+:::note
 `refresh_parts_interval` is not used for ReplicatedMergeTree tables.
 Replicated tables already synchronize parts through the replication mechanism.
 This setting is only applicable to non-replicated MergeTree tables where parts are written externally and metadata refresh is required.
-</Note>
+:::
 
 ## Dynamic Configuration {#dynamic-configuration}
 
@@ -270,12 +270,12 @@ ORDER BY (postcode1, postcode2, addr1, addr2)
 In the settings highlighted below notice that the disk of `type=web` is nested within
 the disk of `type=cache`.
 
-<Note>
+:::note
 The example uses `type=web`, but any disk type can be configured as dynamic, 
 including local disk. Local disks require a path argument to be inside the 
 server config parameter `custom_local_disks_base_directory`, which has no 
 default, so set that also when using local disk.
-</Note>
+:::
 
 A combination of config-based configuration and sql-defined configuration is 
 also possible:
@@ -367,9 +367,9 @@ where `web` is from the server configuration file:
 | `key_template`                                  | Defines object key generation format using [re2](https://github.com/google/re2/wiki/Syntax) syntax. Requires `storage_metadata_write_full_object_key` flag. Incompatible with `root path` in `endpoint`. Requires `key_compatibility_prefix`. | -                                        |
 | `key_compatibility_prefix`                      | Required with `key_template`. Specifies the previous `root path` from `endpoint` for reading older metadata versions.                                                                                                                         | -                                        |
 | `read_only`                                      | Only allowing reading from the disk.                                                                                                                                                                                                          | -                                        |
-<Note>
+:::note
 Google Cloud Storage (GCS) is also supported using the type `s3`. See [GCS backed MergeTree](/integrations/gcs).
-</Note>
+:::
 
 ### Using Plain Storage {#plain-storage}
 
@@ -517,10 +517,9 @@ Authentication parameters (the disk will try all available methods **and** Manag
 
 Examples of working configurations can be found in integration tests directory (see e.g. [test_merge_tree_azure_blob_storage](https://github.com/ClickHouse/ClickHouse/blob/master/tests/integration/test_merge_tree_azure_blob_storage/configs/config.d/storage_conf.xml) or [test_azure_blob_storage_zero_copy_replication](https://github.com/ClickHouse/ClickHouse/blob/master/tests/integration/test_azure_blob_storage_zero_copy_replication/configs/config.d/storage_conf.xml)).
 
-<Note>
-**Zero-copy replication is not ready for production**
+:::note Zero-copy replication is not ready for production
 Zero-copy replication is disabled by default in ClickHouse version 22.8 and higher.  This feature is not recommended for production use.
-</Note>
+:::
 
 ## Using HDFS storage (Unsupported) {#using-hdfs-storage-unsupported}
 
@@ -723,10 +722,10 @@ These settings should be defined in the disk configuration section.
 | `max_query_cache_size`                                        | Size    | `false`                 | Maximum cache size per query. Requires `enable_filesystem_query_cache_limit` in cache config.                                                                  |
 | `filesystem_cache_skip_download_if_exceeds_per_query_cache_write_limit` | Boolean | `true`          | Controls behavior when `max_query_cache_size` is reached: <br/>- `true`: Stops downloading new data <br/>- `false`: Evicts old data to make space for new data |
 
-<Warning>
+:::warning
 Cache configuration settings and cache query settings correspond to the latest ClickHouse version, 
 for earlier versions something might not be supported.
-</Warning>
+:::
 
 #### Cache system tables {#cache-system-tables-file-cache}
 
@@ -835,14 +834,14 @@ In this sample configuration:
 </clickhouse>
 ```
 
-<Tip>
+:::tip
 Storage can also be configured temporarily within a query, if a web dataset is 
 not expected to be used routinely, see [dynamic configuration](#dynamic-configuration) and skip 
 editing the configuration file.
 
 A [demo dataset](https://github.com/ClickHouse/web-tables-demo) is hosted in GitHub.  To prepare your own tables for web 
 storage see the tool [clickhouse-static-files-uploader](/operations/utilities/static-files-disk-uploader)
-</Tip>
+:::
 
 In this `ATTACH TABLE` query the `UUID` provided matches the directory name of the data, and the endpoint is the URL for the raw GitHub content.
 
@@ -1076,7 +1075,6 @@ Use [http_max_single_read_retries](/operations/storing-data#web-storage) setting
 
 Zero-copy replication is possible, but not recommended, with  `S3` and `HDFS` (unsupported) disks. Zero-copy replication means that if the data is stored remotely on several machines and needs to be synchronized, then only the metadata is replicated (paths to the data parts), but not the data itself.
 
-<Note>
-**Zero-copy replication is not ready for production**
+:::note Zero-copy replication is not ready for production
 Zero-copy replication is disabled by default in ClickHouse version 22.8 and higher.  This feature is not recommended for production use.
-</Note>
+:::

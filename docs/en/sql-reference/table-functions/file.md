@@ -41,7 +41,7 @@ file(['file1.csv', 'file2.csv'], 'CSV', 'column1 UInt32, column2 UInt32')
 | `structure`       | Structure of the table. Format: `'column1_name column1_type, column2_name column2_type, ...'`.                                                                                                                                                                                                                |
 | `compression`     | The existing compression type when used in a `SELECT` query, or the desired compression type when used in an `INSERT` query. Supported compression types are `gz`, `br`, `xz`, `zst`, `lz4`, and `bz2`.                                                                                                       |
 
-<Tip>
+:::tip
 When the `structure` argument is omitted, ClickHouse infers the schema from the format itself.
 Different formats produce different default column names and types.
 To see the schema for a specific format, use [`DESC`](/sql-reference/statements/describe-table) with the [`format`](/sql-reference/table-functions/format) table function.
@@ -57,7 +57,7 @@ DESC format(LineAsString, 'Hello\nWorld')
 │ line │ String │              │                    │         │                  │                │
 └──────┴────────┴──────────────┴────────────────────┴─────────┴──────────────────┴────────────────┘
 ```
-</Tip>
+:::
 
 ## Returned value {#returned_value}
 
@@ -207,9 +207,9 @@ Query the total number of rows in `some_dir` using the implicit `*`:
 SELECT count(*) FROM file('some_dir', 'TSV', 'name String, value UInt32');
 ```
 
-<Note>
+:::note
 If your listing of files contains number ranges with leading zeros, use the construction with braces for each digit separately or use `?`.
-</Note>
+:::
 
 **Example**
 

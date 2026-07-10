@@ -28,9 +28,9 @@ Example: The table contains discounts for each advertiser in the format:
 
 To use a sample for date ranges, define the `range_min` and `range_max` elements in the [structure](../attributes.md#composite-key). These elements must contain elements `name` and `type` (if `type` is not specified, the default type will be used - Date). `type` can be any numeric type (Date / DateTime / UInt64 / Int32 / others).
 
-<Note>
+:::note
 Values of `range_min` and `range_max` should fit in `Int64` type.
-</Note>
+:::
 
 Example:
 

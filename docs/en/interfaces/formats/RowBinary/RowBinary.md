@@ -30,20 +30,20 @@ Because data is in the binary format the delimiter after `FORMAT RowBinary` is s
   - or Unix style `'\n'`
 - Immediately followed by binary data.
 
-<Note>
+:::note
 This format is less efficient than the [Native](../Native.md) format since it is row-based.
-</Note>
+:::
 
 ## Data types wire format {#data-types-wire-format}
 
-<Tip>
+:::tip
 Most of the queries provided in the examples can be executed with curl with a file output.
 
 ```bash
 curl -XPOST "http://localhost:8123?default_format=RowBinary" \
   --data-binary "SELECT 42 :: UInt32"  > out.bin
 ```
-</Tip>
+:::
 
 Then, the data can be examined with a hex editor.
 
@@ -153,9 +153,9 @@ For example, a string `foobar` will be encoded using *seven* bytes as follows:
 
 Unlike `String`, `FixedString` has a fixed length, which is defined in the schema. It is encoded as a sequence of bytes, padded with trailing zero bytes if the value is shorter than `N`.
 
-<Note>
+:::note
 When reading a `FixedString`, trailing zero bytes may be either padding or actual `\0` characters in the data, they are indistinguishable on the wire. ClickHouse itself preserves all `N` bytes as-is.
-</Note>
+:::
 
 An empty `FixedString(3)` contains only padding zeroes:
 
@@ -235,9 +235,9 @@ DateTime([timezone])
 
 For example, `DateTime` or `DateTime('UTC')`.
 
-<Note>
+:::note
 The binary value is always a UTC epoch offset. The timezone does not change the encoding. However, the timezone **does** affect how string values are interpreted on insertion: inserting `'2024-01-15 10:30:00'` into a `DateTime('America/New_York')` column stores a different epoch value than inserting the same string into a `DateTime('UTC')` column, because the string is interpreted as local time in the column's timezone. On the wire, both are just `UInt32` epoch seconds.
-</Note>
+:::
 
 Supported range of values: `[1970-01-01 00:00:00, 2106-02-07 06:28:15]`.
 
@@ -264,9 +264,9 @@ Where `precision` is an integer from `0` to `9`. Typically, only the following a
 
 Examples of valid DateTime64 definitions: `DateTime64(0)`, `DateTime64(3)`, `DateTime64(6, 'UTC')`, or `DateTime64(9, 'Europe/Amsterdam')`.
 
-<Note>
+:::note
 As with `DateTime`, the binary value is always a UTC epoch offset. The timezone affects how string values are interpreted on insertion (see the [DateTime](#datetime) note), but the encoding itself is always `Int64` ticks since the UTC epoch.
-</Note>
+:::
 
 The underlying `Int64` value of the `DateTime64` type can be interpreted as the number of the following units before or after the UNIX epoch:
 
@@ -283,9 +283,9 @@ Sample underlying values for `DateTime64`:
 - `DateTime64(6)`: value `1705314600123456` represents `2024-01-15 10:30:00.123456 UTC`.
 - `DateTime64(9)`: value `1705314600123456789` represents `2024-01-15 10:30:00.123456789 UTC`.
 
-<Note>
+:::note
 The precision of the maximum value is 8. If the maximum precision of 9 digits (nanoseconds) is used, the maximum supported value is 2262-04-11 23:47:16 in UTC.
-</Note>
+:::
 
 ### Time {#time}
 
@@ -293,9 +293,9 @@ Stored as `Int32` representing a time value in seconds. Negative values are vali
 
 Supported range of values: `[-999:59:59, 999:59:59]` (i.e., `[-3599999, 3599999]` seconds).
 
-<Note>
+:::note
 At the moment, the setting `enable_time_time64_type` must be set to `1` to use `Time` or `Time64`.
-</Note>
+:::
 
 Sample underlying values for `Time`:
 
@@ -322,9 +322,9 @@ Where `precision` is an integer from `0` to `9`. Common values: `3` (millisecond
 
 Supported range of values: `[-999:59:59.xxxxxxxxx, 999:59:59.xxxxxxxxx]`.
 
-<Note>
+:::note
 At the moment, the setting `enable_time_time64_type` must be set to `1` to use `Time` or `Time64`.
-</Note>
+:::
 
 The underlying `Int64` value represents fractional seconds scaled by `10^precision`.
 
@@ -347,9 +347,9 @@ All interval types are stored as `Int64` (eight bytes, little-endian). The value
 
 The interval types are: `IntervalNanosecond`, `IntervalMicrosecond`, `IntervalMillisecond`, `IntervalSecond`, `IntervalMinute`, `IntervalHour`, `IntervalDay`, `IntervalWeek`, `IntervalMonth`, `IntervalQuarter`, `IntervalYear`.
 
-<Note>
+:::note
 The interval type name (e.g., `IntervalSecond` vs `IntervalDay`) determines the unit of the stored value. The wire encoding is always the same.
-</Note>
+:::
 
 Sample underlying values:
 
@@ -523,13 +523,13 @@ SELECT
 
 In RowBinary format, the low-cardinality marker does not affect the wire format. For example, a `LowCardinality(String)` is encoded the same way as a regular `String`.
 
-<Warning>
+:::warning
 This only applies to RowBinary. In the Native format, `LowCardinality` uses a different dictionary-based encoding.
-</Warning>
+:::
 
-<Note>
+:::note
 A column can be defined as `LowCardinality(Nullable(T))`, but it is not possible to define it as `Nullable(LowCardinality(T))` - it will always result in an error from the server.
-</Note>
+:::
 
 While testing, [allow_suspicious_low_cardinality_types](https://clickhouse.com/docs/operations/settings/settings#allow_suspicious_low_cardinality_types) can be set to `1` to allow most of the data types inside `LowCardinality` for better coverage.
 
@@ -568,9 +568,9 @@ SELECT array('foobar', 'qaz') AS arr
 0x71, 0x61, 0x7a, // 'qaz'
 ```
 
-<Note>
+:::note
 An array can contain nullable values, but the array itself cannot be nullable.
-</Note>
+:::
 
 The following is valid:
 
@@ -659,17 +659,17 @@ SELECT CAST(map('foo', 1, 'bar', 2), 'Map(String, UInt32)') AS m
 0x02, 0x00, 0x00, 0x00, // UInt32(2)
 ```
 
-<Note>
+:::note
 It is possible to have maps with deeply nested structures, such as `Map(String, Map(Int32, Array(Nullable(String))))`, which will be encoded similarly to what is described above.
-</Note>
+:::
 
 ### Variant {#variant}
 
 This type represents a union of other data types. Type `Variant(T1, T2, ..., TN)` means that each row of this type has a value of either type `T1` or `T2` or … or `TN` or none of them (`NULL` value).
 
-<Warning>
+:::warning
 While for the end user `Variant(T1, T2)` means exactly the same as `Variant(T2, T1)`, the order of types in the definition matters for the wire format: the types in the definition are always sorted alphabetically, and this is important, since the exact variant is encoded by a "discriminant" - the data type index in the definition.
-</Warning>
+:::
 
 Consider the following example:
 
@@ -1062,9 +1062,9 @@ Sample encoding of a `Ring` as `Geometry`:
 
 The wire format for `Nested` depends on the `flatten_nested` setting.
 
-<Warning>
+:::warning
 All component arrays in a single row **must have the same length**. This is a server-enforced constraint. Mismatched lengths will cause insertion errors.
-</Warning>
+:::
 
 #### `flatten_nested = 1` (default) {#nested-flattened}
 
@@ -1163,9 +1163,9 @@ The RowBinaryWithNamesAndTypes header reports the type as `SimpleAggregateFuncti
 
 `AggregateFunction(func, T)` stores the full intermediate state of an aggregate function. Unlike `SimpleAggregateFunction`, which also stores an intermediate state but encodes it identically to the underlying data type, `AggregateFunction` stores an opaque binary blob whose format is specific to each aggregate function.
 
-<Warning>
+:::warning
 Aggregate states have **no length prefix** in RowBinary. A parser must understand the internal serialization format of each specific aggregate function to know how many bytes to consume. In practice, most clients treat aggregate states as opaque and use `*State` / `*Merge` combinators to let the server handle serialization.
-</Warning>
+:::
 
 The internal format varies by function. Some simple examples:
 
@@ -1210,9 +1210,9 @@ SELECT minState(toUInt32(number)) FROM numbers(0)
 0x00, // flag: no value
 ```
 
-<Note>
+:::note
 More complex functions like `uniq`, `quantile`, or `groupArray` use implementation-specific formats. If you need to read or write these states, consult the ClickHouse source code for the specific function.
-</Note>
+:::
 
 ### QBit {#qbit}
 

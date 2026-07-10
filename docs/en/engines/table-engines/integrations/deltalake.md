@@ -74,10 +74,9 @@ CREATE TABLE table_name
 ENGINE = DeltaLake('https://storage.googleapis.com/<bucket>/<path>/', '<access_key_id>', '<secret_access_key>')
 ```
 
-<Note>
-**Unsupported gsutil URI**
+:::note[Unsupported gsutil URI]
 gsutil URI such as `gs://clickhouse-docs-example-bucket` is not supported, please use a URL starting `https://storage.googleapis.com`
-</Note>
+:::
 
 **Arguments**
 
@@ -134,12 +133,12 @@ INSERT INTO deltalake(id, firstname, lastname, gender, age)
 VALUES (1, 'John', 'Smith', 'M', 32);
 ```
 
-<Note>
+:::note
 Writing using the table engine is supported only through delta kernel.
 Writes to Azure are not yet supported but work for S3 and GCS.
 
 Delta Lake writes are a Beta feature and must be enabled with `SET allow_delta_lake_writes = 1` (available from version 26.7; on earlier versions use `SET allow_experimental_delta_lake_writes = 1`).
-</Note>
+:::
 
 ### Data cache {#data-cache}
 

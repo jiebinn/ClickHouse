@@ -7,7 +7,7 @@ title: 'Replicated* table engines'
 doc_type: 'reference'
 ---
 
-<Note>
+:::note
 In ClickHouse Cloud replication is managed for you. Please create your tables without adding arguments.  For example, in the text below you would replace:
 
 ```sql
@@ -22,7 +22,7 @@ with:
 ```sql
 ENGINE = ReplicatedMergeTree
 ```
-</Note>
+:::
 
 Replication is only supported for tables in the MergeTree family
 
@@ -51,9 +51,9 @@ ClickHouse uses [ClickHouse Keeper](/guides/sre/keeper/index.md) for storing rep
 
 To use replication, set parameters in the [zookeeper](/operations/server-configuration-parameters/settings#zookeeper) server configuration section.
 
-<Note>
+:::note
 Don't neglect the security setting. ClickHouse supports the `digest` [ACL scheme](https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html#sc_ZooKeeperAccessControl) of the ZooKeeper security subsystem.
-</Note>
+:::
 
 Example of setting the addresses of the ClickHouse Keeper cluster:
 
@@ -138,14 +138,14 @@ The system monitors data synchronicity on replicas and is able to recover after 
 
 ## Creating replicated tables {#creating-replicated-tables}
 
-<Note>
+:::note
 In ClickHouse Cloud, replication is handled automatically.
 
 Create tables using [`MergeTree`](/engines/table-engines/mergetree-family/mergetree) without replication arguments. The system internally rewrites [`MergeTree`](/engines/table-engines/mergetree-family/mergetree) to [`SharedMergeTree`](/cloud/reference/shared-merge-tree) for replication and data distribution.
 
 Avoid using `ReplicatedMergeTree` or specifying replication parameters, as replication is managed by the platform.
 
-</Note>
+:::
 
 ### Replicated\*MergeTree parameters {#replicatedmergetree-parameters}
 

@@ -12,10 +12,10 @@ import BetaBadge from '@theme/badges/BetaBadge';
 
 <BetaBadge/>
 
-<Note>
+:::note
 Lightweight updates are currently beta.
 If you run into problems, kindly open an issue in the [ClickHouse repository](https://github.com/clickhouse/clickhouse/issues).
-</Note>
+:::
 
 The lightweight `UPDATE` statement updates rows in a table `[db.]table` that match the expression `filter_expr`.
 It is called "lightweight update" to contrast it to the [`ALTER TABLE ... UPDATE`](/sql-reference/statements/alter/update) query, which is a heavyweight process that rewrites entire columns in data parts.

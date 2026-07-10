@@ -67,6 +67,6 @@ Setting fields:
 | `secure` | Use SSL for connection. |
 | `query` | The custom query. Optional. |
 
-<Note>
+:::note
 The `table` or `where` fields cannot be used together with the `query` field. And either one of the `table` or `query` fields must be declared.
-</Note>
+:::

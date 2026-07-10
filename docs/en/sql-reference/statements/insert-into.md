@@ -92,13 +92,13 @@ INSERT INTO t FORMAT TabSeparated
 
 You can insert data separately from the query by using the [command-line client](/operations/utilities/clickhouse-local) or the [HTTP interface](/interfaces/http).
 
-<Note>
+:::note
 If you want to specify `SETTINGS` for `INSERT` query then you have to do it _before_ the `FORMAT` clause since everything after `FORMAT format_name` is treated as data. For example:
 
 ```sql
 INSERT INTO table SETTINGS ... FORMAT format_name data_set
 ```
-</Note>
+:::
 
 ## Constraints {#constraints}
 
@@ -139,9 +139,9 @@ ENGINE = MergeTree()
 ORDER BY id; -- ERR: TYPE_TIME_TIME64_IS_NOT_ENABLED
 ```
 
-<Note>
+:::note
 As a consequence, a client with a newer version (where a setting is enabled by default) can insert data with disallowed data types into a server with an older version (where the setting is disabled), as long as the target table already has the corresponding column types. The validation is enforced at the DDL level, not at the DML level.
-</Note>
+:::
 
 ## Inserting the Results of SELECT {#inserting-the-results-of-select}
 
@@ -214,7 +214,7 @@ clickhouse-client --query="INSERT INTO infile_globs FROM INFILE 'input_*.csv' FO
 clickhouse-client --query="SELECT * FROM infile_globs FORMAT PrettyCompact;"
 ```
 
-<Tip>
+:::tip
 In addition to selecting multiple files with `*`, you can use ranges (`{1,2}` or `{1..9}`) and other [glob substitutions](/sql-reference/table-functions/file.md/#globs-in-path). These three all would work with the example above:
 
 ```sql
@@ -222,7 +222,7 @@ INSERT INTO infile_globs FROM INFILE 'input_*.csv' FORMAT CSV;
 INSERT INTO infile_globs FROM INFILE 'input_{1,2}.csv' FORMAT CSV;
 INSERT INTO infile_globs FROM INFILE 'input_?.csv' FORMAT CSV;
 ```
-</Tip>
+:::
 
 ## Inserting using a Table Function {#inserting-using-a-table-function}
 

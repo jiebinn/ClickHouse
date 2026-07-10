@@ -50,9 +50,9 @@ The `Values` format is much more limited.
 
 The rest of this section covers the full parser. 
 
-<Note>
+:::note
 For more information about format parsers, see the [Formats](../interfaces/formats.md) section.
-</Note>
+:::
 
 ## Spaces {#spaces}
 
@@ -92,9 +92,9 @@ Keywords are **case-insensitive** when they correspond to:
 - SQL standard. For example, `SELECT`, `select` and `SeLeCt` are all valid.
 - Implementation in some popular DBMS (MySQL or Postgres). For example, `DateTime` is the same as `datetime`.
 
-<Note>
+:::note
 You can check whether a data type name is case-sensitive in the [system.data_type_families](/operations/system-tables/data_type_families) table.
-</Note>
+:::
 
 In contrast to standard SQL, all other keywords (including functions names) are **case-sensitive**.
 
@@ -128,17 +128,16 @@ See the table below for examples of valid and invalid identifiers:
 
 If you want to use identifiers the same as keywords or you want to use other symbols in identifiers, quote it using double quotes or backticks, for example, `"id"`, `` `id` ``.
 
-<Note>
+:::note
 The same rules that apply for escaping in quoted identifiers also apply for string literals. See [String](#string) for more details.
-</Note>
+:::
 
-<Tip>
-**Avoid using dots in column names**
+:::tip[Avoid using dots in column names]
 Column names containing dots, columns sharing a common dot-prefix, and columns with the `Array` type can each be interpreted as part of a flattened Nested structure when `flatten_nested = 1` (the default). This can cause unexpected array-length validation on inserts and renaming restrictions. 
 
 Avoid using dots in column names if possible.
 Use underscores (`_`) or another separator instead of dots in column names unless you intentionally need `Nested` semantics.
-</Tip>
+:::
 
 ## Literals {#literals}
 
@@ -163,9 +162,9 @@ Escaping works by either:
 - using a preceding single quote where the single-quote character `'` (and only this character) can be escaped as `''`, or
 - using the preceding backslash with the following supported escape sequences listed in the table below.
 
-<Note>
+:::note
 The backslash loses its special meaning i.e. it is interpreted literally should it precede characters other than the ones listed below.
-</Note>
+:::
 
 | Supported Escape                    | Description                                                             |
 |-------------------------------------|-------------------------------------------------------------------------|
@@ -188,9 +187,9 @@ The backslash loses its special meaning i.e. it is interpreted literally should 
 | `\=`                                | equal sign                                                              |
 | ASCII control characters (c &lt;= 31). |                                                                      |
 
-<Note>
+:::note
 In string literals, you need to escape at least `'` and `\` using escape codes `\'` (or: `''`) and `\\`.
-</Note>
+:::
 
 ### Numeric {#numeric}
 
@@ -208,8 +207,7 @@ For example:
 - `1` is parsed as `UInt8`
 - `256` is parsed as `UInt16`. 
 
-<Note>
-**Important**
+:::note Important
 Integer values wider than 64-bit (`UInt128`, `Int128`, `UInt256`, `Int256`) must be cast to a larger type to parse properly:
 
 ```sql
@@ -222,7 +220,7 @@ Integer values wider than 64-bit (`UInt128`, `Int128`, `UInt256`, `Int256`) must
 This bypasses the above algorithm and parses the integer with a routine that supports arbitrary precision.
 
 Otherwise, the literal will be parsed as a floating-point number and thus subject to loss of precision due to truncation.
-</Note>
+:::
 
 For more information, see [Data types](../sql-reference/data-types/index.md).
 
@@ -241,9 +239,9 @@ The following Numeric literals are supported:
 | **Binary**                                | `0b1101`                                        |
 | **SQL Standard compatible binary string** | `b'1101'`                                       |
 
-<Note>
+:::note
 Octal literals are not supported to avoid accidental errors in interpretation.
-</Note>
+:::
 
 ### Compound {#compound}
 
@@ -251,23 +249,23 @@ Arrays are constructed with `[]`: `[1, 2, 3]`. Tuples are constructed with `()`:
 Technically these are not literals, but expressions with the array creation operator and the tuple creation operator, respectively.
 An array must consist of at least one item, and a tuple must have at least two items.
 
-<Note>
+:::note
 There is a separate case when tuples appear in the `IN` clause of a `SELECT` query. 
 Query results can include tuples, but tuples cannot be saved to a database (except for tables using the [Memory](../engines/table-engines/special/memory.md) engine).
-</Note>
+:::
 
 ### NULL {#null}
 
 `NULL` is used to indicate that a value is missing. 
 To store `NULL` in a table field, it must be of the [Nullable](../sql-reference/data-types/nullable.md) type.
 
-<Note>
+:::note
 The following should be noted for `NULL`:
 
 - Depending on the data format (input or output), `NULL` may have a different representation. For more information, see [data formats](/interfaces/formats).
 - `NULL` processing is nuanced. For example, if at least one of the arguments of a comparison operation is `NULL`, the result of this operation is also `NULL`. The same is true for multiplication, addition, and other operations. We recommend to read the documentation for each operation.
 - In queries, you can check `NULL` using the [`IS NULL`](/sql-reference/functions/functions-for-nulls#isNull) and [`IS NOT NULL`](/sql-reference/functions/functions-for-nulls#isNotNull) operators and the related functions `isNull` and `isNotNull`.
-</Note>
+:::
 
 ### Heredoc {#heredoc}
 
@@ -284,13 +282,13 @@ SELECT $heredoc$SHOW CREATE VIEW my_view$heredoc$;
 └────────────────────────────┘
 ```
 
-<Note>
+:::note
 - A value between two heredocs is processed "as-is".
-</Note>
+:::
 
-<Tip>
+:::tip
 - You can use a heredoc to embed snippets of SQL, HTML, or XML code, etc.
-</Tip>
+:::
 
 ## Defining and Using Query Parameters {#defining-and-using-query-parameters}
 
@@ -364,10 +362,10 @@ hello
 The built-in Web UI (`play.html`) automatically detects `{name:Type}` parameter placeholders in the query and displays labeled input fields for each parameter. The parameter values are included in the HTTP request and also persisted in the page URL for bookmarking and sharing.
 </details>
 
-<Note>
+:::note
 Query parameters are not general text substitutions which can be used in arbitrary places in arbitrary SQL queries.
 They are primarily designed to work in `SELECT` statements in place of identifiers or literals.
-</Note>
+:::
 
 ## Functions {#functions}
 
@@ -392,9 +390,9 @@ quantile (0.9)(x)
 These aggregate functions are called "parametric" functions, 
 and the arguments in the first list are called "parameters".
 
-<Note>
+:::note
 The syntax of aggregate functions without parameters is the same as for regular functions.
-</Note>
+:::
 
 ## Operators {#operators}
 
@@ -502,9 +500,9 @@ As aliases are global,
 ClickHouse substituted the literal `b` in the expression `argMax(a, b)` with the expression `sum(b)`. 
 This substitution caused the exception.
 
-<Note>
+:::note
 You can change this default behavior by setting [prefer_column_name_to_alias](/operations/settings/settings#prefer_column_name_to_alias) to `1`.
-</Note>
+:::
 
 ## Asterisk {#asterisk}
 

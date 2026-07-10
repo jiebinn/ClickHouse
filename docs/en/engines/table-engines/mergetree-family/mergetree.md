@@ -28,9 +28,9 @@ Main features of `MergeTree`-family table engines.
 
 - `MergeTree` table engines support various statistics kinds and sampling methods to help query optimization.
 
-<Note>
+:::note
 Despite a similar name, the [Merge](/engines/table-engines/special/merge) engine is different from `*MergeTree` engines.
-</Note>
+:::
 
 ## Creating tables {#table_engine-mergetree-creating-a-table}
 
@@ -128,9 +128,9 @@ The `index_granularity` setting can be omitted because 8192 is the default value
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-<Note>
+:::note
 Do not use this method in new projects. If possible, switch old projects to the method described above.
-</Note>
+:::
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -449,23 +449,21 @@ The following data types are supported:
 - `UUID`
 - `Map`
 
-<Note>
-**Map data type: specifying index creation with keys or values**
+:::note Map data type: specifying index creation with keys or values
 For the `Map` data type, the client can specify if the index should be created for keys or for values using the [`mapKeys`](/sql-reference/functions/tuple-map-functions.md/#mapKeys) or [`mapValues`](/sql-reference/functions/tuple-map-functions.md/#mapValues) functions.
-</Note>
+:::
 
-<Note>
-**JSON data type: indexing JSON paths**
+:::note JSON data type: indexing JSON paths
 For the [`JSON`](/sql-reference/data-types/newjson) data type, a bloom filter index can be created on the set of paths using the [`JSONAllPaths`](/sql-reference/functions/json-functions#JSONAllPaths) function. This allows skipping granules where a queried JSON path is absent. See [Data skipping indexes for JSON](/sql-reference/data-types/newjson#data-skipping-indexes-for-json) for details.
-</Note>
+:::
 
 #### N-gram bloom filter *(Deprecated)* {#n-gram-bloom-filter}
 
-<Note>
+:::note
 With general availability (GA) of the `text` index starting from ClickHouse version 26.2, the `ngrambf_v1` index is no longer recommended for full text search.
 
 See page ["Full-text search with text indexes"](./textindexes.md) for details.
-</Note>
+:::
 
 For each index granule stores a [bloom filter](https://en.wikipedia.org/wiki/Bloom_filter) for the [n-grams](https://en.wikipedia.org/wiki/N-gram) of the specified columns.
 
@@ -533,11 +531,11 @@ The functions above refer to the bloom filter calculator [here](https://hur.st/b
 
 #### Token bloom filter {#token-bloom-filter}
 
-<Note>
+:::note
 With general availability (GA) of the `text` index starting from ClickHouse version 26.2, the `tokenbf_v1` index is no longer recommended for full text search.
 
 See page ["Full-text search with text indexes"](./textindexes.md) for details.
-</Note>
+:::
 
 ```text title="Syntax"
 tokenbf_v1(size_of_bloom_filter_in_bytes, number_of_hash_functions, random_seed)
@@ -604,7 +602,7 @@ Functions with a constant argument that is less than ngram size can't be used by
 
 (*) For `hasTokenCaseInsensitive` and `hasTokenCaseInsensitiveOrNull` to be effective, the `tokenbf_v1` index must be created on lowercased data, for example `INDEX idx (lower(str_col)) TYPE tokenbf_v1(512, 3, 0)`.
 
-<Note>
+:::note
 Bloom filters can have false positive matches, so the `ngrambf_v1`, `tokenbf_v1`, `sparse_grams`, and `bloom_filter` indexes can not be used for optimizing queries where the result of a function is expected to be false.
 
 For example:
@@ -621,14 +619,14 @@ For example:
   - `NOT s = 1`
   - `s != 1`
   - `NOT startsWith(s, 'test')`
-</Note>
+:::
 
 ## Projections {#projections}
 Projections are like [materialized views](/sql-reference/statements/create/view) but defined in part-level. It provides consistency guarantees along with automatic usage in queries.
 
-<Note>
+:::note
 When you are implementing projections you should also consider the [force_optimize_projection](/operations/settings/settings#force_optimize_projection) setting.
-</Note>
+:::
 
 Projections are not supported in the `SELECT` statements with the [FINAL](/sql-reference/statements/select/from#final-modifier) modifier.
 
@@ -700,12 +698,11 @@ The `TTL` clause can be set for the whole table and for each individual column. 
 
 Expressions must evaluate to [Date](/sql-reference/data-types/date.md), [Date32](/sql-reference/data-types/date32.md), [DateTime](/sql-reference/data-types/datetime.md) or [DateTime64](/sql-reference/data-types/datetime64.md) data type.
 
-<Tip>
-**Avoid non-deterministic functions in TTL expressions**
+:::tip[Avoid non-deterministic functions in TTL expressions]
 TTL is evaluated during background merges, and not at insert time.
 Functions like `rand()`, `now()`, or `now64()` will be re-evaluated on every merge, leading to unpredictable deletion behavior.
 ClickHouse blocks expressions with no column dependency at all, but does not currently reject non-deterministic functions mixed with a column reference (e.g. `ts + rand()`). TTL expressions should be based solely on deterministic, column-derived values for predictable results.
-</Tip>
+:::
 
 **Syntax**
 
@@ -907,11 +904,11 @@ The names given to the described entities can be found in the system tables, [sy
 
 Disks, volumes and storage policies should be declared inside the `<storage_configuration>` tag either in a file in the `config.d` directory.
 
-<Tip>
+:::tip
 Disks can also be declared in the `SETTINGS` section of a query.  This is useful
 for ad-hoc analysis to temporarily attach a disk that is, for example, hosted at a URL.
 See [dynamic storage](/operations/storing-data#dynamic-configuration) for more details.
-</Tip>
+:::
 
 Configuration structure:
 
@@ -1205,16 +1202,15 @@ You can also combine local and S3 volumes in a tiered policy, for example moving
 </storage_configuration>
 ```
 
-<Note>
+:::note
 When using `use_environment_credentials` for S3 authentication, the environment credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`) are shared across all S3 disks. It is not possible to use different environment credentials for different disks. If you need different credentials for each S3 disk, use explicit `access_key_id` and `secret_access_key` settings per disk instead.
-</Note>
+:::
 
 It is possible to set up non-replicated MergeTree tables with a one-writer, many-readers scenario on shared storage. This is provided by the automatic refresh of the parts list, which can be set up on readers. Note that this requires shared filesystem metadata across replicas (or `table_disk = true` with a table-local disk). See [refresh_parts_interval and table_disk](/operations/storing-data.md/#refresh-parts-interval-and-table-disk).
 
-<Note>
-**cache configuration**
+:::note cache configuration
 ClickHouse versions 22.3 through 22.7 use a different cache configuration, see [using local cache](/operations/storing-data.md/#using-local-cache) if you are using one of those versions.
-</Note>
+:::
 
 ## Virtual columns {#virtual-columns}
 
@@ -1313,9 +1309,9 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 
 - `TDigest`
 
-<Warning>
+:::warning
 Statistics of type `tdigest` have high creation costs and potentially slow down data ingest.
-</Warning>
+:::
 
     [TDigest](https://github.com/tdunning/t-digest) sketches which allow to compute approximate percentiles (e.g. the 90th percentile) for numeric columns.
 
@@ -1329,9 +1325,9 @@ Statistics of type `tdigest` have high creation costs and potentially slow down 
 
 - `CountMin`
 
-<Warning>
+:::warning
 Statistics of type `countmin` have high creation costs and potentially slow down data ingest.
-</Warning>
+:::
 
     [CountMin](https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch) sketches which provide an approximate count of the frequency of each value in a column.
 

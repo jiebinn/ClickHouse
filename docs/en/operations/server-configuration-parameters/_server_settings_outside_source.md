@@ -37,9 +37,9 @@ To disable `asynchronous_metric_log` setting, you should create the following fi
 
 Use originating address for authentication for clients connected through proxy.
 
-<Note>
+:::note
 This setting should be used with extra caution since forwarded addresses can be easily spoofed - servers accepting such authentication should not be accessed directly but rather exclusively through a trusted proxy.
-</Note>
+:::
 
 ## backups {#backups}
 
@@ -124,19 +124,19 @@ The work factor defines the amount of computations and time needed to compute th
 <bcrypt_workfactor>12</bcrypt_workfactor>
 ```
 
-<Warning>
+:::warning
 For applications with high-frequency authentication,
 consider alternative authentication methods due to
 bcrypt's computational overhead at higher work factors.
-</Warning>
+:::
 
 ## table_engines_require_grant {#table_engines_require_grant}
 
 If set to true, users require a grant to create a table with a specific engine e.g. `GRANT TABLE ENGINE ON TinyLog to user`.
 
-<Note>
+:::note
 By default, for backward compatibility creating table with a specific table engine ignores grant, however you can change this behaviour by setting this to true.
-</Note>
+:::
 
 ## builtin_dictionaries_reload_interval {#builtin_dictionaries_reload_interval}
 
@@ -154,9 +154,9 @@ ClickHouse reloads built-in dictionaries every x seconds. This makes it possible
 
 Data compression settings for [MergeTree](../../engines/table-engines/mergetree-family/mergetree.md)-engine tables.
 
-<Note>
+:::note
 We recommend not changing this if you have just started using ClickHouse.
-</Note>
+:::
 
 **Configuration template**:
 
@@ -179,18 +179,18 @@ We recommend not changing this if you have just started using ClickHouse.
 - `method` – Compression method. Acceptable values: `lz4`, `lz4hc`, `zstd`,`deflate_qpl`.
 - `level` – Compression level. See [Codecs](/sql-reference/statements/create/table#general-purpose-codecs).
 
-<Note>
+:::note
 You can configure multiple `<case>` sections.
-</Note>
+:::
 
 **Actions when conditions are met**:
 
 - If a data part matches a condition set, ClickHouse uses the specified compression method.
 - If a data part matches multiple condition sets, ClickHouse uses the first matched condition set.
 
-<Note>
+:::note
 If no conditions are met for a data part, ClickHouse uses the `lz4` compression.
-</Note>
+:::
 
 **Example**
 
@@ -223,9 +223,9 @@ Loading from config:
 </encryption_codecs>
 ```
 
-<Note>
+:::note
 Storing keys in the configuration file is not recommended. It isn't secure. You can move the keys into a separate config file on a secure disk and put a symlink to that config file to `config.d/` folder.
-</Note>
+:::
 
 Loading from config, when the key is in hex:
 
@@ -282,9 +282,9 @@ Or it can be set in hex:
     </aes_128_gcm_siv>
 </encryption_codecs>
 ```
-<Note>
+:::note
 Everything mentioned above can be applied for `aes_256_gcm_siv` (but the key must be 32 bytes long).
-</Note>
+:::
 
 ## error_log {#error_log}
 
@@ -340,9 +340,9 @@ Multiple prefixes should be separated by commas.
 
 Configures soft limit for core dump file size.
 
-<Note>
+:::note
 Hard limit is configured via system tools
-</Note>
+:::
 
 **Example**
 
@@ -485,9 +485,9 @@ The following settings can be configured by sub-tags (all these sub-tags are opt
 | `empty_query_string` | Check that there is no query string in the URL                                                                                                    |
 | `handler`            | The request handler (required)                                                                                                                    |
 
-<Note>
+:::note
 Instead of `url_regexp`, `full_url_regexp` and `headers_regexp` you can also write a regular expression in `url`, `full_url` or `headers` using the `regex:` prefix (e.g. `<url>regex:/api/.*</url>`). This is still supported for backward compatibility, but is obsolete: prefer the dedicated `url_regexp`, `full_url_regexp` and `headers_regexp` sub-tags.
-</Note>
+:::
 
 `handler` contains the following settings, which can be configured by sub-tags:
 
@@ -586,9 +586,9 @@ Example:
 
 Expired time for HSTS in seconds.
 
-<Note>
+:::note
 A value of `0` means ClickHouse disables HSTS. If you set a positive number, the HSTS will be enabled and the max-age is the number you set.
-</Note>
+:::
 
 **Example**
 
@@ -601,9 +601,9 @@ A value of `0` means ClickHouse disables HSTS. If you set a positive number, the
 Restriction on hosts that can exchange data between ClickHouse servers.
 If Keeper is used, the same restriction will be applied to the communication between different Keeper instances.
 
-<Note>
+:::note
 By default, the value is equal to the [`listen_host`](#listen_host) setting.
-</Note>
+:::
 
 **Example**
 
@@ -621,11 +621,11 @@ Default:
 A username and a password used to connect to other servers during [replication](../../engines/table-engines/mergetree-family/replication.md). Additionally, the server authenticates other replicas using these credentials.
 `interserver_http_credentials` must therefore be the same for all replicas in a cluster.
 
-<Note>
+:::note
 - By default, if `interserver_http_credentials` section is omitted, authentication is not used during replication.
 - `interserver_http_credentials` settings do not relate to a ClickHouse client credentials [configuration](../../interfaces/client.md#configuration_files).
 - These credentials are common for replication via `HTTP` and `HTTPS`.
-</Note>
+:::
 
 The following settings can be configured by sub-tags:
 
@@ -1037,9 +1037,9 @@ The sub-tags above define the following settings for `disks`:
 | `path`                  | The path to which server data will be stored (`data` and `shadow` catalogues). It should end with `/` |
 | `keep_free_space_bytes` | Size of the reserved free space on disk.                                                              |
 
-<Note>
+:::note
 The order of the disks does not matter.
-</Note>
+:::
 
 ### Configuration of policies {#configuration-of-policies}
 
@@ -1407,10 +1407,10 @@ The following settings are available:
 | `max_entry_size_in_rows` | The maximum number of rows `SELECT` query results may have to be saved in the cache.   | `30000000`    |
 | `max_size_in_bytes` | The maximum cache size in bytes. `0` means the query cache is disabled.                | `1073741824`  |
 
-<Note>
+:::note
 - Changed settings take effect immediately.
 - Data for the query cache is allocated in DRAM. If memory is scarce, make sure to set a small value for `max_size_in_bytes` or disable the query cache altogether.
-</Note>
+:::
 
 **Example**
 
@@ -1595,10 +1595,10 @@ which is used if the former one is absent.
 The filesystem cache setting path must lie inside that directory,
 otherwise an exception will be thrown preventing the disk from being created.
 
-<Note>
+:::note
 This will not affect disks created on an older version for which the server was upgraded.
 In this case, an exception will not be thrown, to allow the server to successfully start.
-</Note>
+:::
 
 Example:
 
@@ -1760,10 +1760,10 @@ TCP port for secure communication with clients. Use it with [OpenSSL](#openssl) 
 
 Port for communicating with clients over MySQL protocol.
 
-<Note>
+:::note
 - Positive integers specify the port number to listen to
 - Empty values are used to disable communication with clients over MySQL protocol.
-</Note>
+:::
 
 **Example**
 
@@ -1775,10 +1775,10 @@ Port for communicating with clients over MySQL protocol.
 
 Port for communicating with clients over PostgreSQL protocol.
 
-<Note>
+:::note
 - Positive integers specify the port number to listen to
 - Empty values are used to disable communication with clients over PostgreSQL protocol.
-</Note>
+:::
 
 **Example**
 
@@ -1979,11 +1979,11 @@ When creating a table, specify the corresponding [engine setting](../../engines/
 
 If [`use_minimalistic_part_header_in_zookeeper = 1`](#use_minimalistic_part_header_in_zookeeper), then [replicated](../../engines/table-engines/mergetree-family/replication.md) tables store the headers of the data parts compactly using a single `znode`. If the table contains many columns, this storage method significantly reduces the volume of the data stored in Zookeeper.
 
-<Note>
+:::note
 After applying `use_minimalistic_part_header_in_zookeeper = 1`, you can't downgrade the ClickHouse server to a version that does not support this setting. Be careful when upgrading ClickHouse on servers in a cluster. Don't upgrade all the servers at once. It is safer to test new versions of ClickHouse in a test environment, or on just a few servers of a cluster.
 
 Data part headers already stored with this setting can't be restored to their previous (non-compact) representation.
-</Note>
+:::
 
 ## distributed_ddl {#distributed_ddl}
 
@@ -2266,12 +2266,12 @@ Select a parent field in the tabs below to view their children:
 |-------------|-----------------------------------------------|
 | `<resolver>` | The endpoint and other details for a resolver |
 
-<Note>
+:::note
 You can have multiple `<resolver>` elements, but only the first
 `<resolver>` for a given protocol is used. Any other `<resolver>`
 elements for that protocol are ignored. That means load balancing
 (if needed) should be implemented by the remote resolver.
-</Note>
+:::
 
   </TabItem>
   <TabItem value="resolver" label="<resolver>">

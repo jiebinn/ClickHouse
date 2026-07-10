@@ -21,9 +21,9 @@ Also prints the header row with column names, similar to [TabSeparatedWithNames]
 
 ### Inserting data {#inserting-data}
 
-<Tip>
+:::tip
 Starting from [version](https://github.com/ClickHouse/ClickHouse/releases) 23.1, ClickHouse will automatically detect headers in CSV files when using the `CSV` format, so it is not necessary to use `CSVWithNames` or `CSVWithNamesAndTypes`.
-</Tip>
+:::
 
 Using the following CSV file, named as `football.csv`:
 
@@ -105,8 +105,8 @@ The output will be a CSV with a single header row:
 
 ## Format settings {#format-settings}
 
-<Note>
+:::note
 If setting [`input_format_with_names_use_header`](../../../operations/settings/settings-formats.md/#input_format_with_names_use_header) is set to `1`,
 the columns from input data will be mapped to the columns from the table by their names, columns with unknown names will be skipped if setting [input_format_skip_unknown_fields](../../../operations/settings/settings-formats.md/#input_format_skip_unknown_fields) is set to `1`.
 Otherwise, the first row will be skipped.
-</Note>
+:::

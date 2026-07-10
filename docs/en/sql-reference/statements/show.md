@@ -7,7 +7,7 @@ title: 'SHOW Statements'
 doc_type: 'reference'
 ---
 
-<Note>
+:::note
 
 `SHOW CREATE (TABLE|DATABASE|USER)` hides secrets unless the following settings are turned on:
 
@@ -15,7 +15,7 @@ doc_type: 'reference'
 - [`format_display_secrets_in_show_and_select` ](../../operations/settings/formats/#format_display_secrets_in_show_and_select) (format setting)  
 
 Additionally, the user should have the [`displaySecretsInShowAndSelect`](grant.md/#displaysecretsinshowandselect) privilege.
-</Note>
+:::
 
 ## SHOW CREATE TABLE | DICTIONARY | VIEW | DATABASE {#show-create-table--dictionary--view--database}
 
@@ -28,11 +28,11 @@ containing the `CREATE` query used for creating the specified object.
 SHOW [CREATE] TABLE | TEMPORARY TABLE | DICTIONARY | VIEW | DATABASE [db.]table|view [INTO OUTFILE filename] [FORMAT format]
 ```
 
-<Note>
+:::note
 If you use this statement to get the `CREATE` query of system tables,
 you will get a *fake* query, which only declares the table structure,
 but cannot be used to create a table.
-</Note>
+:::
 
 ## SHOW DATABASES {#show-databases}
 
@@ -346,13 +346,13 @@ SHOW PROCESSLIST [INTO OUTFILE filename] [FORMAT format]
 
 The `SELECT * FROM system.processes` query returns data about all the current queries.
 
-<Tip>
+:::tip
 Execute in the console:
 
 ```bash
 $ watch -n1 "clickhouse-client --query='SHOW PROCESSLIST'"
 ```
-</Tip>
+:::
 
 ## SHOW GRANTS {#show-grants}
 
@@ -500,9 +500,9 @@ SHOW ACCESS
 The `SHOW CLUSTER(S)` statement returns a list of clusters. 
 All available clusters are listed in the [`system.clusters`](../../operations/system-tables/clusters.md) table.
 
-<Note>
+:::note
 The `SHOW CLUSTER name` query displays `cluster`, `shard_num`, `replica_num`, `host_name`, `host_address`, and `port` of the `system.clusters` table for the specified cluster name.
-</Note>
+:::
 
 ### Syntax {#syntax-20}
 

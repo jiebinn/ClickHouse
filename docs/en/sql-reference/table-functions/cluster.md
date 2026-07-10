@@ -12,9 +12,9 @@ Allows accessing all shards (configured in the `remote_servers` section) of a cl
 
 `clusterAllReplicas` function — same as `cluster`, but all replicas are queried. Each replica in a cluster is used as a separate shard/connection.
 
-<Note>
+:::note
 All available clusters are listed in the [system.clusters](../../operations/system-tables/clusters.md) table.
-</Note>
+:::
 
 ## Syntax {#syntax}
 

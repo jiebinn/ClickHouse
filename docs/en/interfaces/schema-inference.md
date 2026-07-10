@@ -1495,9 +1495,9 @@ DESC format(JSONEachRow, $$
 
 #### input_format_try_infer_integers {#input-format-try-infer-integers}
 
-<Note>
+:::note
 This setting does not apply to the `JSON` data type.
-</Note>
+:::
 
 If enabled, ClickHouse will try to infer integers instead of floats in schema inference for text formats.
 If all numbers in the column from sample data are integers, the result type will be `Int64`, if at least one number is float, the result type will be `Float64`.
@@ -2164,6 +2164,6 @@ We can inspect and query this file without specifying format or structure:
 └───┴───────┘
 ```
 
-<Note>
+:::note
 ClickHouse can detect only some subset of formats and this detection takes some time, it's always better to specify the format explicitly.
-</Note>
+:::

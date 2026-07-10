@@ -29,6 +29,6 @@ The following operations are available:
 The commands `ADD`, `DROP`, and `CLEAR` are lightweight in the sense that they only change metadata or remove files.
 Also, they are replicated, syncing indices metadata via ClickHouse Keeper or ZooKeeper.
 
-<Note>
+:::note    
 Index manipulation is supported only for tables with [`*MergeTree`](/engines/table-engines/mergetree-family/mergetree.md) engine (including [replicated](/engines/table-engines/mergetree-family/replication.md) variants).
-</Note>
+:::

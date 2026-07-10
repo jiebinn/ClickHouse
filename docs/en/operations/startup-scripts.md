@@ -33,6 +33,6 @@ the server will not start if an error occurs during script execution.
 
 You can specify a conditional query in the config. In that case, the corresponding query executes only when the condition query returns the value `1` or `true`.
 
-<Note>
+:::note
 If the condition query returns any other value than `1` or `true`, the result will be interpreted as `false`, and the corresponding won't be executed.
-</Note>
+:::

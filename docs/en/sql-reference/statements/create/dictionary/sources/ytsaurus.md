@@ -15,11 +15,11 @@ import TabItem from '@theme/TabItem';
 <ExperimentalBadge/>
 <CloudNotSupportedBadge/>
 
-<Info>
+:::info
 This is an experimental feature that may change in backwards-incompatible ways in future releases.
 Enable usage of the YTsaurus dictionary source
 using setting [`allow_experimental_ytsaurus_dictionary_source`](/operations/settings/settings#allow_experimental_ytsaurus_dictionary_source).
-</Info>
+:::
 
 Example of settings:
 

@@ -83,7 +83,7 @@ The `changeable_in_readonly` constraint type allows users to change the setting
 within the `min`/`max` range even if the `readonly` setting is set to `1`, 
 otherwise settings are not allowed to be changed in `readonly=1` mode. 
 
-<Note>
+:::note
 `changeable_in_readonly` is supported only if `settings_constraints_replace_previous`
 is enabled:
 
@@ -92,7 +92,7 @@ is enabled:
   <settings_constraints_replace_previous>true</settings_constraints_replace_previous>
 </access_control_improvements>
 ```
-</Note>
+:::
 
 ## Multiple constraint profiles {#multiple-constraint-profiles}
 
@@ -152,11 +152,11 @@ Code: 452, e.displayText() = DB::Exception: Setting max_memory_usage should not 
 Code: 452, e.displayText() = DB::Exception: Setting force_index_by_date should not be changed.
 ```
 
-<Note>
+:::note
 The `default` profile is handled uniquely: all the constraints defined for the 
 `default` profile become the default constraints, so they restrict all the users
 until they're overridden explicitly for those users.
-</Note>
+:::
 
 ## Constraints on MergeTree settings {#constraints-on-merge-tree-settings}
 

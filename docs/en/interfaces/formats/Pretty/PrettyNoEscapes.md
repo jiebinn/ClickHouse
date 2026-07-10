@@ -28,9 +28,9 @@ Example:
 $ watch -n1 "clickhouse-client --query='SELECT event, value FROM system.events FORMAT PrettyCompactNoEscapes'"
 ```
 
-<Note>
+:::note
 The [HTTP interface](/interfaces/http) can be used for displaying this format in the browser.
-</Note>
+:::
 
 ## Format settings {#format-settings}
 

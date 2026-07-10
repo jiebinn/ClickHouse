@@ -60,9 +60,9 @@ KILL QUERY WHERE query_id='2-857d-4a57-9ee0-327da5d60a90'
 KILL QUERY WHERE user='username' SYNC
 ```
 
-<Tip>
+:::tip 
 If you are killing a query in ClickHouse Cloud or in a self-managed cluster, then be sure to use the ```ON CLUSTER [cluster-name]```option, in order to ensure the query is killed on all replicas
-</Tip>
+:::
 
 Read-only users can only stop their own queries.
 
@@ -142,6 +142,6 @@ The query is useful when a mutation is stuck and cannot finish (e.g. if some fu
 
 Changes already made by the mutation are not rolled back.
 
-<Note>
+:::note 
 `is_killed=1` column (ClickHouse Cloud only) in the [system.mutations](/operations/system-tables/mutations) table does not necessarily mean the mutation is completely finalized. It is possible for a mutation to remain in a state where `is_killed=1` and `is_done=0` for an extended period. This can happen if another long-running mutation is blocking the killed mutation. This is a normal situation.
-</Note>
+:::

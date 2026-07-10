@@ -54,9 +54,9 @@ Modules can be configured according to:
   * `prometheus` - Prometheus protocol handler
   * `interserver` - clickhouse interserver handler
 
-<Note>
+:::note
 `gRPC` protocol handler is not implemented for `Composable protocols`
-</Note>
+:::
  
 ### Configuring endpoints {#endpoint-ie-listening-port-is-denoted-by-port-and-optional-host-tags}
 

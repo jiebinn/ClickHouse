@@ -64,14 +64,14 @@ These are the recommended steps for a zero-downtime ClickHouse upgrade:
 7. Upgrade the replicas identified in step 4 to the new version
 8. Refer to the list of changes made in steps 1 through 3 and make the changes that need to be made after the upgrade.
 
-<Note>
+:::note
 This error message is expected when there are multiple versions of ClickHouse running in a replicated environment.  You will stop seeing these when all replicas are upgraded to the same version.
 ```text
 MergeFromLogEntryTask: Code: 40. DB::Exception: Checksums of parts don't match:
 hash of uncompressed files doesn't match. (CHECKSUM_DOESNT_MATCH)  Data after merge is not
 byte-identical to data on another replicas.
 ```
-</Note>
+:::
 
 ## ClickHouse server binary upgrade process {#clickhouse-server-binary-upgrade-process}
 
@@ -85,9 +85,9 @@ $ sudo service clickhouse-server restart
 
 If you installed ClickHouse using something other than the recommended `deb` packages, use the appropriate update method.
 
-<Note>
+:::note
 You can update multiple servers at once as soon as there is no moment when all replicas of one shard are offline.
-</Note>
+:::
 
 The upgrade of older version of ClickHouse to specific version:
 

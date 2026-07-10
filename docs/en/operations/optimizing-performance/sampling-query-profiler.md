@@ -20,9 +20,9 @@ You can trace CPU time and wall-clock time spent including idle time.
 The query profiler is automatically enabled in ClickHouse Cloud.
 The following example query finds the most frequent stack traces for a profiled query, with resolved function names and source locations:
 
-<Tip>
+:::tip
 Replace the `query_id` value with the ID of the query you want to profile.
-</Tip>
+:::
 
 <Tabs groupId="deployment">
 <TabItem value="cloud" label="ClickHouse Cloud">
@@ -121,17 +121,17 @@ To analyze the `trace_log` system table allow introspection functions with the [
 SET allow_introspection_functions=1
 ```
 
-<Note>
+:::note
 For security reasons, introspection functions are disabled by default
-</Note>
+:::
 
 Use the `addressToLine`, `addressToLineWithInlines`, `addressToSymbol` and `demangle` [introspection functions](../../sql-reference/functions/introspection.md) to get function names and their positions in ClickHouse code.
 To get a profile for some query, you need to aggregate data from the `trace_log` table.
 You can aggregate data by individual functions or by the whole stack traces.
 
-<Tip>
+:::tip
 If you need to visualize `trace_log` info, try [flamegraph](/interfaces/third-party/gui#clickhouse-flamegraph) and [speedscope](https://www.speedscope.app).
-</Tip>
+:::
 
 </VerticalStepper>
 
@@ -158,7 +158,7 @@ Unmatched deallocations are ignored.
 
 ### CPU flame graph {#cpu-flame-graph}
 
-<Note>
+:::note
 The queries below require you to have [flamegraph.pl](https://github.com/brendangregg/FlameGraph) installed.
 
 You can do so by running:
@@ -170,7 +170,7 @@ git clone https://github.com/brendangregg/FlameGraph
 ```
 
 Replace `flamegraph.pl` in the following queries with the path where `flamegraph.pl` is located on your machine
-</Note>
+:::
 
 ```sql
 SET query_profiler_cpu_time_period_ns = 10000000;

@@ -8,13 +8,13 @@ doc_type: 'reference'
 
 AI Functions are built-in functions in ClickHouse that you can use to call AI or generate embeddings to work with your data, extract information, classify data, etc...
 
-<Note>
+:::note
 AI functions are experimental. Set [`allow_experimental_ai_functions`](/operations/settings/settings#allow_experimental_ai_functions) to enable them.
-</Note>
+:::
 
-<Note>
+:::note
 AI functions can return unpredictable outputs. The result will highly depend on the quality of the prompt and the model used.
-</Note>
+:::
 
 All functions are sharing a common infrastructure that provides:
 
@@ -51,9 +51,9 @@ CREATE NAMED COLLECTION ai_embedding_credentials AS
 | `max_tokens` | UInt64 | `1024` | Maximum number of output tokens per API call. |
 | `api_version` | String | — | API version string. Used by Anthropic (`'2023-06-01'`). |
 
-<Note>
+:::note
 Any OpenAI-compatible API (e.g. vLLM, Ollama, LiteLLM) can be used by setting `provider = 'openai'` and pointing the `endpoint` to your service.
-</Note>
+:::
 
 ### Selecting credentials {#selecting-credentials}
 

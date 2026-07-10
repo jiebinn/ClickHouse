@@ -28,9 +28,9 @@ import Link from '@docusaurus/Link'
 
 The `JSON` type stores JavaScript Object Notation (JSON) documents in a single column.
 
-<Note>
+:::note
 In ClickHouse Open-Source JSON data type is marked as production ready in version 25.3. It's not recommended to use this type in production in previous versions.
-</Note>
+:::
 
 To declare a column of `JSON` type, you can use the following syntax:
 
@@ -132,7 +132,7 @@ SELECT map('a', map('b', 42), 'c', [1,2,3], 'd', 'Hello, World!')::JSON AS json;
 └────────────────────────────────────────────────────────┘
 ```
 
-<Note>
+:::note
 JSON paths are stored flattened. This means that when a JSON object is formatted from a path like `a.b.c`
 it is not possible to know whether the object should be constructed as `{ "a.b.c" : ... }` or `{ "a": { "b": { "c": ... } } }`.
 Our implementation will always assume the latter.
@@ -158,7 +158,7 @@ and **not**:
 1. │ {"a.b.c":"42"} │
    └────────────────┘
 ```
-</Note>
+:::
 
 ## Reading JSON paths as sub-columns {#reading-json-paths-as-sub-columns}
 
@@ -287,9 +287,9 @@ while executing 'FUNCTION CAST(__table1.json.a.g :: 2, 'UUID'_String :: 1) -> CA
 (NOT_IMPLEMENTED)
 ```
 
-<Note>
+:::note
 To read subcolumns efficiently from Compact MergeTree parts make sure MergeTree setting [write_marks_for_substreams_in_compact_parts](../../operations/settings/merge-tree-settings.md#write_marks_for_substreams_in_compact_parts) is enabled.
-</Note>
+:::
 
 ## Reading JSON sub-objects as sub-columns {#reading-json-sub-objects-as-sub-columns}
 
@@ -321,9 +321,9 @@ SELECT json.^a.b, json.^d.e.f FROM test;
 └───────────────────────────────┴────────────────────────────────────────┘
 ```
 
-<Note>
+:::note
 When paths are stored in basic (`map`) [shared data](#shared-data-structure), reading sub-object sub-columns may be inefficient as it requires scanning the entire shared data structure. With `map_with_buckets` or `advanced` shared data serialization, reading sub-columns from shared data is highly optimized.
-</Note>
+:::
 
 ## Reading JSON combined sub-columns {#reading-json-combined-sub-columns}
 
@@ -374,9 +374,9 @@ FROM test;
 - Row 2: `a` holds a nested object. `json.a` returns `NULL` (no literal at that path), `json.^a` returns the sub-object as `JSON`, and `json.@a` also returns the sub-object as `Dynamic(JSON)`.
 - Row 3: `a` is absent entirely. Both `json.a` and `json.@a` return `NULL`, while `json.^a` returns an empty `{}`.
 
-<Note>
+:::note
 When paths are stored in basic (`map`) [shared data](#shared-data-structure), reading combined sub-columns may be inefficient as it requires scanning the entire shared data structure. With `map_with_buckets` or `advanced` shared data serialization, reading sub-columns from shared data is highly optimized.
-</Note>
+:::
 
 ## Type inference for paths {#type-inference-for-paths}
 
@@ -1065,9 +1065,9 @@ SELECT json, json.a, json.b, json.c FROM test;
 
 ## Lazy Type Hints (Experimental) {#lazy-type-hints}
 
-<Note>
+:::note
 This feature is experimental and requires the setting `allow_experimental_json_lazy_type_hints` to be enabled.
-</Note>
+:::
 
 When you add or modify type hints on a JSON column using `ALTER TABLE ... MODIFY COLUMN`, ClickHouse normally rewrites all data parts to materialize the new type hints. For tables with large amounts of historical data (hundreds of terabytes), this can be extremely expensive.
 

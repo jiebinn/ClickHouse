@@ -13,9 +13,9 @@ import TabItem from '@theme/TabItem';
 With the `flat` layout, the dictionary is completely stored in memory in the form of flat arrays.
 The amount of memory used is proportional to the size of the largest key (in space used).
 
-<Tip>
+:::tip
 This layout type provides the best performance among all available methods of storing a dictionary.
-</Tip>
+:::
 
 The dictionary key has the [UInt64](/sql-reference/data-types/int-uint.md) type and the value is limited to `max_array_size` (by default — 500,000).
 If a larger key is discovered when creating the dictionary, ClickHouse throws an exception and does not create the dictionary.

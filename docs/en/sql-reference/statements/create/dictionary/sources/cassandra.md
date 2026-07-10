@@ -74,6 +74,6 @@ Setting fields:
 | `max_threads` | The maximum number of threads to use for loading data from multiple partitions in compose key dictionaries. |
 | `query` | The custom query. Optional. |
 
-<Note>
+:::note
 The `column_family` or `where` fields cannot be used together with the `query` field. And either one of the `column_family` or `query` fields must be declared.
-</Note>
+:::

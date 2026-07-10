@@ -21,12 +21,12 @@ WINDOW window_name as ([[PARTITION BY grouping_column] [ORDER BY sorting_column]
 
 Alias: `anyLast`.
 
-<Note>
+:::note
 Using the optional modifier `RESPECT NULLS` after `first_value(column_name)` will ensure that `NULL` arguments are not skipped.
 See [NULL processing](../aggregate-functions/index.md/#null-processing) for more information.
 
 Alias: `lastValueRespectNulls`
-</Note>
+:::
 
 For more detail on window function syntax see: [Window Functions - Syntax](./index.md/#syntax).
 

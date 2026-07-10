@@ -25,10 +25,9 @@ Engines of the family:
 
 `Log` family table engines can store data to [HDFS](/engines/table-engines/integrations/hdfs) or [S3](/engines/table-engines/mergetree-family/mergetree.md/#table_engine-mergetree-s3) distributed file systems.
 
-<Warning>
-**This engine is not for log data.**
+:::warning This engine is not for log data.
 Despite the name, *Log table engines are not meant for the storage of log data.  They should only be used for small volumes which need to be written quickly.
-</Warning>
+:::
 
 ## Common properties {#common-properties}
 

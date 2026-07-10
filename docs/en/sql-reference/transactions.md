@@ -88,9 +88,9 @@ These examples are with a single node ClickHouse server with ClickHouse Keeper e
 
 #### Basic configuration for a single ClickHouse server node with ClickHouse Keeper enabled {#basic-configuration-for-a-single-clickhouse-server-node-with-clickhouse-keeper-enabled}
 
-<Note>
+:::note
 See the [deployment](/deployment-guides/terminology.md) documentation for details on deploying ClickHouse server and a proper quorum of ClickHouse Keeper nodes.  The configuration shown here is for experimental purposes.
-</Note>
+:::
 
 ```xml title=/etc/clickhouse-server/config.d/config.xml
 <clickhouse replace="true">
@@ -145,7 +145,7 @@ BEGIN TRANSACTION
 Ok.
 ```
 
-<Tip>
+:::tip
 If you see the following error, then check your configuration file to make sure that `allow_experimental_transactions` is set to `1` (or any value other than `0` or `false`).
 
 ```response
@@ -161,7 +161,7 @@ echo ruok | nc localhost 9181
 ```
 
 ClickHouse Keeper should respond with `imok`.
-</Tip>
+:::
 
 ```sql
 ROLLBACK
@@ -173,9 +173,9 @@ Ok.
 
 #### Create a table for testing {#create-a-table-for-testing}
 
-<Tip>
+:::tip
 Creation of tables is not transactional.  Run this DDL query outside of a transaction.
-</Tip>
+:::
 
 ```sql
 CREATE TABLE mergetree_table
@@ -219,9 +219,9 @@ FROM mergetree_table
 └────┘
 ```
 
-<Note>
+:::note
 You can query the table from within a transaction and see that the row was inserted even though it has not yet been committed.
-</Note>
+:::
 
 #### Rollback the transaction, and query the table again {#rollback-the-transaction-and-query-the-table-again}
 

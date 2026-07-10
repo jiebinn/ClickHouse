@@ -65,9 +65,9 @@ SELECT * FROM s3Cluster(
 
 Count the total amount of rows in all files in the cluster `cluster_simple`:
 
-<Tip>
+:::tip
 If your listing of files contains number ranges with leading zeros, use the construction with braces for each digit separately or use `?`.
-</Tip>
+:::
 
 For production use cases, it is recommended to use [named collections](/operations/named-collections.md). Here is the example:
 ```sql

@@ -8,11 +8,11 @@ doc_type: 'reference'
 
 ## Overview {#overview}
 
-<Note>
+:::note
 XML-based Settings Profiles and [configuration files](/operations/configuration-files) are currently not 
 supported for ClickHouse Cloud. To specify settings for your ClickHouse Cloud 
 service, you must use [SQL-driven Settings Profiles](/operations/access-rights#settings-profiles-management).
-</Note>
+:::
 
 There are following main groups of ClickHouse settings:
 

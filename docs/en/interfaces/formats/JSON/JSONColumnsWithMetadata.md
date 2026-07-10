@@ -17,9 +17,9 @@ doc_type: 'reference'
 
 Differs from the [`JSONColumns`](./JSONColumns.md) format in that it also contains some metadata and statistics (similar to the [`JSON`](./JSON.md) format).
 
-<Note>
+:::note
 The `JSONColumnsWithMetadata` format buffers all data in memory and then outputs it as a single block, so, it can lead to high memory consumption.
-</Note>
+:::
 
 ## Example usage {#example-usage}
 

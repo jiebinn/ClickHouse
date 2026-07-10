@@ -9,9 +9,9 @@ doc_type: 'reference'
 
 A settings profile is a collection of settings grouped under the same name.
 
-<Note>
+:::note
 ClickHouse also supports [SQL-driven workflow](/operations/access-rights#access-control-usage) for managing settings profiles. We recommend using it.
-</Note>
+:::
 
 The profile can have any name. You can specify the same profile for different users. The most important thing you can write in the settings profile is `readonly=1`, which ensures read-only access.
 

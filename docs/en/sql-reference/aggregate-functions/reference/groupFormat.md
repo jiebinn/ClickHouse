@@ -9,9 +9,9 @@ doc_type: 'reference'
 
 Formats rows in each group using an output format and returns the formatted data as a string. This is similar to `formatRow`, but works on the whole group and can use block-based formats.
 
-<Warning>
+:::warning
 All rows of each group are accumulated in memory before the formatted string is produced. For groups with a very large number of rows this can consume significant memory. Consider using `LIMIT` inside subqueries or splitting large groups to keep memory usage under control.
-</Warning>
+:::
 
 ## Syntax {#syntax}
 
@@ -31,13 +31,13 @@ groupFormat(format)(x, y, ...)
 
 - A [String](../../data-types/string.md) containing the formatted output for the group.
 
-<Note>
+:::note
 Column names in the formatted output are generated as `c1`, `c2`, ... in the order of arguments.
 
 The particular order of formatted rows is not guaranteed.
 
 The query's format settings (for example `format_csv_delimiter` or `output_format_json_quote_64bit_integers`) are captured when the aggregate function is initialized and used to produce the output. The `output_format_write_statistics` setting is always forced off, so the formatted string never contains a statistics section.
-</Note>
+:::
 
 ## NULL handling {#null-handling}
 

@@ -80,9 +80,9 @@ Example (goes into `users.xml`):
 </clickhouse>
 ```
 
-<Note>
+:::note
 Note that HTTP authentication cannot be used alongside with any other authentication mechanism. The presence of any other sections like `password` alongside `http_authentication` will force ClickHouse to shutdown.
-</Note>
+:::
 
 ### Enabling HTTP authentication using SQL {#enabling-http-auth-using-sql}
 

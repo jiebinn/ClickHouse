@@ -99,9 +99,9 @@ Key behaviors:
 - Compatible with `REFRESH`, `ON CLUSTER`, and all engine options. `POPULATE` is supported on `Atomic` databases only — it is rejected on `Replicated` databases (see the `POPULATE` note below).
 - Requires `CREATE VIEW` and `DROP VIEW` privileges.
 
-<Note>
+:::note
 `CREATE OR REPLACE MATERIALIZED VIEW` is only supported with `Atomic` or `Replicated` database engines. It is not supported with the `Ordinary` database engine.
-</Note>
+:::
 
 **Examples:**
 
@@ -127,9 +127,9 @@ CREATE OR REPLACE MATERIALIZED VIEW mv TO target
     AS SELECT x FROM src;
 ```
 
-<Tip>
+:::tip
 Here is a step-by-step guide on using [Materialized views](/guides/developer/cascading-materialized-views.md).
-</Tip>
+:::
 
 Materialized views store data transformed by the corresponding [SELECT](../../../sql-reference/statements/select/index.md) query.
 
@@ -139,7 +139,7 @@ When creating a materialized view with `TO [db].[table]`, you can't also use `PO
 
 A materialized view is implemented as follows: when inserting data to the table specified in `SELECT`, part of the inserted data is converted by this `SELECT` query, and the result is inserted in the view.
 
-<Note>
+:::note
 Materialized views in ClickHouse use **column names** instead of column order during insertion into destination table. If some column names are not present in the `SELECT` query result, ClickHouse uses a default value, even if the column is not [Nullable](../../data-types/nullable.md). A safe practice would be to add aliases for every column when using Materialized views.
 
 Materialized views in ClickHouse are implemented more like insert triggers. If there's some aggregation in the view query, it's applied only to the batch of freshly inserted data. Any changes to existing data of source table (like update, delete, drop partition, etc.) does not change the materialized view.
@@ -151,17 +151,17 @@ By default, if pushing to one of the views throws, the `INSERT` query fails. Whe
 Setting `materialized_views_ignore_errors=true` on the `INSERT` query only changes error reporting: each view error is logged as a warning and the `INSERT` query succeeds. Delivery to the failing view's destination is partial — blocks processed before the exception are kept, and the failing block plus any subsequent blocks are dropped from that view. Views downstream of that destination see only the blocks that did arrive, so their delivery is partial too. Sibling views (and their downstream chains) that did not throw are written to in full, and the source table is written to as usual. Because the `INSERT` reports success, the client gets no failure signal and no automatic retry is triggered; use this setting only when source-table writes must not be blocked by view-side problems (for example, `system.*_log` tables).
 
 `materialized_views_ignore_errors` is `true` by default for `system.*_log` tables.
-</Note>
+:::
 
 If you specify `POPULATE`, the existing table data is inserted into the view when creating it, as if making a `CREATE TABLE ... AS SELECT ...` . Otherwise, the query contains only the data inserted in the table after creating the view. We **do not recommend** using `POPULATE`, since data inserted in the table during the view creation will not be inserted in it.
 
-<Note>
+:::note
 Given that `POPULATE` works like `CREATE TABLE ... AS SELECT ...` it has limitations:
 - It is not supported with Replicated database
 - It is not supported in ClickHouse cloud
 
 Instead a separate `INSERT ... SELECT` can be used.
-</Note>
+:::
 
 A `SELECT` query can contain `DISTINCT`, `GROUP BY`, `ORDER BY`, `LIMIT`. Note that the corresponding conversions are performed independently on each block of inserted data. For example, if `GROUP BY` is set, data is aggregated during insertion, but only within a single packet of inserted data. The data won't be further aggregated. The exception is when using an `ENGINE` that independently performs data aggregation, such as `SummingMergeTree`.
 
@@ -187,10 +187,10 @@ Note that regardless of the SQL security option, in every case it is still requi
 | `INVOKER`           | User must have a `SELECT` grant for the view's source table.    | `SQL SECURITY INVOKER` can't be specified for materialized views.                                                 |
 | `NONE`              | -                                                               | -                                                                                                                 |
 
-<Note>
+:::note
 `SQL SECURITY NONE` is a deprecated option. Any user with the rights to create views with `SQL SECURITY NONE` will be able to execute any arbitrary query.
 Thus, it is required to have `GRANT ALLOW SQL SECURITY NONE TO <user>` in order to create a view with this option.
-</Note>
+:::
 
 If `DEFINER`/`SQL SECURITY` aren't specified, the default values are used:
 - `SQL SECURITY`: `INVOKER` for normal views and `DEFINER` for materialized views ([configurable by settings](../../../operations/settings/settings.md#default_normal_view_sql_security))
@@ -254,9 +254,9 @@ Differences from regular non-refreshable materialized views:
 * No insert trigger. When new data is inserted into the table specified in `SELECT`, it's *not* automatically pushed to the refreshable materialized view. Instead, data insertion only takes place during the periodic or manual refresh runs.
 * No restrictions on the `SELECT` query. Table functions (e.g. `url()`), views, UNION, JOIN, are all allowed.
 
-<Note>
+:::note
 The settings in the `REFRESH ... SETTINGS` part of the query are refresh settings (e.g. `refresh_retries`), distinct from regular settings (e.g. `max_threads`). Regular settings can be specified using `SETTINGS` at the end of the query.
-</Note>
+:::
 
 ### Refresh Schedule {#refresh-schedule}
 
@@ -311,9 +311,9 @@ Or equivalently:
 CREATE MATERIALIZED VIEW dependent REFRESH DEPENDS ON dependency [...]
 ```
 
-<Note>
+:::note
 `DEPENDS ON` only works between refreshable materialized views. In particular, if the dependency view uses `TO <table>`, make sure to use the name of the view rather than the table. If the `DEPENDS ON` list contains a regular table or non-refreshable view or has a typo, the view will never refresh and will show state `MissingDependencies` in `system.view_refreshes`. Dependencies can be changed or removed using `ALTER`, see [Changing Refresh Parameters](#changing-refresh-parameters).
-</Note>
+:::
 
 #### Using DEPENDS ON for consistent propagation latency {#using-depends-on-for-consistent-propagation-latency}
 
@@ -401,7 +401,7 @@ ALTER TABLE [db.]name MODIFY REFRESH EVERY|AFTER ... [RANDOMIZE FOR ...] [DEPEND
 
 The schedule (`EVERY` or `AFTER`) is mandatory: the statement always replaces *all* refresh parameters — schedule, `RANDOMIZE FOR`, `DEPENDS ON`, and refresh settings — with what is specified. Anything omitted is reset to its default (settings) or removed (dependencies, randomization).
 
-<Note>
+:::note
 - To change only refresh settings (e.g. `refresh_retries`), repeat the existing schedule:
 
   ```sql
@@ -413,7 +413,7 @@ The schedule (`EVERY` or `AFTER`) is mandatory: the statement always replaces *a
 - Adding or removing `APPEND` is not supported.
 
 - The `all_replicas` setting cannot be changed after creation.
-</Note>
+:::
 
 Examples:
 
@@ -442,18 +442,18 @@ To manually stop, start, trigger, or cancel refreshes, use [`SYSTEM STOP|START|R
 
 To wait for a refresh to complete, use [`SYSTEM WAIT VIEW`](../system.md#wait-view). In particular, useful for waiting for initial refresh after creating a view.
 
-<Note>
+:::note
 Fun fact: the refresh query is allowed to read from the view that's being refreshed, seeing pre-refresh version of the data. This means you can implement Conway's game of life: https://pastila.nl/?00021a4b/d6156ff819c83d490ad2dcec05676865#O0LGWTO7maUQIA4AcGUtlA==
-</Note>
+:::
 
 ## Window View {#window-view}
 
 <ExperimentalBadge/>
 <CloudNotSupportedBadge/>
 
-<Info>
+:::info
 This is an experimental feature that may change in backwards-incompatible ways in the future releases. Enable usage of window views and `WATCH` query using [allow_experimental_window_view](/operations/settings/settings#allow_experimental_window_view) setting. Input the command `set allow_experimental_window_view = 1`.
-</Info>
+:::
 
 ```sql
 CREATE WINDOW VIEW [IF NOT EXISTS] [db.]table_name [TO [db.]table_name] [INNER ENGINE engine] [ENGINE engine] [WATERMARK strategy] [ALLOWED_LATENESS interval_function] [POPULATE]

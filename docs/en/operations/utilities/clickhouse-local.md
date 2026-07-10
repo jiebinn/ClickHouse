@@ -23,9 +23,9 @@ Please read the docs below that show example use cases for `clickhouse-local`, s
 curl https://clickhouse.com/ | sh
 ```
 
-<Note>
+:::note
 The binary you just downloaded can run all sorts of ClickHouse tools and utilities. If you want to run ClickHouse as a database server, check out the [Quick Start](/get-started/quick-start).
-</Note>
+:::
 
 ## Query data in a file using SQL {#query_data_in_file}
 
@@ -54,7 +54,7 @@ The `file` table function creates a table, and you can use `DESCRIBE` to see the
 ./clickhouse local -q "DESCRIBE file('reviews.tsv')"
 ```
 
-<Tip>
+:::tip
 You are allowed to use globs in file name (See [glob substitutions](/sql-reference/table-functions/file.md/#globs-in-path)).
 
 Examples:
@@ -65,7 +65,7 @@ Examples:
 ./clickhouse local -q "SELECT * FROM 'review_{1..3}.csv'"
 ```
 
-</Tip>
+:::
 
 ```response
 marketplace    Nullable(String)
@@ -169,9 +169,9 @@ BARNET    ENFIELD    282    740514    ██████████████
 NORTHWOOD    THREE RIVERS    184    731609    ██████████████▋
 ```
 
-<Tip>
+:::tip
 When you are ready to insert your files into ClickHouse, startup a ClickHouse server and insert the results of your `file` and `s3` table functions into a `MergeTree` table. View the [Quick Start](/get-started/quick-start) for more details.
-</Tip>
+:::
 
 ## Format Conversions {#format-conversions}
 
@@ -208,9 +208,9 @@ Basic usage (Mac):
 $ ./clickhouse local --structure "table_structure" --input-format "format_of_incoming_data" --query "query"
 ```
 
-<Note>
+:::note
 `clickhouse-local` is also supported on Windows through WSL2.
-</Note>
+:::
 
 Arguments:
 
@@ -376,10 +376,9 @@ clickhouse-local \
 
 The `--listen_host`, `--tcp_port`, and `--http_port` options configure the bind address and ports. Default ports are `9000` for TCP and `8123` for HTTP.
 
-<Warning>
-**Security**
+:::warning Security
 By default, `clickhouse-local` runs with the temporary users setup, so any listener it opens is unauthenticated. Bind to a loopback address (`127.0.0.1` or `::1`) unless you have explicitly configured users and access control by pointing the `users_config` setting at a custom `users.xml` (for example via `--config-file`). Listening on a non-loopback address without authentication exposes the data of the local instance to anyone who can reach the chosen port.
-</Warning>
+:::
 
 ## Related Content {#related-content-1}
 

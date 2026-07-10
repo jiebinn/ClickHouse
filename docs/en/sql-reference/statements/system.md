@@ -45,10 +45,10 @@ SELECT name, status FROM system.dictionaries;
 
 ## SYSTEM RELOAD MODELS {#reload-models}
 
-<Note>
+:::note
 This statement and `SYSTEM RELOAD MODEL` merely unload catboost models from the clickhouse-library-bridge. The function `catboostEvaluate()`
 loads a model upon first access if it is not loaded yet.
-</Note>
+:::
 
 Unloads all CatBoost models.
 
@@ -190,9 +190,9 @@ SYSTEM SYNC FILESYSTEM CACHE ['<cache_name>']
 
 ## SYSTEM CLEAR|DROP DISTRIBUTED CACHE {#drop-distributed-cache}
 
-<Note>
+:::note
 `SYSTEM CLEAR|DROP DISTRIBUTED CACHE` is available only in ClickHouse Cloud.
-</Note>
+:::
 
 Drops the distributed cache. Use `CONNECTIONS` to drop only the cached connections to the distributed cache servers, or pass a server identifier to target a single server.
 
@@ -407,9 +407,9 @@ Disables background data distribution when inserting data into distributed table
 SYSTEM STOP DISTRIBUTED SENDS [db.]<distributed_table_name> [ON CLUSTER cluster_name]
 ```
 
-<Note>
+:::note
 In case of [`prefer_localhost_replica`](../../operations/settings/settings.md#prefer_localhost_replica) is enabled (the default), the data to local shard will be inserted anyway.
-</Note>
+:::
 
 ### SYSTEM FLUSH DISTRIBUTED {#flush-distributed}
 
@@ -421,9 +421,9 @@ You can also override some settings via `SETTINGS` clause, this can be useful to
 SYSTEM FLUSH DISTRIBUTED [db.]<distributed_table_name> [ON CLUSTER cluster_name] [SETTINGS ...]
 ```
 
-<Note>
+:::note
 Each pending block is stored in disk with settings from the initial INSERT query, so that is why sometimes you may want to override settings.
-</Note>
+:::
 
 ### SYSTEM START DISTRIBUTED SENDS {#start-distributed-sends}
 
@@ -472,9 +472,9 @@ Provides possibility to stop background merges for tables in the MergeTree famil
 SYSTEM STOP MERGES [ON CLUSTER cluster_name] [ON VOLUME <volume_name> | [db.]merge_tree_family_table_name]
 ```
 
-<Note>
+:::note
 `DETACH / ATTACH` table will start background merges for the table even in case when merges have been stopped for all MergeTree tables before.
-</Note>
+:::
 
 ### SYSTEM START MERGES {#start-merges}
 
@@ -665,9 +665,9 @@ One may execute query after:
 Replica attaches locally found parts and sends info about them to Zookeeper.
 Parts present on a replica before metadata loss are not re-fetched from other ones if not being outdated (so replica restoration does not mean re-downloading all data over the network).
 
-<Note>
+:::note
 Parts in all states are moved to `detached/` folder. Parts active before data loss (committed) are attached.
-</Note>
+:::
 
 ### SYSTEM RESTORE DATABASE REPLICA {#restore-database-replica}
 
@@ -743,9 +743,9 @@ SYSTEM CLEAR FILESYSTEM CACHE [ON CLUSTER cluster_name]
 
 ### SYSTEM SYNC FILE CACHE {#sync-file-cache}
 
-<Note>
+:::note
 It's too heavy and has potential for misuse.
-</Note>
+:::
 
 Will do sync syscall.
 
@@ -789,10 +789,10 @@ Disable periodic refreshing of the given view or all refreshable views. If a ref
 
 If the view is in a Replicated or Shared database, `STOP VIEW` only affects the current replica, while `STOP REPLICATED VIEW` affects all replicas.
 
-<Note>
+:::note
 The stopped state does not persist across server restarts. After a restart, views will resume their configured refresh schedules.
 In Replicated or Shared databases, `SYSTEM STOP VIEW` only affects the current replica. Use `SYSTEM STOP REPLICATED VIEW` to stop refreshes on all replicas.
-</Note>
+:::
 
 ```sql
 SYSTEM STOP VIEW [db.]name
@@ -821,10 +821,10 @@ Unlike `SYSTEM STOP VIEW`, `SYSTEM PAUSE VIEW` does not interrupt a refresh that
 
 Undo with `SYSTEM START VIEW` or `SYSTEM START VIEWS`.
 
-<Note>
+:::note
 The paused state does not persist across server restarts. After a restart, views will resume their configured refresh schedules.
 In Replicated or Shared databases, `SYSTEM PAUSE VIEW` only affects the current replica.
-</Note>
+:::
 
 ```sql
 SYSTEM PAUSE VIEW [db.]name

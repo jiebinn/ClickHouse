@@ -35,6 +35,6 @@ CREATE DATABASE my_database;
 
 ClickHouse Cloud automatically assigns the Shared database engine to databases. Any tables created within such a database using stateless engines will automatically benefit from Shared Catalog’s replication and coordination capabilities.
 
-<Tip>
+:::tip
 For more information on Shared Catalog and it's benefits, see ["Shared catalog and shared database engine"](/cloud/reference/shared-catalog) in the Cloud reference section.
-</Tip>
+:::

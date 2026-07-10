@@ -9,9 +9,9 @@ doc_type: 'reference'
 
 Creates a [row policy](../../../guides/sre/user-management/index.md#row-policy-management), i.e. a filter used to determine which rows a user can read from a table.
 
-<Tip>
+:::tip
 Row policies make sense only for users with readonly access. If a user can modify a table or copy partitions between tables, it defeats the restrictions of row policies.
-</Tip>
+:::
 
 Syntax:
 

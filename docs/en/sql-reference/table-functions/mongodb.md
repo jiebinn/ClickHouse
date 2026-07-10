@@ -31,13 +31,13 @@ mongodb(named_collection_name[, <arg>=<value>...]);
 | `options`     | MongoDB connection string options (optional parameter).                                                |
 | `oid_columns` | Comma-separated list of columns that should be treated as `oid` in the WHERE clause. `_id` by default. |
 
-<Tip>
+:::tip
 If you are using the MongoDB Atlas cloud offering please add these options:
 
 ```ini
 'connectTimeoutMS=10000&ssl=true&authSource=admin'
 ```
-</Tip>
+:::
 
 You can also connect by URI:
 
@@ -51,6 +51,7 @@ mongodb(uri, collection, structure[, oid_columns])
 | `collection`  | Remote collection name.                                                                                |
 | `structure`   | The schema for the ClickHouse table returned from this function.                                       |
 | `oid_columns` | Comma-separated list of columns that should be treated as `oid` in the WHERE clause. `_id` by default. |
+:::
 
 You can pass the arguments using a named collection:
 

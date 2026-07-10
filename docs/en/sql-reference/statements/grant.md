@@ -75,10 +75,10 @@ Also `john` has the `GRANT OPTION` privilege, so it can grant other users with p
 
 Access to the `system` database is always allowed (since this database is used for processing queries).
 
-<Note>
+:::note
 While there are many system tables which new users can access by default, they  may not be able to access every system table by default without grants.
 Additionally, access to certain system tables such as `system.zookeeper` is restricted for Cloud users for security reasons.
-</Note>
+:::
 
 You can grant multiple privileges to multiple accounts in one query. The query `GRANT SELECT, INSERT ON *.* TO john, robin` allows accounts `john` and `robin` to execute the `INSERT` and `SELECT` queries over all the tables in all the databases on the server.
 
@@ -88,9 +88,9 @@ Specifying privileges you can use asterisk (`*`) instead of a table or a databas
 Also, you can omit database name. In this case privileges are granted for current database.
 For example, `GRANT SELECT ON * TO john` grants the privilege on all the tables in the current database, `GRANT SELECT ON mytable TO john` grants the privilege on the `mytable` table in the current database.
 
-<Note>
+:::note
 The feature described below is available starting with the 24.10 ClickHouse version.
-</Note>
+:::
 
 You can also put asterisks at the end of a table or a database name. This feature allows you to grant privileges on an abstract prefix of the table's path.
 Example: `GRANT SELECT ON db.my_tables* TO john`. This query allows `john` to execute the `SELECT` query over all the `db` database tables with the prefix `my_tables*`.
@@ -647,12 +647,12 @@ Possible parameters:
 - `SQLITE`
 - `URL`
 
-<Note>
+:::note
 The separation on READ/WRITE grants for sources is available starting with version 25.7 and only with server setting
 `access_control_improvements.enable_read_write_grants`
 
 Otherwise, you should use the syntax `GRANT AZURE ON *.* TO user` which is equivalent to the new `GRANT READ, WRITE ON AZURE TO user` 
-</Note>
+:::
 
 Examples:
 
@@ -661,10 +661,10 @@ Examples:
 
 ### Source Filter Grants {#source-filter-grants}
 
-<Note>
+:::note
 This feature is available starting with version 25.8 and only with server setting
 `access_control_improvements.enable_read_write_grants`
-</Note>
+:::
 
 You can grant access to specific source URIs by using regular expression filters. This allows fine-grained control over which external data sources users can access.
 
@@ -691,7 +691,7 @@ GRANT READ ON S3('s3://foo/.*') TO john
 GRANT READ ON S3('s3://bar/.*') TO john
 ```
 
-<Warning>
+:::warning
 Source filter takes **regexp** as a parameter, so a grant
 `GRANT READ ON URL('http://www.google.com') TO john;`
 
@@ -706,7 +706,7 @@ This may lead to potential vulnerability. The correct grant should be
 ```sql
 GRANT READ ON URL('https://www\.google\.com') TO john;
 ```
-</Warning>
+:::
 
 **Re-granting with GRANT OPTION:**
 
@@ -773,11 +773,11 @@ Allows using a specified table engine when creating a table. Applies to [table e
 - `GRANT TABLE ENGINE ON * TO john`
 - `GRANT TABLE ENGINE ON TinyLog TO john`
 
-<Note>
+:::note
 By default, for backward compatibility reasons, creating a table with a specific table engine ignores grants,
 however you can change this behaviour by setting [`table_engines_require_grant` to true](https://github.com/ClickHouse/ClickHouse/blob/df970ed64eaf472de1e7af44c21ec95956607ebb/programs/server/config.xml#L853-L855)
 in config.xml.
-</Note>
+:::
 
 Some table engines with external sources may require `READ`/`WRITE` permissions on the corresponding source. See [Sources](#sources).
 
@@ -791,10 +791,10 @@ For example, for the AzureBlobStorage table engine, following grant may be requi
 
 Grants all the privileges on regulated entity to a user account or a role.
 
-<Note>
+:::note
 The privilege `ALL` is not supported in ClickHouse Cloud, where the `default` user has limited permissions. Users can grant the maximum permissions to a user by granting the `default_role`. See [here](/cloud/security/manage-cloud-users) for further details.
 Users can also use the `GRANT CURRENT GRANTS` as the default user to achieve similar effects to `ALL`.
-</Note>
+:::
 
 ### NONE {#none}
 

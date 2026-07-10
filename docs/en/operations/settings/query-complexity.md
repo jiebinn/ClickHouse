@@ -41,10 +41,10 @@ the value `any`:
 
 The following settings are used for applying restrictions on query complexity.
 
-<Note>
+:::note
 Restrictions on the "maximum amount of something" can take a value of `0`,
 which means that it is "unrestricted".
-</Note>
+:::
 
 | Setting                                                                                                                | Short description                                                                                                                                               |
 |------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -105,9 +105,9 @@ which means that it is "unrestricted".
 
 ## Obsolete settings {#obsolete-settings}
 
-<Note>
+:::note
 The following settings are obsolete
-</Note>
+:::
 
 ### max_pipeline_depth {#max-pipeline-depth}
 

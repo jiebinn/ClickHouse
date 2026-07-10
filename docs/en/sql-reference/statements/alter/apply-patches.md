@@ -17,16 +17,16 @@ ALTER TABLE [db.]table [ON CLUSTER cluster] APPLY PATCHES [IN PARTITION partitio
 
 The command manually triggers the physical materialization of patch parts created by [lightweight `UPDATE`](/sql-reference/statements/update) statements. It forcefully applies pending patches to the data parts by rewriting only the affected columns.
 
-<Note>
+:::note
 - It only works for tables in the [`MergeTree`](../../../engines/table-engines/mergetree-family/mergetree.md) family (including [replicated](../../../engines/table-engines/mergetree-family/replication.md) tables).
 - This is a mutation operation and executes asynchronously in the background.
-</Note>
+:::
 
 ## When to use APPLY PATCHES {#when-to-use}
 
-<Tip>
+:::tip
 Generally, you should not need to use `APPLY PATCHES`
-</Tip>
+:::
 
 Patch parts are normally applied automatically during merges when the [`apply_patches_on_merge`](/operations/settings/merge-tree-settings#apply_patches_on_merge) setting is enabled (default). However, you may want to manually trigger patch application in these scenarios:
 

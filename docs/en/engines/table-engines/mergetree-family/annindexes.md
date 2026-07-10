@@ -65,10 +65,10 @@ returns
 
 ClickHouse provides a special "vector similarity" index to perform approximate vector search.
 
-<Note>
+:::note
 Vector similarity indexes are available in ClickHouse version 25.8 and higher.
 If you run into problems, kindly open an issue in the [ClickHouse repository](https://github.com/clickhouse/clickhouse/issues).
-</Note>
+:::
 
 #### Creating a Vector Similarity Index {#creating-a-vector-similarity-index}
 
@@ -106,10 +106,10 @@ Function `<distance_function>` must be
 
 For normalized data, `L2Distance` is usually the best choice, otherwise `cosineDistance` is recommended to compensate for scale.
 
-<Note>
+:::note
 For distance functions `L2Distance` and `cosineDistance`, a smaller value means a higher similarity, whereas for `dotProduct`, a higher value means a higher similarity.
 As a result, vector indexes with `L2Distance` and `cosineDistance` can only be used by `SELECT [...] ORDER BY [...] ASC` queries (`ASC` is the default for `ORDER BY`), whereas vector indexes built for `dotProduct` can only be used by `SELECT [...] ORDER BY [...] DESC` queries.
-</Note>
+:::
 
 `<dimensions>` specifies the array cardinality (number of elements) in the underlying column.
 If ClickHouse finds an array with a different cardinality during index creation, the index is discarded and an error is returned.
@@ -193,9 +193,9 @@ Above formula does not account for additional memory required by vector similari
 
 #### Using a Vector Similarity Index {#using-a-vector-similarity-index}
 
-<Note>
+:::note
 To use vector similarity indexes, setting [compatibility](../../../operations/settings/settings.md) has be `''` (the default value), or `'25.1'` or newer.
-</Note>
+:::
 
 Vector similarity indexes support SELECT queries of this form:
 
@@ -262,9 +262,9 @@ Vector similarity indexes are used if the output contains `Skip` and the name an
 In this case, the vector similarity index dropped two of four granules, i.e. 50% of the data.
 The more granules can be dropped, the more effective index usage becomes.
 
-<Tip>
+:::tip
 To enforce index usage, you can run the SELECT query with setting [force_data_skipping_indexes](../../../operations/settings/settings#force_data_skipping_indices) (provide the index name as setting value).
-</Tip>
+:::
 
 **Post-filtering and Pre-filtering**
 
@@ -391,9 +391,9 @@ Query id: a2a9d0c8-a525-45c1-96ca-c5a11fa66f47
     └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-<Note>
+:::note
 A query run without rescoring (`vector_search_with_rescoring = 0`) and with parallel replicas enabled may fall back to rescoring.
-</Note>
+:::
 
 #### Performance tuning {#performance-tuning}
 
@@ -449,11 +449,11 @@ If such messages appear repeatedly for different vector search queries, this ind
 2026-02-03 07:40:25.217603 [1386] f0ac5c85-1b1c-4f35-8848-87a1d1aa00ba : VectorSimilarityIndex Loaded vector similarity index: max_level = 2, connectivity = 64, size = 1808111, capacity = 1808111, memory_usage = 8.00 GiB, bytes_per_vector = 4096, scalar_words = 1024, nodes = 1808111, edges = 51356964, max_edges = 233395072
 ```
 
-<Note>
+:::note
 The vector similarity index cache stores vector index granules.
 If individual vector index granules are bigger than the cache size, they will not be cached.
 Therefore, please make sure to calculate the vector index size (based on the formula in "Estimating storage and memory consumption" or [system.data_skipping_indices](../../../operations/system-tables/data_skipping_indices)) and size the cache correspondingly.
-</Note>
+:::
 
 _We reiterate that verifying and, if necessary, increasing the vector index cache should be the first step when investigating slow vector search queries._
 

@@ -33,14 +33,14 @@ effort and avoids redundancy.
 
 ## Configuration settings and usage {#configuration-settings-and-usage}
 
-<Note>
+:::note
 In ClickHouse Cloud, you must use [query level settings](/operations/settings/query-level) to edit query cache settings. Editing [config level settings](/operations/configuration-files) is currently not supported.
-</Note>
+:::
 
-<Note>
+:::note
 [clickhouse-local](utilities/clickhouse-local.md) runs a single query at a time. Since query result caching does not make sense, the query
 result cache is disabled in clickhouse-local.
-</Note>
+:::
 
 Setting [use_query_cache](/operations/settings/settings#use_query_cache) can be used to control whether a specific query or all queries of the
 current session should utilize the query cache. For example, the first execution of query
@@ -54,11 +54,11 @@ SETTINGS use_query_cache = true;
 will store the query result in the query cache. Subsequent executions of the same query (also with parameter `use_query_cache = true`) will
 read the computed result from the cache and return it immediately.
 
-<Note>
+:::note
 Setting `use_query_cache` and all other query-cache-related settings only take an effect on stand-alone `SELECT` statements. In particular,
 the results of `SELECT`s to views created by `CREATE VIEW AS SELECT [...] SETTINGS use_query_cache = true` are not cached unless the `SELECT`
 statement runs with `SETTINGS use_query_cache = true`.
-</Note>
+:::
 
 The way the cache is utilized can be configured in more detail using settings [enable_writes_to_query_cache](/operations/settings/settings#enable_writes_to_query_cache)
 and [enable_reads_from_query_cache](/operations/settings/settings#enable_reads_from_query_cache) (both `true` by default). The former setting

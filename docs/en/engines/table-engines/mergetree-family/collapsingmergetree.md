@@ -20,10 +20,10 @@ Rows without a pair of opposite valued `Sign` are kept.
 
 For more details, see the [Collapsing](#table_engine-collapsingmergetree-collapsing) section of the document.
 
-<Note>
+:::note
 This engine may significantly reduce the volume of storage,
 increasing the efficiency of `SELECT` queries as a consequence.
-</Note>
+:::
 
 ## Parameters {#parameters}
 
@@ -52,10 +52,10 @@ ENGINE = CollapsingMergeTree(Sign)
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-<Note>
+:::note
 The method below is not recommended for use in new projects. 
 We advise, if possible, to update old projects to use the new method.
-</Note>
+:::
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -123,10 +123,10 @@ row that we inserted can be deleted as shown below, collapsing the invalid (old)
 
 `CollapsingMergeTree` carries out precisely this _collapsing_ behavior while merging of the data parts takes place.
 
-<Note>
+:::note
 The reason for why two rows are needed for each change 
 is further discussed in the [Algorithm](#table_engine-collapsingmergetree-collapsing-algorithm) paragraph.
-</Note>
+:::
 
 **The peculiarities of such an approach**
 
@@ -172,12 +172,12 @@ The aggregate `uniq` could be calculated if an object has at least one non-colla
 The aggregates `min` and `max` could not be calculated 
 because `CollapsingMergeTree` does not save the history of the collapsed states.
 
-<Note>
+:::note
 If you need to extract data without aggregation 
 (for example, to check whether rows whose newest values match certain conditions are present), 
 you can use the [`FINAL`](../../../sql-reference/statements/select/from.md#final-modifier) modifier for the `FROM` clause. It will merge the data before returning the result.
 For CollapsingMergeTree, only the latest state row for each key is returned.
-</Note>
+:::
 
 ## Examples {#examples}
 
@@ -219,9 +219,9 @@ INSERT INTO UAct VALUES (4324182021466249494, 5, 146, -1),(4324182021466249494, 
 
 We use two `INSERT` queries to create two different data parts. 
 
-<Note>
+:::note
 If we insert the data with a single query, ClickHouse creates only one data part and will not perform any merge ever.
-</Note>
+:::
 
 We can select the data using:
 
@@ -276,9 +276,9 @@ SELECT * FROM UAct FINAL
 │ 4324182021466249494 │         6 │      185 │    1 │
 └─────────────────────┴───────────┴──────────┴──────┘
 ```
-<Note>
+:::note
 This way of selecting the data is less efficient and is not recommended for use with large amounts of scanned data (millions of rows).
-</Note>
+:::
 
 ### Example of another approach {#example-of-another-approach}
 

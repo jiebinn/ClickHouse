@@ -14,9 +14,9 @@ import SystemTableCloud from '@site/docs/_snippets/_system_table_cloud.md';
 
 The 'system.zookeeper_connection_log' table shows the history of ZooKeeper connections (including auxiliary ZooKeepers). Each row shows information about one event regarding connections.
 
-<Note>
+:::note
 The table doesn't contain events for disconnections caused by server shutdown.
-</Note>
+:::
 
 ## Columns {#columns}
 

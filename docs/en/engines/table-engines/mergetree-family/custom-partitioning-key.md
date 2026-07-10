@@ -7,11 +7,11 @@ title: 'Custom Partitioning Key'
 doc_type: 'guide'
 ---
 
-<Note>
+:::note
 In most cases you do not need a partition key, and in most other cases you do not need a partition key more granular than by month, unless targeting an observability use case where partitioning by day is common.
 
 You should never use too granular of partitioning. Don't partition your data by client identifiers or names. Instead, make a client identifier or name the first column in the ORDER BY expression.
-</Note>
+:::
 
 Partitioning is available for the [MergeTree family tables](../../../engines/table-engines/mergetree-family/mergetree.md), including [replicated tables](../../../engines/table-engines/mergetree-family/replication.md) and [materialized views](/sql-reference/statements/create/view#materialized-view).
 
@@ -45,9 +45,9 @@ By default, the floating-point partition key is not supported. To use it enable 
 
 When inserting new data to a table, this data is stored as a separate part (chunk) sorted by the primary key. In 10-15 minutes after inserting, the parts of the same partition are merged into the entire part.
 
-<Info>
+:::info
 A merge only works for data parts that have the same value for the partitioning expression. This means **you shouldn't make overly granular partitions** (more than about a thousand partitions). Otherwise, the `SELECT` query performs poorly because of an unreasonably large number of files in the file system and open file descriptors.
-</Info>
+:::
 
 Use the [system.parts](../../../operations/system-tables/parts.md) table to view the table parts and partitions. For example, let's assume that we have a `visits` table with partitioning by month. Let's perform the `SELECT` query for the `system.parts` table:
 
@@ -84,9 +84,9 @@ Let's break down the name of the part: `201901_1_9_2_11`:
 - `2` is the chunk level (the depth of the merge tree it is formed from).
 - `11` is the mutation version (if a part mutated)
 
-<Info>
+:::info
 The parts of old-type tables have the name: `20190117_20190123_2_2_0` (minimum date - maximum date - minimum block number - maximum block number - level).
-</Info>
+:::
 
 The `active` column shows the status of the part. `1` is active; `0` is inactive. The inactive parts are, for example, source parts remaining after merging to a larger part. The corrupted data parts are also indicated as inactive.
 
@@ -160,9 +160,9 @@ FROM session_log
 GROUP BY UserID;
 ```
 
-<Note>
+:::note
 Performance of such a query heavily depends on the table layout. Because of that the optimisation is not enabled by default.
-</Note>
+:::
 
 The key factors for a good performance:
 
@@ -170,9 +170,9 @@ The key factors for a good performance:
 - partitions shouldn't be too small, so batch processing won't degenerate into row-by-row processing
 - partitions should be comparable in size, so all threads will do roughly the same amount of work
 
-<Info>
+:::info
 It's recommended to apply some hash function to columns in `partition by` clause in order to distribute data evenly between partitions.
-</Info>
+:::
 
 Relevant settings are:
 

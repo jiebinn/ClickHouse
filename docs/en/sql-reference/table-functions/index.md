@@ -87,6 +87,6 @@ cat numbers.csv
 5
 ```
 
-<Note>
+:::note
 You can't use table functions if the [allow_ddl](/operations/settings/settings#allow_ddl) setting is disabled.
-</Note>
+:::

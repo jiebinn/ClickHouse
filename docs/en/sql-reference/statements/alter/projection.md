@@ -17,11 +17,10 @@ Projections store data in a format that optimizes query execution, this feature 
 
 You can define one or more projections for a table, and during the query analysis the projection with the least data to scan will be selected by ClickHouse without modifying the query provided by the user.
 
-<Note>
-**Disk usage**
+:::note[Disk usage]
 Projections will create internally a new hidden table, this means that more IO and space on disk will be required.
 For example, if the projection has defined a different primary key, all the data from the original table will be duplicated.
-</Note>
+:::
 
 You can see more technical details about how projections work internally on this [page](/guides/best-practices/sparse-primary-indexes.md/#option-3-projections).
 
@@ -290,9 +289,9 @@ ALTER TABLE [db.]name [ON CLUSTER cluster] ADD PROJECTION [IF NOT EXISTS] name (
 ALTER TABLE [db.]name [ON CLUSTER cluster] ADD PROJECTION [IF NOT EXISTS] name ( SELECT <COLUMN LIST EXPR> [WHERE <expr>] [GROUP BY] ) [WITH SETTINGS ( setting_name1 = setting_value1, setting_name2 = setting_value2, ...)]
 ```
 
-<Note>
+:::note
 When a projection defines a `WHERE` clause, only rows matching the predicate are materialized. The optimizer can use such a projection when the query's `WHERE` logically implies the projection's `WHERE` and the projection is beneficial for the query plan. This applies to both normal and aggregate projections.
-</Note>
+:::
 
 #### `WITH SETTINGS` Clause {#with-settings}
 
@@ -343,9 +342,9 @@ ALTER TABLE [db.]table [ON CLUSTER cluster] CLEAR PROJECTION [IF EXISTS] name [I
 The commands `ADD`, `DROP` and `CLEAR` are lightweight in the sense that they only change metadata or remove files.
 Additionally, they are replicated, and sync projection metadata via ClickHouse Keeper or ZooKeeper.
 
-<Note>
+:::note
 Projection manipulation is supported only for tables with [`*MergeTree`](/engines/table-engines/mergetree-family/mergetree.md) engine (including [replicated](/engines/table-engines/mergetree-family/replication.md) variants).
-</Note>
+:::
 
 ### Controlling projection merge behavior {#control-projections-merges}
 

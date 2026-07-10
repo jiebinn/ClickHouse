@@ -20,9 +20,9 @@ import PrettyFormatSettings from './_snippets/common-pretty-format-settings.md';
 Differs from the [`Pretty`](./Pretty.md) format in that the table is displayed with a grid drawn between rows. 
 Because of this the result is more compact.
 
-<Note>
+:::note
 This format is used by default in the command-line client in interactive mode.
-</Note>
+:::
 
 ## Example usage {#example-usage}
 

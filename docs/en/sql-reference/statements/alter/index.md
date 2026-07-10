@@ -23,9 +23,9 @@ Most `ALTER TABLE` queries modify table settings or data:
 | [APPLY DELETED MASK](/sql-reference/statements/alter/apply-deleted-mask.md) |
 | [APPLY PATCHES](/sql-reference/statements/alter/apply-patches.md)           |
 
-<Note>
+:::note
 Most `ALTER TABLE` queries are supported only for [\*MergeTree](/engines/table-engines/mergetree-family/index.md), [Merge](/engines/table-engines/special/merge.md) and [Distributed](/engines/table-engines/special/distributed.md) tables.
-</Note>
+:::
 
 These `ALTER` statements manipulate views:
 
@@ -71,9 +71,9 @@ For other `ALTER` queries which only modify the metadata, you can use the [alter
 
 You can specify how long (in seconds) to wait for inactive replicas to execute all `ALTER` queries with the [replication_wait_for_inactive_replica_timeout](/operations/settings/settings#replication_wait_for_inactive_replica_timeout) setting.
 
-<Note>
+:::note
 For all `ALTER` queries, if `alter_sync = 2` and some replicas are not active for more than the time, specified in the `replication_wait_for_inactive_replica_timeout` setting, then an exception `UNFINISHED` is thrown.
-</Note>
+:::
 
 ## Related content {#related-content}
 

@@ -17,9 +17,9 @@ The `system.iceberg_metadata_log` table records metadata access and parsing even
 
 This table logs every metadata file and entry read from Iceberg tables, including root metadata files, manifest lists, and manifest entries. It helps users trace how ClickHouse interprets Iceberg table metadata and diagnose issues related to schema evolution, file resolution, or query planning.
 
-<Note>
+:::note
 This table is primarily intended for debugging purposes.
-</Note>
+:::
 
 ### Controlling log verbosity {#controlling-log-verbosity}
 

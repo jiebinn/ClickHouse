@@ -6,9 +6,9 @@ title: 'Tuple functions'
 doc_type: 'reference'
 ---
 
-<Note>
+:::note
 The documentation below is generated from the `system.functions` system table.
-</Note>
+:::
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

@@ -73,6 +73,6 @@ Setting fields:
 | `background_reconnect` | Reconnect to replica in background if connection fails. Optional. |
 | `query` | The custom query. Optional. |
 
-<Note>
+:::note
 The `table` or `where` fields cannot be used together with the `query` field. And either one of the `table` or `query` fields must be declared.
-</Note>
+:::

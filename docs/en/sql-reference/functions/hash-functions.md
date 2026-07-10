@@ -12,16 +12,16 @@ Simhash is a hash function, which returns close hash values for close (similar) 
 
 Most hash functions accept any number of arguments of any types.
 
-<Note>
+:::note
 Hash of NULL is NULL. To get a non-NULL hash of a Nullable column, wrap it in a tuple:
 ```sql
 SELECT cityHash64(tuple(NULL))
 ```
-</Note>
+:::
 
-<Note>
+:::note
 To calculate hash of the whole contents of a table, use `sum(cityHash64(tuple(*)))` (or other hash function). `tuple` ensures that rows with NULL values are not skipped. `sum` ensures that the order of rows doesn't matter.
-</Note>
+:::
 
 <!-- 
 The inner content of the tags below are replaced at doc framework build time with 

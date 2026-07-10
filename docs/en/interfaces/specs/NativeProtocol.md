@@ -12,10 +12,9 @@ The native protocol is the binary, connection-oriented protocol that ClickHouse 
 
 This page covers the protocol itself: packet framing, the connection state machine, version negotiation, and the body of every non-`Block` message. The bytes inside `Data`-family packets (the `Block`, its columns, and the per-type encodings) are a separate concern, documented in the [Native Format](/interfaces/specs/NativeFormat) specification.
 
-<Note>
-**Companion specification**
+:::note Companion specification
 This page is one half of a pair and is published together with the companion [Native Format](/interfaces/specs/NativeFormat) specification. The two specs split the work cleanly: this page owns the packet and transport layer; the Native Format spec owns the bytes inside `Data`-family packets. 
-</Note>
+:::
 
 A few properties hold throughout. The protocol is binary and positional: there are no field tags except inside `BlockInfo`, so a single misplaced byte desynchronizes everything that follows. It is stateful, and each TCP connection processes one query at a time — there is no multiplexing. Fixed-width integers are little-endian.
 
@@ -98,9 +97,9 @@ Every message after that uses the negotiated version to decide which fields are 
 
 A feature is identified by the protocol version that introduced it, and is **active** when the negotiated version is greater than or equal to that number.
 
-<Warning>
+:::warning
 When a feature is active, its fields **must** be present on the wire. The protocol is strictly positional, so omitting a feature-gated field corrupts the byte stream for every field that follows.
-</Warning>
+:::
 
 ### Feature table {#feature-table}
 
@@ -357,9 +356,9 @@ On error at any point the server sends an `Exception` instead of `EndOfStream`, 
 
 On `EndOfStream` or a handled `Exception` the connection returns to `READY`. A protocol violation or I/O error terminates it.
 
-<Note>
+:::note
 The `num_rows == 0` case trips up new implementations. A zero-row block is a boundary marker or schema header, not an end-of-stream signal. Only `EndOfStream` or `Exception` ends the response.
-</Note>
+:::
 
 ### INSERT phase {#insert-phase}
 
@@ -467,9 +466,9 @@ Server → Client. The reply to ClientHello on successful authentication.
 
 The list reflects the server operator's password-policy configuration and is purely advisory — the server does not enforce these rules during the handshake. A client that exposes password change/set functionality may use the rules to flag errors before round-tripping a non-compliant password to the server.
 
-<Note>
+:::note
 To bound resource use against a hostile or misconfigured server, cap the decoded `count` at 256 entries and each `pattern` and `message` String at 4096 bytes. A `count` of `0` (no following pairs) is the common case for servers with no password policy configured.
-</Note>
+:::
 
 ### Addendum (no packet type) {#addendum}
 
@@ -552,8 +551,7 @@ Client → Server, embedded in the Query body (field 2). Gated by `CLIENT_INFO` 
 | 24 | client_agent                 | String  | client       | CLIENT_AGENT_IN_CLIENT_INFO (v54485)   | Trailing field. Identifier of the client tool/agent, auto-detected from the environment (e.g. `claude-code`, `cursor`, `gemini-cli`, or the `AGENT` env var). External clients with no detected agent send an empty string. Present on the normal Query path once negotiated version ≥ 54485 (sent on all interfaces, not only TCP). |
 | 25 | is_internal                  | UInt8   | client       | INTERNAL_QUERY_FLAG (v54486)           | Trailing field. `1` for a server-internal query (not user-issued), propagated to remote queries to label them internal in `system.query_log`; orthogonal to `query_kind` (field 1). External clients send `0`. Present once negotiated version ≥ 54486 (sent on all interfaces, not only TCP). |
 
-<Note>
-**Interface-dependent layout (fields 7–12)**
+:::note Interface-dependent layout (fields 7–12)
 Fields 7–12 above are the **TCP** branch. When `query_interface` (field 6) is **not** TCP, these fields are *replaced* by a different wire layout — they are not merely optional omissions, so a decoder must branch on field 6.
 
 - `query_interface = 2` (**HTTP**): the server-forwarded HTTP request info is written instead — `http_method` (`UInt8`), `http_user_agent` (`String`), then `forwarded_for` (`String`, gated by `X_FORWARDED_FOR_IN_CLIENT_INFO` v54443) and `http_referer` (`String`, gated by `REFERER_IN_CLIENT_INFO` v54447). No `os_user`/`client_hostname`/`client_name`/`version_*`/`protocol_version` fields are present.
@@ -562,7 +560,7 @@ Fields 7–12 above are the **TCP** branch. When `query_interface` (field 6) is 
 After this branch the layout rejoins: `quota_key` (field 13) and `distributed_depth` (field 14) follow for all interfaces, then `version_patch` (field 15) is written only for TCP.
 
 This branch matters mainly for inter-server traffic, where the initiating server forwards a query that originally arrived over HTTP. A decoder that always reads the TCP fields will misread such packets — treating `http_method` or `http_user_agent` as `quota_key`.
-</Note>
+:::
 
 OpenTelemetry encoding (field 16):
 
@@ -619,9 +617,9 @@ Query parameters, for parameterized queries like `SELECT {x:UInt64}`. Encoded id
 | 2 | flags | VarUInt | client | Always `0x02` (Custom) |
 | 3 | value | String  | client | Parameter value as string. See the note below on quoting. |
 
-<Note>
+:::note
 The parameter value is the SQL representation of the value, not a raw literal. String-typed parameters must be passed already single-quoted (for example, the value for `{name:String}` is `'Alice'`, not `Alice`); otherwise the server's value parser rejects them.
-</Note>
+:::
 
 ### Data (packet type 1 server→client, packet type 2 client→server) {#data}
 
@@ -741,9 +739,9 @@ The 6 columns:
 | 5 | name         | String   | Event name (e.g., `"Query"`, `"NetworkReceiveBytes"`) |
 | 6 | value        | Int64    | Counter value or gauge reading |
 
-<Note>
+:::note
 The `value` column's element type is not fixed across packets — older servers emit `UInt64`, newer ones `Int64`. Read the column's type string from the block header rather than assuming one width.
-</Note>
+:::
 
 ### TableColumns (packet type 11) {#tablecolumns}
 
@@ -754,10 +752,9 @@ Server → Client, gated by `COLUMN_DEFAULTS_METADATA` (v54410). The server send
 | 1 | external_table      | String | universal | External table name. Empty = main table. |
 | 2 | columns_description | String | universal | Textual column definitions, e.g., `"id Int32, name String DEFAULT ''"`. Free-form text — parse as a string. |
 
-<Note>
-**Compressed body at v54481+**
+:::note Compressed body at v54481+
 At negotiated version ≥ 54481 (`COMPRESSED_LOGS_PROFILE_EVENTS_COLUMNS`) the server writes **both** fields through the same optionally-compressed output path, so when the query has `compression = true` the whole `TableColumns` body (`external_table` + `columns_description`) is inside the [compression frame](/interfaces/specs/NativeFormat#compression-frame); the client reads it through the matching decompressed stream. When the query has no compression, the body is on the wire uncompressed exactly as the table above shows. This matters for `INSERT` schema responses: a client that switches compression handling for `Log` and `ProfileEvents` but not `TableColumns` will misread the response when query compression is enabled.
-</Note>
+:::
 
 ### TimezoneUpdate (packet type 17) {#timezoneupdate}
 
@@ -817,9 +814,9 @@ sequenceDiagram
     end
 ```
 
-<Note>
+:::note
 This is the reverse of the password handshake, where ServerHello immediately follows ClientHello. Under SSH auth, ServerHello is withheld until after the signature is verified, so the SSH challenge-response is interleaved into the handshake before any ServerHello is seen.
-</Note>
+:::
 
 External clients that don't use SSH auth never see packets 11, 12, or 18 — they stay off the wire unless the user explicitly opts in via the username prefix.
 

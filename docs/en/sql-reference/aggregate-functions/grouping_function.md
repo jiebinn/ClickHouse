@@ -306,9 +306,9 @@ ORDER BY
 
 39 rows in set. Elapsed: 0.355 sec. 
 ```
-<Note>
+:::note
 Version in the above example may not make sense when it is not associated with a distro, if we were tracking the kernel version it might make sense because the kernel version can be associated with either distro.  Using GROUPING SETS, as in the next example, may be a better choice.
-</Note>
+:::
 
 ```sql
 SELECT

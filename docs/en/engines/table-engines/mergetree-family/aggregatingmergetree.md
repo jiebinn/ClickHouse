@@ -52,9 +52,9 @@ When creating an `AggregatingMergeTree` table, the same [clauses](../../../engin
 
 <summary>Deprecated Method for Creating a Table</summary>
 
-<Note>
+:::note
 Do not use this method in new projects and, if possible, switch the old projects to the method described above.
-</Note>
+:::
 
 ```sql
 CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
@@ -181,11 +181,11 @@ AS SELECT
 FROM test.visits;
 ```
 
-<Note>
+:::note
 When using `initializeAggregation`, an aggregate state is created for each individual row without grouping.
 Each source row produces one row in the materialized view, and the actual aggregation happens later when the
 `AggregatingMergeTree` merges parts. This is only true if `optimize_on_insert = 0`.
-</Note>
+:::
 
 ## Tuple element aggregation {#tuple-element-aggregation}
 
@@ -193,9 +193,9 @@ When the `allow_tuple_element_aggregation` setting is enabled, `Tuple` columns a
 
 Sub-columns that belong to a `Tuple` in the sorting key are excluded from aggregation. Non-aggregate sub-columns are treated as ordinary columns (their first value is kept).
 
-<Note>
+:::note
 This setting is immutable and must be specified at table creation time.
-</Note>
+:::
 
 ```sql
 CREATE TABLE agg_tuples

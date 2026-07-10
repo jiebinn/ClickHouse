@@ -261,9 +261,9 @@ clickhousectl cloud auth login
 
 This opens your browser for authentication via the OAuth device flow. Tokens are saved to `.clickhouse/tokens.json` (project-local).
 
-<Note>
+:::note
 OAuth access is currently **read-only** and grants access to **all organizations you belong to**. For write access, or to scope the CLI to a single organization, [create a scoped API key](#api-key) instead.
-</Note>
+:::
 
 ### Auth status and logout {#auth-status}
 

@@ -7,9 +7,9 @@ title: 'Query condition cache'
 doc_type: 'guide'
 ---
 
-<Note>
+:::note
 The query condition cache only works when [enable_analyzer](https://clickhouse.com/docs/operations/settings/settings#enable_analyzer) is set to true, which is the default value.
-</Note>
+:::
 
 Many real-world workloads involve repeated queries against the same or almost the same data (for instance, previously existing data plus new data).
 ClickHouse provides various optimization techniques to optimize for such query patterns.

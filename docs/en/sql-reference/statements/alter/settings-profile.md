@@ -46,9 +46,9 @@ SHOW CREATE SETTINGS PROFILE p;
 -- max_execution_time and enable_lazy_columns_replication are gone.
 ```
 
-<Warning>
+:::warning
 Because the bare `SETTINGS` form is a full replace, using it to "override one setting" on top of a populated base profile will drop every other setting (and every parent profile) on that profile. If you only want to change a single setting while keeping the rest, use the incremental `MODIFY`/`ADD`/`DROP` form described below.
-</Warning>
+:::
 
 This is the same behavior as `SETTINGS` in [`CREATE SETTINGS PROFILE`](../create/settings-profile.md): the clause defines the complete settings list.
 
@@ -96,9 +96,9 @@ SHOW CREATE SETTINGS PROFILE my_profile;
 ```
 ## Incremental vs full replacement {#incremental-vs-full-replacement}
 
-<Warning>
+:::warning
 A bare `SETTINGS` clause **removes all existing settings and all inherited (parent) profiles** from the profile before applying the new ones.
-</Warning>
+:::
 
 To change a single setting while keeping the rest, use `ADD SETTINGS` or `MODIFY SETTINGS` (see examples below).
 
@@ -109,9 +109,9 @@ Both `ADD SETTINGS` and `MODIFY SETTINGS` preserve the other settings in the pro
 - `ADD SETTINGS variable = value ...` first drops any existing entry for `variable` and then inserts the new one. It therefore **replaces the value together with all constraints** of that setting. Any previously defined `MIN`, `MAX`, or writability (`READONLY`/`WRITABLE`/`CONST`/`CHANGEABLE_IN_READONLY`) for `variable` that you do not repeat is discarded.
 - `MODIFY SETTINGS variable = value ...` **merges field by field**: it overrides only the fields you actually specify (the value, or `MIN`, or `MAX`, or the writability) and keeps the other fields of that setting as they were.
 
-<Tip>
+:::tip
 In short, use `MODIFY SETTINGS` when you only want to tweak one aspect of a setting (e.g. just the value, while keeping an existing `MAX`); use `ADD SETTINGS` when you want to redefine a setting from scratch.
-</Tip>
+:::
 
 ## Examples {#profile-examples}
 

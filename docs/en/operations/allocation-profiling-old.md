@@ -62,7 +62,7 @@ For that, `jemalloc`'s tool called [jeprof](https://github.com/jemalloc/jemalloc
 - Using the system's package manager
 - Cloning the [jemalloc repo](https://github.com/jemalloc/jemalloc) and running `autogen.sh` from the root folder. This will provide you with the `jeprof` script inside the `bin` folder
 
-<Note>
+:::note
 `jeprof` uses `addr2line` to generate stacktraces which can be really slow.  
 If that's the case, it is recommended to install an [alternative implementation](https://github.com/gimli-rs/addr2line) of the tool.
 
@@ -72,7 +72,7 @@ cd addr2line
 cargo build --features bin --release
 cp ./target/release/addr2line path/to/current/addr2line
 ```
-</Note>
+:::
 
 There are many different formats to generate from the heap profile using `jeprof`.
 It is recommended to run `jeprof --help` for information on the usage and the various options the tool provides. 
@@ -187,10 +187,9 @@ It is recommended to check `jemalloc`s [reference page](https://jemalloc.net/jem
 
 ClickHouse/Keeper expose `jemalloc` related metrics in many different ways.
 
-<Warning>
-**Warning**
+:::warning Warning
 It's important to be aware that none of these metrics are synchronized with each other and values may drift.
-</Warning>
+:::
 
 ### System table `asynchronous_metrics` {#system-table-asynchronous_metrics}
 

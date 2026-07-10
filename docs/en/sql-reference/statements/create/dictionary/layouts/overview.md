@@ -34,11 +34,10 @@ There are a variety of ways to store dictionaries in memory, each with CPU and R
 | [complex_key_direct](./direct.md#complex_key_direct) | Like `direct`, for composite keys. |
 | [ip_trie](./ip-trie.md) | Trie structure for fast IP prefix lookups (CIDR-based). |
 
-<Tip>
-**Recommended layouts**
+:::tip Recommended layouts
 [flat](./flat.md), [hashed](./hashed.md), and [complex_key_hashed](./hashed.md#complex_key_hashed) provide the best query performance.
 Caching layouts are not recommended due to potentially poor performance and difficulty tuning parameters — see [cache](./cache.md) for details.
-</Tip>
+:::
 
 ## Specify dictionary layout {#specify-dictionary-layout}
 

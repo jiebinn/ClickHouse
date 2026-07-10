@@ -140,9 +140,9 @@ INTO OUTFILE 'football.parquet'
 FORMAT Parquet
 ```
 
-<Tip>
+:::tip
 Parquet is a binary format that does not display in a human-readable form on the terminal. Use the `INTO OUTFILE` to output Parquet files.
-</Tip>
+:::
 
 To exchange data with Hadoop, you can use the [`HDFS table engine`](/engines/table-engines/integrations/hdfs.md).
 
