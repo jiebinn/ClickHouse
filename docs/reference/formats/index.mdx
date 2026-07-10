@@ -57,6 +57,9 @@ The supported formats are:
 | [CSVWithNames](/reference/formats/CSV/CSVWithNames)                                                              | ✔   | ✔     |
 | [CSVWithNamesAndTypes](/reference/formats/CSV/CSVWithNamesAndTypes)                                              | ✔   | ✔     |
 | [CustomSeparated](/reference/formats/CustomSeparated/CustomSeparated)                                            | ✔   | ✔     |
+| [CustomSeparatedIgnoreSpaces](/reference/formats/CustomSeparated/CustomSeparatedIgnoreSpaces)                    | ✔   | ✗     |
+| [CustomSeparatedIgnoreSpacesWithNames](/reference/formats/CustomSeparated/CustomSeparatedIgnoreSpacesWithNames)  | ✔   | ✗     |
+| [CustomSeparatedIgnoreSpacesWithNamesAndTypes](/reference/formats/CustomSeparated/CustomSeparatedIgnoreSpacesWithNamesAndTypes) | ✔ | ✗ |
 | [CustomSeparatedWithNames](/reference/formats/CustomSeparated/CustomSeparatedWithNames)                          | ✔   | ✔     |
 | [CustomSeparatedWithNamesAndTypes](/reference/formats/CustomSeparated/CustomSeparatedWithNamesAndTypes)          | ✔   | ✔     |
 | [HiveText](/reference/formats/HiveText)                                                                          | ✔   | ✗     |
@@ -73,6 +76,7 @@ The supported formats are:
 | [JSONCompactStrings](/reference/formats/JSON/JSONCompactStrings)                                                 | ✗   | ✔     |
 | [JSONCompactColumns](/reference/formats/JSON/JSONCompactColumns)                                                 | ✔   | ✔     |
 | [JSONEachRow](/reference/formats/JSON/JSONEachRow)                                                               | ✔   | ✔     |
+| [JSONLines](/reference/formats/JSON/JSONLines)                                                                     | ✔   | ✔     |
 | [PrettyJSONEachRow](/reference/formats/JSON/PrettyJSONEachRow)                                                   | ✗   | ✔     |
 | [JSONEachRowWithProgress](/reference/formats/JSON/JSONEachRowWithProgress)                                       | ✗   | ✔     |
 | [JSONStringsEachRow](/reference/formats/JSON/JSONStringsEachRow)                                                 | ✔   | ✔     |
@@ -140,6 +144,8 @@ The supported formats are:
 | [Form](/reference/formats/Form)                                                                                  | ✔   | ✗     |
 
 You can control some format processing parameters with the ClickHouse settings. For more information read the [Settings](/reference/settings/formats) section.
+
+Additional JSON-specific settings are documented in the [JSON format settings](/reference/formats/JSON/format-settings) page.
 
 ## Format schema {#formatschema}
 
