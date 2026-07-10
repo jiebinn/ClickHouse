@@ -312,7 +312,7 @@ export const SampleDatasetExplorer = ({ categories }) => {
           pointer-events: none;
         }
         .sde-tile:hover .sde-tile-hint { opacity: 1; }
-        @media (max-width: 639px) {
+        @media (any-hover: none) {
           .sde-tile-hint { opacity: 1; }
         }
         .sde-tile-title {
