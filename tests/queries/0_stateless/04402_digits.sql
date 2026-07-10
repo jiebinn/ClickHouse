@@ -58,6 +58,8 @@ SELECT digits(1234567890, 1, 2, 3); -- {serverError NUMBER_OF_ARGUMENTS_DOESNT_M
 SELECT digits(123, NULL);
 SELECT digits(NULL, 1);
 SELECT digits(arrayJoin([NULL, 123]::Array(Nullable(Int8))), 1);
+SELECT digits(123, toLowCardinality(arrayJoin([NULL, 1]::Array(Nullable(Int8)))));
+SELECT digits(123, 1, NULL);
 
 SELECT digits(1234567890, toInt64(-9223372036854775808), toUInt64(9223372036854775808));
 SELECT digits(1234567891, 1, toUInt64(18446744073709551615));
