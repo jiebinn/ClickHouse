@@ -189,6 +189,9 @@ export const SampleDatasetExplorer = ({ categories }) => {
           pointer-events: none;
         }
         .sde-tile:hover .sde-tile-hint { opacity: 1; }
+        @media (max-width: 639px) {
+          .sde-tile-hint { opacity: 1; }
+        }
         .sde-tile-title {
           display: block;
           margin-top: 0.65rem;
@@ -237,7 +240,7 @@ export const SampleDatasetExplorer = ({ categories }) => {
 
       {!selected ? (
         <div className="sde-view">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
             {cats.map((cat, i) => (
               <button
                 key={cat.id}
@@ -279,7 +282,7 @@ export const SampleDatasetExplorer = ({ categories }) => {
 
           <h2 className="sde-detail-title">{selected.title}</h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
             {selected.datasets.map((ds, i) => (
               <a
                 key={ds.href}
