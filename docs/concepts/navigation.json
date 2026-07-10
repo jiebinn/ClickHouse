@@ -71,6 +71,7 @@
               "group": "Troubleshooting",
               "pages": [
                 "concepts/features/performance/troubleshoot/debugging-memory-issues",
+                "concepts/features/performance/troubleshoot/oom-canary",
                 "concepts/features/performance/troubleshoot/performance-test",
                 "concepts/features/performance/troubleshoot/sampling-query-profiler"
               ]

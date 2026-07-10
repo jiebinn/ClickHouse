@@ -17,7 +17,6 @@
         {
           "group": "Cloud database release changelog",
           "pages": [
-            "resources/changelogs/cloud/release-notes/26_4",
             "resources/changelogs/cloud/release-notes/26_02",
             "resources/changelogs/cloud/release-notes/25_12",
             "resources/changelogs/cloud/release-notes/25_10",
