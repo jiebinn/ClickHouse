@@ -112,6 +112,8 @@ def collect_snippet_anchors(text, docs_root, page_dir, seen):
         with open(sp, "r", encoding="utf-8", errors="replace") as f:
             snip = f.read()
         ids.update(m.group(1) or m.group(2) for m in ANCHOR_ID_RE.finditer(snip))
+        # Element ids (e.g. `<Step id="...">`) are fragment targets too.
+        ids.update(m.group(1) for m in ELEMENT_ID_RE.finditer(snip))
         ids |= collect_snippet_anchors(snip, docs_root, os.path.dirname(sp), seen)
     return ids
 
@@ -205,8 +207,11 @@ def materialize_redirects(docs_root, dest):
                     cand = os.path.join(dest, dest_url.lstrip("/") + e)
                     if os.path.isfile(cand):
                         with open(cand, encoding="utf-8", errors="replace") as f:
-                            anchors = {m.group(1) or m.group(2)
-                                       for m in ANCHOR_ID_RE.finditer(f.read())}
+                            raw = f.read()
+                        anchors = {m.group(1) or m.group(2)
+                                   for m in ANCHOR_ID_RE.finditer(raw)}
+                        # Element ids (e.g. `<Step id="...">`) too.
+                        anchors |= {m.group(1) for m in ELEMENT_ID_RE.finditer(raw)}
                         break
         p = os.path.join(dest, src + ".mdx")
         os.makedirs(os.path.dirname(p) or ".", exist_ok=True)

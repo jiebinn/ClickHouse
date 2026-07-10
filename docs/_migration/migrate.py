@@ -26,6 +26,7 @@ import json
 import re
 import shutil
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1182,14 +1183,78 @@ def transform_image_logo_to_img(text: str) -> str:
 # Convert `<VerticalStepper>...</VerticalStepper>` (Click UI, splits content by
 # headings of `headerLevel` — defaults to h2) into Mintlify `<Steps>`/`<Step>`
 # blocks. Each matching heading inside the stepper marks the start of a new
-# Step; the heading line (anchor and all) is preserved inside the Step body so
-# existing in-page links keep working. Headings inside fenced code blocks are
-# ignored — e.g. `## comment` inside a `shell` fence is a shell comment, not a
-# Markdown heading.
+# Step and becomes its `title`/`id` props: the `id` carries the heading's
+# `{#anchor}` (or its auto-generated slug) so existing in-page links keep
+# working, and a heading left inside the body would render the step number
+# above the title. Headings inside fenced code blocks are ignored — e.g.
+# `## comment` inside a `shell` fence is a shell comment, not a Markdown
+# heading.
 VERTICAL_STEPPER_RE = re.compile(r"<VerticalStepper\b(?P<attrs>[^>]*)>(?P<body>.*?)</VerticalStepper>", re.DOTALL)
 VERTICAL_STEPPER_SELFCLOSE_RE = re.compile(r"<VerticalStepper\b[^>]*/>\s*\n?")
 HEADER_LEVEL_RE = re.compile(r'\bheaderLevel\s*=\s*"h([1-6])"')
 FENCE_RE = re.compile(r"^[ \t]*(```+|~~~+)", re.MULTILINE)
+STEP_HEADING_RE = re.compile(
+    r"^\s*#{1,6}\s+(?P<title>.*?)(?:\s*\{#(?P<anchor>[^}]+)\})?\s*$"
+)
+# Inline markup that a plain string `title` prop would render literally.
+STEP_TITLE_MARKUP_RE = re.compile(r"`|\[[^\]]*\]\(|</?[A-Za-z]|\*\*")
+STEP_TITLE_TOKEN_RE = re.compile(
+    r"`(?P<code>[^`]+)`"
+    r"|\[(?P<ltext>[^\]]*)\]\((?P<lhref>[^)\s]+)\)"
+    r"|\*\*(?P<bold>[^*]+)\*\*"
+    r"|(?P<jsx></?[A-Za-z][^>]*>)"
+)
+
+
+def _step_slug(text: str) -> str:
+    # GitHub-style slug of the heading's plain text, for headings without an
+    # explicit `{#anchor}` — matches the anchor the renderer auto-generates.
+    text = re.sub(r"\[([^\]]*)\]\([^)\s]+\)", r"\1", text)
+    text = re.sub(r"</?[A-Za-z][^>]*>", "", text).replace("`", "").replace("**", "")
+    out = []
+    for ch in text.strip().lower():
+        if ch in (" ", "-"):
+            out.append("-")
+        else:
+            cat = unicodedata.category(ch)
+            if cat[0] in ("L", "N", "M") or ch == "_":
+                out.append(ch)
+    return "".join(out)
+
+
+def _jsx_escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("{", "&#123;")
+        .replace("}", "&#125;")
+        .replace("<", "&lt;")
+    )
+
+
+def _step_title_attr(title: str) -> str:
+    # A plain string when possible, a JSX fragment when the title carries
+    # inline markup (code spans, links, bold, JSX).
+    if not STEP_TITLE_MARKUP_RE.search(title):
+        if '"' in title:
+            if "'" in title:
+                return 'title="%s"' % title.replace('"', "&quot;")
+            return "title='%s'" % title
+        return 'title="%s"' % title
+    pieces = []
+    pos = 0
+    for m in STEP_TITLE_TOKEN_RE.finditer(title):
+        pieces.append(_jsx_escape(title[pos:m.start()]))
+        if m.group("code") is not None:
+            pieces.append("<code>%s</code>" % _jsx_escape(m.group("code")))
+        elif m.group("ltext") is not None:
+            pieces.append('<a href="%s">%s</a>' % (m.group("lhref"), _jsx_escape(m.group("ltext"))))
+        elif m.group("bold") is not None:
+            pieces.append("<strong>%s</strong>" % _jsx_escape(m.group("bold")))
+        else:
+            pieces.append(m.group("jsx"))
+        pos = m.end()
+    pieces.append(_jsx_escape(title[pos:]))
+    return "title={<>%s</>}" % "".join(pieces)
 
 
 def _heading_positions_outside_fences(body: str, level: int) -> list[int]:
@@ -1240,10 +1305,23 @@ def transform_vertical_stepper(text: str) -> str:
             return body.strip("\n")
         prelude = body[: positions[0]].strip("\n")
         steps = []
+        seen: dict[str, int] = {}
         for i, start in enumerate(positions):
             end = positions[i + 1] if i + 1 < len(positions) else len(body)
             seg = body[start:end].strip("\n")
-            steps.append(f"<Step>\n{seg}\n</Step>")
+            heading, _, rest = seg.partition("\n")
+            hm = STEP_HEADING_RE.match(heading)
+            title = hm.group("title").strip()
+            anchor = hm.group("anchor")
+            if not anchor:
+                anchor = _step_slug(title)
+                if anchor in seen:
+                    seen[anchor] += 1
+                    anchor = f"{anchor}-{seen[anchor]}"
+                else:
+                    seen[anchor] = 0
+            opener = '<Step %s id="%s">' % (_step_title_attr(title), anchor)
+            steps.append(f"{opener}\n{rest.strip(chr(10))}\n</Step>")
         out = ("" if not prelude else prelude + "\n\n") + "<Steps>\n" + "\n".join(steps) + "\n</Steps>"
         return out
     return VERTICAL_STEPPER_RE.sub(repl, text)
