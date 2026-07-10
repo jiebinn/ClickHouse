@@ -111,6 +111,9 @@ def collect_snippet_anchors(text, docs_root, page_dir, seen):
         seen.add(sp)
         with open(sp, "r", encoding="utf-8", errors="replace") as f:
             snip = f.read()
+        # Never advertise ids that only occur inside code samples or MDX
+        # comments -- they don't render, so they are not fragment targets.
+        snip = strip_code_blocks(strip_mdx_comments(snip))
         ids.update(m.group(1) or m.group(2) for m in ANCHOR_ID_RE.finditer(snip))
         # Element ids (e.g. `<Step id="...">`) are fragment targets too.
         ids.update(m.group(1) for m in ELEMENT_ID_RE.finditer(snip))
@@ -193,25 +196,34 @@ def materialize_redirects(docs_root, dest):
             continue
         if any(os.path.exists(os.path.join(dest, src + e)) for e in ("", ".mdx", ".md")):
             continue  # a real page already covers this path
-        # For English sources, seed the placeholder with the destination's anchor
-        # ids (only `<a id>` tags, not its content, so we don't re-check the
-        # destination's own links) -- this makes a fragment link to the redirect
-        # source (e.g. .../oss#install-clickhouse) resolve, since Mintlify applies
-        # the fragment on the destination. Locale sources get an empty placeholder
-        # (their destinations are checked for page-existence only; see below).
+        # For English sources, seed the placeholder with the destination's
+        # fragment ids (written as `<a id>` stubs only, not its content, so we
+        # don't re-check the destination's own links) -- this makes a fragment
+        # link to the redirect source (e.g. .../oss#install-clickhouse)
+        # resolve, since Mintlify applies the fragment on the destination. The
+        # ids are collected from the original source with the same hygiene as
+        # the page pass: heading `{#anchor}`s, element ids, and anchors
+        # inherited from imported snippets, with code samples and MDX comments
+        # stripped first so ids that never render are not advertised. Locale
+        # sources get an empty placeholder (their destinations are checked for
+        # page-existence only; see below).
         anchors = set()
         if src.split("/")[0] not in LOCALE_PREFIXES:
             dest_url = (r.get("destination") or "").strip()
             if dest_url.startswith("/"):
                 for e in (".mdx", ".md"):
-                    cand = os.path.join(dest, dest_url.lstrip("/") + e)
+                    cand = os.path.join(docs_root, dest_url.lstrip("/") + e)
                     if os.path.isfile(cand):
                         with open(cand, encoding="utf-8", errors="replace") as f:
                             raw = f.read()
+                        text = strip_code_blocks(strip_mdx_comments(raw))
                         anchors = {m.group(1) or m.group(2)
-                                   for m in ANCHOR_ID_RE.finditer(raw)}
+                                   for m in ANCHOR_ID_RE.finditer(text)}
                         # Element ids (e.g. `<Step id="...">`) too.
-                        anchors |= {m.group(1) for m in ELEMENT_ID_RE.finditer(raw)}
+                        anchors |= {m.group(1) for m in ELEMENT_ID_RE.finditer(text)}
+                        # Anchors inherited from imported snippets.
+                        anchors |= collect_snippet_anchors(
+                            text, docs_root, os.path.dirname(cand), set())
                         break
         p = os.path.join(dest, src + ".mdx")
         os.makedirs(os.path.dirname(p) or ".", exist_ok=True)
