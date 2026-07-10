@@ -1,14 +1,18 @@
 #include <Formats/PNGWriter.h>
 
-#if USE_LIBPNG
+#include <array>
+#include <limits>
 
-#include <png.h>
+#include <zlib.h>
 
-#include <algorithm>
-#include <cstring>
-
-#include <IO/WriteBuffer.h>
+#include <base/types.h>
 #include <Common/Exception.h>
+#include <Common/StringWithMemoryTracking.h>
+#include <IO/CompressionMethod.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromStringWithMemoryTracking.h>
+#include <IO/WriteHelpers.h>
+#include <IO/ZlibDeflatingWriteBuffer.h>
 
 namespace DB
 {
@@ -20,7 +24,26 @@ namespace ErrorCodes
 
 namespace
 {
-    constexpr int PNG_COMPRESSION_LEVEL = 6;
+    /// Deflate level for the image data. 6 is zlib's default: a good size/speed balance.
+    constexpr int COMPRESSION_LEVEL = 6;
+
+    /// Write one PNG chunk: 4-byte big-endian length, 4-byte type, the data,
+    /// and the 4-byte big-endian CRC-32 of the type followed by the data.
+    void writeChunk(WriteBuffer & out, const char (&type)[5], const char * data, size_t size)
+    {
+        if (size > std::numeric_limits<UInt32>::max())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "PNG chunk is too large ({} bytes)", size);
+
+        writeBinaryBigEndian(static_cast<UInt32>(size), out);
+        out.write(type, 4);
+        if (size)
+            out.write(data, size);
+
+        uLong crc = crc32_z(0, reinterpret_cast<const Bytef *>(type), 4);
+        if (size)
+            crc = crc32_z(crc, reinterpret_cast<const Bytef *>(data), size);
+        writeBinaryBigEndian(static_cast<UInt32>(crc), out);
+    }
 }
 
 PNGWriter::PNGWriter(WriteBuffer & out_, size_t width_, size_t height_, size_t channels_)
@@ -32,143 +55,78 @@ PNGWriter::PNGWriter(WriteBuffer & out_, size_t width_, size_t height_, size_t c
     if (channels != 1 && channels != 3 && channels != 4)
         throw Exception(ErrorCodes::LOGICAL_ERROR,
             "PNG writer supports only 1, 3, or 4 channels per pixel, got {}", channels);
-}
 
-PNGWriter::~PNGWriter()
-{
-    cleanup();
-}
-
-void PNGWriter::cleanup()
-{
-    if (png_ptr)
-        png_destroy_write_struct(&png_ptr, info_ptr ? &info_ptr : nullptr);
-    png_ptr = nullptr;
-    info_ptr = nullptr;
+    /// PNG stores width and height as 4-byte unsigned integers and disallows zero.
+    static constexpr size_t MAX_DIMENSION = 0x7fffffff;
+    if (width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION)
+        throw Exception(ErrorCodes::LOGICAL_ERROR,
+            "PNG image dimensions must be between 1 and {} (got {}x{})", MAX_DIMENSION, width, height);
 }
 
 void PNGWriter::writeImage(const unsigned char * pixels)
 {
-    if (initialized)
+    if (written)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "PNG writer can encode only one image");
+    written = true;
 
-    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, this, &PNGWriter::errorCallback, &PNGWriter::warningCallback);
-    if (!png_ptr)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to create libpng write struct");
+    /// The 8-byte PNG file signature.
+    static constexpr std::array<char, 8> signature
+        = {static_cast<char>(0x89), 'P', 'N', 'G', '\r', '\n', static_cast<char>(0x1A), '\n'};
+    out.write(signature.data(), signature.size());
 
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to create libpng info struct");
-
-    if (setjmp(png_jmpbuf(png_ptr))) // NOLINT(cert-err52-cpp)
-    {
-        /// A callback longj'd back here. Either an I/O exception was saved while writing, or libpng raised an error/warning.
-        if (saved_exception)
-            std::rethrow_exception(saved_exception);
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "libpng error while encoding image: {}",
-            error_message[0] ? error_message : "unknown");
-    }
-
-    png_set_write_fn(png_ptr, this, &PNGWriter::writeDataCallback, &PNGWriter::flushDataCallback);
-
-    int color_type = 0;
+    /// IHDR: image header (13 bytes).
+    UInt8 color_type = 0;
     switch (channels)
     {
-        case 1: color_type = PNG_COLOR_TYPE_GRAY; break;
-        case 3: color_type = PNG_COLOR_TYPE_RGB; break;
-        case 4: color_type = PNG_COLOR_TYPE_RGBA; break;
-        default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unsupported number of channels");
+        case 1: color_type = 0; break; /// grayscale
+        case 3: color_type = 2; break; /// RGB
+        case 4: color_type = 6; break; /// RGBA
+        default: break; /// unreachable: the number of channels is validated in the constructor
     }
 
-    png_set_IHDR(png_ptr, info_ptr,
-        static_cast<png_uint_32>(width), static_cast<png_uint_32>(height),
-        8 /* bit_depth */, color_type,
-        PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    auto put_be32 = [](char * p, UInt32 value)
+    {
+        p[0] = static_cast<char>(value >> 24);
+        p[1] = static_cast<char>(value >> 16);
+        p[2] = static_cast<char>(value >> 8);
+        p[3] = static_cast<char>(value);
+    };
 
-    png_set_compression_level(png_ptr, PNG_COMPRESSION_LEVEL);
+    char ihdr[13];
+    put_be32(ihdr, static_cast<UInt32>(width));
+    put_be32(ihdr + 4, static_cast<UInt32>(height));
+    ihdr[8] = 8;                              /// bit depth
+    ihdr[9] = static_cast<char>(color_type);  /// color type
+    ihdr[10] = 0;                             /// compression method: Deflate
+    ihdr[11] = 0;                             /// filter method: the standard set (we only ever emit the "None" filter)
+    ihdr[12] = 0;                             /// interlace method: none
+    writeChunk(out, "IHDR", ihdr, sizeof(ihdr));
 
-    png_write_info(png_ptr, info_ptr);
+    /// IDAT: the pixel data, Deflate-compressed. Each scanline is prefixed with a single filter-type byte;
+    /// we always use "None" (0), i.e. the raw bytes, and let Deflate do the compression.
+    StringWithMemoryTracking compressed;
+    {
+        WriteBufferFromStringWithMemoryTracking compressed_buf(compressed);
+        ZlibDeflatingWriteBuffer deflate(&compressed_buf, CompressionMethod::Zlib, COMPRESSION_LEVEL);
 
-    /// Write the image one row at a time, pointing directly into the tightly packed pixel buffer.
-    /// This avoids materializing a separate table of per-row pointers, whose size would be proportional
-    /// to the user-controlled image height and would not be accounted by the memory tracker.
-    const size_t row_bytes = width * channels;
-    for (size_t y = 0; y < height; ++y)
-        png_write_row(png_ptr, const_cast<png_bytep>(pixels + y * row_bytes));
+        const size_t row_bytes = width * channels;
+        const char filter_none = 0;
+        for (size_t y = 0; y < height; ++y)
+        {
+            deflate.write(&filter_none, 1);
+            deflate.write(reinterpret_cast<const char *>(pixels) + y * row_bytes, row_bytes);
+        }
+        deflate.finalize(); /// Flushes the Deflate stream and finalizes `compressed_buf`.
+    }
+    writeChunk(out, "IDAT", compressed.data(), compressed.size());
 
-    png_write_end(png_ptr, info_ptr);
-
-    initialized = true;
+    /// IEND: end of the image.
+    writeChunk(out, "IEND", nullptr, 0);
 }
 
 void PNGWriter::finalize()
 {
-    cleanup();
     out.next();
 }
 
-void PNGWriter::writeDataCallback(png_struct_def * png_ptr_, unsigned char * data, size_t length)
-{
-    auto * writer = reinterpret_cast<PNGWriter *>(png_get_io_ptr(png_ptr_));
-    try
-    {
-        writer->out.write(reinterpret_cast<const char *>(data), length);
-        return;
-    }
-    catch (...) /// Ok: a C++ exception must not propagate through libpng's C frames; save it and longjmp instead.
-    {
-        writer->saved_exception = std::current_exception();
-    }
-    /// `png_longjmp` must run after leaving the `catch` block: jumping out of an active handler skips the
-    /// runtime's end-of-catch cleanup, leaving the in-flight exception object permanently referenced and leaked.
-    png_longjmp(png_ptr_, 1);
 }
-
-void PNGWriter::flushDataCallback(png_struct_def * png_ptr_)
-{
-    auto * writer = reinterpret_cast<PNGWriter *>(png_get_io_ptr(png_ptr_));
-    try
-    {
-        writer->out.next();
-        return;
-    }
-    catch (...) /// Ok: a C++ exception must not propagate through libpng's C frames; save it and longjmp instead.
-    {
-        writer->saved_exception = std::current_exception();
-    }
-    /// See `writeDataCallback`: `png_longjmp` only after leaving the `catch` block to avoid leaking the exception.
-    png_longjmp(png_ptr_, 1);
-}
-
-void PNGWriter::saveMessage(png_const_charp message)
-{
-    /// Copy into the fixed-size buffer without allocating: an allocation here could throw `std::bad_alloc`
-    /// through libpng's C frames before we reach `png_longjmp`, which is undefined behavior.
-    if (!message)
-        return;
-    const size_t length = std::min(strlen(message), sizeof(error_message) - 1);
-    memcpy(error_message, message, length);
-    error_message[length] = '\0';
-}
-
-[[noreturn]] void PNGWriter::errorCallback(png_struct_def * png_ptr_, png_const_charp error_msg)
-{
-    auto * writer = reinterpret_cast<PNGWriter *>(png_get_error_ptr(png_ptr_));
-    if (writer)
-        writer->saveMessage(error_msg);
-    png_longjmp(png_ptr_, 1);
-}
-
-[[noreturn]] void PNGWriter::warningCallback(png_struct_def * png_ptr_, png_const_charp warning_msg)
-{
-    /// We do not expect any warnings; treat them as errors.
-    auto * writer = reinterpret_cast<PNGWriter *>(png_get_error_ptr(png_ptr_));
-    if (writer)
-        writer->saveMessage(warning_msg);
-    png_longjmp(png_ptr_, 1);
-}
-
-}
-
-#endif
