@@ -51434,5 +51434,9 @@
   {
     "source": "/zh/resources/about/history",
     "destination": "https://clickhouse.com/company/our-story"
+  },
+  {
+    "source": "/api-reference/:path*",
+    "destination": "/products/cloud/api-reference/:path*"
   }
 ]
