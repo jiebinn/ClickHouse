@@ -724,6 +724,7 @@
             "reference/functions/window-functions/last_value",
             "reference/functions/window-functions/lead",
             "reference/functions/window-functions/leadInFrame",
+            "reference/functions/window-functions/nonNegativeDerivative",
             "reference/functions/window-functions/nth_value",
             "reference/functions/window-functions/ntile",
             "reference/functions/window-functions/percent_rank",
