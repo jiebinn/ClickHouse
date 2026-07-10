@@ -12,7 +12,7 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CUR_DIR"/../shell_config.sh
 
 # Unique object path per test database so parallel runs do not collide.
-url="http://localhost:9101/test/04498_s3_engine_endpoint_settings_override/${CLICKHOUSE_DATABASE}/data.native"
+url="http://localhost:11111/test/04498_s3_engine_endpoint_settings_override/${CLICKHOUSE_DATABASE}/data.native"
 
 $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS t_04498 SYNC"
 $CLICKHOUSE_CLIENT --query "CREATE TABLE t_04498 (s String) ENGINE = S3('$url', 'Native')"
