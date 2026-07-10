@@ -53,7 +53,8 @@ function thread_query_table()
     local TIMELIMIT=$((SECONDS+$1))
     while [ $SECONDS -lt "$TIMELIMIT" ]; do
         COUNT=$($CLICKHOUSE_CLIENT --query "SELECT count() FROM t where not ignore(*);")
-        if [ "$COUNT" -ne "2000" ];  then
+        # $COUNT is empty if the read is transiently interrupted; guard so the compare never emits a bash error. A wrong count is still reported.
+        if [ -n "$COUNT" ] && [ "$COUNT" != "2000" ];  then
           echo "$COUNT"
         fi
     done
