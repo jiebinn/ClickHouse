@@ -162,11 +162,7 @@ bool QueryPlan::isSerialized() const
     return serialized_plan != nullptr;
 }
 
-<<<<<<< HEAD
-QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context, bool skip)
-=======
-QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context, size_t max_type_complexity)
->>>>>>> origin/master
+QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context, size_t max_type_complexity, bool skip)
 {
     UInt64 version = 0;
     readVarUInt(version, in);
@@ -176,14 +172,8 @@ QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & cont
             "Query plan serialization version {} is not supported. The last supported version is {}",
             version, DBMS_QUERY_PLAN_SERIALIZATION_VERSION);
 
-<<<<<<< HEAD
     SerializationFlags flags{.version = version, .skip_data = skip};
-    return deserialize(in, context, flags);
-=======
-    SerializationFlags flags;
-    flags.version = version;
     return deserialize(in, context, flags, max_type_complexity);
->>>>>>> origin/master
 }
 
 QueryPlanAndSets QueryPlan::deserialize(ReadBuffer & in, const ContextPtr & context, const SerializationFlags & flags, size_t max_type_complexity)
