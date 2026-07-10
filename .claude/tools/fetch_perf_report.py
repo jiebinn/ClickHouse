@@ -735,6 +735,17 @@ def main():
         print("No matching shards found", file=sys.stderr)
         sys.exit(1)
 
+    # Jobs that didn't run (e.g. the amd perf comparison only runs on 'pr-performance' PRs) have no
+    # artifacts, so report them cleanly instead of attempting a download that 403s.
+    skipped = [s for s in shards if str(s.get("status", "")).upper() == "SKIPPED"]
+    for s in skipped:
+        print(f"  Skipped: {s['name']} ({s.get('info') or 'not run'})", file=sys.stderr)
+    shards = [s for s in shards if str(s.get("status", "")).upper() != "SKIPPED"]
+
+    if not shards:
+        print("No shards to fetch (all matching jobs were skipped)", file=sys.stderr)
+        sys.exit(1)
+
     print(f"Fetching {len(shards)} performance shard(s)...\n", file=sys.stderr)
 
     # Download TSV data in parallel
