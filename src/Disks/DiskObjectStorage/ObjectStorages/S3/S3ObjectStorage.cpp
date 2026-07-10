@@ -239,11 +239,8 @@ std::unique_ptr<ReadBufferFromFileBase> S3ObjectStorage::readObject( /// NOLINT
 {
     auto settings_ptr = s3_settings.get();
 
-    /// Apply user/profile/query-level settings on top of the stored request settings so a per-query
-    /// override (e.g. `s3_max_single_read_retries`, `s3_max_get_rps`) takes priority over the global
-    /// `<s3>` config and the endpoint block. Done per-read on a local copy - not baked into the
-    /// shared `s3_settings` - so an override does not leak into later queries on the same table.
-    /// Background operations don't propagate session/query settings, mirroring `writeObject`.
+    /// A query can override request settings (from its SETTINGS clause or profile). Apply them to a
+    /// local copy so they affect only this read and don't stick around for later queries, same as writeObject.
     S3::S3RequestSettings request_settings = settings_ptr->request_settings;
     if (auto query_context = CurrentThread::tryGetQueryContext();
         query_context && !query_context->isBackgroundContext())
@@ -718,26 +715,17 @@ void S3ObjectStorage::applyNewSettings(
         modified_settings->request_settings.updateIfChanged(settings_from_config->request_settings);
     };
 
+    /// When a setting is given both in the general config and for a specific endpoint, the more specific
+    /// one should win. For a disk the config is the disk's own section (more specific than an endpoint
+    /// block), so apply it last. For S3/S3Queue tables the config is the general <s3> section (less
+    /// specific than an endpoint block), so apply the endpoint last instead. Whichever is applied last wins.
     if (for_disk_s3)
     {
-        /// For a disk, `config_prefix` is the disk's own `<storage_configuration>` section, which is
-        /// more specific than the global `<s3>` section, so the disk config takes priority over the
-        /// endpoint settings matched from `<s3>`.
         apply_endpoint_settings();
         apply_config_settings();
     }
     else
     {
-        /// For object storage backing `S3`/`S3Queue` engine tables, `config_prefix` is the global
-        /// top-level `<s3>` section, which is less specific than the URL-scoped endpoint settings.
-        /// Apply it first so the endpoint settings win, matching the resolution order used at table
-        /// creation in `S3StorageParsedArguments::fromAST` (global `<s3>` first, endpoint on top).
-        ///
-        /// Query/profile-level settings are intentionally NOT baked in here: `applyNewSettings`
-        /// runs on every query and updates the shared `s3_settings`, so a per-query `s3_*` override
-        /// would stick and leak into later queries on the same table. They are applied per-operation
-        /// instead (`readObject`/`writeObject`), so a query-level setting still takes priority
-        /// without being persisted.
         apply_config_settings();
         apply_endpoint_settings();
     }

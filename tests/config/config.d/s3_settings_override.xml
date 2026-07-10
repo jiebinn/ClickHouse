@@ -1,16 +1,8 @@
 <clickhouse>
     <s3>
-        <!-- Top-level default for test 04498_s3_engine_endpoint_settings_override.
-             Set equal to the built-in default (32Mi) so it does not change behaviour for any other
-             test, but is explicitly present (hence "changed") so it participates in the settings
-             priority resolution. The test_04498 endpoint block below sets a small value; the test
-             verifies that the URL-scoped endpoint block wins over this top-level default for an
-             S3 engine table on the object-storage refresh path. -->
-        <max_single_part_upload_size>33554432</max_single_part_upload_size>
+        <s3_max_single_part_upload_size>33554432</s3_max_single_part_upload_size>
 
-        <!-- Endpoint for test 04498_s3_engine_endpoint_settings_override.
-             Small max_single_part_upload_size (more specific than the top-level default above);
-             the test verifies this endpoint block wins for an S3 engine table. -->
+        <!-- Endpoint for test 04498: small max_single_part_upload_size must override the top-level value. -->
         <test_04498>
             <endpoint>http://localhost:11111/test/04498_s3_engine_endpoint_settings_override</endpoint>
             <max_single_part_upload_size>10000</max_single_part_upload_size>
@@ -23,6 +15,7 @@
             <endpoint>http://localhost:11111/test/04070_s3_disk_settings_override</endpoint>
             <max_single_part_upload_size>104857600</max_single_part_upload_size>
         </test_04070>
+
         <!-- Endpoint for test 04093_s3_settings_query_override.
              Sets a large max_single_part_upload_size. Query-level settings set a small value.
              The test verifies that query-level settings take priority over global <s3> section. -->
