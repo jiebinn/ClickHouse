@@ -486,10 +486,15 @@ if (ENABLE_THINLTO AND NOT ENABLE_TESTS AND NOT SANITIZE)
         # `-fwhole-program-vtables` and `-Wl,--lto-whole-program-visibility` (set above) cause
         # the linker to treat all vtables as internal to the binary.
         #
-        # `-fno-sanitize-trap=cfi` puts CFI in diagnostic mode: a violation prints a UBSan-style
-        # type/location report instead of trapping with a bare SIGSEGV, which is what makes
-        # WeeklyCFI failures triageable. `-fno-sanitize-recover=cfi` then aborts after the report.
-        set (CFI_FLAGS "-fsanitize=cfi-vcall,cfi-derived-cast -fno-sanitize-trap=cfi -fno-sanitize-recover=cfi -fvisibility=default")
+        # CFI is left in the default trap mode: a violation executes an illegal instruction
+        # (SIGILL) and CI's core-dump handler yields a stack trace pinpointing the bad vcall/cast.
+        # Diagnostic mode (`-fno-sanitize-trap=cfi`, which prints a UBSan-style type/location
+        # report) is deliberately NOT used: it makes Clang link `libclang_rt.ubsan_standalone`,
+        # which this toolchain does not ship (only select compiler-rt libs are built from contrib),
+        # so even host tools like `protoc` fail to link — validated by WeeklyCFI run 28943752776.
+        # `-fno-sanitize-recover=cfi` is redundant in trap mode but kept as an explicit marker that
+        # a violation must never be continued past.
+        set (CFI_FLAGS "-fsanitize=cfi-vcall,cfi-derived-cast -fno-sanitize-recover=cfi -fvisibility=default")
         set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CFI_FLAGS}")
         set (CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO} ${CFI_FLAGS}")
     endif ()
