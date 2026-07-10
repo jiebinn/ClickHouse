@@ -31,6 +31,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int BAD_ARGUMENTS;
+    extern const int NOT_IMPLEMENTED;
 }
 }
 
@@ -194,6 +196,19 @@ private:
     std::unique_ptr<Poco::Net::HTTPServer> server;
 };
 
+void expectThrowsCode(std::function<void()> fn, int expected_code)
+{
+    try
+    {
+        fn();
+        FAIL() << "expected DB::Exception with code " << expected_code;
+    }
+    catch (const DB::Exception & e)
+    {
+        EXPECT_EQ(e.code(), expected_code);
+    }
+}
+
 bool restCatalogEmpty(CatalogShape shape)
 {
     RestCatalogTestServer server(shape);
@@ -276,7 +291,7 @@ TEST(RestCatalog, ApplySettingsChangesNotSupported)
 
     DB::SettingsChanges changes;
     changes.emplace_back("onelake_bearer_token", "token");
-    EXPECT_THROW(catalog.applySettingsChanges(changes), DB::Exception);
+    expectThrowsCode([&] { catalog.applySettingsChanges(changes); }, DB::ErrorCodes::NOT_IMPLEMENTED);
 }
 
 TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
@@ -320,16 +335,16 @@ TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
     DB::SettingsChanges mode_switch;
     mode_switch.emplace_back("onelake_tenant_id", "tenant-3");
     mode_switch.emplace_back("onelake_client_id", "client-1");
-    EXPECT_THROW(catalog.applySettingsChanges(mode_switch), DB::Exception);
+    expectThrowsCode([&] { catalog.applySettingsChanges(mode_switch); }, DB::ErrorCodes::BAD_ARGUMENTS);
     EXPECT_EQ(catalog.getAuthStateSnapshot()->tenant_id, "tenant-2");
 
     DB::SettingsChanges unknown_setting;
     unknown_setting.emplace_back("warehouse", "other");
-    EXPECT_THROW(catalog.applySettingsChanges(unknown_setting), DB::Exception);
+    expectThrowsCode([&] { catalog.applySettingsChanges(unknown_setting); }, DB::ErrorCodes::BAD_ARGUMENTS);
 
     DB::SettingsChanges empty_value;
     empty_value.emplace_back("onelake_bearer_token", "");
-    EXPECT_THROW(catalog.applySettingsChanges(empty_value), DB::Exception);
+    expectThrowsCode([&] { catalog.applySettingsChanges(empty_value); }, DB::ErrorCodes::BAD_ARGUMENTS);
 }
 
 #endif

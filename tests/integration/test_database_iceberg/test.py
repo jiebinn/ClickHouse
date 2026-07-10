@@ -1531,6 +1531,16 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
     )
     assert "BAD_ARGUMENTS" in error
 
+    error = node.query_and_get_error(
+        f"ALTER DATABASE {db_name} MODIFY SETTING warehouse = 'other_warehouse'"
+    )
+    assert "BAD_ARGUMENTS" in error
+
+    error = node.query_and_get_error(
+        f"ALTER DATABASE {db_name} MODIFY SETTING onelake_bearer_token = ''"
+    )
+    assert "BAD_ARGUMENTS" in error
+
     show_result = node.query(f"SHOW CREATE DATABASE {db_name}")
     assert "tenant-2" in show_result
     assert new_token not in show_result
