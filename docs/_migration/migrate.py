@@ -1222,6 +1222,37 @@ def _step_slug(text: str) -> str:
     return "".join(out)
 
 
+def _claim_step_anchor(claimed: set[str], title: str, anchor: str | None) -> str:
+    # Register the step's fragment id: the explicit `{#anchor}` verbatim, or
+    # the auto slug suffixed with `-1`, `-2`, ... past ids already claimed.
+    if not anchor:
+        base = anchor = _step_slug(title)
+        n = 0
+        while anchor in claimed:
+            n += 1
+            anchor = f"{base}-{n}"
+    claimed.add(anchor)
+    return anchor
+
+
+def _claimed_ids_before(text: str, end: int) -> set[str]:
+    # Fragment ids claimed by headings before `end`, in document order and
+    # mirroring the renderer's assignment (explicit `{#anchor}` or the auto
+    # slug), so anchorless stepper headings never reuse an earlier fragment.
+    claimed: set[str] = set()
+    in_fence = False
+    for line in text[:end].split("\n"):
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        hm = STEP_HEADING_RE.match(line)
+        if hm:
+            _claim_step_anchor(claimed, hm.group("title").strip(), hm.group("anchor"))
+    return claimed
+
+
 def _jsx_escape(text: str) -> str:
     return (
         text.replace("&", "&amp;")
@@ -1305,21 +1336,14 @@ def transform_vertical_stepper(text: str) -> str:
             return body.strip("\n")
         prelude = body[: positions[0]].strip("\n")
         steps = []
-        seen: dict[str, int] = {}
+        claimed = _claimed_ids_before(m.string, m.start())
         for i, start in enumerate(positions):
             end = positions[i + 1] if i + 1 < len(positions) else len(body)
             seg = body[start:end].strip("\n")
             heading, _, rest = seg.partition("\n")
             hm = STEP_HEADING_RE.match(heading)
             title = hm.group("title").strip()
-            anchor = hm.group("anchor")
-            if not anchor:
-                anchor = _step_slug(title)
-                if anchor in seen:
-                    seen[anchor] += 1
-                    anchor = f"{anchor}-{seen[anchor]}"
-                else:
-                    seen[anchor] = 0
+            anchor = _claim_step_anchor(claimed, title, hm.group("anchor"))
             opener = '<Step %s id="%s">' % (_step_title_attr(title), anchor)
             steps.append(f"{opener}\n{rest.strip(chr(10))}\n</Step>")
         out = ("" if not prelude else prelude + "\n\n") + "<Steps>\n" + "\n".join(steps) + "\n</Steps>"
