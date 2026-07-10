@@ -304,6 +304,17 @@ def test_embed_model_override_with_default_credentials(started_cluster):
     assert json.loads(last_request()["body"])["model"] == "override-embed-model"
 
 
+def test_generate_empty_model_override_with_default_credentials(started_cluster):
+    """An explicitly empty `model` in the params map overrides the collection's model: the resolver
+    honors presence, not content, so `map('model', '')` sends an empty model (letting an endpoint
+    pick one), even though the collection selected via the default setting defines `test-model`."""
+    instance.query(
+        "SELECT aiGenerate('hi', map('model', ''))",
+        settings={**AI_SETTINGS, "ai_function_text_default_credentials": "ai_mock"},
+    )
+    assert json.loads(last_request()["body"])["model"] == ""
+
+
 # ---------------------------------------------------------------------------
 # aiClassify
 # ---------------------------------------------------------------------------
