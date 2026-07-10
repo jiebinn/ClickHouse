@@ -1,0 +1,5 @@
+signature ok
+all chunk crcs ok
+multiple IDAT chunks: yes
+filters none ok
+pixels round-trip ok

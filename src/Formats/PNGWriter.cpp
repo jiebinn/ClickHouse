@@ -7,10 +7,9 @@
 
 #include <base/types.h>
 #include <Common/Exception.h>
-#include <Common/StringWithMemoryTracking.h>
+#include <IO/BufferWithOwnMemory.h>
 #include <IO/CompressionMethod.h>
 #include <IO/WriteBuffer.h>
-#include <IO/WriteBufferFromStringWithMemoryTracking.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ZlibDeflatingWriteBuffer.h>
 
@@ -26,6 +25,12 @@ namespace
 {
     /// Deflate level for the image data. 6 is zlib's default: a good size/speed balance.
     constexpr int COMPRESSION_LEVEL = 6;
+
+    /// Emit the compressed pixel stream in `IDAT` chunks of at most this many bytes. PNG allows the Deflate
+    /// datastream to be split across any number of `IDAT` chunks, so bounding the chunk size keeps peak memory
+    /// constant regardless of the image size. The value only trades a little per-chunk overhead (12 bytes each)
+    /// against memory; it does not affect the decoded image.
+    constexpr size_t IDAT_CHUNK_SIZE = 1 << 16; /// 64 KiB
 
     /// Write one PNG chunk: 4-byte big-endian length, 4-byte type, the data,
     /// and the 4-byte big-endian CRC-32 of the type followed by the data.
@@ -44,6 +49,30 @@ namespace
             crc = crc32_z(crc, reinterpret_cast<const Bytef *>(data), size);
         writeBinaryBigEndian(static_cast<UInt32>(crc), out);
     }
+
+    /// A sink for the Deflate-compressed pixel stream that flushes it to `out` as a sequence of bounded
+    /// `IDAT` chunks. Every time this fixed-size buffer fills up (or is finalized) its contents are emitted
+    /// as one more `IDAT` chunk, so we never materialize the whole compressed image in memory and the chunks
+    /// stream out to `out` (HTTP, file, ...) as compression proceeds. Peak memory stays bounded by the buffer
+    /// size, independent of the image dimensions.
+    class IDATChunkWriteBuffer : public BufferWithOwnMemory<WriteBuffer>
+    {
+    public:
+        IDATChunkWriteBuffer(WriteBuffer & out_, size_t buf_size)
+            : BufferWithOwnMemory<WriteBuffer>(buf_size), out(out_)
+        {
+        }
+
+    private:
+        void nextImpl() override
+        {
+            if (offset() == 0)
+                return;
+            writeChunk(out, "IDAT", working_buffer.begin(), offset());
+        }
+
+        WriteBuffer & out;
+    };
 }
 
 PNGWriter::PNGWriter(WriteBuffer & out_, size_t width_, size_t height_, size_t channels_)
@@ -103,11 +132,12 @@ void PNGWriter::writeImage(const unsigned char * pixels)
     writeChunk(out, "IHDR", ihdr, sizeof(ihdr));
 
     /// IDAT: the pixel data, Deflate-compressed. Each scanline is prefixed with a single filter-type byte;
-    /// we always use "None" (0), i.e. the raw bytes, and let Deflate do the compression.
-    StringWithMemoryTracking compressed;
+    /// we always use "None" (0), i.e. the raw bytes, and let Deflate do the compression. The compressed
+    /// stream is emitted as bounded `IDAT` chunks straight to `out`, so peak memory does not grow with the
+    /// image size and the output streams as it is produced.
     {
-        WriteBufferFromStringWithMemoryTracking compressed_buf(compressed);
-        ZlibDeflatingWriteBuffer deflate(&compressed_buf, CompressionMethod::Zlib, COMPRESSION_LEVEL);
+        IDATChunkWriteBuffer idat(out, IDAT_CHUNK_SIZE);
+        ZlibDeflatingWriteBuffer deflate(&idat, CompressionMethod::Zlib, COMPRESSION_LEVEL);
 
         const size_t row_bytes = width * channels;
         const char filter_none = 0;
@@ -116,9 +146,8 @@ void PNGWriter::writeImage(const unsigned char * pixels)
             deflate.write(&filter_none, 1);
             deflate.write(reinterpret_cast<const char *>(pixels) + y * row_bytes, row_bytes);
         }
-        deflate.finalize(); /// Flushes the Deflate stream and finalizes `compressed_buf`.
+        deflate.finalize(); /// Flushes the Deflate stream, emitting the final `IDAT` chunk, and finalizes `idat`.
     }
-    writeChunk(out, "IDAT", compressed.data(), compressed.size());
 
     /// IEND: end of the image.
     writeChunk(out, "IEND", nullptr, 0);
