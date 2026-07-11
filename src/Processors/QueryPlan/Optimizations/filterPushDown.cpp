@@ -1031,7 +1031,13 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
         if (partition_keys.empty())
             return 0;
 
-        if (auto updated_steps = tryAddNewFilterStep(parent_node, false, nodes, partition_keys))
+        /// Pass true (as for aggregation), which disables pushing non-deterministic conjuncts.
+        /// A predicate must be deterministic in the partition key, not merely reference only it:
+        /// a non-deterministic conjunct such as `rand64(key) % 2 = 0` removes arbitrary rows
+        /// inside a surviving partition before the window runs, which can change which row
+        /// becomes row_number() = 1. Unlike SortingStep, the window value depends on the set of
+        /// rows in the partition, so non-deterministic filters are not safe to move below it.
+        if (auto updated_steps = tryAddNewFilterStep(parent_node, true, nodes, partition_keys))
             return updated_steps;
     }
 

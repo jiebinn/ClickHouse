@@ -64,6 +64,20 @@ SELECT count() > 0 AS pushed FROM (
     FROM t_04365 QUALIFY rn = 1 AND key = '5'
 ) WHERE explain ILIKE '%Condition:%key%';
 
+-- Negative: a non-deterministic conjunct on the partition key (`rand64(key) % 2 = 0`)
+-- must NOT be pushed below the window. Pushing it would remove arbitrary rows inside a
+-- surviving partition before the window runs and could change which row becomes
+-- row_number() = 1. With prewhere pinned off, a pushed conjunct would appear as a
+-- separate Filter step below the window (its `Filter column:` referencing rand64), so
+-- the count of `Filter column:` lines mentioning rand64 must stay 1 (only the QUALIFY
+-- filter kept above the window); a value of 2 means it was wrongly pushed down.
+SELECT countIf(explain ILIKE '%Filter column:%rand64%') = 1 AS not_pushed FROM (
+    EXPLAIN actions = 1
+    SELECT key, ts, row_number() OVER (PARTITION BY key ORDER BY ts) AS rn
+    FROM t_04365 QUALIFY rn = 1 AND rand64(key) % 2 = 0
+    SETTINGS optimize_move_to_prewhere = 0, query_plan_optimize_prewhere = 0
+);
+
 -- Correctness is preserved: the optimized query returns the same rows as forcing the
 -- filter before the window explicitly.
 SELECT count(), sum(val) FROM (
