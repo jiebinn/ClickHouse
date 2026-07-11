@@ -34,7 +34,9 @@ function createEnvironment(pathname, search = '') {
   const listeners = new Map();
   const beacons = [];
   const clearedIntervals = [];
-  const cloudLink = { href: 'https://console.clickhouse.cloud/signUp' };
+  const cloudLink = {
+    href: 'https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta',
+  };
   const uuids = ['legacy-user-id', 'legacy-session-id'];
 
   class FixedDate extends Date {
