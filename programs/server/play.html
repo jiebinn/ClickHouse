@@ -7900,13 +7900,16 @@ async function reconcileStartup() {
     /// Reconstruct the saved workspace from IndexedDB, ordered by the persisted order,
     /// and restore the id/title counters.
     let savedTabs = [];
-    /// Titles of the blank tabs dropped by the pruning below. A bare `?tab=Name` URL (no query)
-    /// is treated as a stale echo of a dropped tab — and therefore NOT authoritative — only when
-    /// `Name` matches one of these titles: a plain reload echoes the (now pruned) active tab's
-    /// title, while a shared bare link names a tab this pruning never saw. Keying the distinction
-    /// on whether IndexedDB had any records at all would not work: the trailing `scheduleSave`
-    /// persists the blank bootstrap tab even on a first-ever visit, so every later visit would
-    /// look like an all-blank reload and shared bare links would stop opening the named tab.
+    /// Titles of the blank tabs dropped by the pruning below. Used — together with the reloaded
+    /// history entry's provenance (see `stale_blank_reload`) — to recognize a bare `?tab=Name` URL
+    /// (no query) that is only a stale echo of a tab this load just dropped. A plain reload echoes
+    /// the (now pruned) active tab's title, while a shared bare link names a tab this pruning never
+    /// saw. Keying the distinction on whether IndexedDB had any records at all would not work: the
+    /// trailing `scheduleSave` persists the blank bootstrap tab even on a first-ever visit, so
+    /// every later visit would look like an all-blank reload and shared bare links would stop
+    /// opening the named tab. Title equality alone is likewise not enough — a genuine shared
+    /// `?tab=Name` link may collide with a locally pruned blank tab of the same name — so the
+    /// suppression is additionally gated on the history-state check in `stale_blank_reload`.
     const pruned_blank_titles = new Set();
     if (loaded && loaded.records.length) {
         const order = (loaded.meta && loaded.meta.tabOrder) || [];
@@ -7937,6 +7940,20 @@ async function reconcileStartup() {
             tabTitleSeq = Math.max(tabTitleSeq, loaded.meta.tabTitleSeq || 0);
         }
     }
+
+    /// A bare `?tab=Name` URL is a stale echo of a blank tab this load just pruned — and so NOT
+    /// authoritative — only when the name matches a pruned blank title AND the reloaded history
+    /// entry still describes that tab. Every `?tab=` in the URL was written by `writeHistoryEntry`
+    /// together with a `history.state` carrying the tab's `tabName`, and a reload preserves that
+    /// state, so a plain reload of a dropped blank tab has `history.state.tabName === url_tab_name`.
+    /// A genuine external shared bare link (typed, pasted, or followed from elsewhere) begins a
+    /// fresh navigation with `history.state === null`, so it stays authoritative and opens the
+    /// named tab even when its title happens to collide with a locally pruned blank tab — title
+    /// equality alone could not tell these apart. `history.state` is still the reloaded value here
+    /// (nothing on the paths that consult this flag has rewritten it yet).
+    const stale_blank_reload = !!(url_tab_name
+        && pruned_blank_titles.has(url_tab_name)
+        && history.state && history.state.tabName === url_tab_name);
 
     if (savedTabs.length) {
         if (bootstrap_dirty) {
@@ -8037,16 +8054,19 @@ async function reconcileStartup() {
             } else if (has_url_query && !url_tab_name && (match = savedTabs.find(t => t.query === url_query))) {
                 /// Unnamed URL with a query: a tab already holds this exact query, switch to it.
                 activeTabId = match.id;
-            } else if (has_url_query || !url_tab_name || !pruned_blank_titles.has(url_tab_name)) {
+            } else if (has_url_query || !url_tab_name || !stale_blank_reload) {
                 /// Not found, but the URL is authoritative: it carries a query (a fresh/shared
-                /// link), is unnamed, or its bare `?tab=` names a tab that was NOT among the blank
-                /// tabs just pruned (a shared bare link to a name this workspace does not have).
-                /// Open a new tab carrying the name (if any) and query.
+                /// link), is unnamed, or its bare `?tab=` is not a stale reload echo of a
+                /// just-pruned blank tab — either the name was never among the pruned blank titles,
+                /// or the history entry shows this is a fresh external navigation rather than a
+                /// reload (a shared bare link, even one whose name collides with a pruned blank
+                /// tab). Open a new tab carrying the name (if any) and query.
                 const t = makeTab(url_tab_name || undefined, url_query);
                 tabs.push(t);
                 activeTabId = t.id;
             } else {
-                /// Bare `?tab=Name` (no query) naming one of the blank tabs pruned above.
+                /// Bare `?tab=Name` (no query) echoing one of the blank tabs pruned above, on a
+                /// reload (the history entry still describes that tab — see `stale_blank_reload`).
                 /// This is a plain reload whose active tab was a blank scratch tab we just
                 /// dropped: the URL only echoes that tab's title and carries no query, so it
                 /// is NOT authoritative. Recreating it would resurrect the blank tab (and the
@@ -8059,11 +8079,12 @@ async function reconcileStartup() {
         }
         await activateTab(activeTabId);
         activated = true;
-    } else if (url_tab_name && (has_url_query || !pruned_blank_titles.has(url_tab_name))) {
+    } else if (url_tab_name && (has_url_query || !stale_blank_reload)) {
         /// No saved tabs survived, and the URL is authoritative: it carries a query (a
-        /// fresh/shared link), or its bare `?tab=` names a tab that was NOT among the blank tabs
-        /// just pruned (a first-ever visit, or a shared bare `?tab=Name` link — not a stale echo
-        /// of a dropped tab). Adopt the name for the bootstrap tab.
+        /// fresh/shared link), or its bare `?tab=` is not a stale reload echo of a just-pruned
+        /// blank tab (a first-ever visit, or a shared bare `?tab=Name` link — including one whose
+        /// name collides with a pruned blank tab, since a fresh navigation carries no history
+        /// state). Adopt the name for the bootstrap tab.
         const t = getActiveTab();
         if (t) {
             t.title = url_tab_name;
@@ -8080,8 +8101,9 @@ async function reconcileStartup() {
     } else {
         /// Either a plain load with no `?tab=` at all (e.g. a first-ever visit), or a plain
         /// reload whose every saved tab was blank and got pruned above. In the latter case the
-        /// URL still carries a bare `?tab=<dropped title>` — matched against the pruned titles by
-        /// the branch above — but it is only a stale echo of a tab we just dropped and is
+        /// URL still carries a bare `?tab=<dropped title>` — recognized as a stale reload echo by
+        /// `stale_blank_reload` (the name was pruned and the reloaded history entry still describes
+        /// that tab) — but it is only a stale echo of a tab we just dropped and is
         /// NOT authoritative: adopting it (the branch above) would rename the fresh bootstrap tab
         /// back to the dropped blank title, and the trailing `scheduleSave` would persist it again,
         /// resurrecting the very blank tab the pruning removed. Keep the default fresh bootstrap
