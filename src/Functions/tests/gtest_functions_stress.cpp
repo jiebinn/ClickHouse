@@ -122,6 +122,7 @@ enum Problem
     P_FIELD_COMPARISON_INCONSISTENCY,
     P_VALIDATION_INFRASTRUCTURE,
     P_TIMEOUT_NOT_HONORED,
+    P_SCALE_DIVERGENT_RESULT,
     P_UNEXPECTED_ERROR,
 
     P_COUNT,
@@ -159,6 +160,13 @@ std::pair<String, String> problemInfo(Problem p)
             "iteration ran longer than the configured iteration-too-slow threshold before stopping; "
             "the function is slow and either does not check CurrentThread::isQueryCanceled often enough, "
             "should be made faster, or should reject the offending input shape inside the function itself"};
+        case P_SCALE_DIVERGENT_RESULT: return {"scale_divergent_result",
+            "function returned a Decimal/DateTime64/Time64 column whose scale differs from its declared "
+            "result type. getDataType() is scale-blind so this passes the top-level type check, but the "
+            "column object is structurally inconsistent with its type. Such a column is not stashed for "
+            "reuse (it would surface as a misattributed writeSlice LOGICAL_ERROR in an innocent consumer "
+            "like arrayPushBack, see issue #108517); the producing function should build the result column "
+            "at the declared scale"};
 
         case P_COUNT: std::abort();
     }
@@ -209,7 +217,8 @@ struct Options
     VectorOfStrings ignore_problems = {{"late_typecheck", "const_dependent_checks", "broken_nullable_input", "data_dependent_const",
         "exception_in_prepare", "bulk_success_but_row_error", "bulk_error_but_row_success",
         "broken_determinism", "broken_injectivity", "broken_monotonicity",
-        "field_comparison_inconsistency", "validation_infrastructure", "timeout_not_honored"}};
+        "field_comparison_inconsistency", "validation_infrastructure", "timeout_not_honored",
+        "scale_divergent_result"}};
     VectorOfStrings functions;
     VectorOfStrings skip_functions;
 
@@ -2056,8 +2065,22 @@ struct FunctionsStressTestThread
         }
         FunctionStats & stats = function_stats[operation.function_idx];
 
+        /// A Decimal/DateTime64/Time64 result column whose scale diverges from its declared type is
+        /// structurally inconsistent (getDataType() is scale-blind, so it passes checkAndFixupColumn's
+        /// type check). Reusing it as another function's argument surfaces as a misattributed
+        /// LOGICAL_ERROR in an innocent consumer such as arrayPushBack -> writeSlice (issue #108517).
+        /// Attribute it to the producing function and never stash it for reuse. This is the complete
+        /// cut of the propagation path: generated random arguments are always scale-consistent (built
+        /// via type->createColumn()), so additional_random_values is the only place a divergent column
+        /// can enter as an argument.
+        const bool result_scale_divergent = !columnMatchesType(*result, *result_type, /*strict_decimal_scale=*/ true);
+        if (result_scale_divergent)
+            stats.reportProblem(P_SCALE_DIVERGENT_RESULT, fmt::format(
+                "function returned {} with a scale that diverges from its declared type; {}",
+                result->getName(), operation.describe()));
+
         /// Maybe add result to additional_random_values.
-        if (thread_local_rng() % 8 == 0 && result->byteSize() < (16ul << 10))
+        if (!result_scale_divergent && thread_local_rng() % 8 == 0 && result->byteSize() < (16ul << 10))
         {
             ColumnPtr column = result;
             if (column->size() != options.rows_per_batch)
