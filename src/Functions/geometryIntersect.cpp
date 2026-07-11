@@ -15,8 +15,56 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+}
+
 namespace
 {
+
+/// `callOnGeometryDataType` distinguishes `LineString` from `Ring`, and `MultiLineString` from
+/// `Polygon`, only by the custom type name: each pair shares the same structural type
+/// (`Array(Tuple(Float64, Float64))` and `Array(Array(Tuple(Float64, Float64)))` respectively).
+/// When the custom name is lost during expression analysis (see `getGeometryColumnTypeFromDataType`),
+/// the dispatch falls back to the areal interpretation (`Ring` / `Polygon`), so a linear geometry
+/// would be silently reinterpreted as areal and the result would change. Since these functions
+/// accept any geometry type, reject such ambiguous unnamed forms with a clear error instead of
+/// guessing; the caller can cast to an explicit geometry type to disambiguate.
+void checkGeometryIntersectArgument(const DataTypePtr & type, const String & function_name)
+{
+    const auto & factory = DataTypeFactory::instance();
+
+    /// Named geometry types are unambiguous: the dispatch uses the name.
+    if (const auto * custom_name = type->getCustomName())
+    {
+        const auto & name = custom_name->getName();
+        if (name == "Point" || name == "Ring" || name == "LineString"
+            || name == "MultiLineString" || name == "Polygon" || name == "MultiPolygon")
+            return;
+    }
+
+    /// `Point` and `MultiPolygon` are unambiguous even without a name: no other geometry type
+    /// shares their structure (`Tuple(Float64, Float64)` and `Array(Array(Array(Tuple(Float64, Float64))))`).
+    if (factory.get("Point")->equals(*type) || factory.get("MultiPolygon")->equals(*type))
+        return;
+
+    if (factory.get("Ring")->equals(*type))
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Argument of function {} has type {} which is ambiguous between Ring and LineString. "
+            "Cast it to an explicit geometry type, for example `x::Ring` or `x::LineString`.",
+            function_name, type->getName());
+
+    if (factory.get("Polygon")->equals(*type))
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Argument of function {} has type {} which is ambiguous between Polygon and MultiLineString. "
+            "Cast it to an explicit geometry type, for example `x::Polygon` or `x::MultiLineString`.",
+            function_name, type->getName());
+
+    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Argument of function {} has type {} which is not a geometry type.",
+        function_name, type->getName());
+}
 
 /// Similar to polygonsIntersect{Cartesian,Spherical}, but works for any geometry data type
 /// (Point, LineString, MultiLineString, Ring, Polygon, MultiPolygon), not only polygons.
@@ -39,7 +87,12 @@ public:
 
     size_t getNumberOfArguments() const override { return 2; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes &) const override { return std::make_shared<DataTypeUInt8>(); }
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        checkGeometryIntersectArgument(arguments[0], getName());
+        checkGeometryIntersectArgument(arguments[1], getName());
+        return std::make_shared<DataTypeUInt8>();
+    }
 
     DataTypePtr getReturnTypeForDefaultImplementationForDynamic() const override { return std::make_shared<DataTypeUInt8>(); }
 

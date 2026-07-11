@@ -43,3 +43,25 @@ SELECT geometryIntersectSpherical([(4.3613577, 50.8651821), (4.349556, 50.853587
 
 SELECT '-- Spherical: Geometry (Variant) argument';
 SELECT geometryIntersectSpherical(readWKT('POLYGON((4.3613577 50.8651821, 4.349556 50.8535879, 4.3602419 50.8435626, 4.3830299 50.8428851, 4.3904543 50.8564867, 4.3613148 50.8651279, 4.3613577 50.8651821))'), (4.36, 50.85)::Point);
+
+-- Ambiguous unnamed forms: LineString and Ring share the structural type Array(Tuple(Float64, Float64)),
+-- and MultiLineString and Polygon share Array(Array(Tuple(Float64, Float64))). The explicitly-typed
+-- linear and areal interpretations give different answers, so a value that lost its custom geo name
+-- must not be silently reinterpreted - it is rejected instead.
+SELECT '-- Ambiguity: linear vs areal give different results';
+SELECT geometryIntersectCartesian([(0., 0.), (1., 0.), (1., 1.)]::LineString, (0.75, 0.25)::Point);
+SELECT geometryIntersectCartesian([(0., 0.), (1., 0.), (1., 1.)]::Ring, (0.75, 0.25)::Point);
+SELECT geometryIntersectCartesian([[(0., 0.), (1., 0.), (1., 1.)]]::MultiLineString, (0.75, 0.25)::Point);
+SELECT geometryIntersectCartesian([[(0., 0.), (1., 0.), (1., 1.)]]::Polygon, (0.75, 0.25)::Point);
+
+SELECT '-- Ambiguity: unnamed structural forms are rejected';
+-- A plain literal, or an expression that strips the custom geo name, yields an unnamed Array(Tuple(Float64, Float64)).
+SELECT geometryIntersectCartesian([(0., 0.), (1., 0.), (1., 1.)], (0.75, 0.25)::Point); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT geometryIntersectCartesian(arrayMap(p -> (p.1, p.2), [(0., 0.), (1., 0.), (1., 1.)]::LineString), (0.75, 0.25)::Point); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT geometryIntersectCartesian((0.75, 0.25)::Point, [[(0., 0.), (1., 0.), (1., 1.)]]); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT geometryIntersectSpherical([(0., 0.), (1., 0.), (1., 1.)], (0.75, 0.25)::Point); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+
+SELECT '-- Unambiguous unnamed forms are still accepted';
+-- Point (Tuple(Float64, Float64)) and MultiPolygon (Array(Array(Array(Tuple(Float64, Float64))))) have no ambiguous structural twin.
+SELECT geometryIntersectCartesian((1., 1.), [[[(0., 0.), (0., 2.), (2., 2.), (2., 0.)]]]);
+SELECT geometryIntersectCartesian((5., 5.), [[[(0., 0.), (0., 2.), (2., 2.), (2., 0.)]]]);
