@@ -17,9 +17,9 @@ bulk-appends every spec operation to a group that has an `openapi` field unless
 at least one of the group's pages is a string-form operation reference (MDX
 pages do not count), so an all-MDX navigation would render the whole tag tree a
 second time. The navigation subtree is written as a single fragment
-(`docs/products/cloud/api-reference/navigation.json`), and the consuming files
-(`docs.json` and `products/cloud/navigation.json`) reference that one
-definition via `$ref` so the navigation is never duplicated.
+(`docs/products/cloud/api-reference/navigation.json`), and the consuming file
+(`products/cloud/navigation.json`, itself `$ref`-ed by `docs.json`) references
+that one definition via `$ref` so the navigation is never duplicated.
 
 The navigation grouping mirrors the spec's `x-tagGroups`/`tags` (the same
 hierarchy the hosted Swagger view shows): each tag group is a top-level group;
@@ -64,12 +64,11 @@ FRAGMENT_REL = f"{API_REF_DIR}/navigation.json"
 # and so that spec changes surface as reviewable diffs / CI drift.
 SPEC_PIN = "_specs/cloud-openapi.json"
 
-# Files that consume the fragment. Each currently holds its own copy of the
-# "API reference" group and is rewired to a `$ref`. The ref path is relative to
-# the consuming file's own directory (Mintlify resolves `$ref` relative to the
-# file it appears in).
+# Files that consume the fragment via a `$ref` (relative to the consuming
+# file's own directory — Mintlify resolves `$ref` relative to the file it
+# appears in). `docs.json` is not a consumer: it reaches the group through its
+# `$ref` to `products/cloud/navigation.json`.
 CONSUMERS = {
-    "docs.json": f"./{FRAGMENT_REL}",
     f"{Path(API_REF_DIR).parent}/navigation.json": "./api-reference/navigation.json",
 }
 

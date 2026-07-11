@@ -1,7 +1,7 @@
 """Nightly job: sync the Cloud API reference docs from the live OpenAPI spec.
 
 Runs `generate_cloud_api_reference.py --write`, and if the generated pages or the
-`docs.json` navigation drifted from the spec, opens (or refreshes) a single bot
+navigation drifted from the spec, opens (or refreshes) a single bot
 pull request. The bot branch is stable so re-runs update one PR instead of
 opening a new one every night.
 
@@ -19,7 +19,7 @@ BOT_BRANCH = "robot/cloud-api-docs"
 # Paths the generator owns; everything staged into the bot PR lives here.
 DOCS_PATHS = (
     "docs/products/cloud/api-reference docs/_specs/cloud-openapi.json "
-    "docs/docs.json docs/products/cloud/navigation.json"
+    "docs/products/cloud/navigation.json"
 )
 
 PR_TITLE = "Docs: sync Cloud API reference from the OpenAPI spec"
