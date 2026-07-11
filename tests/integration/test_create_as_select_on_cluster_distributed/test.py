@@ -19,7 +19,11 @@ execution failed.
 The query is only affected when at least one shard is read remotely, and the
 outcome depended on whether `allow_experimental_analyzer` happened to be marked
 as explicitly changed, so it could look intermittent. The loop below runs the
-statement several times to be robust to that.
+statement several times to be robust to that. Because the user-visible failure
+depends on that `changed` flag, an unfixed server may still execute the
+statement successfully; `test_ddl_worker_context_carries_client_version`
+distinguishes a fixed server from an unfixed one deterministically by checking
+the client version that the DDL worker's query context records in `query_log`.
 """
 
 import pytest
@@ -76,6 +80,8 @@ def started_cluster():
         "SELECT num, jn.n, uniq(num) OVER (PARTITION BY jn.n) AS m "
         "FROM dist CROSS JOIN (SELECT number AS n FROM numbers(4)) AS jn "
         "WHERE num != 0 ORDER BY jn.n",
+        # An aggregation forces the coordinator to merge per-shard states.
+        "SELECT num % 10 AS k, count() AS c FROM dist GROUP BY k ORDER BY k",
     ],
 )
 def test_create_as_select_on_cluster_over_distributed(started_cluster, select):
@@ -91,3 +97,41 @@ def test_create_as_select_on_cluster_over_distributed(started_cluster, select):
         assert int(node1.query(f"SELECT count() FROM {table}")) > 0
         assert int(node2.query(f"SELECT count() FROM {table}")) > 0
         node1.query(f"DROP TABLE IF EXISTS {table} ON CLUSTER test_cluster SYNC")
+
+
+def test_ddl_worker_context_carries_client_version(started_cluster):
+    """The DDL worker's query context must carry a real client version.
+
+    Before the fix it stayed 0.0.0, which is the root cause of the issue above:
+    a remote shard treated the initiator of the forwarded sub-query as a
+    pre-23.3 server and applied compatibility downgrades (in particular,
+    disabling the analyzer). Whether that downgrade actually fires depends on
+    whether the environment happens to mark `allow_experimental_analyzer` as
+    explicitly changed, so the end-to-end test above may pass even on an
+    unfixed server. The client version recorded in `system.query_log` for the
+    query executed by the DDL worker (identified by the `/* ddl_entry=... */`
+    prefix that the DDL worker prepends) distinguishes the two
+    deterministically: it is 0 without the fix and the server's own version
+    with it.
+    """
+    table = "res_ddl_client_version"
+    node1.query(f"DROP TABLE IF EXISTS {table} ON CLUSTER test_cluster SYNC")
+    node1.query(
+        f"CREATE TABLE {table} ON CLUSTER test_cluster ENGINE = Memory "
+        "AS SELECT num FROM dist ORDER BY num"
+    )
+    for node in (node1, node2):
+        node.query("SYSTEM FLUSH LOGS")
+        versions = node.query(
+            "SELECT DISTINCT client_version_major FROM system.query_log "
+            "WHERE type = 'QueryFinish' AND query_kind = 'Create' "
+            f"AND query LIKE '/* ddl_entry=query-%' AND query LIKE '%{table}%'"
+        ).split()
+        assert versions, f"no DDL-executed CREATE found in query_log on {node.name}"
+        assert all(int(v) > 0 for v in versions), (
+            f"the DDL worker on {node.name} executed a query whose context "
+            f"carries client version 0.0.0 (client_version_major = {versions}); "
+            "distributed sub-queries spawned by such a context make remote "
+            "shards apply pre-23.3 compatibility downgrades"
+        )
+    node1.query(f"DROP TABLE IF EXISTS {table} ON CLUSTER test_cluster SYNC")
