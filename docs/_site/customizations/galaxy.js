@@ -5,8 +5,29 @@
   // envelope and transport compatible with the legacy Docusaurus site so
   // existing dashboards continue to receive the same data.
   var APPLICATION = 'DOCS_WEBSITE';
-  var IS_LOCAL = /^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(window.location.hostname || '');
-  var API_HOST = IS_LOCAL ? null : 'https://control-plane-internal.clickhouse.cloud';
+  var PREVIEW_SESSION_KEY = 'ch-mintlify-preview';
+  var isPreviewSession = new URLSearchParams(window.location.search)
+    .get('mintlify_preview') === '1';
+  try {
+    if (isPreviewSession) {
+      window.sessionStorage.setItem(PREVIEW_SESSION_KEY, '1');
+    } else {
+      isPreviewSession = window.sessionStorage.getItem(PREVIEW_SESSION_KEY) === '1';
+    }
+  } catch (e) {}
+
+  var isLocal = /^(localhost|127\.0\.0\.1|\[?::1\]?)$/
+    .test(window.location.hostname || '');
+  var isMintlifyPreview = /\.mintlify\.app$/
+    .test(window.location.hostname || '');
+  var isCanonicalDocs = window.location.origin === 'https://clickhouse.com' &&
+    /^\/docs(?:\/|$)/.test(window.location.pathname);
+  var API_HOST = null;
+  if (!isLocal && (isMintlifyPreview || (isCanonicalDocs && isPreviewSession))) {
+    API_HOST = 'https://control-plane-internal.clickhouse-dev.com';
+  } else if (isCanonicalDocs) {
+    API_HOST = 'https://control-plane-internal.clickhouse.cloud';
+  }
   var API_PATH = '/api/galaxy?sendGalaxyForensicEvent';
   var USER_ID_KEY = 'glx_anonymous_id';
   var SESSION_ID_KEY = 'glx_id';

@@ -28,8 +28,8 @@ function createStorage() {
   };
 }
 
-function createEnvironment(pathname, search = '') {
-  const location = new URL(`https://clickhouse.com${pathname}${search}`);
+function createEnvironment(pathname, search = '', origin = 'https://clickhouse.com') {
+  const location = new URL(`${origin}${pathname}${search}`);
   const cookies = new Map([['_ga', 'GA1.1.123.456']]);
   const listeners = new Map();
   const beacons = [];
@@ -147,12 +147,15 @@ function createEnvironment(pathname, search = '') {
   };
 }
 
-async function flushRequest(environment) {
+async function flushRequest(
+  environment,
+  apiHost = 'https://control-plane-internal.clickhouse.cloud',
+) {
   await environment.window.galaxy.flushEvents();
   assert.equal(environment.beacons.length, 1);
   assert.equal(
     environment.beacons[0].url,
-    'https://control-plane-internal.clickhouse.cloud/api/galaxy?sendGalaxyForensicEvent',
+    `${apiHost}/api/galaxy?sendGalaxyForensicEvent`,
   );
   return JSON.parse(await environment.beacons[0].body.text());
 }
@@ -186,4 +189,47 @@ test('keeps periodic flushing active across a BFCache pagehide', () => {
 
   environment.dispatch('pagehide', { persisted: false });
   assert.deepEqual(environment.clearedIntervals, [1]);
+});
+
+test('routes preview traffic to the development Galaxy backend', async () => {
+  const mintlifyPreview = createEnvironment(
+    '/get-started/setup/install',
+    '',
+    'https://private-docs.mintlify.app',
+  );
+  await flushRequest(
+    mintlifyPreview,
+    'https://control-plane-internal.clickhouse-dev.com',
+  );
+
+  const flaggedPreview = createEnvironment(
+    '/docs/get-started/setup/install',
+    '?mintlify_preview=1',
+  );
+  await flushRequest(
+    flaggedPreview,
+    'https://control-plane-internal.clickhouse-dev.com',
+  );
+  assert.equal(
+    flaggedPreview.window.sessionStorage.getItem('ch-mintlify-preview'),
+    '1',
+  );
+});
+
+test('keeps Galaxy transport disabled on localhost and unknown origins', async () => {
+  const localhost = createEnvironment(
+    '/docs/get-started/setup/install',
+    '',
+    'http://localhost:3000',
+  );
+  await localhost.window.galaxy.flushEvents();
+  assert.deepEqual(localhost.beacons, []);
+
+  const unknownOrigin = createEnvironment(
+    '/docs/get-started/setup/install',
+    '?mintlify_preview=1',
+    'https://example.com',
+  );
+  await unknownOrigin.window.galaxy.flushEvents();
+  assert.deepEqual(unknownOrigin.beacons, []);
 });
