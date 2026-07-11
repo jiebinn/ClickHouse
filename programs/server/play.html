@@ -8079,11 +8079,17 @@ async function reconcileStartup() {
         /// tab, and strip the stale `?tab=` from the URL so it matches a first-ever visit (an
         /// all-blank workspace falls back to a single fresh tab). The tab bar stays hidden for the
         /// lone result-less tab, so `syncHistory` is deliberately not called here (it would re-add
-        /// a `?tab=` for the default title); a targeted `replaceState` drops only the `tab` key.
+        /// a `?tab=` for the default title); a targeted `replaceState` drops the `tab` key. The
+        /// reloaded entry's state must go too: it still carries the dropped tab's `tabId`/`tabName`
+        /// (history state survives a reload), and keeping it would make the bootstrap tab's first
+        /// unrun edit bail out of `refreshCurrentHistoryEntry` (`cur.tabId !== tab.id`), never
+        /// seeding the entry/URL/`lastSavedQuery` until a run or tab switch. Clear it to null —
+        /// exactly the state of a first-ever visit, whose first trusted edit seeds a fresh entry
+        /// owned by the bootstrap tab.
         if (url_tab_name) {
             const cleaned_url = new URL(location.href);
             cleaned_url.searchParams.delete('tab');
-            history.replaceState(history.state, document.title, cleaned_url.href);
+            history.replaceState(null, document.title, cleaned_url.href);
         }
         renderTabBar();
     }
