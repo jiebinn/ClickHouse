@@ -26,9 +26,10 @@ extern const int SET_SIZE_LIMIT_EXCEEDED;
 
 /// Regression tests for cumulative limit accounting in DistinctSortedTransform. The
 /// transform's clearable set is reset on every sort-prefix run, so the set size reflects
-/// only the current run: max_rows_in_distinct / max_bytes_in_distinct / limit_hint checked
-/// against it never trip on a stream of many runs that are each below the limit. They must
-/// be checked against the cumulative count of emitted distinct rows (`total_output_rows`).
+/// only the current run: max_rows_in_distinct / limit_hint checked against it never trip
+/// on a stream of many runs that are each below the limit. They must be checked against
+/// the cumulative count of emitted distinct rows (`total_output_rows`); the byte limit
+/// stays on `data.getTotalByteCount()`, whose allocation does not shrink on clear.
 ///
 /// This is not reachable from an SQL test: every plan shape places a preliminary DISTINCT
 /// (DistinctSortedStreamTransform, which already counts cumulatively) before the final
