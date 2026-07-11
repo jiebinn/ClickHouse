@@ -448,10 +448,48 @@ profiles:
             verbose=True,
         )
 
+    def _kill_leftover_server_processes(self):
+        """Kill ClickHouse server processes leaked by a previous CI job.
+
+        Runners are reused across jobs, and a job that is cancelled or times
+        out can leave its clickhouse-server running or slowly shutting down.
+        Such a leftover keeps the server ports, so the next job's server fails
+        every listen with `Address already in use` and its `wait_ready` times
+        out with an opaque `Connection refused`. All server processes are
+        stopped before every replica-0 start, so anything matching here is
+        stale by definition. Never runs locally: a local run may share the
+        machine with a developer's own server that must not be touched.
+        """
+        if Info().is_local_run:
+            return
+        # The bracket in the pattern also keeps pkill from matching the shell
+        # that runs it: the literal `clickhouse[- ]server` in that shell's own
+        # cmdline does not match the regex it denotes.
+        pattern = "clickhouse[- ]server"
+        leftovers = Shell.get_output(f"pgrep -a -f '{pattern}'").strip()
+        if not leftovers:
+            return
+        print(
+            "WARNING: killing leftover clickhouse server processes"
+            f" from a previous job:\n{leftovers}"
+        )
+        Shell.check(f"pkill -9 -f '{pattern}'", verbose=True)
+        for _ in range(10):
+            if not Shell.get_output(f"pgrep -f '{pattern}'").strip():
+                break
+            Utils.sleep(1)
+        else:
+            print("WARNING: leftover clickhouse server processes survived SIGKILL")
+        Info().add_workflow_warning(
+            "Leftover clickhouse server processes from a previous job"
+            " were found and killed, see job.log"
+        )
+
     def start(self, replica_num=0):
         if replica_num == 0:
             # Clear dmesg to avoid false OOM detection from previous CI jobs on the same host
             Shell.check("dmesg --clear", verbose=True)
+            self._kill_leftover_server_processes()
 
         if replica_num == 1:
             pid_file = self.pid_file_replica_1
