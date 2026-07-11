@@ -5899,6 +5899,9 @@ function beginFlight() {
     closeCompletions();
     /// Drop any previous syntax-error highlight; a fresh error (if any) will be set on failure.
     clearQueryError();
+    /// New run: no statement has claimed the error marker yet. With this reset in place, the
+    /// arbitration in `highlightQueryError` is scoped to one run (see `queryErrorOwnerStart`).
+    queryErrorOwnerStart = -1;
     /// Snapshot the editor-interaction generation. A late error response is only allowed to paint
     /// a highlight if the user has not returned to the editor since this run started. The keystroke
     /// or click that triggered the run has already bumped the generation (the textarea's own
@@ -6846,6 +6849,15 @@ let queryErrorPos = -1;
 /// `;`/whitespace token that happens to start there.
 let queryErrorAtEnd = false;
 
+/// Start offset (in the textarea) of the statement whose error currently owns the marker, or -1
+/// when no statement has claimed it in the current run. Several statements of one run can fail
+/// concurrently (`postMulti` executes parallelizable groups with `Promise.all`), but the editor has
+/// a single marker; without arbitration whichever error response arrived last would win, so the
+/// highlight would depend on response timing. Instead the leftmost failing statement wins
+/// deterministically (see the arbitration in `highlightQueryError`). Reset by `beginFlight` at run
+/// start.
+let queryErrorOwnerStart = -1;
+
 /// Monotonic counter bumped whenever the user returns to the editor (refocus, typing, caret
 /// movement, or a click inside it). `beginFlight` snapshots it into `runEditorInteraction` at run
 /// start; if it advances before the error response arrives, `postImpl` suppresses the (now stale)
@@ -6947,6 +6959,14 @@ function highlightQueryError(errorText, query, queryStart) {
         base = text.indexOf(query);
     }
     if (base < 0) return;
+
+    /// Run-level arbitration for the single editor marker: several statements of one run can fail
+    /// concurrently (`postMulti` executes parallelizable groups with `Promise.all`), and their
+    /// error responses arrive in an arbitrary order. The leftmost failing statement wins
+    /// deterministically: a response may take the marker only if no statement has claimed it yet
+    /// in this run, or if its statement starts earlier in the editor than the current owner's.
+    if (queryErrorOwnerStart >= 0 && base >= queryErrorOwnerStart) return;
+    queryErrorOwnerStart = base;
 
     const charIndex = byteOffsetToCharIndex(query, byteOffset);
     const absolute = base + charIndex;

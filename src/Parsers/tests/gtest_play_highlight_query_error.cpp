@@ -19,6 +19,10 @@
   *     byte offset with the function above, and detects the `(end of query)` boundary case (the
   *     parser reached the end of the statement or its `;` separator) so the marker lands on the
   *     statement boundary rather than filling the `;` / whitespace token that starts there.
+  *     It also arbitrates the single editor marker between several concurrently failing statements
+  *     of one run (`postMulti` executes parallelizable groups with `Promise.all`, so error
+  *     responses arrive in an arbitrary order): the leftmost failing statement wins
+  *     deterministically, and `beginFlight` resets the arbitration at run start.
   *
   * There is no JavaScript runtime in CI, so — exactly as `gtest_play_get_query_under_cursor.cpp`
   * does for `getQueryUnderCursor` — we reproduce these pure algorithms here and lock their
@@ -85,6 +89,7 @@ struct QueryErrorPos
     bool found = false;  /// Did the error text carry a `failed at position N` hint we could map?
     size_t pos = 0;      /// Absolute UTF-16 index into the full textarea text.
     bool at_end = false; /// Was it an `(end of query)` boundary error (mark the boundary, not a token)?
+    size_t base = 0;     /// Resolved start offset of the sent query within the text (valid when `found`).
 };
 
 /// Faithful port of the pure computation in `highlightQueryError` (play.html).
@@ -135,8 +140,40 @@ QueryErrorPos computeQueryErrorPos(
 
     const size_t char_index = byteOffsetToCharIndex(query, byte_offset);
     result.found = true;
+    result.base = base;
     result.pos = std::min(base + char_index, text.size());
     return result;
+}
+
+/// The marker state one run accumulates across error responses. `owner_start` mirrors
+/// `queryErrorOwnerStart` in play.html: empty (-1 in the JS) until a statement claims the marker.
+/// `beginFlight` resets it at run start; here a fresh instance models a fresh run.
+struct QueryErrorMarker
+{
+    std::optional<size_t> owner_start;
+    QueryErrorPos painted; /// `found == false` while nothing has been painted.
+};
+
+/// Faithful port of the run-level arbitration in `highlightQueryError` (play.html): the editor has
+/// a single marker, and several statements of one run can fail concurrently (`postMulti` executes
+/// parallelizable groups with `Promise.all`), so error responses arrive in an arbitrary order. A
+/// response may take the marker only if no statement has claimed it yet in this run, or if its
+/// statement starts earlier in the editor than the current owner's — the leftmost failing
+/// statement wins regardless of arrival order.
+void applyQueryError(
+    QueryErrorMarker & marker,
+    const std::string & error_text,
+    const std::u16string & query,
+    std::optional<size_t> query_start,
+    const std::u16string & text)
+{
+    const auto r = computeQueryErrorPos(error_text, query, query_start, text);
+    if (!r.found)
+        return;
+    if (marker.owner_start && r.base >= *marker.owner_start)
+        return;
+    marker.owner_start = r.base;
+    marker.painted = r;
 }
 
 /// Port of the staleness guard in `postImpl`: a late error response paints its highlight only
@@ -306,4 +343,73 @@ TEST(PlayHighlightQueryError, StaleResponseGuard)
     /// A key consumed by the completion handler (or any return to the editor) bumps the
     /// generation past the snapshot -> the late response is suppressed.
     EXPECT_FALSE(wouldPaintErrorHighlight(/* snapshot */ 3, /* current */ 4));
+}
+
+TEST(PlayHighlightQueryError, ConcurrentFailuresPaintDeterministically)
+{
+    /// Two parallelizable statements (`postMulti` runs consecutive SELECTs concurrently) both fail
+    /// with position-bearing syntax errors, and the editor has a single marker. The final marker
+    /// must be the same whichever HTTP response arrives first: the leftmost failing statement owns
+    /// it, so the highlight is deterministic instead of timing-dependent.
+    const std::u16string text = u"SELECT * FRM t; SELECT * FRM u";
+    const std::string err1 = "Syntax error: failed at position 10 ('FRM')";
+    const std::string err2 = "Syntax error: failed at position 10 ('FRM')";
+
+    QueryErrorMarker first_response_first;
+    applyQueryError(first_response_first, err1, u"SELECT * FRM t", 0, text);
+    applyQueryError(first_response_first, err2, u"SELECT * FRM u", 16, text);
+
+    QueryErrorMarker second_response_first;
+    applyQueryError(second_response_first, err2, u"SELECT * FRM u", 16, text);
+    applyQueryError(second_response_first, err1, u"SELECT * FRM t", 0, text);
+
+    ASSERT_TRUE(first_response_first.painted.found);
+    ASSERT_TRUE(second_response_first.painted.found);
+    /// Both arrival orders converge on the first statement's `FRM` (absolute index 9); the second
+    /// statement's error (absolute index 25) never wins.
+    EXPECT_EQ(first_response_first.painted.pos, 9u);
+    EXPECT_EQ(second_response_first.painted.pos, 9u);
+    EXPECT_EQ(first_response_first.owner_start, std::optional<size_t>(0));
+    EXPECT_EQ(second_response_first.owner_start, std::optional<size_t>(0));
+}
+
+TEST(PlayHighlightQueryError, LaterStatementDoesNotStealTheMarker)
+{
+    /// Once the leftmost failing statement has painted, a later statement's error response —
+    /// however late it arrives — must not move the marker, nor flip its `at_end` flavor.
+    const std::u16string text = u"SELECT * FRM t; SELECT;";
+    QueryErrorMarker marker;
+    applyQueryError(marker, "Syntax error: failed at position 10 ('FRM')", u"SELECT * FRM t", 0, text);
+    applyQueryError(marker, "Syntax error: failed at position 7 (end of query)", u"SELECT;", 16, text);
+    ASSERT_TRUE(marker.painted.found);
+    EXPECT_EQ(marker.painted.pos, 9u);
+    EXPECT_FALSE(marker.painted.at_end);
+}
+
+TEST(PlayHighlightQueryError, NonPositionErrorDoesNotBlockAPositionBearingOne)
+{
+    /// The arbitration is among position-bearing errors only: a message without a `failed at
+    /// position N` hint claims nothing (there is nothing to paint for it), so a later statement's
+    /// mappable error still paints.
+    const std::u16string text = u"SELECT throwIf(1); SELECT * FRM u";
+    QueryErrorMarker marker;
+    applyQueryError(marker, "Code: 395. DB::Exception: Value passed to 'throwIf' function is non-zero", u"SELECT throwIf(1)", 0, text);
+    applyQueryError(marker, "Syntax error: failed at position 10 ('FRM')", u"SELECT * FRM u", 19, text);
+    ASSERT_TRUE(marker.painted.found);
+    EXPECT_EQ(marker.painted.pos, 28u); /// `FRM` of the second statement.
+}
+
+TEST(PlayHighlightQueryError, ArbitrationResetsAtRunStart)
+{
+    /// `beginFlight` resets `queryErrorOwnerStart` at run start, so an earlier run's owner cannot
+    /// suppress the next run's highlight. A fresh `QueryErrorMarker` models the reset.
+    const std::u16string text = u"SELECT 1; SELECT * FRM u";
+    QueryErrorMarker previous_run;
+    applyQueryError(previous_run, "Syntax error: failed at position 1 ('SELECT')", u"SELECT 1", 0, text);
+    EXPECT_EQ(previous_run.owner_start, std::optional<size_t>(0));
+
+    QueryErrorMarker next_run;
+    applyQueryError(next_run, "Syntax error: failed at position 10 ('FRM')", u"SELECT * FRM u", 10, text);
+    ASSERT_TRUE(next_run.painted.found);
+    EXPECT_EQ(next_run.painted.pos, 19u);
 }
