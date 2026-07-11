@@ -7,6 +7,8 @@ const vm = require('node:vm');
 const NOW = 1700000000000;
 const ORIGINAL_CLOUD_LINK =
   'https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta';
+const THIRD_PARTY_CLOUD_LINK =
+  'https://docs.cloud.google.com/storage?existing=value';
 const SCRIPT = fs.readFileSync(path.join(__dirname, 'galaxy.js'), 'utf8');
 // Snapshot of the request/link contract produced by clickhouse-docs'
 // GalaxyClient, useGalaxyOnPage, and utmPersistence implementations.
@@ -40,6 +42,7 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
   const cloudLink = {
     href: ORIGINAL_CLOUD_LINK,
   };
+  const thirdPartyCloudLink = { href: THIRD_PARTY_CLOUD_LINK };
   const uuids = ['legacy-user-id', 'legacy-session-id'];
 
   class FixedDate extends Date {
@@ -72,7 +75,7 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
     body: {},
     addEventListener,
     querySelectorAll() {
-      return [cloudLink];
+      return [cloudLink, thirdPartyCloudLink];
     },
     get cookie() {
       return Array.from(cookies, ([key, value]) => `${key}=${value}`).join('; ');
@@ -152,6 +155,7 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
       assert.ok(callback, 'expected a queued animation frame');
       callback();
     },
+    thirdPartyCloudLink,
     window,
   };
 }
@@ -178,6 +182,12 @@ test('matches the legacy docs-page request and Cloud-link contract', async () =>
 
   assert.deepEqual(await flushRequest(environment), LEGACY_CONTRACT.docsPageRequest);
   assert.equal(environment.cloudLink.href, LEGACY_CONTRACT.cloudLink);
+});
+
+test('does not add ClickHouse attribution to third-party .cloud links', () => {
+  const environment = createEnvironment('/docs/get-started/setup/install');
+
+  assert.equal(environment.thirdPartyCloudLink.href, THIRD_PARTY_CLOUD_LINK);
 });
 
 test('matches the legacy knowledge-base request contract', async () => {

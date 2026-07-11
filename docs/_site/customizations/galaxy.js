@@ -23,6 +23,7 @@
   var MAX_COOKIE_AGE = 2147483647;
   var FLUSH_INTERVAL_MS = 5000;
   var KEEPALIVE_LIMIT_BYTES = 60 * 1024;
+  var ATTRIBUTION_HOSTS = ['clickhouse.cloud', 'console.clickhouse.cloud'];
 
   if (window.__clickhouseGalaxyInitialized) return;
   window.__clickhouseGalaxyInitialized = true;
@@ -297,11 +298,13 @@
 
     saveAttribution();
     var attribution = storedAttribution();
-    var links = document.querySelectorAll('a[href*=".cloud"]');
+    var links = document.querySelectorAll('a[href*="clickhouse.cloud"]');
 
     for (var i = 0; i < links.length; i++) {
       try {
         var url = new URL(links[i].href, window.location.href);
+        if (ATTRIBUTION_HOSTS.indexOf(url.hostname) === -1) continue;
+
         if (attribution) {
           for (var key in attribution) {
             if (Object.prototype.hasOwnProperty.call(attribution, key)) {
