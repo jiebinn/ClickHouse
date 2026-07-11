@@ -110,9 +110,8 @@ public:
     /// If specified checksum+size are new for this IBackupContentsInfo the function sets `is_data_file_required`.
     virtual void addFileInfos(BackupFileInfos && file_infos) = 0;
     virtual BackupFileInfos getFileInfos() const = 0;
-    virtual BackupFileInfos getFileInfosForAllHosts() const = 0;
 
-    /// Like getFileInfosForAllHosts, but iterates the infos in place instead of copying them all
+    /// Iterates the file infos of all hosts in place, without copying them into a vector
     /// (a backup can contain millions).
     /// The callback may be called while an internal coordination mutex is held; it must not call back
     /// into IBackupCoordination (risk of deadlocks). Prefer keeping the callback lightweight to avoid long critical sections.
