@@ -194,7 +194,7 @@ export const KBExplorer = ({ index, featured = [] }) => {
           {featuredArticles.length > 0 && (
             <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-zinc-50 mb-6">Articles à la une</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {featuredArticles.map((article) => (
                   <a
                     key={article.id}
