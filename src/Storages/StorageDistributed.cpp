@@ -2584,6 +2584,17 @@ void registerStorageRemote(StorageFactory & factory)
             {
                 if (!tolerate_absent_target || e.code() == ErrorCodes::ACCESS_DENIED)
                     throw;
+
+                /// The target could not be analyzed for a reason other than access control (e.g. the
+                /// table matched by `merge(...)` was dropped since the backup was taken). The restore
+                /// proceeds with the columns carried in the backup metadata, but the swallowed error is
+                /// logged rather than silently discarded, so a genuine problem is not hidden.
+                LOG_WARNING(
+                    getLogger(secure ? "RemoteSecure" : "Remote"),
+                    "Could not analyze the table function target of {} during RESTORE; proceeding with "
+                    "the columns from the backup metadata. Error: {}",
+                    args.table_id.getNameForLogs(),
+                    getExceptionMessage(e, /* with_stacktrace = */ true));
             }
         }
 
