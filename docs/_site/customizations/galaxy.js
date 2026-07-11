@@ -5,17 +5,6 @@
   // envelope and transport compatible with the legacy Docusaurus site so
   // existing dashboards continue to receive the same data.
   var APPLICATION = 'DOCS_WEBSITE';
-  var PREVIEW_SESSION_KEY = 'ch-mintlify-preview';
-  var isPreviewSession = new URLSearchParams(window.location.search)
-    .get('mintlify_preview') === '1';
-  try {
-    if (isPreviewSession) {
-      window.sessionStorage.setItem(PREVIEW_SESSION_KEY, '1');
-    } else {
-      isPreviewSession = window.sessionStorage.getItem(PREVIEW_SESSION_KEY) === '1';
-    }
-  } catch (e) {}
-
   var isLocal = /^(localhost|127\.0\.0\.1|\[?::1\]?)$/
     .test(window.location.hostname || '');
   var isMintlifyPreview = /\.mintlify\.app$/
@@ -23,7 +12,7 @@
   var isCanonicalDocs = window.location.origin === 'https://clickhouse.com' &&
     /^\/docs(?:\/|$)/.test(window.location.pathname);
   var API_HOST = null;
-  if (!isLocal && (isMintlifyPreview || (isCanonicalDocs && isPreviewSession))) {
+  if (!isLocal && isMintlifyPreview) {
     API_HOST = 'https://control-plane-internal.clickhouse-dev.com';
   } else if (isCanonicalDocs) {
     API_HOST = 'https://control-plane-internal.clickhouse.cloud';
@@ -304,6 +293,8 @@
   }
 
   function updateCloudLinks() {
+    if (!isCanonicalDocs) return;
+
     saveAttribution();
     var attribution = storedAttribution();
     var links = document.querySelectorAll('a[href*=".cloud"]');
@@ -335,6 +326,8 @@
   }
 
   function startLinkObserver() {
+    if (!isCanonicalDocs) return;
+
     updateCloudLinks();
     new MutationObserver(updateCloudLinks).observe(document.body, {
       childList: true,

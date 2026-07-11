@@ -5,6 +5,8 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const NOW = 1700000000000;
+const ORIGINAL_CLOUD_LINK =
+  'https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta';
 const SCRIPT = fs.readFileSync(path.join(__dirname, 'galaxy.js'), 'utf8');
 // Snapshot of the request/link contract produced by clickhouse-docs'
 // GalaxyClient, useGalaxyOnPage, and utmPersistence implementations.
@@ -36,7 +38,7 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
   const clearedIntervals = [];
   const animationFrames = [];
   const cloudLink = {
-    href: 'https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta',
+    href: ORIGINAL_CLOUD_LINK,
   };
   const uuids = ['legacy-user-id', 'legacy-session-id'];
 
@@ -230,19 +232,7 @@ test('routes preview traffic to the development Galaxy backend', async () => {
     mintlifyPreview,
     'https://control-plane-internal.clickhouse-dev.com',
   );
-
-  const flaggedPreview = createEnvironment(
-    '/docs/get-started/setup/install',
-    '?mintlify_preview=1',
-  );
-  await flushRequest(
-    flaggedPreview,
-    'https://control-plane-internal.clickhouse-dev.com',
-  );
-  assert.equal(
-    flaggedPreview.window.sessionStorage.getItem('ch-mintlify-preview'),
-    '1',
-  );
+  assert.equal(mintlifyPreview.cloudLink.href, ORIGINAL_CLOUD_LINK);
 });
 
 test('keeps Galaxy transport disabled on localhost and unknown origins', async () => {
@@ -253,12 +243,14 @@ test('keeps Galaxy transport disabled on localhost and unknown origins', async (
   );
   await localhost.window.galaxy.flushEvents();
   assert.deepEqual(localhost.beacons, []);
+  assert.equal(localhost.cloudLink.href, ORIGINAL_CLOUD_LINK);
 
   const unknownOrigin = createEnvironment(
     '/docs/get-started/setup/install',
-    '?mintlify_preview=1',
+    '',
     'https://example.com',
   );
   await unknownOrigin.window.galaxy.flushEvents();
   assert.deepEqual(unknownOrigin.beacons, []);
+  assert.equal(unknownOrigin.cloudLink.href, ORIGINAL_CLOUD_LINK);
 });
