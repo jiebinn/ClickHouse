@@ -242,7 +242,7 @@ export const QuickStartsGrid = ({ quickStartsData = [], featured = [] }) => {
                   >
                     {/* Banner art is drawn in code from the title so it
                         translates automatically — no per-locale PNG needed. */}
-                    <div className="relative w-full aspect-[3/1] overflow-hidden bg-[#FAFF69] flex flex-col justify-center px-6 transition-transform duration-200 group-hover:scale-[1.02]">
+                    <div className="relative w-full aspect-[3/1] lg:aspect-[16/9] overflow-hidden bg-[#FAFF69] flex flex-col justify-center px-6 transition-transform duration-200 group-hover:scale-[1.02]">
                       {/* Decorative bar-chart motif, purely visual. */}
                       <div className="pointer-events-none absolute inset-y-0 right-6 flex items-center gap-2.5" aria-hidden="true">
                         <span className="w-3 rounded-sm bg-[#C4CB54]" style={{ height: '42%', transform: 'translateY(-12%)' }} />
