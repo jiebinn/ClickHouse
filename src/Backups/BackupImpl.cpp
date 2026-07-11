@@ -447,7 +447,7 @@ void BackupImpl::writeBackupMetadata()
             base_backup_in_use = true;
     });
 
-    if (!num_all_file_infos)
+    if (num_all_file_infos == 0)
         throw Exception(ErrorCodes::BACKUP_IS_EMPTY, "Backup must not be empty");
 
     if (base_backup_info)
