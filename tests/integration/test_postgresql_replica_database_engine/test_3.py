@@ -990,6 +990,125 @@ def test_two_schemas_same_table_name_single_storage(started_cluster):
     instance.query("DROP TABLE ct_cs2 SYNC")
 
 
+def test_two_schemas_same_table_name_database_engine(started_cluster):
+    # Regression for the database-engine half of the publication/slot collision flagged in review of
+    # https://github.com/ClickHouse/ClickHouse/pull/107425 (the single-table half is covered by
+    # test_two_schemas_same_table_name_single_storage). Two `MaterializedPostgreSQL` DATABASE engines that
+    # each replicate a single common non-default schema (`materialized_postgresql_schema`) of the SAME
+    # PostgreSQL database must not share a publication or a replication slot. Before the identity became
+    # schema-aware for the database engine too, both derived their publication from `<postgres_database>`
+    # and their default slot from `<postgres_database>` only, so the second `CREATE DATABASE` dropped and
+    # recreated the shared publication for its own schema's tables and the consumers cross-talked (one
+    # database would stop receiving its schema's changes or ingest the other schema's rows, because in
+    # single-schema mode the publication carries only the bare relation name).
+    cursor = pg_manager.get_db_cursor()
+    schema1 = "dbs1"
+    schema2 = "dbs2"
+    table = "dbt"
+
+    create_postgres_schema(cursor, schema1)
+    create_postgres_schema(cursor, schema2)
+    create_postgres_table_with_schema(cursor, schema1, table)
+    create_postgres_table_with_schema(cursor, schema2, table)
+
+    # ClickHouse PostgreSQL databases scoped to each schema, used to seed and to read the source.
+    pg_db1 = "dbs1_src"
+    pg_db2 = "dbs2_src"
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=pg_db1,
+        schema_name=schema1,
+        postgres_database="postgres_database",
+    )
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=pg_db2,
+        schema_name=schema2,
+        postgres_database="postgres_database",
+    )
+
+    # Distinct data per schema so cross-talk is detectable: schema2's values are offset by 1000.
+    instance.query(
+        f"INSERT INTO {pg_db1}.{table} SELECT number, number from numbers(0, 50)"
+    )
+    instance.query(
+        f"INSERT INTO {pg_db2}.{table} SELECT number, number + 1000 from numbers(0, 30)"
+    )
+
+    # Two MaterializedPostgreSQL database engines over the SAME PostgreSQL database, each scoped to one
+    # non-default schema. No unique-consumer identifier is set, so isolation must come solely from the
+    # schema-aware publication and slot names.
+    mat_db1 = "mat_dbs1"
+    mat_db2 = "mat_dbs2"
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_db1,
+        postgres_database="postgres_database",
+        settings=[f"materialized_postgresql_schema = '{schema1}'"],
+    )
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_db2,
+        postgres_database="postgres_database",
+        settings=[f"materialized_postgresql_schema = '{schema2}'"],
+    )
+
+    # Initial snapshot: each database sees only its own schema's rows.
+    check_tables_are_synchronized(
+        instance, table, postgres_database=pg_db1, materialized_database=mat_db1
+    )
+    check_tables_are_synchronized(
+        instance, table, postgres_database=pg_db2, materialized_database=mat_db2
+    )
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db1}.{table}", "50\n")
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db2}.{table}", "30\n")
+    # Values prove there is no cross-talk: schema2's rows (>= 1000) must never appear in database 1.
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value >= 1000) FROM {mat_db1}.{table}", "0\n"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value < 1000) FROM {mat_db2}.{table}", "0\n"
+    )
+
+    # The two database engines must own DISTINCT publications and replication slots (the fix); before it
+    # they collapsed onto the single `<postgres_database>_ch_publication` / `<postgres_database>` pair.
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    pubs = {row[0] for row in cursor.fetchall()}
+    assert len(pubs) == 2, f"expected two distinct publications, got {pubs}"
+    for pub in pubs:
+        assert len(pub) <= 63, f"publication name too long: {pub} ({len(pub)})"
+
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots "
+        "WHERE database = 'postgres_database' AND slot_name LIKE '%\\_ch\\_replication\\_slot'"
+    )
+    slots = {row[0] for row in cursor.fetchall()}
+    assert len(slots) == 2, f"expected two distinct slots, got {slots}"
+    for slot in slots:
+        assert len(slot) <= 63, f"slot name too long: {slot} ({len(slot)})"
+
+    # Ongoing replication (the consumer path) stays isolated too.
+    instance.query(
+        f"INSERT INTO {pg_db1}.{table} SELECT number, number from numbers(50, 50)"
+    )
+    instance.query(
+        f"INSERT INTO {pg_db2}.{table} SELECT number, number + 1000 from numbers(30, 30)"
+    )
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db1}.{table}", "100\n")
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db2}.{table}", "60\n")
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value >= 1000) FROM {mat_db1}.{table}", "0\n"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value < 1000) FROM {mat_db2}.{table}", "0\n"
+    )
+
+    pg_manager.drop_materialized_db(mat_db1)
+    pg_manager.drop_materialized_db(mat_db2)
+
+
 def test_default_schema_preserves_legacy_identity(started_cluster):
     # A standalone MaterializedPostgreSQL table that targets PostgreSQL's default schema must keep the
     # legacy, schema-unaware publication and default replication-slot names `<postgres_database>_<table>_*`,

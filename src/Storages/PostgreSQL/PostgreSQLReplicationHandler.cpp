@@ -101,12 +101,12 @@ namespace
     /// There can be several replication slots per publication, but one publication per table/database replication.
     /// Replication slot might be unique (contain uuid) to allow have multiple replicas for the same PostgreSQL table/database.
 
-    /// A standalone MaterializedPostgreSQL table that targets PostgreSQL's default schema — either
-    /// implicitly (the `materialized_postgresql_schema` setting is left empty) or explicitly (set to
-    /// `public`) — must keep the legacy, schema-unaware publication and default replication-slot names,
-    /// derived from the database and the bare table name only. Only a genuinely non-default schema is
+    /// A MaterializedPostgreSQL engine that targets PostgreSQL's default schema — either implicitly (the
+    /// `materialized_postgresql_schema` setting is left empty) or explicitly (set to `public`) — must keep
+    /// the legacy, schema-unaware publication and default replication-slot names, derived from the database
+    /// and (for the single-table engine) the bare table name only. Only a genuinely non-default schema is
     /// included in the generated name. Otherwise the generated default object names would change for
-    /// tables created before the identity became schema-aware, and their `ATTACH` would look for a
+    /// tables/databases created before the identity became schema-aware, and their `ATTACH` would look for a
     /// slot/publication that does not exist, run an initial sync, and reload a snapshot into the
     /// already-existing nested table (duplicating data).
     bool isDefaultPostgreSQLSchema(const String & postgres_schema)
@@ -116,7 +116,7 @@ namespace
 
     /// A collision-resistant, fixed-length identity derived from the full (database, schema, table) triple.
     /// It is used in place of a plain `database_schema_table` concatenation in the schema-aware
-    /// single-table names below. A plain concatenation with `_` is not injective: `schema = a_b`,
+    /// names below. A plain concatenation with `_` is not injective: `schema = a_b`,
     /// `table = c` and `schema = a`, `table = b_c` both produce `..._a_b_c_...`. The replication slot name
     /// is additionally folded by normalizeReplicationSlot() (lower-cased, `-` mapped to `_`), so even
     /// names PostgreSQL keeps distinct — the schemas `"Foo"` and `"foo"`, or `"a-b"` and `"a_b"` — would
@@ -137,7 +137,8 @@ namespace
         return fmt::format("{:016x}", hash.get64());
     }
 
-    /// The base name of the schema-aware single-table publication and default replication slot. It keeps a
+    /// The base name of the schema-aware publication and default replication slot — used by the single-table
+    /// engine, and by the database engine with a non-default common schema. It keeps a
     /// short, human-readable prefix taken from the PostgreSQL database name purely for recognizability in
     /// `pg_replication_slots`/`pg_publication`, followed by the fixed-length identity hash. Only the prefix
     /// length is bounded here: the full (database, schema, table) identity is carried by the hash, so the
@@ -168,20 +169,22 @@ namespace
         /// PostgreSQL parses with `SplitIdentifierString`, folding unquoted identifiers to lower
         /// case), so both sides agree even for names with upper-case letters.
         String name;
-        if (postgres_table.empty())
-            /// MaterializedPostgreSQL database engine: one publication per database.
-            name = postgres_database;
-        else if (isDefaultPostgreSQLSchema(postgres_schema))
-            name = fmt::format("{}_{}", postgres_database, postgres_table);
-        else
-            /// Single-table MaterializedPostgreSQL engine with a non-default schema: include the schema
-            /// so that two standalone tables replicating the same table name from different schemas of
-            /// the same PostgreSQL database do not collide on a single publication (which would make
-            /// their consumers cross-talk, because the publication carries only the bare relation name).
-            /// A plain `database_schema_table` concatenation is not injective, so a collision-resistant
-            /// hash of the full identity is used instead, with a bounded database prefix
-            /// (see getSchemaAwareIdentityName()).
+        if (!isDefaultPostgreSQLSchema(postgres_schema))
+            /// A non-default `materialized_postgresql_schema` — either a single-table MaterializedPostgreSQL
+            /// engine, or a database engine replicating one common non-default schema. Include the schema so
+            /// that two engines replicating from different schemas of the same PostgreSQL database do not
+            /// collide on a single publication (which would make their consumers cross-talk, because in
+            /// single-schema mode the publication carries only the bare relation name). A plain
+            /// `database_schema_table` concatenation is not injective, so a collision-resistant hash of the
+            /// full identity is used instead, with a bounded database prefix (see getSchemaAwareIdentityName()).
+            /// For the database engine the remote table name is empty, so the identity is over
+            /// `(database, schema, "")`, which is still distinct from any single-table identity (non-empty table).
             name = getSchemaAwareIdentityName(postgres_database, postgres_schema, postgres_table);
+        else if (postgres_table.empty())
+            /// MaterializedPostgreSQL database engine over the default schema: one publication per database.
+            name = postgres_database;
+        else
+            name = fmt::format("{}_{}", postgres_database, postgres_table);
         return fmt::format("{}_ch_publication", name);
     }
 
@@ -224,18 +227,19 @@ namespace
         {
             if (replication_settings[MaterializedPostgreSQLSetting::materialized_postgresql_use_unique_replication_consumer_identifier])
                 slot_name = clickhouse_uuid;
-            else if (postgres_table.empty())
-                /// MaterializedPostgreSQL database engine.
-                slot_name = postgres_database;
-            else if (isDefaultPostgreSQLSchema(postgres_schema))
-                slot_name = fmt::format("{}_{}_ch_replication_slot", postgres_database, postgres_table);
-            else
+            else if (!isDefaultPostgreSQLSchema(postgres_schema))
                 /// Include the schema for the same reason as in getPublicationName(), via the same
-                /// collision-resistant and length-bounded identity: otherwise two standalone tables
-                /// replicating the same table name from different schemas of the same PostgreSQL database
-                /// would share the default replication slot (and normalizeReplicationSlot() would
-                /// additionally fold case- or hyphen-distinct schema names together).
+                /// collision-resistant and length-bounded identity: otherwise two engines replicating from
+                /// different schemas of the same PostgreSQL database would share the default replication slot
+                /// (and normalizeReplicationSlot() would additionally fold case- or hyphen-distinct schema
+                /// names together). Covers both the single-table engine and the database engine (whose remote
+                /// table name is empty).
                 slot_name = fmt::format("{}_ch_replication_slot", getSchemaAwareIdentityName(postgres_database, postgres_schema, postgres_table));
+            else if (postgres_table.empty())
+                /// MaterializedPostgreSQL database engine over the default schema.
+                slot_name = postgres_database;
+            else
+                slot_name = fmt::format("{}_{}_ch_replication_slot", postgres_database, postgres_table);
 
             slot_name = normalizeReplicationSlot(slot_name);
         }
