@@ -19,6 +19,7 @@
 #include <Processors/QueryPlan/FilterStep.h>
 #include <Processors/QueryPlan/JoinStep.h>
 #include <Processors/QueryPlan/JoinStepLogical.h>
+#include <Processors/QueryPlan/LimitByStep.h>
 #include <Processors/QueryPlan/MergingAggregatedStep.h>
 #include <Processors/QueryPlan/Optimizations/Optimizations.h>
 #include <Processors/QueryPlan/ReadFromLocalReplica.h>
@@ -1014,6 +1015,21 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
             return 0;
 
         if (auto updated_steps = tryAddNewFilterStep(parent_node, true, nodes, keys))
+            return updated_steps;
+    }
+
+    if (const auto * limit_by = typeid_cast<LimitByStep *>(child.get()))
+    {
+        /// A predicate on the LIMIT BY key columns is safe to apply before the LIMIT BY: it
+        /// only removes whole groups, and dropping a group never changes which rows survive
+        /// the per-group top-N (the offset/length are applied within each surviving group
+        /// independently). Predicates on other columns stay above. LIMIT BY is 1:1 per
+        /// surviving row, so it does not change the number of rows for the pushed conjuncts.
+        const auto & keys = limit_by->getColumns();
+        if (keys.empty())
+            return 0;
+
+        if (auto updated_steps = tryAddNewFilterStep(parent_node, false, nodes, keys))
             return updated_steps;
     }
 
