@@ -2601,6 +2601,15 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
             for (const auto & task : current_context->getRefreshSet().findTasks({create.getDatabase(), table_to_replace_name}))
                 task->start();
 
+        /// The populating INSERT SELECT ran against the internal temporary table, so its (random) name was
+        /// recorded in this query's access info and would surface in `system.query_log` `tables`. The
+        /// temporary table is an implementation detail whose random name is meaningless to the user and would
+        /// make the log non-deterministic, so drop it here. The final table name is added to the log
+        /// independently, from the query's target (see `IInterpreter::extendQueryLogElem`).
+        if (create.isCreateQueryWithImmediateInsertSelect() && getContext()->hasQueryContext())
+            getContext()->getQueryContext()->removeQueryAccessInfoTable(
+                StorageID{create.getDatabase(), create.getTable()}.getFullTableName());
+
         create.setTable(table_to_replace_name);
 
         return {};
