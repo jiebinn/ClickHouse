@@ -56,13 +56,31 @@ print("multiple IDAT chunks: yes" if idat_chunks > 1 else "multiple IDAT chunks:
 raw = zlib.decompress(idat)
 channels = {0: 1, 2: 3, 6: 4}[color_type]
 stride = width * channels
-# All scanlines use the "None" filter (a leading 0 byte), so the pixels are the raw bytes.
-filters_ok = all(raw[y * (stride + 1)] == 0 for y in range(height))
-print("filters none ok" if filters_ok else "unexpected filter")
 
-pixels = bytearray()
-for y in range(height):
-    pixels += raw[y * (stride + 1) + 1: (y + 1) * (stride + 1)]
+# Each scanline is prefixed with a filter-type byte; the encoder picks the best of the five standard PNG
+# filters per row, so validate the type and undo the filter to reconstruct the raw pixels.
+def paeth(a, b, c):
+    p = a + b - c
+    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+    return a if pa <= pb and pa <= pc else (b if pb <= pc else c)
+
+filters_ok, pixels, prev, pos = True, bytearray(), bytearray(stride), 0
+for _ in range(height):
+    ftype = raw[pos]; pos += 1
+    if ftype > 4:
+        filters_ok = False
+    line = bytearray(raw[pos:pos + stride]); pos += stride
+    for i in range(stride):
+        a = line[i - channels] if i >= channels else 0
+        b = prev[i]
+        c = prev[i - channels] if i >= channels else 0
+        if ftype == 1: line[i] = (line[i] + a) & 0xff
+        elif ftype == 2: line[i] = (line[i] + b) & 0xff
+        elif ftype == 3: line[i] = (line[i] + ((a + b) >> 1)) & 0xff
+        elif ftype == 4: line[i] = (line[i] + paeth(a, b, c)) & 0xff
+    pixels += line
+    prev = line
+print("filters valid ok" if filters_ok else "invalid filter")
 print("pixels round-trip ok" if sum(pixels) == expected_sum else "pixels mismatch")
 PYEOF
 

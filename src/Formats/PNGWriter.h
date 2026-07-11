@@ -17,8 +17,9 @@ class WriteBuffer;
   *   4 - RGBA.
   *
   * Only what ClickHouse needs to produce `FORMAT PNG` is implemented: one image, 8 bits per channel,
-  * no interlacing, and the trivial "None" scanline filter. The pixel data is compressed with Deflate
-  * (zlib), so the result is a standard PNG datastream that any decoder can read.
+  * and no interlacing. Each scanline is filtered with the best of the five standard PNG filters (chosen by
+  * the sum-of-absolute-differences heuristic) and the pixel data is compressed with Deflate (zlib), so the
+  * result is a standard PNG datastream that any decoder can read.
   */
 class PNGWriter : private boost::noncopyable
 {
