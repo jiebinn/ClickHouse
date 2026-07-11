@@ -34,6 +34,7 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
   const listeners = new Map();
   const beacons = [];
   const clearedIntervals = [];
+  const animationFrames = [];
   const cloudLink = {
     href: 'https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta',
   };
@@ -114,8 +115,9 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
     clearInterval(id) {
       clearedIntervals.push(id);
     },
-    requestAnimationFrame() {
-      return 1;
+    requestAnimationFrame(callback) {
+      animationFrames.push(callback);
+      return animationFrames.length;
     },
   };
   window.window = window;
@@ -143,6 +145,11 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
     dispatch(type, properties = {}) {
       window.dispatchEvent({ type, ...properties });
     },
+    runNextAnimationFrame() {
+      const callback = animationFrames.shift();
+      assert.ok(callback, 'expected a queued animation frame');
+      callback();
+    },
     window,
   };
 }
@@ -150,14 +157,15 @@ function createEnvironment(pathname, search = '', origin = 'https://clickhouse.c
 async function flushRequest(
   environment,
   apiHost = 'https://control-plane-internal.clickhouse.cloud',
+  beaconIndex = 0,
 ) {
   await environment.window.galaxy.flushEvents();
-  assert.equal(environment.beacons.length, 1);
+  assert.equal(environment.beacons.length, beaconIndex + 1);
   assert.equal(
-    environment.beacons[0].url,
+    environment.beacons[beaconIndex].url,
     `${apiHost}/api/galaxy?sendGalaxyForensicEvent`,
   );
-  return JSON.parse(await environment.beacons[0].body.text());
+  return JSON.parse(await environment.beacons[beaconIndex].body.text());
 }
 
 test('matches the legacy docs-page request and Cloud-link contract', async () => {
@@ -189,6 +197,27 @@ test('keeps periodic flushing active across a BFCache pagehide', () => {
 
   environment.dispatch('pagehide', { persisted: false });
   assert.deepEqual(environment.clearedIntervals, [1]);
+});
+
+test('tracks a Mintlify SPA route and updates only the current page path', async () => {
+  const environment = createEnvironment(
+    '/docs/get-started/setup/install',
+    '?utm_source=docs-test&gclid=test-click',
+  );
+  await flushRequest(environment);
+
+  environment.window.location.pathname = '/docs/guides/developer/overview';
+  environment.runNextAnimationFrame();
+
+  assert.deepEqual(
+    await flushRequest(
+      environment,
+      'https://control-plane-internal.clickhouse.cloud',
+      1,
+    ),
+    LEGACY_CONTRACT.spaPageRequest,
+  );
+  assert.equal(environment.cloudLink.href, LEGACY_CONTRACT.spaCloudLink);
 });
 
 test('routes preview traffic to the development Galaxy backend', async () => {

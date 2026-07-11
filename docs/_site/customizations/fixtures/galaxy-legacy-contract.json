@@ -45,5 +45,29 @@
       }
     ]
   },
-  "cloudLink": "https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta&utm_source=docs-test&gclid=test-click&glxid=legacy-user-id&pagePath=%2Fdocs%2Fget-started%2Fsetup%2Finstall&origPath=%2Fdocs%2Fget-started%2Fsetup%2Finstall&utm_ga=GA1.1.123.456"
+  "cloudLink": "https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta&utm_source=docs-test&gclid=test-click&glxid=legacy-user-id&pagePath=%2Fdocs%2Fget-started%2Fsetup%2Finstall&origPath=%2Fdocs%2Fget-started%2Fsetup%2Finstall&utm_ga=GA1.1.123.456",
+  "spaPageRequest": {
+    "rpcAction": "sendGalaxyForensicEvent",
+    "galaxySessionId": "legacy-session-id",
+    "data": [
+      {
+        "application": "DOCS_WEBSITE",
+        "timestamp": 1700000000000,
+        "userId": "legacy-user-id",
+        "namespace": "docs",
+        "component": "page",
+        "interaction": "trigger",
+        "event": "/docs/guides/developer/overview",
+        "message": "/docs/guides/developer/overview",
+        "properties": {
+          "properties": {
+            "application": "DOCS_WEBSITE",
+            "page": "https://clickhouse.com/docs/guides/developer/overview?utm_source=docs-test&gclid=test-click",
+            "userAgent": "Galaxy compatibility test"
+          }
+        }
+      }
+    ]
+  },
+  "spaCloudLink": "https://console.clickhouse.cloud/signUp?loc=docs-nav-signUp-cta&utm_source=docs-test&gclid=test-click&glxid=legacy-user-id&pagePath=%2Fdocs%2Fguides%2Fdeveloper%2Foverview&origPath=%2Fdocs%2Fget-started%2Fsetup%2Finstall&utm_ga=GA1.1.123.456"
 }
