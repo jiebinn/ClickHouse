@@ -127,9 +127,10 @@ void MergeTreeIndexGranuleSet::deserializeBinary(ReadBuffer & istr, MergeTreeInd
         serializations[i]->deserializeBinaryBulkStatePrefix(settings, state, nullptr);
         serializations[i]->deserializeBinaryBulkWithMultipleStreams(elem.column, 0, rows_to_read, settings, state, nullptr);
 
-        /// Unwrap LowCardinality so LowCardinality(Nullable(T)) exposes its ColumnNullable and keeps
-        /// the NULL sentinel via getExtremesNullLast; otherwise IS NULL can wrongly prune granules.
-        const auto column = elem.column->convertToFullColumnIfLowCardinality();
+        /// Only LowCardinality needs unwrapping to expose a nested Nullable; gate the call so other
+        /// columns are untouched. LC(Nullable(T)) then keeps the NULL sentinel via getExtremesNullLast
+        /// (otherwise IS NULL can wrongly prune); getExtremes on LC materializes internally anyway.
+        const auto column = elem.column->lowCardinality() ? elem.column->convertToFullColumnIfLowCardinality() : elem.column;
         if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(column.get()))
             column_nullable->getExtremesNullLast(min_val, max_val, 0, column->size());
         else
@@ -287,9 +288,10 @@ void MergeTreeIndexAggregatorSet::update(const Block & block, size_t * pos, size
             auto filtered_column = block.getByName(index_columns[i]).column->filter(filter, block.rows());
             columns[i]->insertRangeFrom(*filtered_column, 0, filtered_column->size());
 
-            /// Unwrap LowCardinality so LowCardinality(Nullable(T)) exposes its ColumnNullable and keeps
-            /// the NULL sentinel via getExtremesNullLast; otherwise IS NULL can wrongly prune granules.
-            const auto extremes_column = filtered_column->convertToFullColumnIfLowCardinality();
+            /// Only LowCardinality needs unwrapping to expose a nested Nullable; gate the call so other
+            /// columns are untouched. LC(Nullable(T)) then keeps the NULL sentinel via getExtremesNullLast
+            /// (otherwise IS NULL can wrongly prune); getExtremes on LC materializes internally anyway.
+            const auto extremes_column = filtered_column->lowCardinality() ? filtered_column->convertToFullColumnIfLowCardinality() : filtered_column;
             if (const auto * column_nullable = typeid_cast<const ColumnNullable *>(extremes_column.get()))
                 column_nullable->getExtremesNullLast(field_min, field_max, 0, extremes_column->size());
             else
