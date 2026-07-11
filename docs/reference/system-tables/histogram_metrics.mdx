@@ -38,6 +38,22 @@ FROM system.histogram_metrics
 FORMAT Prometheus
 ```
 
+### filesystem_cache_evicted_segment_hits_bucket {#filesystem_cache_evicted_segment_hits_bucket}
+
+Distribution of cache-hit counts on file segments at the moment of their eviction, labelled by cache name.
+
+### filesystem_cache_evicted_segment_size_bytes_bucket {#filesystem_cache_evicted_segment_size_bytes_bucket}
+
+Distribution of byte sizes of evicted file segments, labelled by cache name.
+
+### filesystem_cache_evicted_segment_hits_by_user_bucket {#filesystem_cache_evicted_segment_hits_by_user_bucket}
+
+Distribution of cache-hit counts on evicted file segments, labelled by cache name and user id.
+
+### filesystem_cache_evicted_segment_size_bytes_by_user_bucket {#filesystem_cache_evicted_segment_size_bytes_by_user_bucket}
+
+Distribution of byte sizes of evicted file segments, labelled by cache name and user id.
+
 ### http_pool_tcp_buf_bytes {#http_pool_tcp_buf_bytes}
 
 Kernel TCP buffer memory (sk_rmem_alloc / sk_wmem_alloc) of HTTP connection pool sockets, observed once per live socket each time asynchronous metrics are scraped. Labels: `group` is one of `disk`, `storage`, `http`; `direction` is `rcv` or `snd`.
