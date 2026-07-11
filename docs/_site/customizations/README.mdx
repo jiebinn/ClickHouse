@@ -21,3 +21,9 @@ See Mintlify's docs on [custom scripts](https://www.mintlify.com/docs/customize/
 
 To wire a new script up, add a `{ "src": "/_site/customizations/<name>.js" }`
 entry to the top-level `scripts` array in `docs.json`.
+
+Run the Galaxy legacy-contract regression test with:
+
+```bash
+node --test _site/customizations/galaxy.test.cjs
+```

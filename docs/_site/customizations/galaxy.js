@@ -202,7 +202,12 @@
   }
 
   window.addEventListener('beforeunload', stopGalaxy);
-  window.addEventListener('pagehide', stopGalaxy);
+  window.addEventListener('pagehide', function (event) {
+    // Timers are suspended while a page is in the back/forward cache and
+    // resume when it is restored. Clearing the interval here would leave a
+    // restored page queueing events without ever flushing them.
+    if (!event.persisted) stopGalaxy();
+  });
 
   function pageEventPrefix(path) {
     return path.indexOf('/resources/support-center/knowledge-base/') !== -1
