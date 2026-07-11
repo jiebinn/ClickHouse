@@ -152,6 +152,9 @@
   "redirects": { "$ref": "./_site/redirects.json" },
   "scripts": [
     {
+      "src": "/_site/customizations/galaxy.js"
+    },
+    {
       "src": "/_site/customizations/scroll-reset.js"
     },
     {
