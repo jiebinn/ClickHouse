@@ -162,12 +162,12 @@ void DistinctSortedTransform::transform(Chunk & chunk)
     }
 
     size_t data_total_row_count = data.getTotalRowCount();
+    /// In case of overflow_mode = 'break' `check` returns false instead of throwing.
+    /// Stop reading, but still emit the new rows from the current chunk (their keys are
+    /// already in the set): 'break' means return a partial result as if the source data
+    /// ran out, not discard it.
     if (!set_size_limits.check(data_total_row_count, data.getTotalByteCount(), "DISTINCT", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED))
-    {
         stopReading();
-        chunk.clear();
-        return;
-    }
 
     /// Stop reading if we already reached the limit.
     if (limit_hint && data_total_row_count >= limit_hint)
