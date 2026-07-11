@@ -21,6 +21,7 @@
 #include <Processors/QueryPlan/JoinStepLogical.h>
 #include <Processors/QueryPlan/LimitByStep.h>
 #include <Processors/QueryPlan/MergingAggregatedStep.h>
+#include <Processors/QueryPlan/NegativeLimitByStep.h>
 #include <Processors/QueryPlan/Optimizations/Optimizations.h>
 #include <Processors/QueryPlan/ReadFromLocalReplica.h>
 #include <Processors/QueryPlan/SortingStep.h>
@@ -1026,6 +1027,20 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
         /// independently). Predicates on other columns stay above. LIMIT BY is 1:1 per
         /// surviving row, so it does not change the number of rows for the pushed conjuncts.
         const auto & keys = limit_by->getColumns();
+        if (keys.empty())
+            return 0;
+
+        if (auto updated_steps = tryAddNewFilterStep(parent_node, false, nodes, keys))
+            return updated_steps;
+    }
+
+    if (const auto * negative_limit_by = typeid_cast<NegativeLimitByStep *>(child.get()))
+    {
+        /// Same reasoning as LimitByStep: negative LIMIT BY (LIMIT -N BY, LIMIT -N OFFSET -M BY,
+        /// and the mixed-sign decompositions) also selects a per-group slice, so a predicate on
+        /// the LIMIT BY key columns only removes whole groups and never changes which rows survive
+        /// within a surviving group. Predicates on other columns stay above.
+        const auto & keys = negative_limit_by->getColumns();
         if (keys.empty())
             return 0;
 
