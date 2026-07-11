@@ -2,12 +2,12 @@
 
 #include <array>
 #include <limits>
-#include <vector>
 
 #include <zlib.h>
 
 #include <base/types.h>
 #include <Common/Exception.h>
+#include <Common/VectorWithMemoryTracking.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/CompressionMethod.h>
 #include <IO/WriteBuffer.h>
@@ -218,9 +218,11 @@ void PNGWriter::writeImage(const unsigned char * pixels)
         /// Scratch buffers, all one scanline wide, so peak memory stays bounded regardless of the height:
         /// the best filtered row so far, the candidate currently being tried, and an all-zero "prior" row for
         /// the first scanline (later scanlines use the previous raw row, which is already in `pixels`).
-        std::vector<UInt8> best(row_bytes);
-        std::vector<UInt8> candidate(row_bytes);
-        const std::vector<UInt8> zero_row(row_bytes, 0);
+        /// They use `VectorWithMemoryTracking` (the throwing allocator) so that these user-controlled
+        /// (`width * channels`) allocations honor `max_memory_usage` like the rest of the encoder.
+        VectorWithMemoryTracking<UInt8> best(row_bytes);
+        VectorWithMemoryTracking<UInt8> candidate(row_bytes);
+        const VectorWithMemoryTracking<UInt8> zero_row(row_bytes, 0);
 
         const auto * image = reinterpret_cast<const UInt8 *>(pixels);
         for (size_t y = 0; y < height; ++y)
