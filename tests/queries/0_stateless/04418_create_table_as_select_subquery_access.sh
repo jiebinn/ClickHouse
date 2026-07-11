@@ -5,9 +5,12 @@
 # first and the access check happened only during the populating INSERT SELECT, so the access error
 # left the table in place and a retry reported `TABLE_ALREADY_EXISTS` instead of the access error.
 #
-# Both forms are checked: the column list inferred from the SELECT, and an explicit column list. The
-# explicit form takes a different code path (`create.columns_list`) that never analyzes the SELECT, so
-# it needs the same up-front access check; otherwise the orphan table is still left behind.
+# The fix (for Atomic databases) creates the table under a temporary name, runs the populating
+# INSERT SELECT into it, and only then atomically publishes it under the final name with a RENAME. If
+# the SELECT is denied (or fails for any other reason) the temporary table is dropped, so no orphan is
+# left behind and the access check is done by the real INSERT SELECT (column-aware, and covering IN /
+# scalar subqueries). Both forms are checked: the column list inferred from the SELECT, and an explicit
+# column list -- both route through the same temporary-table path.
 
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
@@ -38,7 +41,7 @@ inferred_query="CREATE TABLE dst ENGINE = Memory AS SELECT * FROM t0 WHERE y IN 
 # Same SELECT, but the destination columns are given explicitly. This goes through the column-list code path.
 explicit_query="CREATE TABLE dst_explicit (y Int) ENGINE = Memory AS SELECT y FROM t0 WHERE y IN (SELECT y FROM t1 WHERE y IN (SELECT y FROM t2 WHERE y < 2))"
 
-# The fix lives in the analyzer code path, so force it on regardless of the test profile.
+# The temporary-table fix is analyzer-independent, but force the analyzer on for a deterministic profile.
 client=(${CLICKHOUSE_CLIENT} --enable_analyzer 1 --user "${user}" --password "${user}")
 
 check_denied()
@@ -55,10 +58,10 @@ check_denied()
 check_denied "inferred columns" "${inferred_query}" "dst"
 check_denied "explicit columns" "${explicit_query}" "dst_explicit"
 
-# `CREATE TABLE IF NOT EXISTS dst ... AS SELECT` for a table that already exists is a no-op:
-# `doCreateTable` returns false and the populating INSERT SELECT (`fillTableIfNeeded`) never runs, so
-# the SELECT is not executed and access to t2 must not be required. The statement must succeed and
-# leave the existing table untouched, not raise ACCESS_DENIED for the no-op.
+# `CREATE TABLE IF NOT EXISTS dst ... AS SELECT` for a table that already exists is a no-op: the
+# temporary-table path sees the target already exists and returns early, so the populating INSERT SELECT
+# never runs, the SELECT is not executed and access to t2 must not be required. The statement must
+# succeed and leave the existing table untouched, not raise ACCESS_DENIED for the no-op.
 ${CLICKHOUSE_CLIENT} --query "CREATE TABLE dst_noop (y Int) ENGINE = Memory; INSERT INTO dst_noop VALUES (42);"
 # Capture both the exit status and the output. Asserting the exit status is 0 (not merely that the
 # output has no ACCESS_DENIED) is what proves the no-op succeeds: any other failure -- e.g.

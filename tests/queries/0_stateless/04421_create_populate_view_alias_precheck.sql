@@ -1,9 +1,8 @@
 -- Regression test for https://github.com/ClickHouse/ClickHouse/pull/108048
--- The up-front access pre-check for queries that populate a table immediately (CREATE ... AS SELECT, or a
--- materialized/window view with POPULATE) builds the full query plan of the SELECT before the table is
--- created. It must run after the view's column alias list has already been applied to the SELECT; otherwise
--- a POPULATE materialized view whose ORDER BY references a column alias would be planned against the
--- un-aliased SELECT and fail with UNKNOWN_IDENTIFIER before the view could be created.
+-- A POPULATE materialized view whose ORDER BY references a column alias from the view's column list must
+-- populate correctly: the view's column alias list is applied to the SELECT before it is planned, so
+-- `ORDER BY x` (where `(x)` renames the SELECT column `y`) resolves instead of failing with
+-- UNKNOWN_IDENTIFIER.
 
 SET enable_analyzer = 1;
 

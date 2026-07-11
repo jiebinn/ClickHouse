@@ -746,47 +746,6 @@ ConstraintsDescription InterpreterCreateQuery::getConstraintsDescription(
 }
 
 
-/// True when this is a `CREATE ... IF NOT EXISTS` whose target table already exists, so `doCreateTable`
-/// will return false and `execute` will skip `fillTableIfNeeded` (the populating INSERT SELECT). In that
-/// case the SELECT is a no-op against the untouched existing table, so the orphan-table access pre-check
-/// must not run -- otherwise a missing grant on a source table would turn the no-op into an ACCESS_DENIED.
-static bool createIfNotExistsResolvesToExistingTable(const ASTCreateQuery & create, const ContextPtr & context)
-{
-    if (!create.if_not_exists)
-        return false;
-
-    if (create.isTemporary())
-        return static_cast<bool>(context->tryResolveStorageID({"", create.getTable()}, Context::ResolveExternal));
-
-    auto database = DatabaseCatalog::instance().tryGetDatabase(create.getDatabase());
-    return database && database->isTableExist(create.getTable(), context);
-}
-
-
-void InterpreterCreateQuery::checkAccessForImmediateInsertSelectPopulate(
-    const ASTCreateQuery & create, const InterpreterCreateQuery::TableProperties & properties)
-{
-    /// Building the full query plan of the SELECT (rather than only a sample block) is required: a
-    /// sample-block (only_analyze) build does not recursively plan subqueries in WHERE/IN/scalar
-    /// positions, so their (column-aware) access checks would be missed.
-    ///
-    /// Mirror the subsequent INSERT SELECT (see fillTableIfNeeded) exactly, so this check cannot introduce
-    /// a failure mode the insert would not also hit. In particular that INSERT SELECT sets the just-created
-    /// table as the insertion table, which lets table functions in the SELECT infer their structure from the
-    /// target table's columns (use_structure_from_insertion_table_in_table_functions), e.g.
-    /// `CREATE TABLE t (a Int32) AS SELECT * FROM file('x.bin', RowBinary)`. The table does not exist yet, so
-    /// provide the structure we just computed (which is what the table will have). Options match
-    /// InterpreterInsertQuery: SelectQueryOptions(Complete, subquery_depth = 1).
-    auto check_context = Context::createCopy(getContext());
-    check_context->setInsertionTable(
-        StorageID(create.getDatabase(), create.getTable(), create.uuid),
-        /*column_names=*/std::nullopt,
-        std::make_shared<ColumnsDescription>(properties.columns));
-    InterpreterSelectQueryAnalyzer(create.select->clone(), check_context,
-        SelectQueryOptions(QueryProcessingStage::Complete, /*subquery_depth_=*/1)).getQueryPlan();
-}
-
-
 InterpreterCreateQuery::TableProperties InterpreterCreateQuery::getTablePropertiesAndNormalizeCreateQuery(
     ASTCreateQuery & create, LoadingStrictnessLevel mode)
 {
@@ -1020,18 +979,9 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::getTableProperti
 
         if (getContext()->getSettingsRef()[Setting::allow_experimental_analyzer])
         {
-            SelectQueryOptions sample_block_options = SelectQueryOptions{}.analyze();
-
-            /// For an immediate INSERT SELECT, access to all referenced tables was already verified up-front
-            /// by the full query plan built at the top of this function (which is column-aware and also covers
-            /// WHERE/IN/scalar subqueries). For a plain view definition there is no such insert, so keep the
-            /// lighter FROM-position subquery access check here.
-            if (!create.isCreateQueryWithImmediateInsertSelect())
-                sample_block_options.checkSubqueryTableAccess();
-
             as_select_sample = InterpreterSelectQueryAnalyzer::getSampleBlock(create.select->clone(),
                 select_context,
-                sample_block_options);
+                SelectQueryOptions{}.analyze().checkSubqueryTableAccess());
         }
         else
         {
@@ -1071,34 +1021,6 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::getTableProperti
     /// supports schema inference (will determine table structure in it's constructor).
     else if (!StorageFactory::instance().getStorageFeatures(create.storage->engine->name).supports_schema_inference)
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.");
-
-    /// For queries that populate the table immediately (CREATE ... AS SELECT, or a materialized/window
-    /// view with POPULATE), the table is created first and the data is inserted afterwards by an
-    /// INSERT SELECT (see fillTableIfNeeded). If the user lacks access to a table referenced by the
-    /// SELECT, that INSERT SELECT would fail only after the table has already been created, leaving an
-    /// empty orphan table behind (issue #26746: a retry then reports `TABLE_ALREADY_EXISTS` instead of
-    /// the access error). To prevent this, verify access to all referenced tables now, before the table
-    /// is created (checkAccessForImmediateInsertSelectPopulate).
-    ///
-    /// This runs for every isCreateQueryWithImmediateInsertSelect() form (columns inferred from the SELECT
-    /// or given explicitly, and materialized/window views with POPULATE), so it lives here, after the
-    /// column structure is known but before the table is created.
-    ///
-    /// It is skipped when `IF NOT EXISTS` resolves to an already-existing table: there `doCreateTable`
-    /// returns false and `fillTableIfNeeded` is never reached, so the populating INSERT SELECT (and its
-    /// access checks) does not run and we must not raise a spurious access error for the no-op. That
-    /// existence check is not held under the table DDL guard, so it can race with a concurrent DROP of the
-    /// target table; in that case the skip is only deferred -- `doCreateTable` re-runs the pre-check under
-    /// the guard before creating the table (see `deferred_as_select_access_check`), so the orphan-table
-    /// fix still holds under concurrent DDL.
-    if (create.isCreateQueryWithImmediateInsertSelect()
-        && getContext()->getSettingsRef()[Setting::allow_experimental_analyzer])
-    {
-        if (createIfNotExistsResolvesToExistingTable(create, getContext()))
-            deferred_as_select_access_check = true;
-        else
-            checkAccessForImmediateInsertSelectPopulate(create, properties);
-    }
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     if (!create.columns_list)
@@ -2020,6 +1942,23 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return doCreateOrReplaceTable(create, properties, mode);
     }
 
+    /// A plain `CREATE TABLE ... AS SELECT` (no REPLACE) on an Atomic database is executed by creating a
+    /// temporary table, running the populating INSERT SELECT into it, and only then atomically publishing it
+    /// under the final name with a RENAME. If the SELECT is denied (or fails for any other reason), the
+    /// temporary table is dropped, so a denied query leaves no empty orphan table behind (issue #26746: a
+    /// retry used to report `TABLE_ALREADY_EXISTS` instead of the access error). This reuses the same
+    /// create-temporary-then-publish machinery as CREATE OR REPLACE (doCreateOrReplaceTable). On non-Atomic
+    /// databases (getUUID() == Nil, e.g. Ordinary) we keep the previous behavior: the table is created first
+    /// and an orphan is left if the INSERT SELECT fails. Materialized/window views are excluded (they can own
+    /// an inner table and carry source-view dependencies, so they keep the previous behavior for now).
+    if (create.isCreateQueryWithImmediateInsertSelect()
+        && !create.is_materialized_view && !create.is_window_view
+        && database && database->getUUID() != UUIDHelpers::Nil)
+    {
+        chassert(!ddl_guard);
+        return doCreateOrReplaceTable(create, properties, mode);
+    }
+
     /// Actually creates table
     bool created = doCreateTable(create, properties, ddl_guard, mode);
     ddl_guard.reset();
@@ -2195,14 +2134,6 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
         if (mode <= LoadingStrictnessLevel::CREATE)
             database->checkTableNameLength(create.getTable());
     }
-
-    /// We have now confirmed under the DDL guard that the table does not exist and we are about to create it.
-    /// If the CREATE ... AS SELECT access pre-check was deferred in getTablePropertiesAndNormalizeCreateQuery
-    /// because `IF NOT EXISTS` had resolved to an existing table (outside this guard) that has since been
-    /// concurrently dropped, run the pre-check now -- before the table is created -- so a denied source SELECT
-    /// in the subsequent fillTableIfNeeded cannot leave an empty orphan table behind.
-    if (deferred_as_select_access_check)
-        checkAccessForImmediateInsertSelectPopulate(create, properties);
 
     data_path = database->getTableDataPath(create);
     // When creating a table, when checking if the data path exists, it should use the local disk to check, not the database disk. Because the database disk stores metadata files only.
@@ -2425,6 +2356,13 @@ void InterpreterCreateQuery::throwIfTooManyEntities(ASTCreateQuery & create) con
 BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
                                                        const InterpreterCreateQuery::TableProperties & properties, LoadingStrictnessLevel mode)
 {
+    /// This function creates the table under a temporary name, populates it, and then atomically publishes it
+    /// under the final name. It serves both REPLACE / CREATE OR REPLACE (publish via EXCHANGE / rename) and a
+    /// plain `CREATE TABLE ... AS SELECT` (no REPLACE; publish via a plain RENAME that fails if the target
+    /// exists). The plain-create case is routed here (only for Atomic databases) so a denied or failing
+    /// populating INSERT SELECT leaves no empty orphan table behind (issue #26746).
+    const bool is_plain_create = !create.replace_table && !create.create_or_replace && !create.replace_view;
+
     /// Replicated database requires separate contexts for each DDL query
     ContextPtr current_context = getContext();
     if (auto txn = current_context->getZooKeeperMetadataTransaction())
@@ -2448,6 +2386,30 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         return drop_context;
     };
 
+    /// The temporary table is an implementation detail: renaming it to the final name and dropping it on
+    /// failure are internal operations that must not require the user to hold RENAME/DROP privileges on it.
+    /// A plain `CREATE TABLE ... AS SELECT` only requires CREATE + INSERT (+ SELECT on the sources, still
+    /// checked by the populating INSERT SELECT below, which runs as the user), so those internal steps run
+    /// with a full-access context derived from the global context -- mirroring how inner tables of a
+    /// materialized view are dropped (see `InterpreterDropQuery::executeDropQuery`). Settings and any
+    /// Replicated-database ZooKeeper transaction are propagated so the operations behave and replicate
+    /// correctly. This is used only for the plain-create case; REPLACE keeps running as the user (its
+    /// required access already includes DROP).
+    auto make_internal_context = [&]() -> ContextMutablePtr
+    {
+        ContextMutablePtr internal_context = Context::createCopy(current_context->getGlobalContext());
+        internal_context->makeQueryContext();
+        internal_context->setSettings(current_context->getSettingsRef());
+        internal_context->setDDLOrOnClusterInternal(true);
+        if (auto txn = current_context->getZooKeeperMetadataTransaction())
+        {
+            internal_context->setQueryKindReplicatedDatabaseInternal();
+            internal_context->setQueryContext(std::const_pointer_cast<Context>(current_context));
+            internal_context->initZooKeeperMetadataTransaction(txn, /*attach_existing=*/true);
+        }
+        return internal_context;
+    };
+
     auto ast_drop = make_intrusive<ASTDropQuery>();
     String table_to_replace_name = create.getTable();
 
@@ -2456,13 +2418,29 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         if (database->getUUID() == UUIDHelpers::Nil)
             throw Exception(ErrorCodes::INCORRECT_QUERY,
                             "{} query is supported only for Atomic databases",
-                            create.create_or_replace
-                ? (create.is_materialized_view ? "CREATE OR REPLACE MATERIALIZED VIEW"
-                    : (create.isView() ? "CREATE OR REPLACE VIEW" : "CREATE OR REPLACE TABLE"))
-                : "REPLACE TABLE");
+                            is_plain_create
+                ? "CREATE ... AS SELECT via a temporary table"
+                : (create.create_or_replace
+                    ? (create.is_materialized_view ? "CREATE OR REPLACE MATERIALIZED VIEW"
+                        : (create.isView() ? "CREATE OR REPLACE VIEW" : "CREATE OR REPLACE TABLE"))
+                    : "REPLACE TABLE"));
 
         if (mode <= LoadingStrictnessLevel::CREATE)
             database->checkTableNameLength(table_to_replace_name);
+
+        /// For a plain create the final name must not already exist. Check it up front so that (a) an
+        /// `IF NOT EXISTS` create on an existing table is a no-op that does not run (and does not require
+        /// access to) the SELECT, and (b) a plain create over an existing table fails fast with
+        /// `TABLE_ALREADY_EXISTS` before the (potentially expensive) populate. This check is not under the
+        /// table DDL guard, so it can race with a concurrent create; the final RENAME below re-establishes
+        /// correctness (it fails if the target appeared meanwhile, which for `IF NOT EXISTS` is a no-op).
+        if (is_plain_create && database->isTableExist(table_to_replace_name, current_context))
+        {
+            if (create.if_not_exists)
+                return {};
+            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists",
+                backQuoteIfNeed(create.getDatabase()), backQuoteIfNeed(table_to_replace_name));
+        }
     }
 
     /// A non-APPEND refreshable materialized view exclusively owns its target table. The replacement is
@@ -2552,7 +2530,15 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 
         auto ast_rename = make_intrusive<ASTRenameQuery>(ASTRenameQuery::Elements{std::move(elem)});
         ast_rename->dictionary = create.is_dictionary;
-        if (create.create_or_replace || create.replace_view)
+        if (is_plain_create)
+        {
+            /// Plain CREATE ... AS SELECT: the target must not exist. A plain RENAME asserts this and fails
+            /// with TABLE_ALREADY_EXISTS if a concurrent query created the target while we were populating the
+            /// temporary table (handled below for IF NOT EXISTS).
+            ast_rename->exchange = false;
+            ast_rename->rename_if_cannot_exchange = false;
+        }
+        else if (create.create_or_replace || create.replace_view)
         {
             /// CREATE OR REPLACE TABLE/VIEW
             /// Will execute ordinary RENAME instead of EXCHANGE if the target table does not exist
@@ -2569,18 +2555,38 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         FailPointInjection::pauseFailPoint(FailPoints::create_or_replace_before_rename);
 
         /// The size check runs once inside the rename's `DDLGuard`s via `setPreSwapCheck`.
-        /// If it throws, no rename happens and the catch block below drops the temp.
-        InterpreterRenameQuery interpreter_rename{ast_rename, current_context};
+        /// If it throws, no rename happens and the catch block below drops the temp. For a plain create the
+        /// rename publishes an internal temporary table under the final name, so it runs with a full-access
+        /// context (the user is not required to hold RENAME/DROP on the temporary table); REPLACE keeps
+        /// running as the user.
+        ContextPtr rename_context = is_plain_create ? ContextPtr{make_internal_context()} : current_context;
+        InterpreterRenameQuery interpreter_rename{ast_rename, rename_context};
         interpreter_rename.setPreSwapCheck(
             [&current_context](const StorageID & to_drop_id)
             {
                 if (auto to_drop = DatabaseCatalog::instance().tryGetTable(to_drop_id, current_context))
                     to_drop->checkTableSizeBelowDropLimit(current_context);
             });
-        interpreter_rename.execute();
+        try
+        {
+            interpreter_rename.execute();
+        }
+        catch (const Exception & e)
+        {
+            /// A concurrent query created the target while we were populating the temporary table. For a plain
+            /// `CREATE TABLE IF NOT EXISTS ... AS SELECT` this is a no-op: drop the temporary table and return
+            /// without error. For a plain create without IF NOT EXISTS (and for REPLACE) the error propagates.
+            if (is_plain_create && create.if_not_exists && e.code() == ErrorCodes::TABLE_ALREADY_EXISTS)
+            {
+                InterpreterDropQuery(ast_drop, make_internal_context()).execute();
+                create.setTable(table_to_replace_name);
+                return {};
+            }
+            throw;
+        }
         renamed = true;
 
-        if (!interpreter_rename.renamedInsteadOfExchange())
+        if (!is_plain_create && !interpreter_rename.renamedInsteadOfExchange())
         {
             /// `pre_swap_check` already gated this; bypass to avoid double-consuming
             /// the `force_drop_table` flag inside `Context::checkCanBeDropped`.
@@ -2602,10 +2608,12 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
     catch (...)
     {
         /// Drop the temp table we just created if it was not renamed to the target name.
-        /// Bypassing the size guard is safe here: the temp name is unique to this call.
+        /// Bypassing the size guard is safe here: the temp name is unique to this call. For a plain create
+        /// use a full-access context: the user is not required to hold DROP on the internal temporary table
+        /// (its cleanup must not turn a denied source SELECT into an ACCESS_DENIED on the temporary table).
         if (created && !renamed)
         {
-            auto drop_context = make_drop_context(/*bypass_size_guard=*/true);
+            auto drop_context = is_plain_create ? make_internal_context() : make_drop_context(/*bypass_size_guard=*/true);
             try
             {
                 InterpreterDropQuery(ast_drop, drop_context).execute();
