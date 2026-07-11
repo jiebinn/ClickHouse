@@ -1194,6 +1194,11 @@ struct FunctionsStressTestThread
     ColumnsWithTypeAndName valid_args; // rows of `args` on which the function didn't throw
     ColumnPtr result;
 
+    /// Set by checkAndFixupColumn (stress-test path) if any executed column - the bulk result or
+    /// any per-row result before it is merged - had a Decimal/DateTime64/Time64 scale diverging
+    /// from its declared type. Read at the stash site to skip stashing such a producer's result.
+    bool result_scale_divergent = false;
+
     /// Protects `operation`.
     /// Locked by watchdog thread when reading other threads' `operation` values (without mutating them).
     /// Correspondingly, must be locked by this thread when mutating `operation`, but not necessarily
@@ -1445,6 +1450,7 @@ struct FunctionsStressTestThread
             resolver.reset();
             valid_args.clear();
             result.reset();
+            result_scale_divergent = false;
 
             {
                 auto lock = lockMutex();
@@ -1678,6 +1684,22 @@ struct FunctionsStressTestThread
             throw Exception(ErrorCodes::INCORRECT_DATA, "function returned unexpected number of rows: {} instead of {}", column->size(), expected_rows);
         if (!columnMatchesType(*column, *data_type))
             throw Exception(ErrorCodes::INCORRECT_DATA, "function returned column of unexpected type: {} instead of {}", column->getName(), data_type->getName());
+
+        /// On the stress-test path (stats != nullptr), also detect a Decimal/DateTime64/Time64
+        /// scale that diverges from the declared type. getDataType() is scale-blind, so such a
+        /// column passes the check above; reusing it as another function's argument surfaces as a
+        /// misattributed LOGICAL_ERROR in an innocent consumer (arrayPushBack -> writeSlice, #108517).
+        /// This runs on both the bulk result and every per-row result before it is merged, so a
+        /// per-row divergence (row0 scale 3, row1 scale 7) is caught before insertRangeFrom (a raw
+        /// memcpy that does not rescale) hides it inside a merged column that matches the declared
+        /// scale. Attribute to the producing function and remember so the stash site skips it.
+        if (stats && !columnMatchesType(*column, *data_type, /*strict_decimal_scale=*/ true))
+        {
+            result_scale_divergent = true;
+            stats->reportProblem(P_SCALE_DIVERGENT_RESULT, fmt::format(
+                "function returned {} with a scale that diverges from its declared type; {}",
+                column->getName(), operation.describe()));
+        }
 
         auto apply = [&](IColumn & col)
         {
@@ -2065,20 +2087,17 @@ struct FunctionsStressTestThread
         }
         FunctionStats & stats = function_stats[operation.function_idx];
 
-        /// A Decimal/DateTime64/Time64 result column whose scale diverges from its declared type is
+        /// A Decimal/DateTime64/Time64 column whose scale diverges from its declared type is
         /// structurally inconsistent (getDataType() is scale-blind, so it passes checkAndFixupColumn's
         /// type check). Reusing it as another function's argument surfaces as a misattributed
         /// LOGICAL_ERROR in an innocent consumer such as arrayPushBack -> writeSlice (issue #108517).
-        /// Attribute it to the producing function and never stash it for reuse. This is the complete
-        /// cut of the propagation path: generated random arguments are always scale-consistent (built
-        /// via type->createColumn()), so additional_random_values is the only place a divergent column
-        /// can enter as an argument.
-        const bool result_scale_divergent = !columnMatchesType(*result, *result_type, /*strict_decimal_scale=*/ true);
-        if (result_scale_divergent)
-            stats.reportProblem(P_SCALE_DIVERGENT_RESULT, fmt::format(
-                "function returned {} with a scale that diverges from its declared type; {}",
-                result->getName(), operation.describe()));
-
+        /// result_scale_divergent was set by checkAndFixupColumn on the bulk result and on every
+        /// per-row result before merging, so a per-row divergence is caught even though the merged
+        /// column may end up matching the declared scale. Never stash such a producer's result. This
+        /// is the complete cut of the propagation path: generated random arguments are always
+        /// scale-consistent (built via type->createColumn()), so additional_random_values is the only
+        /// place a divergent column can enter as an argument.
+        ///
         /// Maybe add result to additional_random_values.
         if (!result_scale_divergent && thread_local_rng() % 8 == 0 && result->byteSize() < (16ul << 10))
         {
