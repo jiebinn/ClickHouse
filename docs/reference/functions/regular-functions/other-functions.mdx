@@ -2406,6 +2406,7 @@ Certain HTTP headers (e.g., `Authentication` and `X-ClickHouse-*`) are restricte
 
 <Note>
 **Setting `allow_get_client_http_header` is required**
+
 The function requires the setting `allow_get_client_http_header` to be enabled.
 The setting is not enabled by default for security reasons, because some headers, such as `Cookie`, could contain sensitive info.
 </Note>
@@ -4725,6 +4726,7 @@ Accumulates the states of an aggregate function for each row of a data block.
 
 <Warning>
 **Deprecated**
+
 The state is reset for each new block of data.
 Due to this error-prone behavior the function has been deprecated, and you are advised to use [window functions](/reference/functions/window-functions/index) instead.
 You can use setting [`allow_deprecated_error_prone_window_functions`](/reference/settings/session-settings#allow_deprecated_error_prone_window_functions) to allow usage of this function.
@@ -4781,6 +4783,7 @@ The function calculates the total number of active (concurrent) events for each 
 
 <Tip>
 **Requirements**
+
 Events must be ordered by the start time in ascending order.
 If this requirement is violated the function raises an exception.
 Every data block is processed separately.
@@ -4789,6 +4792,7 @@ If events from different data blocks overlap then they can not be processed corr
 
 <Warning>
 **Deprecated**
+
 It is advised to use [window functions](/reference/functions/window-functions/index) instead.
 </Warning>
 
@@ -4833,6 +4837,7 @@ Returns `0` for the first row, and for subsequent rows the difference to the pre
 
 <Warning>
 **Deprecated**
+
 Only returns differences inside the currently processed data block.
 Because of this error-prone behavior, the function is deprecated.
 It is advised to use [window functions](/reference/functions/window-functions/index) instead.
@@ -4936,6 +4941,7 @@ Calculates the difference between consecutive row values in a data block, but un
 
 <Warning>
 **Deprecated**
+
 Only returns differences inside the currently processed data block.
 Because of this error-prone behavior, the function is deprecated.
 It is advised to use [window functions](/reference/functions/window-functions/index) instead.
