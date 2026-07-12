@@ -884,7 +884,19 @@ bool CachedOnDiskReadBufferFromFile::predownloadForFileSegment(
                     /// waiting on this segment can take over instead of waiting for a download that
                     /// will never finish. This mirrors the EOF handling in readFromFileSegment.
                     if (file_segment.isDownloader())
+                    {
+                        /// Withdraw the reader from the file segment before releasing the segment
+                        /// (only the downloader may do it). `setDownloadFinishedWithoutContinuation`
+                        /// publishes `PARTIALLY_DOWNLOADED_NO_CONTINUATION` and wakes up the waiters,
+                        /// and from that moment another thread could take the still-registered
+                        /// reader (`FileSegment::extractRemoteFileReader`, or the background
+                        /// download) and start mutating it, while this frame still reads `state.buf`
+                        /// in the diagnostics below (`eof` may even call `next`) and restores its
+                        /// internal buffer in the `SCOPE_EXIT` above — a data race. After the
+                        /// withdrawal we own the reader exclusively.
+                        file_segment.resetRemoteFileReader();
                         file_segment.setDownloadFinishedWithoutContinuation();
+                    }
 
                     /// The remote object may have been overwritten with shorter content
                     /// between listing and reading. Check the actual remote file metadata (size and
@@ -1024,6 +1036,15 @@ bool CachedOnDiskReadBufferFromFile::predownloadForFileSegment(
                 /// TODO: allow seek more than once with seek avoiding.
 
                 state.bytes_to_predownload = 0;
+
+                /// The failed reservation (or cache write) above has already withdrawn the reader
+                /// from the file segment (`FileSegment::setDownloadFailedUnlocked`), so the waiters
+                /// woken up by `completePartAndResetDownloader` cannot reach it, and the buffer
+                /// restore in the `SCOPE_EXIT` above and the bypass handoff (`swap`) in
+                /// `readFromFileSegment` stay race-free. Withdraw it explicitly anyway (a no-op
+                /// today) so that the invariant — once another thread may reuse the reader, nothing
+                /// here may touch it — does not silently depend on that distant reset.
+                file_segment.resetRemoteFileReader();
                 file_segment.completePartAndResetDownloader();
                 chassert(file_segment.state() == FileSegment::State::PARTIALLY_DOWNLOADED_NO_CONTINUATION);
 
