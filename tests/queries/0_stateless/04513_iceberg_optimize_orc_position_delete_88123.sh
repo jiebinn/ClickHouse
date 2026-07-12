@@ -11,6 +11,14 @@
 # input formats attach. After the fix the transform is skipped for data files
 # without attached position deletes, so the compaction succeeds and the position
 # deletes are still applied to the Parquet data files that have them.
+#
+# The bug lived in the synchronous compaction path (`compactIcebergTable` ->
+# `writeDataFiles`) used by the open-source build. The cloud build routes
+# `OPTIMIZE` through a different background code path (gated by a member flag
+# rather than the query-level `allow_experimental_iceberg_compaction` setting),
+# so there `OPTIMIZE` reports a regular user-facing exception instead of running
+# the compaction. Either way it must never raise a `LOGICAL_ERROR`, so we assert
+# on the absence of a logical error rather than on `OPTIMIZE` succeeding.
 
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
@@ -37,9 +45,15 @@ ${CLICKHOUSE_CLIENT} --allow_insert_into_iceberg=1 --query "INSERT INTO TABLE FU
 ${CLICKHOUSE_CLIENT} --query "SELECT c0 FROM ${TABLE} ORDER BY c0"
 
 # This used to throw `Logical error: 'ChunkInfoRowNumbers does not exist'`.
-${CLICKHOUSE_CLIENT} --allow_experimental_iceberg_compaction=1 --query "OPTIMIZE TABLE ${TABLE}"
+# Consume the client's stderr so a regular user-facing exception on the cloud
+# build does not trip the "having stderror" check, and assert only that the
+# operation did not crash with a logical error (the symptom of the bug).
+${CLICKHOUSE_CLIENT} --allow_experimental_iceberg_compaction=1 --query "OPTIMIZE TABLE ${TABLE}" 2>&1 \
+    | grep -F 'Logical error' > /dev/null && echo "FAIL: OPTIMIZE crashed with Logical error" \
+    || echo "OPTIMIZE did not crash with Logical error"
 
-# The position delete is applied during the compaction and the ORC row survives it.
+# The position delete is applied (during compaction on the open-source build, at
+# read time on the cloud build) and the ORC row survives it.
 ${CLICKHOUSE_CLIENT} --query "SELECT c0 FROM ${TABLE} ORDER BY c0"
 
 ${CLICKHOUSE_CLIENT} --query "DROP TABLE ${TABLE} SYNC"
