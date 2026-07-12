@@ -115,3 +115,17 @@ SELECT * FROM (
     SELECT key, val FROM t_04366_single ORDER BY key LIMIT 0 BY key
 ) WHERE intDiv(1, toInt32(key)) > 0;
 DROP TABLE t_04366_single;
+
+-- Semantic negative for non-key predicates: a throwing predicate on a NON-key column must
+-- stay ABOVE LimitBy. Group 'a' has two rows ordered by `ord`: the surviving row (ord = 0)
+-- has x = 1 (safe), the row LIMIT 1 BY drops (ord = 1) has x = 0. `intDiv(1, x)` therefore
+-- only throws if evaluated on the dropped row, i.e. only if the non-key conjunct is pushed
+-- below LimitBy. The un-pushed query returns the single surviving key without raising; a
+-- text-only EXPLAIN check would miss such a regression, so assert the observable result.
+DROP TABLE IF EXISTS t_04366_nonkey;
+CREATE TABLE t_04366_nonkey (key String, ord UInt64, x Int64) ENGINE = MergeTree ORDER BY (key, ord)
+AS SELECT 'a' AS key, number AS ord, if(number = 0, 1, 0) AS x FROM numbers(2);
+SELECT key FROM (
+    SELECT key, x FROM t_04366_nonkey ORDER BY key, ord LIMIT 1 BY key
+) WHERE intDiv(1, x) > 0;
+DROP TABLE t_04366_nonkey;
