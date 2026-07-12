@@ -750,20 +750,23 @@ bool CachedOnDiskReadBufferFromFile::completeFileSegmentAndGetNext()
     auto * current_file_segment = &info.file_segments->front();
     auto completed_range = current_file_segment->range();
 
+    /// Snapshot the read type for the cache log, then drop the current read state (and thus our
+    /// reference to the current segment's remote reader) before doing any potentially-throwing work.
+    /// Downloader ownership of this segment has already been released in `nextImplStep`, so another
+    /// thread may pick up the reusable remote reader as the next downloader and start mutating it. If
+    /// we keep `state->buf` pointing at that reader and something below throws — for example
+    /// `appendFilesystemCacheLog` hitting `bad_alloc` in `SystemLogBase::add`, or preparing the next
+    /// segment — the diagnostics in `nextImplStep`'s SCOPE_EXIT (`getInfoForLog`) would read the
+    /// reader concurrently with the new downloader — a data race.
+    const auto completed_read_type = state->read_type;
+    state.reset();
+
     if (cache_log)
-        appendFilesystemCacheLog(*current_file_segment, state->read_type);
+        appendFilesystemCacheLog(*current_file_segment, completed_read_type);
 
     chassert(file_offset_of_buffer_end > completed_range.right);
     info.cache_file_reader.reset();
     info.remote_file_reader.reset();
-
-    /// Drop the current read state (and thus our reference to the current segment's remote reader)
-    /// before the segment is completed and popped. Once the segment is completed, another thread may
-    /// pick up the reusable remote reader as the next downloader and start mutating it. If we keep
-    /// `state->buf` pointing at that reader and something below throws (e.g. while preparing the next
-    /// segment), the diagnostics in `nextImplStep`'s SCOPE_EXIT (`getInfoForLog`) would read the
-    /// reader concurrently with the new downloader — a data race.
-    state.reset();
 
     info.file_segments->completeAndPopFront(
         info.cache_settings.allow_background_download,
