@@ -1,3 +1,7 @@
+-- The Bad-cast abort only happens with the new analyzer, and the declared tuple type name
+-- differs between analyzers (named vs unnamed), so pin the analyzer for a stable reference.
+SET enable_analyzer = 1;
+
 DROP TABLE IF EXISTS t_04515;
 CREATE TABLE t_04515 (key UInt8, value LowCardinality(String)) ENGINE = MergeTree ORDER BY key;
 INSERT INTO t_04515 SELECT number % 3, toString(number) FROM numbers(100);
