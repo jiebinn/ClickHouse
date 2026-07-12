@@ -7962,6 +7962,19 @@ async function reconcileStartup() {
         && history.state.tabName === url_tab_name
         && pruned_blank_ids.has(history.state.tabId));
 
+    /// A `stale_blank_reload` can still leave a query fragment in the URL: the pruned tab's own
+    /// text was encoded into the hash by the last `writeHistoryEntry`, so `has_url_query` is true
+    /// even for a tab the pruning counted as blank. When that text is itself blank (whitespace-only,
+    /// by the same `trim()` rule the pruning uses) the hash is only a stale echo of the dropped
+    /// blank tab — NOT a query the user wants restored — so it must be treated exactly like a bare
+    /// `?tab=`: non-authoritative everywhere below, never allowed to recreate or re-adopt the blank
+    /// tab. Otherwise the branches keyed on `has_url_query` would rebuild it and the trailing
+    /// `scheduleSave` would write it straight back to `IndexedDB`, defeating the pruning. A NON-blank
+    /// hash on a stale reload is instead a genuine unsaved edit that never reached `IndexedDB` before
+    /// the reload, so it stays authoritative and the tab is recreated with that real query,
+    /// preserving the edit.
+    const stale_blank_reload_bare = stale_blank_reload && (url_query || '').trim() === '';
+
     if (savedTabs.length) {
         if (bootstrap_dirty) {
             /// The user interacted with the bootstrap workspace while IndexedDB was still
@@ -8071,38 +8084,44 @@ async function reconcileStartup() {
             } else if (has_url_query && !url_tab_name && (match = savedTabs.find(t => t.query === url_query))) {
                 /// Unnamed URL with a query: a tab already holds this exact query, switch to it.
                 activeTabId = match.id;
-            } else if (has_url_query || !url_tab_name || !stale_blank_reload) {
-                /// Not found, but the URL is authoritative: it carries a query (a fresh/shared
-                /// link), is unnamed, or its bare `?tab=` is not a stale reload echo of a
+            } else if ((has_url_query && !stale_blank_reload_bare) || !url_tab_name || !stale_blank_reload) {
+                /// Not found, but the URL is authoritative: it carries a non-blank query (a
+                /// fresh/shared link, or a genuine unsaved edit whose tab was pruned before it
+                /// reached `IndexedDB`), is unnamed, or its `?tab=` is not a stale reload echo of a
                 /// just-pruned blank tab — either the reloaded history entry does not identify one
                 /// of the pruned blank tabs (by its stable `tabId`), or there is no history state at
                 /// all, showing this is a fresh external navigation rather than a reload (a shared
-                /// bare link, even one whose name collides with a pruned blank tab). Open a new tab
+                /// bare link, even one whose name collides with a pruned blank tab). A whitespace-only
+                /// hash echoing a pruned blank tab is excluded by `stale_blank_reload_bare` — it is
+                /// handled by the fallback below, not treated as authoritative. Open a new tab
                 /// carrying the name (if any) and query.
                 const t = makeTab(url_tab_name || undefined, url_query);
                 tabs.push(t);
                 activeTabId = t.id;
             } else {
-                /// Bare `?tab=Name` (no query) echoing one of the blank tabs pruned above, on a
-                /// reload (the history entry still describes that tab — see `stale_blank_reload`).
-                /// This is a plain reload whose active tab was a blank scratch tab we just
-                /// dropped: the URL only echoes that tab's title and carries no query, so it
-                /// is NOT authoritative. Recreating it would resurrect the blank tab (and the
-                /// trailing `scheduleSave` would write it back to `IndexedDB`), defeating the very
-                /// pruning above. Instead fall back to the persisted active tab if it survived,
-                /// otherwise the first saved tab (mirrors the plain-load branch).
+                /// `?tab=Name` echoing one of the blank tabs pruned above, on a reload (the history
+                /// entry still describes that tab — see `stale_blank_reload`), with no query or only
+                /// a blank whitespace-only one (`stale_blank_reload_bare`). This is a plain reload
+                /// whose active tab was a blank scratch tab we just dropped: the URL only echoes that
+                /// tab's title and its blank text, so it is NOT authoritative. Recreating it would
+                /// resurrect the blank tab (and the trailing `scheduleSave` would write it back to
+                /// `IndexedDB`), defeating the very pruning above. Instead fall back to the persisted
+                /// active tab if it survived, otherwise the first saved tab (mirrors the plain-load
+                /// branch).
                 activeTabId = (loaded.meta && savedTabs.some(t => t.id === loaded.meta.activeTabId))
                     ? loaded.meta.activeTabId : savedTabs[0].id;
             }
         }
         await activateTab(activeTabId);
         activated = true;
-    } else if (url_tab_name && (has_url_query || !stale_blank_reload)) {
-        /// No saved tabs survived, and the URL is authoritative: it carries a query (a
-        /// fresh/shared link), or its bare `?tab=` is not a stale reload echo of a just-pruned
-        /// blank tab (a first-ever visit, or a shared bare `?tab=Name` link — including one whose
-        /// name collides with a pruned blank tab, since a fresh navigation carries no history
-        /// state). Adopt the name for the bootstrap tab.
+    } else if (url_tab_name && ((has_url_query && !stale_blank_reload_bare) || !stale_blank_reload)) {
+        /// No saved tabs survived, and the URL is authoritative: it carries a non-blank query (a
+        /// fresh/shared link, or a genuine unsaved edit whose tab was pruned before it reached
+        /// `IndexedDB`), or its `?tab=` is not a stale reload echo of a just-pruned blank tab (a
+        /// first-ever visit, or a shared bare `?tab=Name` link — including one whose name collides
+        /// with a pruned blank tab, since a fresh navigation carries no history state). A
+        /// whitespace-only hash echoing a pruned blank tab is excluded by `stale_blank_reload_bare`,
+        /// falling to the stale-echo branch below instead. Adopt the name for the bootstrap tab.
         const t = getActiveTab();
         if (t) {
             t.title = url_tab_name;
@@ -8119,9 +8138,11 @@ async function reconcileStartup() {
     } else {
         /// Either a plain load with no `?tab=` at all (e.g. a first-ever visit), or a plain
         /// reload whose every saved tab was blank and got pruned above. In the latter case the
-        /// URL still carries a bare `?tab=<dropped title>` — recognized as a stale reload echo by
-        /// `stale_blank_reload` (the reloaded history entry's stable `tabId` matches a blank tab this
-        /// load pruned) — but it is only a stale echo of a tab we just dropped and is
+        /// URL still carries a `?tab=<dropped title>` (with no query, or only the dropped tab's own
+        /// blank whitespace one) — recognized as a stale reload echo by `stale_blank_reload` (the
+        /// reloaded history entry's stable `tabId` matches a blank tab this load pruned) and, when a
+        /// whitespace hash is present, kept non-authoritative by `stale_blank_reload_bare` — but it
+        /// is only a stale echo of a tab we just dropped and is
         /// NOT authoritative: adopting it (the branch above) would rename the fresh bootstrap tab
         /// back to the dropped blank title, and the trailing `scheduleSave` would persist it again,
         /// resurrecting the very blank tab the pruning removed. Keep the default fresh bootstrap
@@ -8149,12 +8170,14 @@ async function reconcileStartup() {
     /// happens to carry. Otherwise a shared `?tab=Name#<query>` URL with no `param_x` would
     /// inherit the matched tab's stale `param_x` and auto-run with it. So each placeholder
     /// detected in the query takes its URL value when present and is cleared to empty (its
-    /// default) when absent. Skipped on a stale reload, where the saved params are newer.
+    /// default) when absent. Skipped on a stale reload, where the saved params are newer, and on a
+    /// blank stale-reload echo (`stale_blank_reload_bare`), whose whitespace hash is not
+    /// authoritative and must not overwrite the surviving/bootstrap tab's own parameters.
     /// Done after reconciliation so it targets the reconciled active tab; the auto-run itself
     /// is still gated on run=1 below. Also skipped when the user already edited the bootstrap
     /// workspace during the load window (`bootstrap_dirty`): their live params are newer and
     /// must not be replaced by the URL's.
-    if (url_query && !preserve_local_query && !bootstrap_dirty) {
+    if (url_query && !stale_blank_reload_bare && !preserve_local_query && !bootstrap_dirty) {
         const params_ok = await updateQueryParams();
         if (params_ok) {
             const urlParamValues = {};
@@ -8178,8 +8201,10 @@ async function reconcileStartup() {
     /// Auto-run only when the URL is still authoritative. On a stale reload
     /// (`preserve_local_query`), the persisted local edit is newer than the URL and was never
     /// run by the user, so the stale `run=1` must not execute it; just sync the restored tab
-    /// into the URL instead (with the `run=1` directive already dropped above).
-    if (defer_run_for_reconcile && query_area.value && !preserve_local_query && !bootstrap_dirty) {
+    /// into the URL instead (with the `run=1` directive already dropped above). Likewise on a
+    /// blank stale-reload echo (`stale_blank_reload_bare`): the URL is a stale echo of a pruned
+    /// blank tab, so its `run=1` must not auto-run whatever query the fallback tab restored.
+    if (defer_run_for_reconcile && !stale_blank_reload_bare && query_area.value && !preserve_local_query && !bootstrap_dirty) {
         postAll();   /// saves history itself on completion
     } else if (activated) {
         syncHistory();   /// reflect the restored active tab in the URL (replaceState)
