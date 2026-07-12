@@ -38,6 +38,8 @@ public:
 
     const WindowDescription & getWindowDescription() const;
 
+    QueryPlanStepPtr clone() const override;
+
 private:
     void updateOutputHeader() override;
 
