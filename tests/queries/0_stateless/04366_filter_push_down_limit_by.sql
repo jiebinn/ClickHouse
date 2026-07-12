@@ -1,8 +1,10 @@
--- Filter push down below LimitByStep / NegativeLimitByStep on LIMIT BY key columns (issue #110112).
--- A predicate referencing only the LIMIT BY key columns is safe to apply before the
--- LIMIT BY (it only removes whole groups), so it must reach storage as the driving
--- primary key condition. This covers positive LIMIT BY, negative LIMIT BY, and the
--- mixed-sign decompositions (which the planner lowers to combinations of the two steps).
+-- Filter push down below LimitByStep on LIMIT BY key columns (issue #110112).
+-- A predicate referencing only the LIMIT BY key columns removes whole groups, so it is
+-- result-equivalent above or below the LIMIT BY and must reach storage as the driving
+-- primary key condition. It is only pushed for `OFFSET 0` and `LIMIT >= 1`: only then is
+-- every non-empty group guaranteed a surviving row, so a throwing key predicate is not
+-- evaluated on a group the step would otherwise discard (see the exception-semantics test
+-- below). OFFSET and negative LIMIT BY forms are intentionally NOT pushed.
 
 SET enable_analyzer = 1;
 SET query_plan_filter_push_down = 1;
@@ -19,7 +21,7 @@ OPTIMIZE TABLE t_04366 FINAL;
 -- PrimaryKey condition text, not on arbitrary `Granules:` lines (which can come from
 -- unrelated index sections). = 0 when the filter stays above and the PK sees no condition.
 
--- LIMIT n BY: key-column conjunct pushed below LimitBy -> PK condition on key.
+-- LIMIT n BY (OFFSET 0, n >= 1): key-column conjunct pushed below LimitBy -> PK condition.
 SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
 FROM (
     EXPLAIN indexes = 1
@@ -28,7 +30,8 @@ FROM (
     ) WHERE key = '5'
 );
 
--- LIMIT n OFFSET m BY: the per-group offset is unaffected by dropping whole groups.
+-- LIMIT n OFFSET m BY (m > 0): NOT pushed. A group of size <= m is fully dropped, so a
+-- pushed throwing key predicate could be evaluated on rows the query never reaches.
 SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
 FROM (
     EXPLAIN indexes = 1
@@ -37,41 +40,12 @@ FROM (
     ) WHERE key = '5'
 );
 
--- LIMIT -n BY: negative LIMIT BY (NegativeLimitByStep) is equally safe.
+-- LIMIT -n BY (NegativeLimitByStep): NOT pushed (a small group can be fully trimmed).
 SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
 FROM (
     EXPLAIN indexes = 1
     SELECT * FROM (
         SELECT key, ts, val FROM t_04366 ORDER BY key, ts LIMIT -1 BY key
-    ) WHERE key = '5'
-);
-
--- LIMIT -n OFFSET -m BY: both negative -> single NegativeLimitByStep.
-SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
-FROM (
-    EXPLAIN indexes = 1
-    SELECT * FROM (
-        SELECT key, ts, val FROM t_04366 ORDER BY key, ts LIMIT -2 OFFSET -1 BY key
-    ) WHERE key = '5'
-);
-
--- LIMIT -n OFFSET m BY: mixed sign -> LimitBy(offset) then NegativeLimitBy; the filter
--- must push below both.
-SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
-FROM (
-    EXPLAIN indexes = 1
-    SELECT * FROM (
-        SELECT key, ts, val FROM t_04366 ORDER BY key, ts LIMIT -2 OFFSET 1 BY key
-    ) WHERE key = '5'
-);
-
--- LIMIT n OFFSET -m BY: mixed sign -> NegativeLimitBy(offset) then LimitBy; the filter
--- must push below both.
-SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
-FROM (
-    EXPLAIN indexes = 1
-    SELECT * FROM (
-        SELECT key, ts, val FROM t_04366 ORDER BY key, ts LIMIT 2 OFFSET -1 BY key
     ) WHERE key = '5'
 );
 
@@ -106,3 +80,15 @@ SELECT count(), sum(val) FROM (
 );
 
 DROP TABLE t_04366;
+
+-- Exception-semantics regression: a singleton group '0' dropped by OFFSET 1 must NOT be
+-- evaluated by a throwing key predicate. The un-pushed query returns empty (the group is
+-- discarded before WHERE); pushing intDiv(1, toInt32(key)) below LIMIT BY would raise
+-- Division by zero on the input row. Because OFFSET != 0 is not pushed, this stays empty.
+DROP TABLE IF EXISTS t_04366_single;
+CREATE TABLE t_04366_single (key String, val UInt64) ENGINE = MergeTree ORDER BY key
+AS SELECT '0' AS key, number AS val FROM numbers(1);
+SELECT * FROM (
+    SELECT key, val FROM t_04366_single ORDER BY key LIMIT 1 OFFSET 1 BY key
+) WHERE intDiv(1, toInt32(key)) > 0;
+DROP TABLE t_04366_single;
