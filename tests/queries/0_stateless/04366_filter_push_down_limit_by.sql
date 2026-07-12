@@ -49,6 +49,17 @@ FROM (
     ) WHERE key = '5'
 );
 
+-- LIMIT 0 BY (getGroupLength() == 0): NOT pushed. The step discards every row of every
+-- group, so a pushed throwing key predicate would be evaluated on rows the original query
+-- never reaches (see the LIMIT 0 BY exception-semantics regression below).
+SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
+FROM (
+    EXPLAIN indexes = 1
+    SELECT * FROM (
+        SELECT key, ts, val FROM t_04366 ORDER BY key, ts LIMIT 0 BY key
+    ) WHERE key = '5'
+);
+
 -- Mixed predicate: the key conjunct pushes (PK condition on key), the non-key conjunct
 -- stays above.
 SELECT countIf(match(explain, 'Condition: \(key in ')) > 0 AS pushed
@@ -90,5 +101,13 @@ CREATE TABLE t_04366_single (key String, val UInt64) ENGINE = MergeTree ORDER BY
 AS SELECT '0' AS key, number AS val FROM numbers(1);
 SELECT * FROM (
     SELECT key, val FROM t_04366_single ORDER BY key LIMIT 1 OFFSET 1 BY key
+) WHERE intDiv(1, toInt32(key)) > 0;
+
+-- Same exception-semantics regression for `LIMIT 0 BY` (getGroupLength() == 0): the group
+-- is fully discarded, so the un-pushed query is empty. Pushing intDiv(1, toInt32(key))
+-- below LIMIT BY would raise Division by zero on the input row. Because LIMIT 0 BY is not
+-- pushed, this stays empty rather than raising.
+SELECT * FROM (
+    SELECT key, val FROM t_04366_single ORDER BY key LIMIT 0 BY key
 ) WHERE intDiv(1, toInt32(key)) > 0;
 DROP TABLE t_04366_single;
