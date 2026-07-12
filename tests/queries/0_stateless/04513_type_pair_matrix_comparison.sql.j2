@@ -52,7 +52,7 @@ SELECT '{{ label }}'
 , materialize({{ l1 }}) {{ op }} materialize({{ r1 }}), {{ l1 }} {{ op }} materialize({{ r1 }}), materialize({{ l1 }}) {{ op }} {{ r1 }}, {{ l1 }} {{ op }} {{ r1 }}
 {%- endfor -%}
 {%- for op in ops -%}
-, materialize({{ l2 }}) {{ op }} materialize({{ r2 }}), materialize({{ l1 }}) {{ op }} materialize({{ r2 }}), materialize({{ l2 }}) {{ op }} materialize({{ r1 }})
+, materialize({{ l2 }}) {{ op }} materialize({{ r2 }}), materialize({{ l1 }}) {{ op }} materialize({{ r2 }}), materialize({{ l2 }}) {{ op }} materialize({{ r1 }}), {{ l2 }} {{ op }} materialize({{ r2 }}), materialize({{ l2 }}) {{ op }} {{ r2 }}, {{ l2 }} {{ op }} {{ r2 }}
 {%- endfor -%};
 {%- endmacro %}
 
