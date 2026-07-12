@@ -183,6 +183,11 @@ def aggregate_generators(docs_dir):
     return gens
 
 
+# Pages whose basename does not normalise to the engine name (the SQL matches
+# case/separator-insensitively, but cannot bridge a genuinely different word).
+TABLE_ENGINE_PAGE_ALIASES = {"generate": "GenerateRandom"}
+
+
 def table_engine_generators(docs_dir, file_map):
     # One page per table engine, discovered from the migrated docs tree the
     # same way as aggregate functions: every engine reference page carrying the
@@ -205,7 +210,7 @@ def table_engine_generators(docs_dir, file_map):
         gens.append({
             "name": f"table-engine:{basename}",
             "sql": ["generate-table-engines.sql"],
-            "params": {"engine": basename},
+            "params": {"engine": TABLE_ENGINE_PAGE_ALIASES.get(basename, basename)},
             "outfile": "temp-table-engine.md",
             "dest": docu,
             "method": "markers",
