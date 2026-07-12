@@ -251,7 +251,11 @@ def database_engine_generators(docs_dir, file_map):
     return gens
 
 
-DATA_TYPE_PAGE_ALIASES = {"boolean": "Bool", "newjson": "JSON"}
+DATA_TYPE_PAGE_ALIASES = {
+    "boolean": "Bool", "newjson": "JSON",
+    # Multi-family pages: one family's Documentation is the whole page body.
+    "float": "Float64", "int-uint": "Int32", "geo": "Point",
+}
 
 
 def data_type_generators(docs_dir, file_map):
