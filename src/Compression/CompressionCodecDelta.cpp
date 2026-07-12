@@ -8,14 +8,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTFunction.h>
 
-#ifdef __SSE2__
-#    include <emmintrin.h>
-#endif
-
-#if defined(__aarch64__) && defined(__ARM_NEON)
-#    include <arm_neon.h>
-#    pragma clang diagnostic ignored "-Wreserved-identifier"
-#endif
+#include <cstring>
+#include <utility>
 
 
 namespace DB
@@ -102,121 +96,60 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
 /** Delta decoding is an inclusive prefix sum of the deltas, and the scalar loop is limited by the
   * loop-carried accumulator to at most one element per cycle. Instead, process the data in 16-byte
   * registers: log2(lanes) shift-and-add steps compute the prefix sum within a register, then the
-  * running total of all previous registers is added to every lane, and the last lane is broadcast
-  * to become the running total for the next register.
+  * running total of all previous registers is added to every lane, and the last lane becomes the
+  * running total for the next register.
+  *
+  * The kernel is written with generic clang vectors; the shuffles compile to single instructions
+  * on the SSE2 (x86_64) and NEON (AArch64) baselines, so no arch-specific code or runtime dispatch
+  * is needed. Lanes are loaded in native byte order, which matches the little-endian on-disk
+  * format on these platforms; others fall back to the scalar loop below.
   */
-#ifdef __SSE2__
+#if defined(__SSE2__) || (defined(__aarch64__) && defined(__ARM_NEON))
+#define DELTA_CODEC_SIMD_DECOMPRESS
 
 template <typename T>
-T decompressBlocks(const char * source, char * dest, size_t blocks)
-{
-    __m128i sum = _mm_setzero_si128();
-    for (size_t i = 0; i < blocks; ++i)
-    {
-        __m128i x = _mm_loadu_si128(reinterpret_cast<const __m128i *>(source + i * 16));
-        if constexpr (sizeof(T) == 1)
-        {
-            x = _mm_add_epi8(x, _mm_slli_si128(x, 1));
-            x = _mm_add_epi8(x, _mm_slli_si128(x, 2));
-            x = _mm_add_epi8(x, _mm_slli_si128(x, 4));
-            x = _mm_add_epi8(x, _mm_slli_si128(x, 8));
-            x = _mm_add_epi8(x, sum);
-            __m128i t = _mm_unpackhi_epi8(x, x);
-            t = _mm_shufflehi_epi16(t, 0xFF);
-            sum = _mm_shuffle_epi32(t, 0xEE);
-        }
-        else if constexpr (sizeof(T) == 2)
-        {
-            x = _mm_add_epi16(x, _mm_slli_si128(x, 2));
-            x = _mm_add_epi16(x, _mm_slli_si128(x, 4));
-            x = _mm_add_epi16(x, _mm_slli_si128(x, 8));
-            x = _mm_add_epi16(x, sum);
-            sum = _mm_shuffle_epi32(_mm_shufflehi_epi16(x, 0xFF), 0xEE);
-        }
-        else if constexpr (sizeof(T) == 4)
-        {
-            x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
-            x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
-            x = _mm_add_epi32(x, sum);
-            sum = _mm_shuffle_epi32(x, 0xFF);
-        }
-        else
-        {
-            x = _mm_add_epi64(x, _mm_slli_si128(x, 8));
-            x = _mm_add_epi64(x, sum);
-            sum = _mm_shuffle_epi32(x, 0xEE);
-        }
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(dest + i * 16), x);
-    }
+using DeltaVec [[gnu::vector_size(16)]] = T;
 
-    if constexpr (sizeof(T) == 8)
-        return static_cast<T>(_mm_cvtsi128_si64(sum));
-    else
-        return static_cast<T>(_mm_cvtsi128_si32(sum));
+/// Shift the lanes up by `shift` positions, filling the low lanes with zeros.
+template <size_t shift, typename T, size_t... lane>
+DeltaVec<T> shiftLanesIn(DeltaVec<T> x, std::index_sequence<lane...>)
+{
+    return __builtin_shufflevector(DeltaVec<T>{}, x, (lane < shift ? 0 : sizeof...(lane) + lane - shift)...);
 }
 
-#elif defined(__aarch64__) && defined(__ARM_NEON)
+template <typename T, size_t... lane>
+DeltaVec<T> broadcastLastLane(DeltaVec<T> x, std::index_sequence<lane...>)
+{
+    return __builtin_shufflevector(x, x, (lane * 0 + sizeof...(lane) - 1)...);
+}
 
 template <typename T>
 T decompressBlocks(const char * source, char * dest, size_t blocks)
 {
-    const uint8x16_t zero = vdupq_n_u8(0);
-    uint8x16_t sum = zero;
+    constexpr size_t lanes = 16 / sizeof(T);
+    constexpr auto index = std::make_index_sequence<lanes>{};
+
+    DeltaVec<T> sum{};
     for (size_t i = 0; i < blocks; ++i)
     {
-        uint8x16_t bytes = vld1q_u8(reinterpret_cast<const uint8_t *>(source) + i * 16);
-        if constexpr (sizeof(T) == 1)
-        {
-            uint8x16_t x = bytes;
-            x = vaddq_u8(x, vextq_u8(zero, x, 15));
-            x = vaddq_u8(x, vextq_u8(zero, x, 14));
-            x = vaddq_u8(x, vextq_u8(zero, x, 12));
-            x = vaddq_u8(x, vextq_u8(zero, x, 8));
-            x = vaddq_u8(x, sum);
-            sum = vdupq_laneq_u8(x, 15);
-            bytes = x;
-        }
-        else if constexpr (sizeof(T) == 2)
-        {
-            uint16x8_t x = vreinterpretq_u16_u8(bytes);
-            const uint16x8_t z = vreinterpretq_u16_u8(zero);
-            x = vaddq_u16(x, vextq_u16(z, x, 7));
-            x = vaddq_u16(x, vextq_u16(z, x, 6));
-            x = vaddq_u16(x, vextq_u16(z, x, 4));
-            x = vaddq_u16(x, vreinterpretq_u16_u8(sum));
-            sum = vreinterpretq_u8_u16(vdupq_laneq_u16(x, 7));
-            bytes = vreinterpretq_u8_u16(x);
-        }
-        else if constexpr (sizeof(T) == 4)
-        {
-            uint32x4_t x = vreinterpretq_u32_u8(bytes);
-            const uint32x4_t z = vreinterpretq_u32_u8(zero);
-            x = vaddq_u32(x, vextq_u32(z, x, 3));
-            x = vaddq_u32(x, vextq_u32(z, x, 2));
-            x = vaddq_u32(x, vreinterpretq_u32_u8(sum));
-            sum = vreinterpretq_u8_u32(vdupq_laneq_u32(x, 3));
-            bytes = vreinterpretq_u8_u32(x);
-        }
-        else
-        {
-            uint64x2_t x = vreinterpretq_u64_u8(bytes);
-            const uint64x2_t z = vreinterpretq_u64_u8(zero);
-            x = vaddq_u64(x, vextq_u64(z, x, 1));
-            x = vaddq_u64(x, vreinterpretq_u64_u8(sum));
-            sum = vreinterpretq_u8_u64(vdupq_laneq_u64(x, 1));
-            bytes = vreinterpretq_u8_u64(x);
-        }
-        vst1q_u8(reinterpret_cast<uint8_t *>(dest) + i * 16, bytes);
+        DeltaVec<T> x;
+        memcpy(&x, source + i * 16, 16);
+        if constexpr (lanes >= 2)
+            x += shiftLanesIn<1>(x, index);
+        if constexpr (lanes >= 4)
+            x += shiftLanesIn<2>(x, index);
+        if constexpr (lanes >= 8)
+            x += shiftLanesIn<4>(x, index);
+        if constexpr (lanes >= 16)
+            x += shiftLanesIn<8>(x, index);
+        /// Update the running total from the local prefix sum, so that the broadcast stays off
+        /// the loop-carried dependency chain (which is then a single addition).
+        const DeltaVec<T> carry = broadcastLastLane(x, index);
+        x += sum;
+        sum += carry;
+        memcpy(dest + i * 16, &x, 16);
     }
-
-    if constexpr (sizeof(T) == 1)
-        return vgetq_lane_u8(sum, 0);
-    else if constexpr (sizeof(T) == 2)
-        return vgetq_lane_u16(vreinterpretq_u16_u8(sum), 0);
-    else if constexpr (sizeof(T) == 4)
-        return vgetq_lane_u32(vreinterpretq_u32_u8(sum), 0);
-    else
-        return vgetq_lane_u64(vreinterpretq_u64_u8(sum), 0);
+    return sum[0];
 }
 
 #endif
@@ -233,7 +166,7 @@ UInt32 decompressDataForType(const char * source, UInt32 source_size, char * des
     T accumulator{};
     const char * const source_end = source + source_size;
 
-#if defined(__SSE2__) || (defined(__aarch64__) && defined(__ARM_NEON))
+#ifdef DELTA_CODEC_SIMD_DECOMPRESS
     const size_t blocks = source_size / 16;
     accumulator = decompressBlocks<T>(source, dest, blocks);
     source += blocks * 16;
