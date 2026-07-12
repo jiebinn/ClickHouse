@@ -63,42 +63,57 @@ ParsedRemoteFunctionArguments parseRemoteFunctionArguments(
     VectorWithMemoryTracking<std::pair<std::string, ASTPtr>> complex_args;
     if (!is_cluster_function && (named_collection = tryGetNamedCollectionWithOverrides(args, context, false, &complex_args, dependent_table_id)))
     {
-        validateNamedCollection<ValidateKeysMultiset<ExternalDatabaseEqualKeysSet>>(
-            *named_collection,
-            {"addresses_expr", "host", "hostname", "table"},
-            {"username", "user", "password", "sharding_key", "port", "database", "db"});
+        /// Simple literal overrides are already merged into `named_collection` by
+        /// tryGetNamedCollectionWithOverrides; only the complex (non-literal) overrides arrive in
+        /// `complex_args`. Load the collection's own values first and apply the complex overrides on
+        /// top, so that e.g. remote(nc, sharding_key = rand()) keeps the collection's database.
+        database = named_collection->getAnyOrDefault<String>({"db", "database"}, "default");
 
-        if (!complex_args.empty())
+        for (const auto & [arg_name, arg_ast] : complex_args)
         {
-            for (const auto & [arg_name, arg_ast] : complex_args)
+            if (arg_name == "database" || arg_name == "db")
             {
-                if (arg_name == "database" || arg_name == "db")
-                {
-                    /// A table function is allowed here (remote(nc, database = mysql(...))), mirroring the
-                    /// positional signature remote('addr', table_function()). Any other expression is a
-                    /// database name, so a non-function node never reaches TableFunctionFactory::get().
-                    const auto * function = arg_ast->as<ASTFunction>();
-                    if (function && TableFunctionFactory::instance().isTableFunctionName(function->name))
-                        remote_table_function_ptr = arg_ast;
-                    else
-                        database = checkAndGetLiteralArgument<String>(
-                            evaluateConstantExpressionForDatabaseName(arg_ast, context), "database");
-                }
-                else if (arg_name == "sharding_key")
-                    sharding_key = arg_ast;
+                /// A table function is allowed here (remote(nc, database = mysql(...))), mirroring the
+                /// positional signature remote('addr', table_function()). Any other expression is a
+                /// database name, so a non-function node never reaches TableFunctionFactory::get().
+                const auto * function = arg_ast->as<ASTFunction>();
+                if (function && TableFunctionFactory::instance().isTableFunctionName(function->name))
+                    remote_table_function_ptr = arg_ast;
                 else
-                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unexpected argument representation for {}", arg_name);
+                    database = checkAndGetLiteralArgument<String>(
+                        evaluateConstantExpressionForDatabaseName(arg_ast, context), "database");
             }
+            else if (arg_name == "sharding_key")
+                sharding_key = arg_ast;
+            else
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unexpected argument representation for {}", arg_name);
         }
+
+        /// A `table` key is meaningless when the target is a table function, so it is required only
+        /// otherwise: remote(nc, database = merge(...)) needs no dummy `table` in the collection.
+        ValidateKeysMultiset<ExternalDatabaseEqualKeysSet> required_keys{"addresses_expr", "host", "hostname"};
+        ValidateKeysMultiset<ExternalDatabaseEqualKeysSet> optional_keys{"username", "user", "password", "sharding_key", "port", "database", "db"};
+        if (remote_table_function_ptr)
+            optional_keys.insert("table");
         else
-            database = named_collection->getAnyOrDefault<String>({"db", "database"}, "default");
+            required_keys.insert("table");
+        validateNamedCollection<ValidateKeysMultiset<ExternalDatabaseEqualKeysSet>>(*named_collection, required_keys, optional_keys);
 
         cluster_description = named_collection->getOrDefault<String>("addresses_expr", "");
         if (cluster_description.empty() && named_collection->hasAny({"host", "hostname"}))
             cluster_description = named_collection->has("port")
                 ? named_collection->getAny<String>({"host", "hostname"}) + ':' + toString(named_collection->get<UInt64>("port"))
                 : named_collection->getAny<String>({"host", "hostname"});
-        table = named_collection->get<String>("table");
+        if (remote_table_function_ptr)
+        {
+            /// Match the positional remote('addr', table_function()) form: the parsed table id stays at
+            /// the meaningless parser default (`system.one`), which the callers rely on (it takes part
+            /// in the local-shard access check of `TableFunctionRemote`, while the engine skips it in
+            /// favor of analyzing the function itself).
+            database = "system";
+        }
+        else
+            table = named_collection->get<String>("table");
         username = named_collection->getAnyOrDefault<String>({"username", "user"}, "default");
         password = named_collection->getOrDefault<String>("password", "");
     }
