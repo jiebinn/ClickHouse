@@ -79,7 +79,7 @@ inline ColumnPtr NO_INLINE createConstResult(size_t size, UInt8 value)
 template <typename To, bool check_overflow, bool apply_scale, typename From>
 ALWAYS_INLINE To convertOneForCompare(const From & from, To scale [[maybe_unused]])
 {
-    To x;
+    To x{};
     if constexpr (is_decimal<From>)
         x = static_cast<To>(from.value);
     else
