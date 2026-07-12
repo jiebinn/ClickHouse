@@ -5802,25 +5802,30 @@ function buildHistoryParams(params, tabName, fromRun, colorModes, user, server_a
 }
 
 /// Compare two server addresses for connection identity, tolerating cosmetic differences that
-/// address the same endpoint (a trailing slash, an explicit default port) while still separating
-/// endpoints that differ in the request target. Used by the history restore gate
+/// address the same endpoint (a root-path trailing slash, an explicit default port) while still
+/// separating endpoints that differ in the request target. Used by the history restore gate
 /// (`window.onpopstate`) so re-typing e.g. `http://h:8123` as `http://h:8123/` does not stop
 /// restoring an entry produced on the same server. The query string IS significant: the request URL
 /// is built by concatenating `url_elem.value` and preserving any existing `?...` (see `postImpl`),
 /// so `http://h:8123/?cluster=a` and `http://h:8123/?cluster=b` are different endpoints (a different
-/// cluster/namespace/settings) and must not share a restored `database=`. Relative addresses (e.g.
-/// `/clickhouse`) are resolved against the current page so they parse and normalize their trailing
-/// slash; both operands come from the same `url_elem.value` field, so this is symmetric. Falls back
-/// to an exact string compare when a value does not parse as a URL.
+/// cluster/namespace/settings) and must not share a restored `database=`. The trailing slash is
+/// collapsed for the ROOT path only: `postImpl` sends the path verbatim, so a non-root
+/// `/clickhouse` and `/clickhouse/` can be different routes/namespaces on a proxied deployment and
+/// are compared exactly (only the root path, where the URL parser already yields `/` for both `origin`
+/// and `origin/`, is treated as equivalent). Relative addresses (e.g. `/clickhouse`) are resolved
+/// against the current page so they parse; both operands come from the same `url_elem.value` field,
+/// so this is symmetric. Falls back to an exact string compare when a value does not parse as a URL.
 function sameServerAddress(a, b) {
     if (a === b) return true;
     if (a == null || b == null) return false;
     try {
         const ua = new URL(a, location.href);
         const ub = new URL(b, location.href);
+        /// Root path only: '' and '/' are the same root; every other path is compared verbatim.
+        const rootNormalized = (p) => (p === '/' || p === '') ? '/' : p;
         return ua.protocol === ub.protocol
             && ua.host === ub.host
-            && ua.pathname.replace(/\/+$/, '') === ub.pathname.replace(/\/+$/, '')
+            && rootNormalized(ua.pathname) === rootNormalized(ub.pathname)
             && ua.search === ub.search;
     } catch (e) {
         return false;
@@ -5884,8 +5889,8 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     /// Compared with the SAME semantic identity as the restore gate (`window.onpopstate`) and the
     /// connection-change invalidation (`resetConnectionScopedState`): `sameServerAddress` +
     /// `effectiveConnectionUser`, with the selected database a namespace on that pair. So a
-    /// cosmetic-only URL difference (a trailing slash, a default port) or a password-only change is
-    /// not a divergence, matching those gates.
+    /// cosmetic-only URL difference (a root-path trailing slash, a default port) or a password-only
+    /// change is not a divergence, matching those gates.
     const live_diverged = !!run_snapshot && (
            (selected_database || null) !== (run_snapshot.database || null)
         || !sameServerAddress(run_snapshot.url ?? url_elem.value, url_elem.value)
@@ -6101,7 +6106,7 @@ window.onpopstate = function(event) {
     /// distinct even though `sameServerAddress` sees the same endpoint; without this a Back/Forward
     /// could restore one user's selection into another user's session on the same host. Server
     /// addresses are compared via `sameServerAddress`, tolerating
-    /// cosmetic differences (a trailing slash, a default port) but keeping the query string
+    /// cosmetic differences (a root-path trailing slash, a default port) but keeping the query string
     /// significant, since it is part of the request target (a different cluster/namespace/settings).
     /// The password is never part of the identity — it is never serialized and is unknowable after a
     /// reload — so a same server/user entry restores its database even across a password change: the
@@ -7392,8 +7397,8 @@ function resetConnectionScopedState() {
     /// The selected database is a namespace on the SEMANTIC connection identity
     /// (`sameServerAddress` + `effectiveConnectionUser`) — the same identity the `window.onpopstate`
     /// restore gate uses. This handler fires on every `input` in a connection field, including edits
-    /// that do NOT change that identity: a cosmetic URL normalization (a trailing slash or a default
-    /// port — the query string stays significant) or a password-only change (the password is
+    /// that do NOT change that identity: a cosmetic URL normalization (a root-path trailing slash or
+    /// a default port — the query string stays significant) or a password-only change (the password is
     /// authentication, not part of the resource identity). Dropping the selection then would retarget
     /// the next unqualified `Run` to the server default while history navigation still treats the
     /// entry as valid — the two would disagree. So clear it only when the identity actually changed
