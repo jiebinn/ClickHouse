@@ -67,6 +67,7 @@
     ctaLink.target = '_blank';
     ctaLink.rel = 'noopener noreferrer';
     ctaLink.textContent = 'Get Started';
+    ctaLink.setAttribute('data-galaxy-event', 'docs.navbar.get-started');
     container.appendChild(ctaLink);
 
     mapleNav.appendChild(container);
