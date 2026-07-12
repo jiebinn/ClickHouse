@@ -776,33 +776,25 @@ def test_s3_glob_scheherazade(started_cluster):
     bucket = started_cluster.minio_bucket
     instance = started_cluster.instances["dummy"]  # type: ClickHouseInstance
     table_format = "column1 UInt32, column2 UInt32, column3 UInt32"
-    values = "(1, 1, 1)"
-    nights_per_job = 1001 // 30
-    jobs = []
-    for night in range(0, 1001, nights_per_job):
 
-        def add_tales(start, end):
-            for i in range(start, end):
-                path = "night_{}/tale.csv".format(i)
-                query = "insert into table function s3('http://{}:{}/{}/{}', 'CSV', '{}') values {}".format(
-                    started_cluster.minio_ip,
-                    MINIO_INTERNAL_PORT,
-                    bucket,
-                    path,
-                    table_format,
-                    values,
-                )
-                run_query(instance, query)
-
-        jobs.append(
-            threading.Thread(
-                target=add_tales, args=(night, min(night + nights_per_job, 1001))
-            )
+    # Write all 1001 night_<i>/tale.csv objects with one server-side partitioned insert
+    # per batch. column1 carries the night index, so each object gets a distinct value.
+    # Batched to bound the number of concurrently open partition write buffers.
+    batch = 100
+    for start in range(0, 1001, batch):
+        count = min(start + batch, 1001) - start
+        run_query(
+            instance,
+            "insert into table function s3('http://{}:{}/{}/night_{{_partition_id}}/tale.csv', 'CSV', '{}') "
+            "partition by column1 select number, 1, 1 from numbers({}, {}) settings s3_truncate_on_insert=1".format(
+                started_cluster.minio_ip,
+                MINIO_INTERNAL_PORT,
+                bucket,
+                table_format,
+                start,
+                count,
+            ),
         )
-        jobs[-1].start()
-
-    for job in jobs:
-        job.join()
 
     query = "select count(), sum(column1), sum(column2), sum(column3) from s3('http://{}:{}/{}/night_*/tale.csv', 'CSV', '{}')".format(
         started_cluster.minio_redirect_host,
@@ -810,7 +802,8 @@ def test_s3_glob_scheherazade(started_cluster):
         bucket,
         table_format,
     )
-    assert run_query(instance, query).splitlines() == ["1001\t1001\t1001\t1001"]
+    # sum(column1) = 0 + 1 + ... + 1000 = 500500 confirms all 1001 distinct files exist.
+    assert run_query(instance, query).splitlines() == ["1001\t500500\t1001\t1001"]
 
 
 def test_s3_enum_glob_should_not_list(started_cluster):
