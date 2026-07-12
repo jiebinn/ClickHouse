@@ -2,6 +2,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <Analyzer/Resolve/IdentifierResolveScope.h>
 
+#include <Analyzer/ColumnNode.h>
 #include <Analyzer/ConstantNode.h>
 #include <Analyzer/IdentifierNode.h>
 #include <Analyzer/JoinNode.h>
@@ -1224,6 +1225,56 @@ ProjectionNames QueryAnalyzer::resolveFunction(QueryTreeNodePtr & node, Identifi
                     auto replacement_table_expression_table_node = table_expression_table_node->clone();
                     replacement_table_expression_table_node->as<TableNode &>().updateStorage(storage, scope.context);
                     in_second_argument = in_second_argument->cloneAndReplace(table_expression, std::move(replacement_table_expression_table_node));
+                }
+            }
+
+            /// A subquery on the right of IN whose single result column is an Array exactly one dimension
+            /// deeper than the left argument is the set of the elements of those arrays, exactly like an
+            /// array literal or an array-returning function on the right of IN (e.g.
+            /// `x IN (SELECT groupArray(x) ...)` means `x` is tested against the set `{groupArray(x)...}`).
+            /// Flatten the column with arrayJoin so its elements become the set elements; without this the
+            /// whole array is treated as a single opaque set value and the left argument is coerced into the
+            /// array type, giving a confusing "Array does not start with '[' character" or type-mismatch error.
+            if ((in_second_argument->as<QueryNode>() || in_second_argument->as<UnionNode>())
+                && in_first_argument->getNodeType() != QueryTreeNodeType::LAMBDA)
+            {
+                const auto * subquery_query_node = in_second_argument->as<QueryNode>();
+                NamesAndTypes subquery_projection_columns = subquery_query_node
+                    ? subquery_query_node->getProjectionColumns()
+                    : in_second_argument->as<UnionNode>()->computeProjectionColumns();
+
+                const auto * rhs_array_type = subquery_projection_columns.size() == 1
+                    ? typeid_cast<const DataTypeArray *>(subquery_projection_columns.front().type.get())
+                    : nullptr;
+                if (rhs_array_type)
+                {
+                    const auto & lhs_type = in_first_argument->getResultType();
+                    const auto * lhs_array_type = typeid_cast<const DataTypeArray *>(lhs_type.get());
+                    const size_t lhs_depth = lhs_array_type ? lhs_array_type->getNumberOfDimensions() : 0;
+
+                    if (rhs_array_type->getNumberOfDimensions() == lhs_depth + 1)
+                    {
+                        /// Wrap the subquery in `SELECT arrayJoin(<column>) FROM (<subquery>)`.
+                        auto array_column_node = std::make_shared<ColumnNode>(subquery_projection_columns.front(), in_second_argument);
+
+                        auto array_join_function = std::make_shared<FunctionNode>("arrayJoin");
+                        array_join_function->getArguments().getNodes().push_back(std::move(array_column_node));
+                        resolveOrdinaryFunctionNodeByName(*array_join_function, "arrayJoin", scope.context);
+
+                        auto element_type = array_join_function->getResultType();
+                        auto element_name = "arrayJoin(" + subquery_projection_columns.front().name + ")";
+
+                        auto projection_list = std::make_shared<ListNode>();
+                        projection_list->getNodes().push_back(std::move(array_join_function));
+
+                        auto flattened_subquery = std::make_shared<QueryNode>(Context::createCopy(scope.context));
+                        flattened_subquery->setIsSubquery(true);
+                        flattened_subquery->getProjectionNode() = std::move(projection_list);
+                        flattened_subquery->getJoinTree() = std::move(in_second_argument);
+                        flattened_subquery->resolveProjectionColumns(NamesAndTypes{{std::move(element_name), std::move(element_type)}});
+
+                        in_second_argument = std::move(flattened_subquery);
+                    }
                 }
             }
 
