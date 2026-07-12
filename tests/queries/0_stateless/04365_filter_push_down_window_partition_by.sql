@@ -4,6 +4,10 @@
 
 SET enable_analyzer = 1;
 SET query_plan_filter_push_down = 1;
+-- Under parallel replicas the pushed conjunct reaches storage as a plain Filter step,
+-- not a primary key Condition (the KeyCondition is not built in the local plan), so the
+-- "Condition:" detection below would see 0. Pin it off, like sibling test 00808.
+SET enable_parallel_replicas = 0;
 
 DROP TABLE IF EXISTS t_04365;
 CREATE TABLE t_04365 (key String, ts DateTime, val UInt64)
