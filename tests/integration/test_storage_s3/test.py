@@ -796,6 +796,16 @@ def test_s3_glob_scheherazade(started_cluster):
             ),
         )
 
+    # Assert object cardinality directly: the point of scheherazade is that the glob
+    # lists MORE than 1000 separate objects. A row-level count alone would still pass
+    # if partitioned writes coalesced several partitions into fewer objects.
+    night_objects = list(
+        started_cluster.minio_client.list_objects(
+            bucket, prefix="night_", recursive=True
+        )
+    )
+    assert len(night_objects) == 1001
+
     query = "select count(), sum(column1), sum(column2), sum(column3) from s3('http://{}:{}/{}/night_*/tale.csv', 'CSV', '{}')".format(
         started_cluster.minio_redirect_host,
         started_cluster.minio_redirect_port,
