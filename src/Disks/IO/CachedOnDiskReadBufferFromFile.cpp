@@ -757,6 +757,14 @@ bool CachedOnDiskReadBufferFromFile::completeFileSegmentAndGetNext()
     info.cache_file_reader.reset();
     info.remote_file_reader.reset();
 
+    /// Drop the current read state (and thus our reference to the current segment's remote reader)
+    /// before the segment is completed and popped. Once the segment is completed, another thread may
+    /// pick up the reusable remote reader as the next downloader and start mutating it. If we keep
+    /// `state->buf` pointing at that reader and something below throws (e.g. while preparing the next
+    /// segment), the diagnostics in `nextImplStep`'s SCOPE_EXIT (`getInfoForLog`) would read the
+    /// reader concurrently with the new downloader — a data race.
+    state.reset();
+
     info.file_segments->completeAndPopFront(
         info.cache_settings.allow_background_download,
         /*force_shrink_to_downloaded_size=*/false);
@@ -1071,6 +1079,13 @@ void CachedOnDiskReadBufferFromFile::updateReadStateIfNeeded(
         * to read by marks range given to him. Therefore, each nextImpl() call, in case of
         * READ_AND_PUT_IN_CACHE, starts with getOrSetDownloader().
         */
+
+        /// Release the old state (and thus our reference to the possibly-reused remote reader that
+        /// belonged to the previous downloader term) before re-electing a downloader. Otherwise, if
+        /// `prepareReadFromFileSegmentState` below throws, `state->buf` would still point at a reader
+        /// that another thread may now own as the new downloader, and the diagnostics in
+        /// `nextImplStep`'s SCOPE_EXIT (`getInfoForLog`) would read it concurrently — a data race.
+        state.reset();
         state = prepareReadFromFileSegmentState(file_segment, offset, info, file_size_, log);
     }
 }
