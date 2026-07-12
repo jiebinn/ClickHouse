@@ -15,7 +15,7 @@ ColumnsDescription StorageSystemBackgroundSchedulePool::getColumnsDescription()
 {
     return ColumnsDescription
     {
-        {"pool", std::make_shared<DataTypeString>(), "Pool name. Possible values: `schedule` — general purpose schedule pool, `buffer_flush` — pool for flushing Buffer table data, `distributed` — pool for distributed table operations, `message_broker` — pool for message broker operations."},
+        {"pool", std::make_shared<DataTypeString>(), "Pool name. Possible values: `schedule` (general purpose schedule pool), `buffer_flush` (pool for flushing Buffer table data), `distributed` (pool for distributed table operations), `message_broker` (pool for message broker operations), `streaming` (pool for streaming queries background jobs)."},
         {"database", std::make_shared<DataTypeString>(), "Database name."},
         {"table", std::make_shared<DataTypeString>(), "Table name."},
         {"table_uuid", std::make_shared<DataTypeUUID>(), "Table UUID."},
