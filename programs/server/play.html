@@ -3975,8 +3975,18 @@ function applySelectedDatabaseHighlight() {
 /// even requested — so a `Run` issued before the load returns already targets the just-clicked
 /// database, and so switching databases restamps the entry the same way a query or parameter edit
 /// does (`refreshCurrentHistoryEntry`) instead of leaving a stale `database=`/`run=1` in the URL.
+///
+/// Selecting the server's already-current database is semantically identical to leaving the
+/// selection unset — both run against the same target — so collapse it back to `null` here. This
+/// keeps a single canonical representation for "the current database" across the whole state model:
+/// the `run=1` divergence checks in `writeHistoryEntry` and `tabReflectsRun` compare the raw
+/// `selected_database` against the producing snapshot, so without this an explicit click on the
+/// highlighted current row (with no prior selection) would be treated as a database change and
+/// spuriously drop `run=1` and rewrite history, even though the requests before and after still hit
+/// the same database. `server_current_database` is `null` until the database list has loaded for the
+/// live connection; while it is unknown we keep the explicit value rather than risk a false collapse.
 function commitSelectedDatabase(database) {
-    selected_database = database;
+    selected_database = (server_current_database !== null && database === server_current_database) ? null : database;
     stampSelectedDatabaseConnection();
     applySelectedDatabaseHighlight();
     captureActiveTab();
