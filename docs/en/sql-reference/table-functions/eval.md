@@ -18,7 +18,7 @@ This table function is experimental and disabled by default. Enable it with the 
 SET allow_experimental_eval_table_function = 1;
 ```
 
-It also requires the new query analyzer ([`enable_analyzer`](/operations/settings/settings#enable_analyzer), enabled by default).
+It also requires the analyzer ([`enable_analyzer`](/operations/settings/settings#enable_analyzer), enabled by default).
 
 ## Syntax {#syntax}
 
