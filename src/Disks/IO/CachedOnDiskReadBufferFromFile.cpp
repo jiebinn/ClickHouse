@@ -1281,7 +1281,25 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
     size_t size = 0;
     {
         SCOPE_EXIT({
-            state->buf->set(nullptr, 0);
+            /// On normal completion we still exclusively own `state->buf`: either we are the segment's
+            /// downloader for a `REMOTE_FS_READ_AND_PUT_IN_CACHE` read (downloader ownership is only
+            /// released later, at the end of `nextImplStep`), or it is a non-shared
+            /// `REMOTE_FS_READ_BYPASS_CACHE`/`CACHED` reader. So it is safe to un-borrow our
+            /// `internal_buffer` from it here.
+            ///
+            /// If `readFromFileSegment` threw, it may have already released downloader ownership of the
+            /// shared remote reader while `state->buf` still points at it: the predownload,
+            /// `PARTIALLY_DOWNLOADED_NO_CONTINUATION` and bypass paths call
+            /// `completePartAndResetDownloader`/`setDownloadFinishedWithoutContinuation` before swapping
+            /// in a bypass buffer, and any later call there can throw. Once ownership is released,
+            /// another reader can pick up the same reader (`FileSegment::extractRemoteFileReader` /
+            /// `getRemoteFileReader`) and start mutating it. Touching it here (`set`) — or reading it in
+            /// the `getInfoForLog` diagnostics of the enclosing `SCOPE_EXIT` — would then be a data
+            /// race, so on the exception path drop our reference to it instead.
+            if (std::uncaught_exceptions() > 0)
+                state.reset();
+            else
+                state->buf->set(nullptr, 0);
         });
 
         size = readFromFileSegment(
@@ -1727,7 +1745,12 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
         [[maybe_unused]] size_t remaining_size_in_file_segment = file_segment.range().right - offset + 1;
         current_state->buf->set(to + read_bytes, n - read_bytes);
         SCOPE_EXIT({
-            current_state->buf->set(nullptr, 0);
+            /// See the matching comment in `nextImplStep`: if `readFromFileSegment` threw, it may have
+            /// released downloader ownership of the shared remote reader while `current_state->buf`
+            /// still points at it, so another thread may now own and mutate it. Only un-borrow our
+            /// buffer on normal completion, when we still exclusively own the reader.
+            if (std::uncaught_exceptions() == 0)
+                current_state->buf->set(nullptr, 0);
         });
 
         const auto size = readFromFileSegment(
