@@ -726,9 +726,9 @@ GRANT CURRENT GRANTS(READ ON S3) TO alice
 
 ### dictGet {#dictget}
 
-- `dictGet`. Aliases: `dictHas`, `dictGetHierarchy`, `dictIsIn`
+- `dictGet`. Aliases: `dictHas`, `dictGetHierarchy`, `dictGetRoot`, `dictIsIn`
 
-Allows a user to execute [dictGet](/sql-reference/functions/ext-dict-functions#dictGet), [dictHas](../../sql-reference/functions/ext-dict-functions.md#dictHas), [dictGetHierarchy](../../sql-reference/functions/ext-dict-functions.md#dictGetHierarchy), [dictIsIn](../../sql-reference/functions/ext-dict-functions.md#dictIsIn) functions.
+Allows a user to execute [dictGet](/sql-reference/functions/ext-dict-functions#dictGet), [dictHas](../../sql-reference/functions/ext-dict-functions.md#dictHas), [dictGetHierarchy](../../sql-reference/functions/ext-dict-functions.md#dictGetHierarchy), [dictGetRoot](../../sql-reference/functions/ext-dict-functions.md#dictGetRoot), [dictIsIn](../../sql-reference/functions/ext-dict-functions.md#dictIsIn) functions.
 
 Privilege level: `DICTIONARY`.
 
