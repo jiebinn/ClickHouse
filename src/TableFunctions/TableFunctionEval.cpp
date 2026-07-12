@@ -6,6 +6,7 @@
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
@@ -143,6 +144,10 @@ void TableFunctionEval::parseArguments(const ASTPtr & ast_function, ContextPtr c
         settings[Setting::max_parser_backtracks]);
 
     checkNoEval(query);
+
+    /// The generated query cannot flip the `enable_analyzer` setting in a SETTINGS clause:
+    /// `eval` is analyzer-only, and the same validation rejects such a change for a usual query.
+    validateAnalyzerSettings(query, settings[Setting::allow_experimental_analyzer]);
 
     /// The generated query does not go through `executeQuery`, so resolve the INTERSECT/EXCEPT
     /// operator precedence and the implicit UNION mode here, same as `executeQueryImpl` does
