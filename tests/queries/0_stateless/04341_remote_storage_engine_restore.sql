@@ -27,6 +27,11 @@ DROP TABLE remote_restore_src SYNC;
 
 -- The restore must succeed even though `remote_restore_src` no longer exists: the table carries its
 -- own explicit columns and must not re-analyze the table-function target just to be restored.
+--
+-- The tolerated fallback logs the swallowed analysis error at `WARNING` (the target's source is
+-- intentionally absent here); silence it so the expected server-log message relayed to the client at
+-- the default `send_logs_level=warning` does not trip the harness "having stderror" check.
+SET send_logs_level = 'fatal';
 RESTORE TABLE remote_restore_t FROM Memory('04341_remote_storage_engine_restore') FORMAT Null;
 
 -- The restored table is present; it persists as a `Remote` engine definition (which builds a

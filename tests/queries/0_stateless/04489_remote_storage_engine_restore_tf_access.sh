@@ -65,7 +65,10 @@ ${CLICKHOUSE_CLIENT} --query "DROP TABLE $db.t_remote_absent SYNC"
 ${CLICKHOUSE_CLIENT} --query "DROP TABLE $db.protected_target SYNC"
 
 echo "-- restore of a Remote over an absent table-function target: allowed (tolerated non-access failure)"
-${CLICKHOUSE_CLIENT} --user "$user" --query "RESTORE TABLE $db.t_remote_absent FROM $backup_absent FORMAT Null"
+# The tolerated absent-target fallback logs the swallowed analysis error at `WARNING`; silence it
+# (`--send_logs_level=fatal` overrides the default `warning` via `--allow_repeated_settings`) so the
+# expected server-log message relayed to the client does not trip the harness "having stderror" check.
+${CLICKHOUSE_CLIENT} --send_logs_level=fatal --user "$user" --query "RESTORE TABLE $db.t_remote_absent FROM $backup_absent FORMAT Null"
 ${CLICKHOUSE_CLIENT} --query "SELECT count() FROM system.tables WHERE database = '$db' AND name = 't_remote_absent'"
 
 ${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS $db.t_remote_absent SYNC"
