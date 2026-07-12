@@ -3768,7 +3768,11 @@ checkURL();
 /// result pane with a response from the previous connection, so the result-pane side effects are
 /// skipped once the generation no longer matches. Pass `null` for requests that are not
 /// connection-scoped and should always report.
-async function auxiliaryQuery(server_address, user, password, query, url_params = '', quiet = false, generation = null) {
+/// `quiet` suppresses touching the shared result pane (used by background panel-maintenance
+/// queries). `on_error`, when provided, still receives the real server error text in that case,
+/// so a quiet caller can surface actionable diagnostics in its own inline UI instead of dropping
+/// them - a quiet query hides the error from the result pane, not from the user.
+async function auxiliaryQuery(server_address, user, password, query, url_params = '', quiet = false, generation = null, on_error = null) {
     let url = server_address +
         (server_address.indexOf('?') >= 0 ? '&' : '?') +
         'add_http_cors_header=1&default_format=JSON' + url_params;
@@ -3789,14 +3793,17 @@ async function auxiliaryQuery(server_address, user, password, query, url_params 
             resultEl.renderError("Network error");
             logoEl.style.display = 'none';
         }
+        if (on_error) on_error("Network error");
         return false;
     }
     if (!response.ok) {
+        let error_text = await response.text();
         if (!quiet && belongs_to_active_connection()) {
             clear();
-            resultEl.renderError(await response.text());
+            resultEl.renderError(error_text);
             logoEl.style.display = 'none';
         }
+        if (on_error) on_error(error_text);
         return false;
     }
     if (!quiet && belongs_to_active_connection()) {
@@ -4339,11 +4346,17 @@ async function toggleColumns(table, table_icon, database, table_name_str, server
     toggle_columns_generation.set(table, generation);
     const connection_generation = connectionGeneration;
 
+    /// Expanding columns is an explicit user action, so its failures must surface the real
+    /// server error (a missing privilege on `system.columns`, a version mismatch, ...) the way
+    /// the other user-triggered panel queries do, rather than being swallowed behind a generic
+    /// placeholder. The query still runs quietly so it does not clobber the main result pane;
+    /// `on_error` captures the error text and we render it here, inline in the side panel.
+    let error_text = null;
     let json = await auxiliaryQuery(server_address, user, password,
         `SELECT name, type, data_compressed_bytes AS compressed, data_uncompressed_bytes AS uncompressed
             FROM system.columns WHERE database = {database:String} AND table = {table:String} ORDER BY position`,
         '&param_database=' + encodeURIComponent(database) + '&param_table=' + encodeURIComponent(table_name_str),
-        true, connection_generation);
+        true, connection_generation, (e) => { error_text = e; });
 
     /// Drop the result if this load is no longer the relevant one for the row.
     if (generation != toggle_columns_generation.get(table)) return;
@@ -4354,7 +4367,7 @@ async function toggleColumns(table, table_icon, database, table_name_str, server
         let error_elem = document.createElement('div');
         error_elem.className = 'columns-loading';
         error_elem.style.animation = 'none';
-        error_elem.textContent = 'unable to load columns';
+        error_elem.textContent = error_text ? ('unable to load columns: ' + error_text.trim()) : 'unable to load columns';
         columns_elem.appendChild(error_elem);
         return;
     }
