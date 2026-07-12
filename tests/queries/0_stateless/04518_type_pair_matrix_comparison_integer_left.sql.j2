@@ -77,6 +77,12 @@ SELECT '{{ label }}'
 {{ cmprow('DateTime64(3) vs Date32', "toDateTime64('2024-01-02 00:00:00.000', 3, 'UTC')", "toDate32('2024-01-02')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')", "toDate32('2024-01-15')") }}
 {{ cmprow('DateTime64(3) vs DateTime64(6)', "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678000', 6, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678001', 6, 'UTC')") }}
 {{ cmprow('DateTime vs DateTime64(3)', "toDateTime('2024-01-02 03:04:05', 'UTC')", "toDateTime64('2024-01-02 03:04:05.000', 3, 'UTC')", "toDateTime('2024-01-15 00:00:00', 'UTC')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')") }}
+-- The reverse operand order for the non-DateTime pairs: a non-Decimal (Date / Date32) or a
+-- coarser-scaled Decimal (DateTime64(6)) on the left of DateTime64(3) instantiates the
+-- scale_left path of DecimalComparison, which the forward rows above never reach.
+{{ cmprow('Date vs DateTime64(3)', "toDate('2024-01-02')", "toDateTime64('2024-01-02 00:00:00.000', 3, 'UTC')", "toDate('2024-01-15')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')") }}
+{{ cmprow('Date32 vs DateTime64(3)', "toDate32('2024-01-02')", "toDateTime64('2024-01-02 00:00:00.000', 3, 'UTC')", "toDate32('2024-01-15')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')") }}
+{{ cmprow('DateTime64(6) vs DateTime64(3)', "toDateTime64('2024-01-02 03:04:05.678000', 6, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678001', 6, 'UTC')", "toDateTime64('2024-01-02 03:04:05.678', 3, 'UTC')") }}
 
 -- Same-type pairs with different scales as a control for the fused kernels.
 {{ cmprow('Decimal32 vs Decimal32', "toDecimal32('1.50', 2)", "toDecimal32('1.5', 1)", "toDecimal32('-7.25', 2)", "toDecimal32('7.2', 1)") }}
