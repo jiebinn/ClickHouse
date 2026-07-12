@@ -108,7 +108,7 @@ Result:
 
 ## Restrictions {#restrictions}
 
-- `eval` works only with the new query analyzer (`enable_analyzer = 1`).
+- `eval` works only with query analyzer (`enable_analyzer = 1`).
 - The generated query must be a single `SELECT` query without output options such as `INTO OUTFILE` or `FORMAT`. `eval` does not execute multiple statements.
 - The generated query must be self-contained: it is resolved in its own scope and cannot reference `WITH` aliases or columns of the outer query.
 - The generated query cannot use the `eval` table function again.
