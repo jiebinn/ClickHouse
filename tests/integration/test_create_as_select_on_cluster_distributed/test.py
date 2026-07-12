@@ -122,16 +122,30 @@ def test_ddl_worker_context_carries_client_version(started_cluster):
     )
     for node in (node1, node2):
         node.query("SYSTEM FLUSH LOGS")
-        versions = node.query(
-            "SELECT DISTINCT client_version_major FROM system.query_log "
+        # The fix stamps the DDL worker context with the server's own
+        # compile-time version (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH),
+        # whose first three components are exactly what `version()` reports.
+        server_version = tuple(node.query("SELECT version()").strip().split(".")[:3])
+        rows = node.query(
+            "SELECT DISTINCT client_version_major, client_version_minor, "
+            "client_version_patch FROM system.query_log "
             "WHERE type = 'QueryFinish' AND query_kind = 'Create' "
             f"AND query LIKE '/* ddl_entry=query-%' AND query LIKE '%{table}%'"
-        ).split()
-        assert versions, f"no DDL-executed CREATE found in query_log on {node.name}"
-        assert all(int(v) > 0 for v in versions), (
-            f"the DDL worker on {node.name} executed a query whose context "
-            f"carries client version 0.0.0 (client_version_major = {versions}); "
-            "distributed sub-queries spawned by such a context make remote "
-            "shards apply pre-23.3 compatibility downgrades"
-        )
+        ).splitlines()
+        assert rows, f"no DDL-executed CREATE found in query_log on {node.name}"
+        for row in rows:
+            logged = tuple(row.split("\t"))
+            # It is 0.0.0 without the fix. Asserting the exact server version
+            # - not merely a non-zero major - proves the DDL worker forwards a
+            # version far above the 23.3.0 compatibility threshold in
+            # TCPHandler, so remote shards do not apply the pre-23.3 analyzer
+            # downgrade. A broken implementation stamping e.g. 1.0.0 or 22.8.0
+            # would pass a `major > 0` check yet still trip that downgrade.
+            assert logged == server_version, (
+                f"the DDL worker on {node.name} executed a query whose context "
+                f"carries client version {'.'.join(logged)} instead of the "
+                f"server's own {'.'.join(server_version)}; a version below "
+                "23.3.0 (in particular 0.0.0) makes remote shards apply "
+                "pre-23.3 compatibility downgrades"
+            )
     node1.query(f"DROP TABLE IF EXISTS {table} ON CLUSTER test_cluster SYNC")
