@@ -2,7 +2,8 @@
 -- with every operator family and every combination of constant and non-constant arguments,
 -- including the result types and the OrZero/OrNull behavior for zero divisors.
 -- Each row pins down one type pair. Values are chosen so that nothing in this file throws;
--- the throwing cases are covered by 04515_type_pair_matrix_errors.
+-- the throwing cases are covered by 04515_type_pair_matrix_errors and
+-- 04520_type_pair_matrix_division_overflow_errors.
 --
 -- This is part 1 of 2: it drives the unsigned wide integers (UInt128, UInt256), so it covers
 -- every mixed pair in which at least one operand is a UInt128 or UInt256. Part 2
