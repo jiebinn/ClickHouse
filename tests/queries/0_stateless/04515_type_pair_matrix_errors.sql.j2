@@ -1,0 +1,76 @@
+-- Exceptional cases of comparison and arithmetic over mixed type pairs involving
+-- Decimal and 128/256-bit integers. Companion of 04513_type_pair_matrix_comparison
+-- and 04514_type_pair_matrix_arithmetic, which cover the non-throwing matrix.
+--
+-- Every throwing case is exercised in all four constness shapes: vector/vector, left-const,
+-- right-const, and both-const. DecimalComparison::applyMixed and FunctionBinaryArithmetic have
+-- distinct executor branches per constness (and modulo/moduloLegacy route a right-constant
+-- divisor through ModuloByConstantImpl::vectorConstant with its own zero and lowest() checks),
+-- so a regression on the constant side would be missed by the vector/vector shape alone. The
+-- both-const shape uses identity(...) so the analyzer does not fold the expression away before
+-- the executor runs.
+
+-- A throwing infix comparison "a <op> b" in all four constness shapes.
+{% macro cmp_throws(a, op, b, err) -%}
+SELECT materialize({{ a }}) {{ op }} materialize({{ b }}); -- { serverError {{ err }} }
+SELECT {{ a }} {{ op }} materialize({{ b }}); -- { serverError {{ err }} }
+SELECT materialize({{ a }}) {{ op }} {{ b }}; -- { serverError {{ err }} }
+SELECT identity({{ a }}) {{ op }} identity({{ b }}); -- { serverError {{ err }} }
+{%- endmacro %}
+
+-- A throwing function call "fn(a, b)" in all four constness shapes.
+{% macro fn_throws(fn, a, b, err) -%}
+SELECT {{ fn }}(materialize({{ a }}), materialize({{ b }})); -- { serverError {{ err }} }
+SELECT {{ fn }}({{ a }}, materialize({{ b }})); -- { serverError {{ err }} }
+SELECT {{ fn }}(materialize({{ a }}), {{ b }}); -- { serverError {{ err }} }
+SELECT {{ fn }}(identity({{ a }}), identity({{ b }})); -- { serverError {{ err }} }
+{%- endmacro %}
+
+SELECT '-- comparison overflow during scale conversion';
+{{ cmp_throws("CAST('18446744073709551615', 'UInt64')", '>', "toDecimal32('1.5', 2)", 'DECIMAL_OVERFLOW') }}
+{{ cmp_throws("toUInt64(9223372036854775807)", '>', "toDecimal64('1.5', 4)", 'DECIMAL_OVERFLOW') }}
+{{ cmp_throws("toDecimal32('1.5', 2)", '=', "CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935', 'UInt256')", 'DECIMAL_OVERFLOW') }}
+
+SELECT '-- the same comparisons with the overflow check disabled';
+SELECT materialize(CAST('18446744073709551615', 'UInt64')) > materialize(toDecimal32('1.5', 2)) SETTINGS decimal_check_overflow = 0;
+SELECT materialize(toDecimal32('1.5', 2)) = materialize(CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935', 'UInt256')) SETTINGS decimal_check_overflow = 0;
+
+SELECT '-- extreme values that must compare without overflow';
+SELECT materialize(CAST('-170141183460469231731687303715884105728', 'Int128')) < materialize(toDecimal32('1.5', 2));
+SELECT materialize(CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')) != materialize(toDecimal64('1.5', 4));
+
+SELECT '-- division by zero in every width direction';
+{{ fn_throws('intDiv', 'toUInt256(1)', 'toUInt8(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('intDiv', 'toUInt8(1)', 'toUInt256(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('intDiv', 'toInt256(1)', 'toInt256(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('modulo', 'toInt256(-1)', 'toUInt64(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('modulo', 'toUInt64(1)', 'toUInt256(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('positiveModulo', 'toInt128(-1)', 'toUInt32(0)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('moduloLegacy', 'toUInt256(1)', 'toUInt8(0)', 'ILLEGAL_DIVISION') }}
+
+SELECT '-- division of the minimal signed number by minus one, wide and narrow dividends';
+{{ fn_throws('intDiv', "CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')", 'toInt8(-1)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('intDiv', "CAST('-170141183460469231731687303715884105728', 'Int128')", 'toInt64(-1)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('intDiv', 'toInt8(-128)', 'toInt256(-1)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('modulo', "CAST('-170141183460469231731687303715884105728', 'Int128')", 'toInt64(-1)', 'ILLEGAL_DIVISION') }}
+{{ fn_throws('modulo', 'toInt8(-128)', 'toInt128(-1)', 'ILLEGAL_DIVISION') }}
+
+SELECT '-- positiveModulo by the most negative divisor value';
+{{ fn_throws('positiveModulo', 'toInt256(-100)', 'toInt8(-128)', 'ILLEGAL_DIVISION') }}
+
+SELECT '-- OrZero and OrNull variants of the same exceptional cases do not throw';
+SELECT intDivOrZero(materialize(CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')), materialize(toInt8(-1)));
+SELECT intDivOrNull(materialize(CAST('-170141183460469231731687303715884105728', 'Int128')), materialize(toInt64(-1)));
+SELECT moduloOrNull(materialize(toInt8(-128)), materialize(toInt128(-1)));
+SELECT intDivOrZero(materialize(toUInt8(1)), materialize(toUInt256(0)));
+SELECT moduloOrNull(materialize(toInt256(-1)), materialize(toUInt64(0)));
+
+SELECT '-- combinations of a floating point number and a wide integer';
+SELECT materialize(toFloat64(1)) + materialize(toUInt256(1)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT materialize(toUInt256(1)) - materialize(toFloat64(1)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT materialize(toFloat32(1)) * materialize(toInt128(1)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+SELECT intDiv(materialize(toUInt256(1)), materialize(toFloat64(1)));
+SELECT modulo(materialize(toInt128(1)), materialize(toFloat32(1)));
+
+SELECT '-- isDistinctFrom does not support Decimal vs wide integer';
+SELECT isDistinctFrom(materialize(toDecimal32('1.00', 2)), materialize(toUInt128(1))); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }

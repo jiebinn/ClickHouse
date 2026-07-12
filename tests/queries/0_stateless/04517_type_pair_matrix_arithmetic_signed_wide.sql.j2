@@ -97,9 +97,11 @@ SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] 
 {% endfor %}
 
 -- Floating point with wide integers: only division is a valid combination.
+-- The identity(...) / identity(...) shape keeps the both-const path of the wide-int/float
+-- conversion executing instead of being folded away by the analyzer.
 {% for W in wide %}
 {% for F in ['Float32','Float64'] %}
-SELECT '{{ W }} vs {{ F }}', materialize({{ dividend[W] }}) / materialize(to{{ F }}(4)), {{ dividend[W] }} / materialize(to{{ F }}(4)), materialize({{ dividend[W] }}) / to{{ F }}(4), toTypeName({{ dividend[W] }} / to{{ F }}(4));
-SELECT '{{ F }} vs {{ W }}', materialize(to{{ F }}(10)) / materialize({{ divisor[W] }}), to{{ F }}(10) / materialize({{ divisor[W] }}), materialize(to{{ F }}(10)) / {{ divisor[W] }}, toTypeName(to{{ F }}(10) / {{ divisor[W] }});
+SELECT '{{ W }} vs {{ F }}', materialize({{ dividend[W] }}) / materialize(to{{ F }}(4)), {{ dividend[W] }} / materialize(to{{ F }}(4)), materialize({{ dividend[W] }}) / to{{ F }}(4), identity({{ dividend[W] }}) / identity(to{{ F }}(4)), toTypeName({{ dividend[W] }} / to{{ F }}(4));
+SELECT '{{ F }} vs {{ W }}', materialize(to{{ F }}(10)) / materialize({{ divisor[W] }}), to{{ F }}(10) / materialize({{ divisor[W] }}), materialize(to{{ F }}(10)) / {{ divisor[W] }}, identity(to{{ F }}(10)) / identity({{ divisor[W] }}), toTypeName(to{{ F }}(10) / {{ divisor[W] }});
 {% endfor %}
 {% endfor %}
