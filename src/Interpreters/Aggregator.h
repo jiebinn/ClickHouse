@@ -135,6 +135,15 @@ public:
 
         bool serialize_string_with_zero_byte = false;
 
+        /// Set for aggregation in order (`AggregatingInOrderTransform`). In that mode a fresh
+        /// aggregation-method state is constructed for every contiguous run of equal order-key
+        /// values (via `executeOnBlockSmall` / `mergeOnBlockSmall`), so a method whose state
+        /// construction does work proportional to the whole block turns a single block into
+        /// O(number_of_runs * block_size) work. This is the case for the `prealloc_serialized`
+        /// method, which serializes all of the block's keys up front on construction. Fall back to
+        /// the plain `serialized` method (lazy, per-row key serialization) to keep it linear.
+        bool aggregation_in_order = false;
+
         static size_t getMaxBytesBeforeExternalGroupBy(size_t max_bytes_before_external_group_by, double max_bytes_ratio_before_external_group_by);
 
         Params(

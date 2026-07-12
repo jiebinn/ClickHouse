@@ -690,6 +690,18 @@ Aggregator::Aggregator(const Block & header_, const Params & params_)
 
     method_chosen = AggregatedDataVariants::chooseMethod(header_, params.keys, key_sizes);
 
+    /// See `Params::aggregation_in_order`: the `prealloc_serialized` method serializes the whole
+    /// block's keys on state construction, which is pathological for aggregation in order, where
+    /// a fresh state is constructed for every run of equal order-key values. Use the plain
+    /// `serialized` method there, whose construction is O(1) and which serializes keys lazily.
+    if (params.aggregation_in_order)
+    {
+        if (method_chosen == AggregatedDataVariants::Type::prealloc_serialized)
+            method_chosen = AggregatedDataVariants::Type::serialized;
+        else if (method_chosen == AggregatedDataVariants::Type::nullable_prealloc_serialized)
+            method_chosen = AggregatedDataVariants::Type::nullable_serialized;
+    }
+
     /// TODO(ab): HashMethodSingleLowCardinalityColumn uses a hardcoded internal cache,
     /// which interferes with inline aggregation (e.g. for COUNT). This needs to be
     /// refactored to respect the `use_cache` setting.
