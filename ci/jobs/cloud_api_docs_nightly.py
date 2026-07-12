@@ -16,6 +16,7 @@ from praktika.utils import Shell
 
 GENERATOR = "./ci/jobs/scripts/docs/generate_cloud_api_reference.py"
 BOT_BRANCH = "robot/cloud-api-docs"
+REPOSITORY = "ClickHouse/ClickHouse"
 # Paths the generator owns; everything staged into the bot PR lives here.
 DOCS_PATHS = (
     "docs/products/cloud/api-reference docs/_specs/cloud-openapi.json "
@@ -55,15 +56,33 @@ def has_changes():
 
 
 def open_or_refresh_pr():
-    push = [
+    prepare = [
         'git config user.name "robot-clickhouse"',
         'git config user.email "robot-clickhouse@users.noreply.github.com"',
         f"git checkout -B {BOT_BRANCH}",
         f"git add -A {DOCS_PATHS}",
         f"git commit -m {shlex.quote(PR_TITLE)}",
-        f"git push -f origin {BOT_BRANCH}",
     ]
-    if not Shell.check(" && ".join(push), verbose=True):
+    if not Shell.check(" && ".join(prepare), verbose=True):
+        return False
+
+    # actions/checkout persists the workflow GITHUB_TOKEN as an HTTP extraheader,
+    # so a plain `git push origin` ignores the GitHub App token authenticated by
+    # enable_gh_auth and pushes as github-actions[bot]. Clear that extraheader and
+    # use the App token explicitly. Keep the command out of logs because its URL
+    # contains the expanded token.
+    repo_url = (
+        "https://x-access-token:${token}@github.com/"
+        + shlex.quote(REPOSITORY)
+        + ".git"
+    )
+    refspec = shlex.quote(f"{BOT_BRANCH}:refs/heads/{BOT_BRANCH}")
+    push = (
+        'token="$(gh auth token)" && '
+        "git -c http.https://github.com/.extraheader= push -f "
+        f"{repo_url} {refspec}"
+    )
+    if not Shell.check(push, verbose=False):
         return False
 
     # A force-push already refreshed any open PR, so a PR is created only when
