@@ -8155,10 +8155,26 @@ async function reconcileStartup() {
         /// unrun edit bail out of `refreshCurrentHistoryEntry` (`cur.tabId !== tab.id`), never
         /// seeding the entry/URL/`lastSavedQuery` until a run or tab switch. Clear it to null —
         /// exactly the state of a first-ever visit, whose first trusted edit seeds a fresh entry
-        /// owned by the bootstrap tab.
+        /// owned by the bootstrap tab. When the stale echo carried a whitespace-only hash
+        /// (`stale_blank_reload_bare`), the pruned tab's own blank text was decoded into the editor
+        /// and the bootstrap tab's query at load (`query_area.value`, `makeTab` above) and left in
+        /// the URL fragment, so stripping only `?tab=` is not enough: that blank text would stay in
+        /// the hash, the editor, and the bootstrap tab, and the trailing `scheduleSave` would
+        /// persist it straight back to `IndexedDB` as the sole tab — resurrecting the pruned blank
+        /// tab (now nameless). Reset the bootstrap tab to a genuinely fresh empty one: drop the hash
+        /// as well, and clear the editor exactly as `restoreFromHistory` does (blank the textarea
+        /// and dispatch a synthetic 'input' event, which resyncs the syntax backdrop and parameter
+        /// inputs and mirrors the empty text into the active tab's query). This matches a first-ever
+        /// visit precisely, so the next reload sees a single blank tab with no `?tab=` or hash and
+        /// prunes it again.
         if (url_tab_name) {
             const cleaned_url = new URL(location.href);
             cleaned_url.searchParams.delete('tab');
+            if (stale_blank_reload_bare) {
+                cleaned_url.hash = '';
+                query_area.value = '';
+                query_area.dispatchEvent(new Event('input'));
+            }
             history.replaceState(null, document.title, cleaned_url.href);
         }
         renderTabBar();
