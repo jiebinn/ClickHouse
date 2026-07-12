@@ -241,6 +241,17 @@
   // wrappers around Mintlify components:
   // <div data-galaxy-event="docs.install.download"
   //      data-galaxy-prop-os="linux">...</div>
+  function getTrackedHref(anchor) {
+    var href = anchor.getAttribute('href');
+    // Homepage click handlers add the canonical /docs base before navigating.
+    // Record that final destination rather than the unprefixed DOM attribute.
+    if (isCanonicalDocs && href && href.charAt(0) === '/' &&
+        href.indexOf('//') !== 0 && !/^\/docs(?:\/|$)/.test(href)) {
+      return '/docs' + href;
+    }
+    return href;
+  }
+
   document.addEventListener('click', function (event) {
     var target = event.target;
     if (!target || typeof target.closest !== 'function') return;
@@ -254,7 +265,7 @@
     var properties = { interaction: 'click' };
     var anchor = target.closest('a[href]') ||
       (element.tagName === 'A' ? element : element.querySelector('a[href]'));
-    if (anchor) properties.href = anchor.getAttribute('href');
+    if (anchor) properties.href = getTrackedHref(anchor);
 
     for (var i = 0; i < element.attributes.length; i++) {
       var attribute = element.attributes[i];
