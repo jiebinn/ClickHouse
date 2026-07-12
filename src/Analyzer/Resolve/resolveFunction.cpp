@@ -1271,7 +1271,7 @@ ProjectionNames QueryAnalyzer::resolveFunction(QueryTreeNodePtr & node, Identifi
                         flattened_subquery->setIsSubquery(true);
                         flattened_subquery->getProjectionNode() = std::move(projection_list);
                         flattened_subquery->getJoinTree() = std::move(in_second_argument);
-                        flattened_subquery->resolveProjectionColumns(NamesAndTypes{{std::move(element_name), std::move(element_type)}});
+                        flattened_subquery->resolveProjectionColumns(NamesAndTypes{{element_name, element_type}});
 
                         in_second_argument = std::move(flattened_subquery);
                     }
