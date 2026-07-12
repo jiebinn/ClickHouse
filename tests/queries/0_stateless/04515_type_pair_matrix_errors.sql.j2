@@ -38,6 +38,7 @@ SELECT '-- comparison overflow during scale conversion';
 
 SELECT '-- the same comparisons with the overflow check disabled';
 SELECT materialize(CAST('18446744073709551615', 'UInt64')) > materialize(toDecimal32('1.5', 2)) SETTINGS decimal_check_overflow = 0;
+SELECT materialize(toUInt64(9223372036854775807)) > materialize(toDecimal64('1.5', 4)) SETTINGS decimal_check_overflow = 0;
 SELECT materialize(toDecimal32('1.5', 2)) = materialize(CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935', 'UInt256')) SETTINGS decimal_check_overflow = 0;
 
 SELECT '-- extreme values that must compare without overflow';
