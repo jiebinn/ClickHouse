@@ -1,13 +1,14 @@
 -- `optimize_or_like_chain` rewrites an `OR` chain of `like`/`ilike`/`match` into
--- `multiSearchAny*` / `multiMatchAny` / combined `match`. The first two functions
--- (`FunctionsMultiStringSearch`) accept only a plain `String` haystack and throw
--- `ILLEGAL_TYPE_OF_ARGUMENT` for `FixedString`/`Enum`, whereas the original `like`/`ilike`/`match`
--- predicates accept those types. With the setting default-on, an `OR` chain over a `FixedString` or
--- `Enum` column must therefore keep using the haystack-compatible combined `match` (or the original
--- branches), not the string-only fast paths — otherwise a previously-working query would start to
--- throw. The optimized result must equal the unoptimized one, for both analyzers.
+-- `multiSearchAny*` / `multiMatchAny`. Both functions (`FunctionsMultiStringSearch`) accept only a
+-- plain `String` haystack and throw `ILLEGAL_TYPE_OF_ARGUMENT` for `FixedString`/`Enum`, whereas the
+-- original `like`/`ilike`/`match` predicates accept those types. With the setting default-on, an `OR`
+-- chain over a `FixedString` or `Enum` column must therefore keep the original branches (the
+-- string-only fast paths would throw, and we do not fall back to a combined `match` alternation) —
+-- otherwise a previously-working query would start to throw. The optimized result must equal the
+-- unoptimized one, for both analyzers.
 
 SET optimize_or_like_chain_min_patterns = 1;
+SET optimize_or_like_chain_min_substrings = 1;
 
 DROP TABLE IF EXISTS t_or_like_fs;
 CREATE TABLE t_or_like_fs (s FixedString(8)) ENGINE = Memory;

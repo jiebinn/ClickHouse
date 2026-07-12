@@ -4,8 +4,9 @@
 -- a single `multiSearchAny` would change query results.
 
 SET optimize_or_like_chain = 1;
--- Exercise the rewrite even for short chains (default `optimize_or_like_chain_min_patterns` would skip 2-pattern fixtures).
+-- Exercise the rewrite even for short chains (the default thresholds would skip 2-pattern fixtures).
 SET optimize_or_like_chain_min_patterns = 1;
+SET optimize_or_like_chain_min_substrings = 1;
 
 -- Old analyzer: the rewrite must keep two separate LIKE expressions.
 EXPLAIN SYNTAX

@@ -2,7 +2,9 @@
 -- no-fasttest: Reference output uses `multiMatchAny`, which requires vectorscan
 SET allow_hyperscan = 1, max_hyperscan_regexp_length = 0, max_hyperscan_regexp_total_length = 0;
 SET optimize_rewrite_like_perfect_affix = 0; -- prevent input/output interference from another LIKE rewrite pass
-SET optimize_or_like_chain_min_patterns = 1; -- exercise the rewrite for the short chains in this test; production default is 5
+-- Exercise the rewrite for the short chains in this test; production defaults are 10 (regexp) and 4 (substring).
+SET optimize_or_like_chain_min_patterns = 1;
+SET optimize_or_like_chain_min_substrings = 1;
 
 EXPLAIN SYNTAX SELECT materialize('Привет, World') AS s WHERE (s LIKE 'hell%') OR (s ILIKE '%привет%') OR (s ILIKE 'world%') SETTINGS optimize_or_like_chain = 0;
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Привет, World') AS s WHERE (s LIKE 'hell%') OR (s ILIKE '%привет%') OR (s ILIKE 'world%') SETTINGS optimize_or_like_chain = 0, enable_analyzer = 1;
@@ -34,7 +36,9 @@ SELECT materialize('Привет, World') AS s WHERE (s LIKE 'hell%') OR (s ILIK
 
 EXPLAIN SYNTAX SELECT test, materialize('Привет, World') AS s WHERE ((s LIKE 'hell%') AS test) OR (s ILIKE '%привет%') OR (s ILIKE 'world%') SETTINGS optimize_or_like_chain = 1;
 
--- Test `match` function combined with `LIKE` (uses `multiMatchAny` when `allow_hyperscan` is on, falls back to `match` with combined regexp otherwise)
+-- Test `match` function combined with `LIKE`. A raw `match()` regexp is not eligible for `multiMatchAny`
+-- (Vectorscan can reject RE2-only syntax), and we no longer emit a combined `match` alternation, so this
+-- chain is kept as the original `OR`.
 EXPLAIN SYNTAX SELECT materialize('Hello World') AS s WHERE (s LIKE 'hello%') OR match(s, 'wor.*') SETTINGS optimize_or_like_chain = 1;
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Hello World') AS s WHERE (s LIKE 'hello%') OR match(s, 'wor.*') SETTINGS optimize_or_like_chain = 1, enable_analyzer = 1;
 
@@ -65,7 +69,7 @@ EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Hello World') AS s WHERE (s 
 SELECT materialize('Hello World') AS s WHERE (s ILIKE '%hello%') OR (s ILIKE '%world%') SETTINGS optimize_or_like_chain = 1;
 SELECT materialize('Hello World') AS s WHERE (s ILIKE '%hello%') OR (s ILIKE '%world%') SETTINGS optimize_or_like_chain = 0;
 
--- Test mixed case sensitivity (falls back to `multiMatchAny`/`match` with case flags inside the regexps)
+-- Test mixed case sensitivity (uses `multiMatchAny` with case flags inside the regexps)
 EXPLAIN SYNTAX SELECT materialize('Hello World') AS s WHERE (s LIKE '%Hello%') OR (s ILIKE '%world%') SETTINGS optimize_or_like_chain = 1;
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Hello World') AS s WHERE (s LIKE '%Hello%') OR (s ILIKE '%world%') SETTINGS optimize_or_like_chain = 1, enable_analyzer = 1;
 
@@ -89,10 +93,10 @@ SELECT materialize('Hello World') AS s WHERE match(s, '(?i)hello') OR match(s, '
 -- producing false negatives. The QUERY TREE must keep just `or(...)` at the top, not `and(...)`.
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Hello World') AS s, materialize(1::UInt8) AS n WHERE (s LIKE '%Hello%') OR (n = 2) SETTINGS optimize_or_like_chain = 1, enable_analyzer = 1;
 
--- When per-pattern or total pattern length exceeds the hyperscan limits, the rewrite is skipped
--- for that LHS group: `multiMatchAny` would throw at runtime, and a single combined `match`
--- regexp could blow up RE2 compile limits. The non-substring `s1` group must keep its original
--- LIKE/ILIKE branches; the substring `s2` group remains rewritten as `multiSearchAny`.
+-- When per-pattern or total pattern length exceeds the hyperscan limits, the `multiMatchAny`
+-- rewrite is skipped for that LHS group (it would throw at runtime); we do not fall back to a
+-- combined `match` alternation, so the non-substring `s1` group keeps its original LIKE/ILIKE
+-- branches, while the substring `s2` group remains rewritten as `multiSearchAny`.
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Привет, World') AS s1, materialize('Привет, World') AS s2 WHERE (s1 LIKE 'hell%') OR (s2 ILIKE '%привет%') OR (s1 ILIKE 'world%') SETTINGS optimize_or_like_chain = 1, enable_analyzer = 1, max_hyperscan_regexp_length = 5;
 EXPLAIN QUERY TREE run_passes=1 SELECT materialize('Привет, World') AS s1, materialize('Привет, World') AS s2 WHERE (s1 LIKE 'hell%') OR (s2 ILIKE '%привет%') OR (s1 ILIKE 'world%') SETTINGS optimize_or_like_chain = 1, enable_analyzer = 1, max_hyperscan_regexp_total_length = 10;
 

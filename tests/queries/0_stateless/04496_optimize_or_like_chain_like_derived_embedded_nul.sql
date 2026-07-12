@@ -4,9 +4,9 @@
 -- NUL-terminated Vectorscan API and truncates it at the first NUL, whereas the original `like`/`ilike`
 -- compiles the full pattern with length-aware RE2. A pattern such as `s LIKE 'a\0_'` (regexp `^a\x00.`)
 -- would therefore match a *broader* set under a truncated `multiMatchAny` (`^a`) than under the
--- original predicate. The rewrite must keep such chains off both `multiMatchAny` and the combined
--- `match` (whose alternation is likewise not NUL-truncated), i.e. keep the original branches. The
--- optimized result must equal the unoptimized one regardless of `allow_hyperscan` and the analyzer.
+-- original predicate. The rewrite must keep such chains off `multiMatchAny`, and we no longer fall
+-- back to a combined `match` alternation, so the original branches are kept. The optimized result
+-- must equal the unoptimized one regardless of `allow_hyperscan` and the analyzer.
 
 SET optimize_or_like_chain_min_patterns = 1;
 
@@ -22,7 +22,7 @@ SELECT count() FROM t_or_like_nul_derived WHERE s LIKE 'a\0_' OR s LIKE 'cd' SET
 SELECT count() FROM t_or_like_nul_derived WHERE s LIKE 'a\0_' OR s LIKE 'cd' SETTINGS optimize_or_like_chain = 1, allow_hyperscan = 1, enable_analyzer = 1;
 SELECT count() FROM t_or_like_nul_derived WHERE s LIKE 'a\0_' OR s LIKE 'cd' SETTINGS optimize_or_like_chain = 1, allow_hyperscan = 1, enable_analyzer = 0;
 
--- Rewrite enabled with Hyperscan disabled (combined `match` candidate, also NUL-unsafe -> keep originals): 2.
+-- Rewrite enabled with Hyperscan disabled (no fast path applies -> keep originals): 2.
 SELECT count() FROM t_or_like_nul_derived WHERE s LIKE 'a\0_' OR s LIKE 'cd' SETTINGS optimize_or_like_chain = 1, allow_hyperscan = 0, enable_analyzer = 1;
 SELECT count() FROM t_or_like_nul_derived WHERE s LIKE 'a\0_' OR s LIKE 'cd' SETTINGS optimize_or_like_chain = 1, allow_hyperscan = 0, enable_analyzer = 0;
 

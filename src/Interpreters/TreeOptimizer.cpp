@@ -63,6 +63,7 @@ namespace Setting
     extern const SettingsBool optimize_redundant_functions_in_order_by;
     extern const SettingsBool optimize_or_like_chain;
     extern const SettingsUInt64 optimize_or_like_chain_min_patterns;
+    extern const SettingsUInt64 optimize_or_like_chain_min_substrings;
 }
 
 namespace ErrorCodes
@@ -596,8 +597,9 @@ void optimizeOrLikeChain(ASTPtr & query, const Settings & settings, const NamesA
     data.max_hyperscan_regexp_total_length = settings[Setting::max_hyperscan_regexp_total_length];
     data.reject_expensive_hyperscan_regexps = settings[Setting::reject_expensive_hyperscan_regexps];
     data.min_patterns_for_rewrite = settings[Setting::optimize_or_like_chain_min_patterns];
+    data.min_substrings_for_rewrite = settings[Setting::optimize_or_like_chain_min_substrings];
     /// The `multiSearchAny*` / `multiMatchAny` rewrite targets accept only a `String` haystack; the
-    /// visitor uses these types to keep `FixedString`/`Enum` chains on the combined-`match` form,
+    /// visitor uses these types to keep `FixedString`/`Enum` chains on the original `OR LIKE` form,
     /// which accepts them. Types are looked up by column name (the LHS of each LIKE branch).
     for (const auto & column : source_columns)
         data.source_column_types.emplace(column.name, column.type);

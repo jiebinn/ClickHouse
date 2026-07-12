@@ -5,8 +5,9 @@
 -- accepts such patterns (matching them byte-wise / as Latin-1), but `multiMatchAny` compiles its
 -- patterns with Hyperscan's `HS_FLAG_UTF8` and rejects a non-UTF-8 pattern with `BAD_ARGUMENTS`.
 -- With `optimize_or_like_chain` now enabled by default, the rewrite must not turn such a
--- previously-working query into an exception: it has to fall back to the combined-`match` (RE2)
--- path instead of `multiMatchAny`. Verify the chain succeeds and returns the same result as the
+-- previously-working query into an exception: the non-UTF-8 pattern keeps the chain off
+-- `multiMatchAny`, and we no longer fall back to a combined `match` alternation, so the original
+-- `OR` chain is kept unchanged. Verify the chain succeeds and returns the same result as the
 -- un-rewritten OR chain, for both the new and the old analyzer.
 
 DROP TABLE IF EXISTS t_or_like_non_utf8;

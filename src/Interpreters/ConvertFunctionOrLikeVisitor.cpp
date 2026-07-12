@@ -8,7 +8,6 @@
 #include <Parsers/IAST.h>
 #include <Common/likePatternToRegexp.h>
 #include <Common/isValidUTF8.h>
-#include <Common/re2.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -50,49 +49,6 @@ bool isExpressionNonDeterministic(const ASTPtr & ast, const ContextPtr & context
             return true;
 
     return false;
-}
-
-/// Returns true if `combined_regexp` compiles within RE2's limits, using the same RE2 engine
-/// configuration as the `match` function (`RE_DOT_NL`, default 8 MiB program budget; see
-/// `Functions/Regexps.h` and `OptimizedRegularExpression`). The combined-`match` fallback merges an
-/// `OR` chain into a single `(p1)|(p2)|...` alternation; for a long or repetition-heavy chain the
-/// merged RE2 program can exceed RE2's default 8 MiB budget (`RE2::Options::kDefaultMaxMem`) and make
-/// `match` throw `CANNOT_COMPILE_REGEXP`, even though every original per-branch `match`/`LIKE`
-/// compiled on its own (each is a far smaller program). The `max_hyperscan_regexp_length` /
-/// `max_hyperscan_regexp_total_length` settings default to 0 ("unlimited") and so do not bound this.
-/// We therefore pre-compile the merged regexp and keep the original branches when it does not compile,
-/// so a default-on rewrite cannot turn a previously-working query into a regexp-compilation exception.
-///
-/// We probe RE2 directly rather than constructing an `OptimizedRegularExpression`. The latter first
-/// runs ClickHouse's required-substring `analyze` step, which recurses over the regexp structure and,
-/// for a very large merged alternation, can hit the stack-depth guard and log a spurious `<Error>`
-/// ("Analyze RegularExpression failed ... TOO_DEEP_RECURSION") at analysis time. That `analyze`
-/// failure is non-fatal and never changes whether `match` accepts the regexp — it only disables a
-/// required-substring optimization, and the accept/reject decision is solely whether RE2 can compile
-/// the program (an alternation is never trivial, so `match` always reaches RE2 here). Probing RE2
-/// directly therefore yields exactly the same decision without the noise, and lets us read a real RE2
-/// rejection off `ok()` instead of a `catch (...)` that would also swallow an unexpected
-/// memory-limit/cancellation exception.
-bool combinedRegexpCompilesWithRE2(const String & combined_regexp)
-{
-    re2::RE2::Options options;
-    /// Never write error messages to stderr from library code; we inspect `ok()` instead.
-    options.set_log_errors(false);
-    /// `match` constructs its `OptimizedRegularExpression` with `RE_DOT_NL`.
-    options.set_dot_nl(true);
-
-    re2::RE2 re(combined_regexp, options);
-
-    /// `OptimizedRegularExpression` retries invalid UTF-8 with Latin1 to allow matching binary data;
-    /// mirror that so the probe accepts exactly the regexps `match` would accept at runtime.
-    if (!re.ok() && re.error_code() == re2::RE2::ErrorCode::ErrorBadUTF8)
-    {
-        options.set_encoding(re2::RE2::Options::EncodingLatin1);
-        re2::RE2 re_latin1(combined_regexp, options);
-        return re_latin1.ok();
-    }
-
-    return re.ok();
 }
 
 /// Stores information about a single LIKE/ILIKE/match pattern
@@ -169,36 +125,8 @@ struct PatternInfo
         return result;
     }
 
-    /// Build a combined regexp pattern using alternation: (pattern1)|(pattern2)|...
-    /// Used as the `match` fallback when the binary is built without Vectorscan.
-    String getCombinedRegexp() const
-    {
-        String result;
-        for (const auto & p : patterns)
-        {
-            if (!result.empty())
-                result += "|";
-            result += "(" + p.regexp + ")";
-        }
-        return result;
-    }
-
-    /// Predicted size of `getCombinedRegexp()` without actually building the string:
-    /// `(p1)|(p2)|...` — 2 wrapper chars per pattern, plus `N - 1` separator chars.
-    size_t combinedRegexpSize() const
-    {
-        if (patterns.empty())
-            return 0;
-        size_t total = 0;
-        for (const auto & p : patterns)
-            total += p.regexp.size();
-        return total + 2 * patterns.size() + (patterns.size() - 1);
-    }
-
     /// Returns true if all per-pattern lengths and the total length fit within the hyperscan
-    /// regexp size limits. A limit value of 0 means "unlimited".
-    /// Used as a pre-check for `multiMatchAny`; for the combined-`match` fallback, use
-    /// `combinedRegexpFitsHyperscanLimits` instead so the `(`/`)`/`|` overhead is included.
+    /// regexp size limits. A limit value of 0 means "unlimited". Used as a pre-check for `multiMatchAny`.
     bool fitsHyperscanLimits(size_t max_length, size_t max_total_length) const
     {
         if (max_length == 0 && max_total_length == 0)
@@ -212,23 +140,6 @@ struct PatternInfo
             total += p.regexp.size();
         }
         return max_total_length == 0 || total <= max_total_length;
-    }
-
-    /// Like `fitsHyperscanLimits`, but bounds the size of the alternation regexp that
-    /// `getCombinedRegexp` would build. The alternation adds `(`, `)` and `|` overhead per
-    /// branch, so the emitted `match` regexp can be substantially larger than the sum of raw
-    /// pattern sizes. Pre-checking the combined size lets the rewrite back off to the original
-    /// `OR LIKE` chain instead of emitting a `match` regexp that could blow up RE2 compile
-    /// limits.
-    bool combinedRegexpFitsHyperscanLimits(size_t max_length, size_t max_total_length) const
-    {
-        if (max_length == 0 && max_total_length == 0)
-            return true;
-
-        for (const auto & p : patterns)
-            if (max_length > 0 && p.regexp.size() > max_length)
-                return false;
-        return max_total_length == 0 || combinedRegexpSize() <= max_total_length;
     }
 
     /// Returns true if any pattern would be rejected at runtime by the `multiMatchAny` slow-regexp
@@ -282,16 +193,12 @@ struct PatternInfo
         return false;
     }
 
-    /// Returns true if no regexp contains an embedded NUL byte. Used to gate both regexp rewrite
-    /// targets — `multiMatchAny` and the combined-`match` fallback — off chains that contain an
-    /// embedded NUL. `multiMatchAny` compiles through a NUL-terminated Vectorscan API and truncates at
-    /// the first NUL (so a `LIKE`-derived regexp such as `^a\x00.` matches a broader set than the
-    /// original `like`/`ilike`, which uses length-aware RE2) — this path must be gated for correctness.
-    /// The combined `(p1)|(p2)|...` alternation is matched by the same length-aware RE2 as the originals
-    /// (RE2 matches `\0` literally — see commit `2655ec4ea51`), so it reproduces embedded NUL faithfully;
-    /// the gate is kept there too so one check governs both regexp targets. When any pattern has an
-    /// embedded NUL we keep the originals on both paths. The byte-oriented `multiSearchAny*` substring
-    /// path is length-aware and preserving, so it needs no such guard.
+    /// Returns true if no regexp contains an embedded NUL byte. Used to gate the `multiMatchAny`
+    /// rewrite off chains that contain an embedded NUL: `multiMatchAny` compiles through a NUL-terminated
+    /// Vectorscan API and truncates at the first NUL (so a `LIKE`-derived regexp such as `^a\x00.` matches
+    /// a broader set than the original `like`/`ilike`, which uses length-aware RE2). When any pattern has
+    /// an embedded NUL we keep the originals. The byte-oriented `multiSearchAny*` substring path is
+    /// length-aware and preserving, so it needs no such guard.
     [[maybe_unused]] bool allRegexpsHaveNoEmbeddedNul() const
     {
         for (const auto & p : patterns)
@@ -461,10 +368,11 @@ void ConvertFunctionOrLikeData::visit(ASTFunction & function, ASTPtr & /*ast*/) 
 
             bool any_rewrite = false;
 
-            /// Decide per-key whether to rewrite. When the patterns exceed the configured hyperscan
-            /// size limits, keep the original LIKE/ILIKE/match branches: emitting `multiMatchAny`
-            /// would throw at runtime and emitting one combined `match` regexp could blow up RE2
-            /// compile limits.
+            /// Decide per-key whether to rewrite. A group becomes `multiSearchAny` (pure substrings)
+            /// or `multiMatchAny` (regexps, Vectorscan). We never emit a combined `match('(p1)|...)'`
+            /// alternation — benchmarking on `hits` showed the RE2 alternation is consistently slower
+            /// than the original short-circuit `OR` — so when neither fast path applies we keep the
+            /// original branches, which is always correct and never a regression.
             for (auto & key_data : per_key_data)
             {
                 auto & info = key_data.info;
@@ -472,32 +380,31 @@ void ConvertFunctionOrLikeData::visit(ASTFunction & function, ASTPtr & /*ast*/) 
 
                 ASTPtr match_fn;
 
-                /// Skip rewriting groups with too few patterns — the rewrite cost (fixed setup of
-                /// `multiSearchAny`/Hyperscan) typically exceeds the benefit of short-circuit OR
-                /// evaluation for short chains. Controlled by `optimize_or_like_chain_min_patterns`.
-                /// Also keep originals when a pattern failed to convert to a regexp (see the collection
-                /// loop), so the query's runtime error / short-circuit behavior is preserved instead of
-                /// failing eagerly during optimization.
-                if (info.patterns.size() < min_patterns_for_rewrite || key_data.keep_originals)
-                {
-                    slot = std::move(key_data.originals);
-                    continue;
-                }
-
-                /// `multiSearchAny*` and `multiMatchAny` accept only a `String` haystack (after the
-                /// usual `LowCardinality`/`Nullable` unwrapping); for `FixedString`/`Enum` haystacks —
-                /// which the original `like`/`ilike`/`match` predicates accept — they throw
-                /// `ILLEGAL_TYPE_OF_ARGUMENT` during function resolution. With the rewrite default-on
-                /// this would turn a previously working chain over such a column into an exception. The
+                /// `multiSearchAny*` / `multiMatchAny` accept only a `String` haystack (after
+                /// `LowCardinality`/`Nullable` unwrapping); `FixedString`/`Enum` haystacks — which the
+                /// original `like`/`ilike`/`match` accept — would throw `ILLEGAL_TYPE_OF_ARGUMENT`. The
                 /// LHS type is looked up by column name (unknown for non-column expressions); when it is
-                /// not provably `String` we keep both fast paths off and fall back to the combined
-                /// `match`, which (like the original predicates) accepts `FixedString`/`Enum`.
+                /// not provably `String` we keep the original branches.
                 bool haystack_is_string = false;
                 if (auto type_it = source_column_types.find(key_data.identifier->getColumnNameWithoutAlias());
                     type_it != source_column_types.end() && type_it->second)
                     haystack_is_string = WhichDataType(removeLowCardinalityAndNullable(type_it->second)).isString();
 
-                if (haystack_is_string && info.canUseMultiSearchAny())
+                const bool can_use_multi_search = haystack_is_string && info.canUseMultiSearchAny();
+
+                /// Per-target minimum branch counts (see the settings' documentation): `multiSearchAny`
+                /// pays off from ~4 branches, `multiMatchAny` (Vectorscan) only from ~9. Also keep the
+                /// originals when a pattern failed to convert to a regexp (see the collection loop), so
+                /// the query's runtime error / short-circuit behavior is preserved instead of failing
+                /// eagerly during optimization.
+                const size_t min_for_rewrite = can_use_multi_search ? min_substrings_for_rewrite : min_patterns_for_rewrite;
+                if (info.patterns.size() < min_for_rewrite || key_data.keep_originals)
+                {
+                    slot = std::move(key_data.originals);
+                    continue;
+                }
+
+                if (can_use_multi_search)
                 {
                     /// Use `multiSearchAny` or `multiSearchAnyCaseInsensitiveUTF8` for pure substring patterns.
                     /// `multiSearchAny*` operates on raw substrings, not regexps, so the hyperscan
@@ -507,12 +414,10 @@ void ConvertFunctionOrLikeData::visit(ASTFunction & function, ASTPtr & /*ast*/) 
                 }
                 else
                 {
-                    [[maybe_unused]] const bool fits_limits
-                        = info.fitsHyperscanLimits(max_hyperscan_regexp_length, max_hyperscan_regexp_total_length);
 #if USE_VECTORSCAN
                     const bool can_use_multi_match = allow_hyperscan
                         && haystack_is_string
-                        && fits_limits
+                        && info.fitsHyperscanLimits(max_hyperscan_regexp_length, max_hyperscan_regexp_total_length)
                         && !info.hasRawRegexp()
                         && info.allRegexpsValidUTF8()
                         && info.allRegexpsHaveNoEmbeddedNul()
@@ -522,55 +427,25 @@ void ConvertFunctionOrLikeData::visit(ASTFunction & function, ASTPtr & /*ast*/) 
 #endif
                     if (can_use_multi_match)
                     {
-                        /// Use `multiMatchAny` for non-substring patterns. It is significantly faster
-                        /// than `match` with alternation in RE2 because it can leverage
-                        /// Vectorscan/Hyperscan. We pre-check `max_hyperscan_regexp_length`,
-                        /// `max_hyperscan_regexp_total_length` and `reject_expensive_hyperscan_regexps`,
-                        /// and that all patterns are valid UTF-8, so a query that previously worked as
-                        /// `OR LIKE` cannot be turned into a `BAD_ARGUMENTS` / `HYPERSCAN_CANNOT_SCAN_TEXT`
-                        /// failure. `hasRawRegexp` additionally keeps chains that contain a raw `match()`
-                        /// regexp off this path: Vectorscan rejects RE2-only syntax such as `\C` even when
-                        /// the bytes are valid UTF-8 (see `hasRawRegexp`). `allRegexpsHaveNoEmbeddedNul`
-                        /// keeps chains whose regexps contain an embedded NUL off this path:
-                        /// `multiMatchAny` compiles each pattern through a NUL-terminated Vectorscan API
-                        /// and truncates at the first NUL, whereas the original `like`/`ilike` compiles
-                        /// the full pattern with RE2 (length-aware), so a `LIKE`-derived regexp such as
-                        /// `^a\x00.` (from `LIKE 'a\0_%'`) matches a different set; such chains fall back
-                        /// to the combined-`match` / originals below.
+                        /// Use `multiMatchAny` for non-substring patterns; it evaluates all regexps in a
+                        /// single Vectorscan pass instead of a short-circuit chain of `match`/`LIKE` calls.
+                        /// We pre-check `max_hyperscan_regexp_length`, `max_hyperscan_regexp_total_length`
+                        /// and `reject_expensive_hyperscan_regexps`, and that all patterns are valid UTF-8,
+                        /// so a query that worked as `OR LIKE` cannot be turned into a `BAD_ARGUMENTS` /
+                        /// `HYPERSCAN_CANNOT_SCAN_TEXT` failure. `hasRawRegexp` keeps chains with a raw
+                        /// `match()` regexp off this path (Vectorscan rejects RE2-only syntax such as `\C`),
+                        /// and `allRegexpsHaveNoEmbeddedNul` keeps embedded-NUL regexps off it (Vectorscan
+                        /// truncates at the first NUL, matching a broader set than the length-aware RE2 of
+                        /// the original `like`/`ilike`). Any group failing a check keeps its originals below.
                         match_fn = makeASTFunction("multiMatchAny", key_data.identifier, make_intrusive<ASTLiteral>(Field{info.getRegexps()}));
-                    }
-                    else if (info.allRegexpsHaveNoEmbeddedNul()
-                        && info.combinedRegexpFitsHyperscanLimits(max_hyperscan_regexp_length, max_hyperscan_regexp_total_length)
-                        && combinedRegexpCompilesWithRE2(info.getCombinedRegexp()))
-                    {
-                        /// Fall back to `match` with combined alternation when Vectorscan is not
-                        /// compiled in, `allow_hyperscan` is off, the patterns would be rejected
-                        /// as expensive, the chain contains a raw `match()` regexp, or some pattern is
-                        /// not valid UTF-8 (which `multiMatchAny` cannot compile but RE2 accepts).
-                        /// `combinedRegexpFitsHyperscanLimits` accounts for the `(`, `)` and `|`
-                        /// overhead added by `getCombinedRegexp`, so `max_hyperscan_regexp_total_length`
-                        /// is a strict upper bound on the emitted regexp when the user sets it; but those
-                        /// limits default to 0 ("unlimited"), so they alone do not stop a large or
-                        /// repetition-heavy chain from being merged into a single RE2 program that exceeds
-                        /// RE2's 8 MiB budget and throws `CANNOT_COMPILE_REGEXP`. We therefore additionally
-                        /// pre-compile the merged regexp (`combinedRegexpCompilesWithRE2`) and only emit
-                        /// the combined `match` when it compiles; otherwise we fall through to the `else`
-                        /// below and keep the originals.
-                        /// `allRegexpsHaveNoEmbeddedNul` also gates this path: the combined
-                        /// `(p1)|(p2)|...` alternation is matched by the same length-aware RE2 as the
-                        /// originals (RE2 matches `\0` literally — see commit `2655ec4ea51`), so it
-                        /// reproduces embedded NUL faithfully; the gate is kept here too so one check
-                        /// governs both regexp targets. Such groups fall through to the `else` below and
-                        /// keep the originals, so results are preserved regardless of `allow_hyperscan`.
-                        match_fn = makeASTFunction("match", key_data.identifier, make_intrusive<ASTLiteral>(Field{info.getCombinedRegexp()}));
                     }
                     else
                     {
-                        /// Patterns exceed the configured hyperscan size limits, or contain an embedded
-                        /// NUL that the combined alternation cannot reproduce faithfully. Skip the
-                        /// rewrite for this key — keep the original `OR LIKE` branches so the query
-                        /// remains executable, we don't build an unbounded combined regexp, and the
-                        /// result is preserved.
+                        /// No applicable fast path: Hyperscan disabled or not compiled in, or the patterns
+                        /// are raw `match()` regexps, non-UTF-8, embedded-NUL, over-limit, or expensive.
+                        /// We do not fall back to a combined `match` alternation (it regresses — see the
+                        /// comment above), so keep the original `OR LIKE` branches: always executable and
+                        /// result-preserving.
                         slot = std::move(key_data.originals);
                         continue;
                     }

@@ -3,7 +3,7 @@
 # be rewritten by `optimize_or_like_chain` into a single `multiSearchAny()` call. `multiSearchAny`
 # throws TOO_MANY_ARGUMENTS_FOR_FUNCTION for constant needle arrays larger than UInt8::max (255),
 # so a default-on rewrite turned a previously-working query into an exception. Now such chains fall
-# through to the `multiMatchAny`/combined-`match` path, which has no such cap. Verify that the query
+# through to the `multiMatchAny` path (Vectorscan), which has no such cap. Verify that the query
 # succeeds and returns the same result as the un-rewritten OR chain, for both analyzers.
 #
 # The needles must be *pure* substrings: no LIKE metacharacters (`_`, `%`) and no regexp
