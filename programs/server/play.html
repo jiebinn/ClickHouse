@@ -4522,11 +4522,16 @@ let controller = null;
 /// Returns { format, reply, response_ok, is_table, is_raw, is_chart, is_image, is_error }.
 /// The caller is responsible for top-level UI (download buttons, history, favicon).
 /// `abortController` is an AbortController that can be used to cancel this query.
-async function postImpl(posted_request_num, query, targetResultEl, abortController, paramValuesSnapshot, query_database)
+async function postImpl(posted_request_num, query, targetResultEl, abortController, paramValuesSnapshot, query_database, connection)
 {
-    const user = user_elem.value;
-    const password = password_elem.value;
-    const server_address = url_elem.value;
+    /// The connection tuple (server address, user, password) is snapshotted once per run by the
+    /// caller and passed in, rather than read live from the inputs here. Otherwise, in a
+    /// multi-query run (where later statement groups start only after earlier ones finish), editing
+    /// the connection mid-run would send later statements to a different server/user while the saved
+    /// provenance still claims a single producing connection (see `postMulti`).
+    const user = connection.user;
+    const password = connection.password;
+    const server_address = connection.url;
     let url = server_address +
         (server_address.indexOf('?') >= 0 ? '&' : '?') +
         /// Ask server to allow cross-domain requests.
@@ -4700,6 +4705,11 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     /// `last_url_for_download`/`last_user_for_download` docs).
     const query_url = url_elem.value;
     const query_user = user_elem.value;
+    /// Snapshot the full connection tuple (including the password) for the run's requests, so
+    /// every request executes against one connection even if the inputs change while the query is
+    /// in flight, and pass it to `postImpl`. The password authenticates this run only; it is never
+    /// persisted in history or the download metadata (see the `last_url_for_download` docs).
+    const query_connection = { url: query_url, user: query_user, password: password_elem.value };
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4709,7 +4719,7 @@ async function postSingle(posted_request_num, query, history_query_text, params_
     progressEl.start();
 
     controller = new AbortController();
-    const result = await postImpl(posted_request_num, query, resultEl, controller, paramValuesSnapshot, query_database);
+    const result = await postImpl(posted_request_num, query, resultEl, controller, paramValuesSnapshot, query_database, query_connection);
 
     if (result.cancelled) return;
 
@@ -4803,6 +4813,13 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
     /// (kept symmetric with `postSingle`; see `last_url_for_download`/`last_user_for_download`).
     const query_url = url_elem.value;
     const query_user = user_elem.value;
+    /// Snapshot the full connection tuple (including the password) once for the whole run and pass
+    /// it to every `postImpl` call below. Groups run sequentially (a later group starts only after
+    /// `await Promise.all` of the previous one), so without a single snapshot, editing the connection
+    /// between groups would split one run across different servers/users while the saved provenance
+    /// still claims a single producing connection. The password authenticates this run's requests
+    /// only; it is never persisted in history or the download metadata.
+    const query_connection = { url: query_url, user: query_user, password: password_elem.value };
     last_query_start = performance.now();
 
     document.getElementById('download-div').style.display = 'none';
@@ -4892,7 +4909,7 @@ async function postMulti(posted_request_num, parsed, params_restore_pending)
         const promises = group.indices.map(i => {
             const ac = new AbortController();
             multiQueryControllers.push(ac);
-            return postImpl(posted_request_num, parsed[i].query, resultElements[i], ac, paramValuesSnapshot, query_database)
+            return postImpl(posted_request_num, parsed[i].query, resultElements[i], ac, paramValuesSnapshot, query_database, query_connection)
                 .then(result => ({ index: i, result }));
         });
 
