@@ -72,6 +72,7 @@ const VersionToSettingsChangesMap & getSettingsChangesHistory()
             {"allow_experimental_text_index_lazy_apply", false, true, "Lazy posting list apply mode for the text index is no longer experimental; the setting is now obsolete and has no effect (lazy mode is selected via `text_index_posting_list_apply_mode = 'lazy'`)."},
             {"allow_experimental_url_wildcard_from_index_pages", false, false, "New setting to enable expanding wildcards in the `url` table function by listing HTTP index pages."},
             {"url_wildcard_max_directories_to_read", 100000, 100000, "New setting to limit the number of directories read when expanding wildcards in the `url` table function."},
+            {"allow_experimental_eval_table_function", false, false, "New setting to enable the experimental table function `eval`."},
             {"output_format_csv_header_serialize_tuple_into_separate_columns", false, true, "New setting. When output_format_csv_serialize_tuple_into_separate_columns is enabled, the CSVWithNames/CSVWithNamesAndTypes header now flattens Tuple columns into their leaf fields so the header width matches the data. Set to false to restore the previous single-name header."},
             {"reader_executor_use_long_connections", false, false, "New experimental ReaderExecutor setting (off by default): reuse a held source connection across sequential windows."},
             {"reader_executor_min_bytes_for_seek", 2097152, 2097152, "New experimental ReaderExecutor setting: forward-gap bound for bridging on a held source connection."},
