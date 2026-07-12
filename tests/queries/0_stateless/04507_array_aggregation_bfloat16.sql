@@ -9,6 +9,10 @@ SELECT arrayMin([toBFloat16(5), toBFloat16(2), toBFloat16(7)]), arrayMax([toBFlo
 
 -- Empty arrays.
 SELECT arraySum([]::Array(BFloat16)), arrayProduct([]::Array(BFloat16));
+SELECT arrayAvg([]::Array(BFloat16));
+
+-- Empty arrays with a constant lambda: the result must be the default value, same as for other numeric types.
+SELECT arraySum(x -> toBFloat16(1), []::Array(BFloat16)), arrayAvg(x -> toBFloat16(1), []::Array(BFloat16)), arrayProduct(x -> toBFloat16(2), []::Array(BFloat16));
 
 -- A column of arrays.
 DROP TABLE IF EXISTS t_array_bfloat16;
