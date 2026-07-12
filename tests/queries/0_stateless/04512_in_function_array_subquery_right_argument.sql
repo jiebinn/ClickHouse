@@ -45,3 +45,12 @@ SELECT 3 IN (SELECT number FROM numbers(10)) AS present, 99 IN (SELECT number FR
 
 -- Regression guard: a multi-column subquery (tuple IN) is unaffected.
 SELECT (1, 2) IN (SELECT 1, 2) AS present, (1, 3) IN (SELECT 1, 2) AS absent;
+
+-- The same behavior must not depend on `rewrite_in_to_join`, which rewrites a non-constant
+-- `x IN (subquery)` into a correlated `EXISTS` before the regular IN handling runs. Without
+-- flattening the array subquery there too, the rewrite would compare `x = <array>` and keep the
+-- reported bug alive whenever this setting is enabled.
+SET allow_experimental_correlated_subqueries = 1;
+SET rewrite_in_to_join = 1;
+SELECT count() FROM numbers(10) WHERE number IN (SELECT groupArray(number) FROM numbers(10));
+SELECT count() FROM numbers(10) WHERE number NOT IN (SELECT groupArray(number) FROM numbers(5));
