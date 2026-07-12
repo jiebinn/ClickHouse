@@ -4,15 +4,15 @@
 -- Each row pins down one type pair. Values are chosen so that nothing in this file throws;
 -- the throwing cases are covered by 04515_type_pair_matrix_errors.
 --
--- This is part 1 of 2: it drives the unsigned wide integers (UInt128, UInt256), so it covers
--- every mixed pair in which at least one operand is a UInt128 or UInt256. Part 2
--- (04517_type_pair_matrix_arithmetic_signed_wide) drives the signed wide integers against the
--- operands that part 1 does not already reach. The suite was split so that each file's single
--- run stays within the flaky-check runtime budget while the union keeps the whole matrix and
--- the same per-file shape coverage.
+-- This is part 2 of 2: it drives the signed wide integers (Int128, Int256) against every
+-- operand except the unsigned wide integers, which part 1
+-- (04514_type_pair_matrix_arithmetic) already reaches. Together the two files cover every
+-- mixed pair that involves a 128/256-bit integer. The suite was split so that each file's
+-- single run stays within the flaky-check runtime budget while the union keeps the whole
+-- matrix and the same per-file shape coverage.
 
-{% set wide = ['UInt128','UInt256'] %}
-{% set all_int = ['UInt8','UInt16','UInt32','UInt64','Int8','Int16','Int32','Int64','UInt128','UInt256','Int128','Int256'] %}
+{% set wide = ['Int128','Int256'] %}
+{% set all_int = ['UInt8','UInt16','UInt32','UInt64','Int8','Int16','Int32','Int64','Int128','Int256'] %}
 {% set arith_ops = ['+','-','*','/'] %}
 {% set named_ops = ['intDiv','intDivOrZero','intDivOrNull','modulo','moduloOrNull','moduloOrZero','positiveModulo','positiveModuloOrNull','moduloLegacy'] %}
 
