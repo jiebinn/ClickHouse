@@ -60,6 +60,12 @@ public:
 
     std::string getName() const override { return name; }
 
+    /// `eval` must not be persisted through `CREATE TABLE ... AS eval(...)`: the source expression
+    /// would be re-evaluated on every `ATTACH`, so such a table could fail to attach after a restart
+    /// (the experimental setting might be disabled) or silently change if the expression depends on
+    /// parameters, settings, or time. There is no stable persisted representation, so forbid it.
+    bool canBeUsedToCreateTable() const override { return false; }
+
 private:
     StoragePtr executeImpl(
         const ASTPtr & ast_function,

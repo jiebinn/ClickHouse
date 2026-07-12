@@ -78,6 +78,15 @@ SELECT * FROM loop(eval('SELECT 27')) LIMIT 1; -- { serverError UNSUPPORTED_METH
 -- However, it can be used inside a query argument of `view`.
 SELECT * FROM view(SELECT * FROM eval('SELECT 30 AS v'));
 
+-- `eval` cannot be used to create a persisted table: the source expression would be re-evaluated
+-- on every ATTACH and could depend on settings, parameters, or time.
+CREATE TABLE t_eval AS eval('SELECT 1 AS x'); -- { serverError BAD_ARGUMENTS }
+
+-- The generated query is opaque to the query result cache, so `eval` is treated as potentially
+-- non-deterministic and potentially reading a system table, and is not cached by default.
+SELECT * FROM eval('SELECT now()') SETTINGS use_query_cache = 1; -- { serverError QUERY_CACHE_USED_WITH_NONDETERMINISTIC_FUNCTIONS }
+SELECT * FROM eval('SELECT * FROM system.one') SETTINGS use_query_cache = 1, query_cache_nondeterministic_function_handling = 'save'; -- { serverError QUERY_CACHE_USED_WITH_SYSTEM_TABLE }
+
 -- The old analyzer is not supported.
 SET enable_analyzer = 0;
 SELECT * FROM eval('SELECT 28'); -- { serverError NOT_IMPLEMENTED }
