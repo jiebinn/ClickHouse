@@ -6111,13 +6111,27 @@ window.onpopstate = function(event) {
     /// The password is never part of the identity — it is never serialized and is unknowable after a
     /// reload — so a same server/user entry restores its database even across a password change: the
     /// selected database is a namespace on (server, user), and wrong credentials fail loud on the next
-    /// run rather than exposing another server's data. An entry with no stamp (written before this
-    /// code) fails the check and is left untouched — the safe direction, since we cannot confirm it
-    /// belongs to the live connection.
+    /// run rather than exposing another server's data.
     /// `location` already reflects the navigated entry here (and after the restamp above); an absent
     /// `database=` means the server default.
-    if (event.state.connectionServer !== undefined
-        && sameServerAddress(event.state.connectionServer, url_elem.value)
+    ///
+    /// An entry with no stamp (`connectionServer` undefined — written before this feature) cannot be
+    /// proven to belong to the live connection, and it carries no `database=` of its own (it ran
+    /// against the server default of whatever connection was live then). Leaving the current, newer
+    /// `selected_database` in place would silently send the next `Run` to that database while the
+    /// displayed entry/URL describe a server-default query. Fail closed: drop the selection so
+    /// Back/Forward to such an entry targets the server default it actually represents. (A stamped
+    /// entry for a DIFFERENT connection is instead left untouched: the connection itself is not
+    /// restored by history navigation, so the live connection and its selection legitimately stay;
+    /// only the foreign entry's own `database=` — which belongs to another (server, user) — is not
+    /// imported into the live connection.)
+    if (event.state.connectionServer === undefined) {
+        if (selected_database !== null) {
+            selected_database = null;
+            stampSelectedDatabaseConnection();
+            applySelectedDatabaseHighlight();
+        }
+    } else if (sameServerAddress(event.state.connectionServer, url_elem.value)
         && effectiveConnectionUser(event.state.connectionServer, event.state.connectionUser)
             === effectiveConnectionUser(url_elem.value, user_elem.value)) {
         selected_database = new URL(location.href).searchParams.get('database');
