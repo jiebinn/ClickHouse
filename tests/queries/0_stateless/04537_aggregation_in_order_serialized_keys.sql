@@ -66,3 +66,45 @@ SELECT
 );
 
 DROP TABLE t_agg_in_order_serialized_mt;
+
+-- Nullable variant. A multi-column key `Nullable(String), Nullable(UInt64)` (a string plus a
+-- number, so not all keys are fixed-size contiguous) selects the `nullable_prealloc_serialized`
+-- method, which serializes keys through a different, null-map-aware path in `HashMethodSerialized`
+-- than the non-nullable `prealloc_serialized` above. The quadratic blowup applies to that method
+-- just the same, and the fix downgrades it to `nullable_serialized` on the per-run in-order path.
+-- The data below carries actual NULL values in both keys (disjoint, so every `(s, n)` pair stays
+-- distinct), so the null-map serialization is exercised.
+
+DROP TABLE IF EXISTS t_agg_in_order_serialized_null;
+CREATE TABLE t_agg_in_order_serialized_null (s Nullable(String), n Nullable(UInt64))
+    ENGINE = MergeTree ORDER BY s SETTINGS allow_nullable_key = 1;
+
+INSERT INTO t_agg_in_order_serialized_null
+    SELECT if(number % 100 = 0, NULL, toString(number)),
+           if(number % 100 = 1, NULL, number)
+    FROM numbers(300000);
+
+SELECT count() FROM (SELECT s, n FROM t_agg_in_order_serialized_null GROUP BY s, n)
+SETTINGS optimize_aggregation_in_order = 1, optimize_read_in_order = 1,
+         max_threads = 1, max_block_size = 16384, max_execution_time = 20;
+
+-- The nullable in-order result must be identical to regular aggregation.
+SELECT
+(
+    SELECT sum(cityHash64(s, n, c)) FROM
+    (
+        SELECT s, n, count() AS c FROM t_agg_in_order_serialized_null GROUP BY s, n
+        SETTINGS optimize_aggregation_in_order = 1, optimize_read_in_order = 1,
+                 max_threads = 1, max_block_size = 16384
+    )
+)
+=
+(
+    SELECT sum(cityHash64(s, n, c)) FROM
+    (
+        SELECT s, n, count() AS c FROM t_agg_in_order_serialized_null GROUP BY s, n
+        SETTINGS optimize_aggregation_in_order = 0, optimize_read_in_order = 0
+    )
+);
+
+DROP TABLE t_agg_in_order_serialized_null;
