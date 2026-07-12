@@ -49,16 +49,24 @@ function check_logs_credentials()
     __set_connection_args
     __shadow_credentials
     local code
-    # Retry the probe: the remote CI logs cluster occasionally resets the
-    # connection (NETWORK_ERROR 210), which is transient and unrelated to the
-    # credentials. A single attempt turned such a blip into "Failed to start
-    # log export" for the whole job.
+    # The remote CI logs cluster occasionally resets the connection
+    # (NETWORK_ERROR 210), which is transient and unrelated to the credentials.
+    # Retry only that case. A short --connect_timeout (instead of the 10s
+    # default) is applied to the probe only, so a real outage or a
+    # non-recoverable error (auth, config, DNS) fails fast: this probe is
+    # best-effort and must not slow every CI job. Export queries keep the
+    # default timeouts.
     local attempt
     for attempt in 1 2 3; do
         # Catch both success and error to not fail on `set -e`
-        clickhouse-client "${CONNECTION_ARGS[@]:?}" -q 'SELECT 1 FORMAT Null' && return 0 || code=$?
-        echo "Attempt ${attempt}/3 to connect to CI Logs cluster failed, exit code: ${code}"
-        [ "$attempt" -lt 3 ] && sleep "$((attempt * 5))"
+        clickhouse-client "${CONNECTION_ARGS[@]:?}" --connect_timeout 3 -q 'SELECT 1 FORMAT Null' && return 0 || code=$?
+        # Only NETWORK_ERROR (210) is worth retrying; other codes will not
+        # recover on retry, so stop immediately.
+        if [ "$code" != 210 ]; then
+            break
+        fi
+        echo "Attempt ${attempt}/3 to connect to CI Logs cluster failed (NETWORK_ERROR ${code})"
+        [ "$attempt" -lt 3 ] && sleep "$((attempt + 1))"
     done
     echo 'Failed to connect to CI Logs cluster'
     return "$code"
