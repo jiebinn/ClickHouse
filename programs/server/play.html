@@ -7453,17 +7453,34 @@ function resetConnectionScopedState() {
     /// panel so it is rebuilt against the new connection on the next open; this also detaches the
     /// rows, dropping any in-flight table load through its `isConnected` check.
     if (databases_toggle.dataset['opened']) closeDatabases();
-    /// Clearing `selected_database` above only touched memory: the current history entry and URL may
-    /// still carry the old `database=` (and its `run=1` marker), so a reload or a copied link would
-    /// immediately resurrect the selection we just invalidated (and possibly auto-run it against the
-    /// new connection). Restamp the current entry from the active tab exactly as
-    /// `commitSelectedDatabase` does — `buildHistoryParams` now emits no `database=`, and
-    /// `tabReflectsRun` drops `run=1` because the cleared selection no longer matches the database
-    /// that produced the shown result — so both are gone the moment the connection changes. Only when
-    /// a selection was actually cleared (not when it was kept because the identity was unchanged, nor
-    /// when none was selected), so an edit that keeps the selection leaves its `database=`/`run=1`
-    /// intact and typing in a connection field on a page with none selected never churns history.
-    if (cleared_selection) {
+    /// Restamp the current history entry whenever the live connection moved, so its URL stops
+    /// describing the previous target. Two ways it can go stale:
+    ///   - A selection was just cleared above: the entry/URL may still carry the old `database=` (and
+    ///     its `run=1` marker), so a reload or copied link would resurrect the selection we just
+    ///     invalidated (and possibly auto-run it against the new connection).
+    ///   - No selection was set, but the entry is a run entry (`run=1`) stamped for the previous
+    ///     server (`connectionServer`), which is the case even for a server-default run that carries
+    ///     no `database=` at all. Editing the connection from server A to server B then leaves the
+    ///     live page on B while the current entry still says `run=1`/`url=A`; reloading or sharing it
+    ///     would auto-execute the old query against A — the same stale-target hazard the `database=`
+    ///     restamp addresses. The database-clear branch never fires here (there is nothing to clear),
+    ///     so detect the connection divergence directly from the entry's stamp.
+    /// Compared with the SAME (`sameServerAddress`, `effectiveConnectionUser`) identity as the restore
+    /// gate (`window.onpopstate`) and `writeHistoryEntry`'s `live_diverged`, so a cosmetic URL edit (a
+    /// root-path trailing slash, a default port) or a password-only change keeps the identity and does
+    /// NOT churn the entry. An entry without a `connectionServer` stamp (a legacy pre-feature entry) is
+    /// left alone: startup already dropped its `run=1` (`writeHistoryEntry` fails closed on an unknown
+    /// producing connection), so it carries no stale-run hazard to fix, and we have no stored
+    /// connection to compare it against. When it did diverge, restamp from the active tab exactly as
+    /// `commitSelectedDatabase` does — `writeHistoryEntry` then drops `run=1` and rewrites `url=`/`user=`
+    /// for the live target (or, for a still-matching run entry, keeps the producing snapshot verbatim).
+    const current_entry = history.state;
+    const connection_diverged = current_entry
+        && current_entry.connectionServer !== undefined
+        && (!sameServerAddress(current_entry.connectionServer, url_elem.value)
+            || effectiveConnectionUser(current_entry.connectionServer, current_entry.connectionUser)
+                !== effectiveConnectionUser(url_elem.value, user_elem.value));
+    if (cleared_selection || connection_diverged) {
         captureActiveTab();
         refreshCurrentHistoryEntry(getActiveTab());
     }
