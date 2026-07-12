@@ -126,7 +126,7 @@ To ensure consistent and expected results, especially when migrating old queries
 
 #### Handling of type modifiers for columns in the `USING` clause {#handling-of-type-modifiers-for-columns-in-using-clause}
 
-In the new version of the analyzer, the rules for determining the common supertype for columns specified in the `USING` clause have been standardized to produce more predictable outcomes,
+In the analyzer, the rules for determining the common supertype for columns specified in the `USING` clause have been standardized to produce more predictable outcomes,
 especially when dealing with type modifiers like `LowCardinality` and `Nullable`.
 
 - `LowCardinality(T)` and `T`: When a column of type `LowCardinality(T)` is joined with a column of type `T`, the resulting common supertype will be `T`, effectively discarding the `LowCardinality` modifier.
