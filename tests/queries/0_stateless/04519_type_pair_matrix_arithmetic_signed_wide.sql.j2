@@ -76,6 +76,24 @@ SELECT '{{ L }} vs {{ R }}'
 SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] }}), toTypeName({{ dividend[L] }} - {{ divisor[R] }}), toTypeName({{ dividend[L] }} * {{ divisor[R] }}), toTypeName({{ dividend[L] }} / {{ divisor[R] }}), toTypeName(intDiv({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(modulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(positiveModulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloLegacy({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(intDivOrNull({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloOrNull({{ dividend[L] }}, {{ divisor[R] }}));
 {%- endmacro %}
 
+-- A floating-point/wide-integer pair "a op b". Unlike the integer matrix, +, -, * are rejected
+-- for these pairs (see 04520_type_pair_matrix_division_overflow_errors), so only the
+-- division family is valid: the true division "/", intDiv, modulo, positiveModulo, moduloLegacy
+-- and their OrZero/OrNull variants. Every one of them is pinned in all four constness shapes,
+-- with the zero-divisor OrZero/OrNull cases and the result types, so a regression in the
+-- wide-int/float conversion path of any of them is caught. The identity(...) shape keeps the
+-- both-const path executing instead of being folded away by the analyzer.
+{% macro floatpair(label, a, b, bzero) -%}
+SELECT '{{ label }}', materialize({{ a }}) / materialize({{ b }}), {{ a }} / materialize({{ b }}), materialize({{ a }}) / {{ b }}, identity({{ a }}) / identity({{ b }})
+{%- for fn in named_ops -%}
+, {{ fn }}(materialize({{ a }}), materialize({{ b }})), {{ fn }}(materialize({{ a }}), {{ b }}), {{ fn }}({{ a }}, materialize({{ b }})), {{ fn }}(identity({{ a }}), identity({{ b }}))
+{%- endfor -%}
+{%- for fn in ['intDivOrZero','intDivOrNull','moduloOrZero','moduloOrNull','positiveModuloOrNull'] -%}
+, {{ fn }}(materialize({{ a }}), materialize({{ bzero }})), {{ fn }}(materialize({{ a }}), {{ bzero }}), {{ fn }}({{ a }}, materialize({{ bzero }})), {{ fn }}(identity({{ a }}), identity({{ bzero }}))
+{%- endfor -%};
+SELECT '{{ label }} types', toTypeName({{ a }} / {{ b }}), toTypeName(intDiv({{ a }}, {{ b }})), toTypeName(modulo({{ a }}, {{ b }})), toTypeName(positiveModulo({{ a }}, {{ b }})), toTypeName(moduloLegacy({{ a }}, {{ b }})), toTypeName(intDivOrNull({{ a }}, {{ b }})), toTypeName(moduloOrNull({{ a }}, {{ b }}));
+{%- endmacro %}
+
 {% set ns = namespace(seen=[]) %}
 {% for W in wide %}
 {% for O in all_int %}
@@ -97,12 +115,10 @@ SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] 
 {{ arithrow(W, W) }}
 {% endfor %}
 
--- Floating point with wide integers: only division is a valid combination.
--- The identity(...) / identity(...) shape keeps the both-const path of the wide-int/float
--- conversion executing instead of being folded away by the analyzer.
+-- Floating point with wide integers: the whole division family in both directions.
 {% for W in wide %}
 {% for F in ['Float32','Float64'] %}
-SELECT '{{ W }} vs {{ F }}', materialize({{ dividend[W] }}) / materialize(to{{ F }}(4)), {{ dividend[W] }} / materialize(to{{ F }}(4)), materialize({{ dividend[W] }}) / to{{ F }}(4), identity({{ dividend[W] }}) / identity(to{{ F }}(4)), toTypeName({{ dividend[W] }} / to{{ F }}(4));
-SELECT '{{ F }} vs {{ W }}', materialize(to{{ F }}(10)) / materialize({{ divisor[W] }}), to{{ F }}(10) / materialize({{ divisor[W] }}), materialize(to{{ F }}(10)) / {{ divisor[W] }}, identity(to{{ F }}(10)) / identity({{ divisor[W] }}), toTypeName(to{{ F }}(10) / {{ divisor[W] }});
+{{ floatpair(W ~ ' vs ' ~ F, dividend[W], 'to' ~ F ~ '(4)', 'to' ~ F ~ '(0)') }}
+{{ floatpair(F ~ ' vs ' ~ W, 'to' ~ F ~ '(10)', divisor[W], zero[W]) }}
 {% endfor %}
 {% endfor %}
