@@ -2351,6 +2351,338 @@ def test_schema_aware_identity_long_database_name(started_cluster):
     instance.query(f"DROP TABLE {table} SYNC")
 
 
+def test_legacy_identity_adopted_on_attach_table_engine(started_cluster):
+    # Backward compatibility of the schema-aware identity for the standalone table engine. A table with a
+    # non-default `materialized_postgresql_schema` created before the generated names became schema-aware
+    # (possible since 26.6, where the single-table publication became schema-qualified) owns the legacy,
+    # schema-unaware publication and replication slot `<postgres_database>_<table>_*`. On ATTACH such a
+    # deployment must adopt its legacy identity instead of looking for the schema-aware names: recreating
+    # the slot would reload a snapshot and leave the legacy slot orphaned on the PostgreSQL side,
+    # retaining WAL forever.
+    cursor = pg_manager.get_db_cursor()
+    schema_name = "leg_schema"
+    table = "leg_table"
+    clickhouse_postgres_db = "postgres_database_legacy_identity_table_engine"
+
+    create_postgres_schema(cursor, schema_name)
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=clickhouse_postgres_db,
+        schema_name=schema_name,
+        postgres_database="postgres_database",
+    )
+    create_postgres_table_with_schema(cursor, schema_name, table)
+
+    instance.query(
+        f"INSERT INTO {clickhouse_postgres_db}.{table} SELECT number, number from numbers(0, 50)"
+    )
+
+    instance.query(f"DROP TABLE IF EXISTS {table} SYNC")
+    instance.query(
+        f"""
+        SET allow_experimental_materialized_postgresql_table=1;
+        CREATE TABLE {table} (key Int32, value Int32)
+        ENGINE=MaterializedPostgreSQL('{started_cluster.postgres_ip}:{started_cluster.postgres_port}', 'postgres_database', '{table}', 'postgres', '{pg_pass}')
+        ORDER BY key
+        SETTINGS materialized_postgresql_schema = '{schema_name}'
+        """
+    )
+    check_tables_are_synchronized(
+        instance,
+        table,
+        postgres_database=clickhouse_postgres_db,
+        materialized_database="default",
+    )
+
+    # The freshly created table uses the schema-aware identity.
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = [row[0] for row in cursor.fetchall()]
+    assert len(slots) == 1, f"expected exactly one slot, got {slots}"
+    schema_aware_slot = slots[0]
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    pubs = [row[0] for row in cursor.fetchall()]
+    assert len(pubs) == 1, f"expected exactly one publication, got {pubs}"
+    schema_aware_publication = pubs[0]
+
+    legacy_slot = f"postgres_database_{table}_ch_replication_slot"
+    legacy_publication = f"postgres_database_{table}_ch_publication"
+    assert schema_aware_slot != legacy_slot
+    assert schema_aware_publication != legacy_publication
+
+    # While the table is detached, rewrite the PostgreSQL side into what a table created before the
+    # identity became schema-aware owns: the legacy, schema-unaware slot and publication.
+    instance.query(f"DETACH TABLE {table} PERMANENTLY")
+    cursor.execute(f"SELECT pg_drop_replication_slot('{schema_aware_slot}')")
+    cursor.execute(f"DROP PUBLICATION {schema_aware_publication}")
+    cursor.execute(
+        f'CREATE PUBLICATION {legacy_publication} FOR TABLE ONLY "{schema_name}"."{table}"'
+    )
+    cursor.execute(
+        f"SELECT pg_create_logical_replication_slot('{legacy_slot}', 'pgoutput')"
+    )
+    # Rows written after the legacy slot was created must reach the replica through it after ATTACH.
+    cursor.execute(
+        f'INSERT INTO "{schema_name}"."{table}" (key, value) SELECT g, g FROM generate_series(50, 69) AS g'
+    )
+
+    instance.query(f"ATTACH TABLE {table}")
+    assert_eq_with_retry(instance, f"SELECT count() FROM {table}", "70\n")
+
+    # The legacy identity was adopted: the legacy slot and publication are reused and the schema-aware
+    # ones are NOT recreated (recreating the slot would have re-snapshotted and orphaned the legacy slot).
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = {row[0] for row in cursor.fetchall()}
+    assert slots == {legacy_slot}, f"expected only the adopted legacy slot, got {slots}"
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    pubs = {row[0] for row in cursor.fetchall()}
+    assert pubs == {
+        legacy_publication
+    }, f"expected only the adopted legacy publication, got {pubs}"
+
+    # Ongoing replication flows through the adopted identity.
+    cursor.execute(
+        f'INSERT INTO "{schema_name}"."{table}" (key, value) SELECT g, g FROM generate_series(70, 99) AS g'
+    )
+    assert_eq_with_retry(instance, f"SELECT count() FROM {table}", "100\n")
+
+    # DROP must clean up the adopted legacy objects, not the schema-aware names.
+    instance.query(f"DROP TABLE {table} SYNC")
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    assert cursor.fetchall() == []
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    assert cursor.fetchall() == []
+
+
+def test_legacy_identity_adopted_on_restart_database_engine(started_cluster):
+    # Backward compatibility of the schema-aware identity for the DATABASE engine. A database with a
+    # non-default `materialized_postgresql_schema` created before the generated names became schema-aware
+    # owns the legacy `<postgres_database>` replication slot and `<postgres_database>_ch_publication`.
+    # On server restart (attach) such a deployment must adopt its legacy identity: looking for the
+    # schema-aware names instead would miss the existing slot, reload a snapshot into the
+    # already-populated nested tables and leave the legacy slot orphaned on the PostgreSQL side,
+    # retaining WAL forever.
+    cursor = pg_manager.get_db_cursor()
+    schema_name = "ldb_schema"
+    table = "ldb_table"
+    pg_db = "ldb_src"
+    mat_db = "mat_ldb"
+
+    create_postgres_schema(cursor, schema_name)
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=pg_db,
+        schema_name=schema_name,
+        postgres_database="postgres_database",
+    )
+    create_postgres_table_with_schema(cursor, schema_name, table)
+    instance.query(
+        f"INSERT INTO {pg_db}.{table} SELECT number, number from numbers(0, 50)"
+    )
+
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_db,
+        postgres_database="postgres_database",
+        settings=[f"materialized_postgresql_schema = '{schema_name}'"],
+    )
+    check_tables_are_synchronized(
+        instance, table, postgres_database=pg_db, materialized_database=mat_db
+    )
+
+    # The freshly created database uses the schema-aware identity.
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = [row[0] for row in cursor.fetchall()]
+    assert len(slots) == 1, f"expected exactly one slot, got {slots}"
+    schema_aware_slot = slots[0]
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    pubs = [row[0] for row in cursor.fetchall()]
+    assert len(pubs) == 1, f"expected exactly one publication, got {pubs}"
+    schema_aware_publication = pubs[0]
+
+    legacy_slot = "postgres_database"
+    legacy_publication = "postgres_database_ch_publication"
+    assert schema_aware_slot != legacy_slot
+    assert schema_aware_publication != legacy_publication
+
+    # While the server is down — exactly the upgrade scenario — rewrite the PostgreSQL side into what a
+    # database created before the identity became schema-aware owns: the legacy slot and publication.
+    instance.stop_clickhouse()
+    cursor.execute(f"SELECT pg_drop_replication_slot('{schema_aware_slot}')")
+    cursor.execute(f"DROP PUBLICATION {schema_aware_publication}")
+    cursor.execute(
+        f'CREATE PUBLICATION {legacy_publication} FOR TABLE ONLY "{schema_name}"."{table}"'
+    )
+    cursor.execute(
+        f"SELECT pg_create_logical_replication_slot('{legacy_slot}', 'pgoutput')"
+    )
+    # Rows written after the legacy slot was created (while the server is down) must reach the replica
+    # through it after the restart.
+    cursor.execute(
+        f'INSERT INTO "{schema_name}"."{table}" (key, value) SELECT g, g FROM generate_series(50, 69) AS g'
+    )
+    instance.start_clickhouse()
+
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db}.{table}", "70\n")
+
+    # The legacy identity was adopted: the legacy slot and publication are reused and the schema-aware
+    # ones are NOT recreated.
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = {row[0] for row in cursor.fetchall()}
+    assert slots == {legacy_slot}, f"expected only the adopted legacy slot, got {slots}"
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    pubs = {row[0] for row in cursor.fetchall()}
+    assert pubs == {
+        legacy_publication
+    }, f"expected only the adopted legacy publication, got {pubs}"
+
+    # Ongoing replication flows through the adopted identity.
+    instance.query(
+        f"INSERT INTO {pg_db}.{table} SELECT number, number from numbers(70, 30)"
+    )
+    assert_eq_with_retry(instance, f"SELECT count() FROM {mat_db}.{table}", "100\n")
+
+    # DROP DATABASE must clean up the adopted legacy objects, not the schema-aware names.
+    pg_manager.drop_materialized_db(mat_db)
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    assert cursor.fetchall() == []
+    cursor.execute(
+        "SELECT pubname FROM pg_publication WHERE pubname LIKE '%\\_ch\\_publication'"
+    )
+    assert cursor.fetchall() == []
+
+
+def test_legacy_identity_not_adopted_for_foreign_publication(started_cluster):
+    # Fail-close half of the legacy-identity adoption. The legacy names are schema-blind, so they can
+    # belong to a DIFFERENT engine: a database over the DEFAULT schema of the same PostgreSQL database
+    # owns exactly the `<postgres_database>` slot and `<postgres_database>_ch_publication`. A
+    # schema-scoped database that lost its schema-aware slot (e.g. after a PostgreSQL failover) must NOT
+    # adopt them — two consumers on one slot and publication would cross-talk, the very failure the
+    # schema-aware identity removes. It must re-sync under its own schema-aware identity and leave the
+    # default-schema engine's objects untouched.
+    cursor = pg_manager.get_db_cursor()
+    schema_name = "fp_schema"
+    table = "fp_table"
+    pg_db = "fp_src"
+    mat_default_db = "mat_fp_default"
+    mat_schema_db = "mat_fp_schema"
+
+    # A table with the SAME name in the default schema and in a non-default one, with distinct data
+    # (values >= 1000 in the non-default schema) so cross-talk is detectable.
+    create_postgres_table(cursor, table)
+    instance.query(
+        f"INSERT INTO postgres_database.{table} SELECT number, number from numbers(0, 50)"
+    )
+    create_postgres_schema(cursor, schema_name)
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=pg_db,
+        schema_name=schema_name,
+        postgres_database="postgres_database",
+    )
+    create_postgres_table_with_schema(cursor, schema_name, table)
+    instance.query(
+        f"INSERT INTO {pg_db}.{table} SELECT number, number + 1000 from numbers(0, 30)"
+    )
+
+    # The default-schema database owns the legacy identity (the default schema keeps the legacy names).
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_default_db,
+        postgres_database="postgres_database",
+    )
+    check_tables_are_synchronized(
+        instance,
+        table,
+        postgres_database="postgres_database",
+        materialized_database=mat_default_db,
+    )
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_schema_db,
+        postgres_database="postgres_database",
+        settings=[f"materialized_postgresql_schema = '{schema_name}'"],
+    )
+    check_tables_are_synchronized(
+        instance, table, postgres_database=pg_db, materialized_database=mat_schema_db
+    )
+
+    legacy_slot = "postgres_database"
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = {row[0] for row in cursor.fetchall()}
+    assert legacy_slot in slots and len(slots) == 2, f"got {slots}"
+    schema_aware_slot = next(slot for slot in slots if slot != legacy_slot)
+
+    # The schema-scoped database loses its schema-aware slot while the server is down. The legacy slot
+    # and publication it then finds belong to the default-schema database.
+    instance.stop_clickhouse()
+    cursor.execute(f"SELECT pg_drop_replication_slot('{schema_aware_slot}')")
+    instance.start_clickhouse()
+
+    # The schema-scoped database must NOT adopt the foreign legacy identity: the schema-aware slot is
+    # recreated (a fresh sync) and the legacy slot stays with the default-schema database.
+    slots = set()
+    for _ in range(120):
+        cursor.execute(
+            "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+        )
+        slots = {row[0] for row in cursor.fetchall()}
+        if schema_aware_slot in slots:
+            break
+        time.sleep(1)
+    assert (
+        schema_aware_slot in slots
+    ), f"schema-aware slot was not recreated, got {slots}"
+    assert legacy_slot in slots
+    assert instance.contains_in_log("not this engine's schema")
+
+    # Both databases keep replicating their own schema's table, without cross-talk.
+    instance.query(
+        f"INSERT INTO postgres_database.{table} SELECT number, number from numbers(50, 50)"
+    )
+    instance.query(
+        f"INSERT INTO {pg_db}.{table} SELECT number, number + 1000 from numbers(30, 30)"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT count() FROM {mat_default_db}.{table}", "100\n"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT count() FROM {mat_schema_db}.{table}", "60\n"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value >= 1000) FROM {mat_default_db}.{table}", "0\n"
+    )
+    assert_eq_with_retry(
+        instance, f"SELECT countIf(value < 1000) FROM {mat_schema_db}.{table}", "0\n"
+    )
+
+    pg_manager.drop_materialized_db(mat_default_db)
+    pg_manager.drop_materialized_db(mat_schema_db)
+
+
 if __name__ == "__main__":
     cluster.start()
     input("Cluster created, press any key to destroy...")

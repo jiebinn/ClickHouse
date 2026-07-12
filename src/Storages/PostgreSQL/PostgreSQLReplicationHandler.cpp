@@ -275,6 +275,8 @@ PostgreSQLReplicationHandler::PostgreSQLReplicationHandler(
     , replication_slot(getReplicationSlotName(postgres_database_, postgres_schema, postgres_table_, clickhouse_uuid_, replication_settings))
     , tmp_replication_slot(replication_slot + "_tmp")
     , publication_name(getPublicationName(postgres_database_, postgres_schema, postgres_table_))
+    , legacy_replication_slot(getReplicationSlotName(postgres_database_, /* postgres_schema */ "", postgres_table_, clickhouse_uuid_, replication_settings))
+    , legacy_publication_name(getPublicationName(postgres_database_, /* postgres_schema */ "", postgres_table_))
     , reschedule_backoff_min_ms(replication_settings[MaterializedPostgreSQLSetting::materialized_postgresql_backoff_min_ms])
     , reschedule_backoff_max_ms(replication_settings[MaterializedPostgreSQLSetting::materialized_postgresql_backoff_max_ms])
     , reschedule_backoff_factor(replication_settings[MaterializedPostgreSQLSetting::materialized_postgresql_backoff_factor])
@@ -402,10 +404,90 @@ void PostgreSQLReplicationHandler::assertInitialized() const
 }
 
 
+/// Deployments created before the generated publication and default replication-slot names became
+/// schema-aware own the legacy, schema-blind objects on the PostgreSQL side. On attach such a
+/// deployment must keep its legacy identity: looking for the schema-aware slot instead would miss the
+/// existing slot, run an initial sync and reload a snapshot into the already-existing nested tables,
+/// duplicating data. So, on attach, when the schema-aware objects do not exist but the legacy ones do,
+/// switch to the legacy names. The legacy names are schema-blind and therefore shared with a
+/// same-database deployment over the default schema, so the legacy publication is only adopted when
+/// every table it publishes belongs to this engine's schema — otherwise the legacy objects belong to
+/// another engine, and adopting them would make the two consumers cross-talk (the very failure the
+/// schema-aware identity removes); in that case the schema-aware identity is kept and the attach
+/// proceeds as a fresh setup.
+void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::nontransaction & tx)
+{
+    if (!is_attach)
+        return;
+
+    /// The generated names differ from the legacy ones only for a non-default schema (and, for the slot,
+    /// only when it is neither user-managed nor a unique replication consumer identifier). This also
+    /// makes the adoption idempotent: once adopted, the names compare equal.
+    if (replication_slot == legacy_replication_slot && publication_name == legacy_publication_name)
+        return;
+
+    auto slot_exists = [&](const String & name)
+    {
+        pqxx::result result{tx.exec(fmt::format("SELECT 1 FROM pg_replication_slots WHERE slot_name = '{}'", name))};
+        return !result.empty();
+    };
+    auto publication_exists = [&](const String & name)
+    {
+        pqxx::result result{tx.exec(fmt::format("SELECT 1 FROM pg_publication WHERE pubname = '{}'", name))};
+        return !result.empty();
+    };
+
+    if (replication_slot != legacy_replication_slot)
+    {
+        /// The slot is the object whose loss triggers a destructive re-sync, so it carries the evidence:
+        /// adopt only if the schema-aware slot does not exist while the legacy one does.
+        if (slot_exists(replication_slot) || !slot_exists(legacy_replication_slot))
+            return;
+    }
+    else
+    {
+        /// The slot name does not depend on the schema, so the publication is the only renamed object
+        /// and carries the evidence instead.
+        if (publication_exists(publication_name) || !publication_exists(legacy_publication_name))
+            return;
+    }
+
+    if (publication_exists(legacy_publication_name))
+    {
+        pqxx::result result{tx.exec(fmt::format(
+            "SELECT DISTINCT schemaname FROM pg_publication_tables WHERE pubname = '{}'", legacy_publication_name))};
+        for (const auto & row : result)
+        {
+            if (row[0].as<std::string>() != postgres_schema)
+            {
+                LOG_WARNING(
+                    log,
+                    "Legacy publication {} publishes a table from schema '{}', not this engine's schema '{}', "
+                    "so it belongs to another engine and is not adopted. Keeping replication slot {} and publication {}",
+                    doubleQuoteString(legacy_publication_name), row[0].as<std::string>(), postgres_schema,
+                    replication_slot, doubleQuoteString(publication_name));
+                return;
+            }
+        }
+    }
+
+    LOG_INFO(
+        log,
+        "Adopting the legacy replication identity of a deployment created before the generated names became "
+        "schema-aware: replication slot {} (instead of {}) and publication {} (instead of {})",
+        legacy_replication_slot, replication_slot, doubleQuoteString(legacy_publication_name), doubleQuoteString(publication_name));
+
+    replication_slot = legacy_replication_slot;
+    tmp_replication_slot = replication_slot + "_tmp";
+    publication_name = legacy_publication_name;
+}
+
+
 void PostgreSQLReplicationHandler::startSynchronization(bool throw_on_error)
 {
     postgres::Connection replication_connection(connection_info, /* replication */true);
     pqxx::nontransaction tx(replication_connection.getRef());
+    adoptLegacyReplicationIdentityIfNeeded(tx);
     createPublicationIfNeeded(tx);
 
     /// List of nested tables (table_name -> nested_storage), which is passed to replication consumer.
@@ -958,6 +1040,11 @@ std::set<String> PostgreSQLReplicationHandler::fetchRequiredTables()
 
     {
         pqxx::nontransaction tx(connection.getRef());
+        /// The database engine consults the publication before startSynchronization() runs, so a legacy
+        /// deployment must switch to its legacy identity already here — otherwise the schema-aware
+        /// publication name would (wrongly) look absent and the tables list would be refetched from the
+        /// schema instead of the existing publication.
+        adoptLegacyReplicationIdentityIfNeeded(tx);
         publication_exists_before_startup = isPublicationExist(tx);
     }
 
