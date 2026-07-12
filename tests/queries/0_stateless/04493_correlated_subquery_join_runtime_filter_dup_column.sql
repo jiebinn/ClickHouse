@@ -26,12 +26,15 @@ SETTINGS correlated_subqueries_default_join_kind = 'right', correlated_subquerie
 -- { echoOff }
 
 -- A runtime filter is still built for a normal join without duplicated column names.
+-- Pin join_algorithm='hash': the filter is only added for hash-family algorithms
+-- (supportsRuntimeFilter), and CI randomizes join_algorithm, so an unpinned run may
+-- pick e.g. full_sorting_merge and build no filter, making this assertion flap.
 SELECT countIf(explain LIKE '%BuildRuntimeFilter%') > 0
 FROM (
     EXPLAIN PLAN
     SELECT * FROM (SELECT number AS a FROM numbers(100)) AS l
     ANY RIGHT JOIN (SELECT number AS b FROM numbers(3)) AS r ON l.a = r.b
-    SETTINGS enable_join_runtime_filters = 1
+    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash'
 );
 
 -- The filter must still be built when the build side has a duplicated NON-key column
@@ -43,5 +46,5 @@ FROM (
     EXPLAIN PLAN
     SELECT * FROM (SELECT number AS a FROM numbers(100)) AS l
     ANY RIGHT JOIN (SELECT number AS b, number + 1 AS c, c FROM numbers(3)) AS r ON l.a = r.b
-    SETTINGS enable_join_runtime_filters = 1
+    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash'
 );
