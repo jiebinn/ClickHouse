@@ -8023,7 +8023,17 @@ async function reconcileStartup() {
                 ? loaded.meta.activeTabId : savedTabs[0].id;
         } else {
             let match = null;
-            if (url_tab_name) {
+            /// Skip title matching entirely when the URL is a stale reload echo of a just-pruned
+            /// blank tab (`stale_blank_reload`): the reloaded history entry's stable `tabId`
+            /// identifies the pruned tab, not any surviving tab that merely shares its title, so
+            /// the URL is NOT authoritative and must not activate an unrelated same-titled tab.
+            /// This matters only in legacy persisted workspaces that still hold duplicate titles
+            /// (normally titles are kept unique, see `uniqueTitle`): there `named[0]` below would
+            /// otherwise pick a same-titled survivor and make the stale bare `?tab=` authoritative
+            /// again, landing a plain reload on an unrelated tab. Leaving `match` null here lets
+            /// control reach the non-authoritative fallback (persisted active tab, else the first
+            /// saved tab) — the same fall-through the guard already applies further below.
+            if (url_tab_name && !stale_blank_reload) {
                 /// Tabs are normally kept title-unique (see `uniqueTitle`), but legacy persisted
                 /// state could still hold duplicates. Among same-titled tabs, prefer the one the
                 /// URL actually came from — its query (or last URL-synced query) equals the URL's
