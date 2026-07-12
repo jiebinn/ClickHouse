@@ -57,13 +57,13 @@
 {% macro arithrow(L, R) -%}
 SELECT '{{ L }} vs {{ R }}'
 {%- for op in arith_ops -%}
-, materialize({{ dividend[L] }}) {{ op }} materialize({{ divisor[R] }}), {{ dividend[L] }} {{ op }} materialize({{ divisor[R] }}), materialize({{ dividend[L] }}) {{ op }} {{ divisor[R] }}, {{ dividend[L] }} {{ op }} {{ divisor[R] }}
+, materialize({{ dividend[L] }}) {{ op }} materialize({{ divisor[R] }}), {{ dividend[L] }} {{ op }} materialize({{ divisor[R] }}), materialize({{ dividend[L] }}) {{ op }} {{ divisor[R] }}, identity({{ dividend[L] }}) {{ op }} identity({{ divisor[R] }})
 {%- endfor -%}
 {%- for fn in named_ops -%}
-, {{ fn }}(materialize({{ dividend[L] }}), materialize({{ divisor[R] }})), {{ fn }}(materialize({{ dividend[L] }}), {{ divisor[R] }}), {{ fn }}({{ dividend[L] }}, materialize({{ divisor[R] }})), {{ fn }}({{ dividend[L] }}, {{ divisor[R] }})
+, {{ fn }}(materialize({{ dividend[L] }}), materialize({{ divisor[R] }})), {{ fn }}(materialize({{ dividend[L] }}), {{ divisor[R] }}), {{ fn }}({{ dividend[L] }}, materialize({{ divisor[R] }})), {{ fn }}(identity({{ dividend[L] }}), identity({{ divisor[R] }}))
 {%- endfor -%}
 {%- for fn in ['intDivOrZero','intDivOrNull','moduloOrZero','moduloOrNull','positiveModuloOrNull'] -%}
-, {{ fn }}(materialize({{ dividend[L] }}), materialize({{ zero[R] }})), {{ fn }}(materialize({{ dividend[L] }}), {{ zero[R] }}), {{ fn }}({{ dividend[L] }}, materialize({{ zero[R] }})), {{ fn }}({{ dividend[L] }}, {{ zero[R] }})
+, {{ fn }}(materialize({{ dividend[L] }}), materialize({{ zero[R] }})), {{ fn }}(materialize({{ dividend[L] }}), {{ zero[R] }}), {{ fn }}({{ dividend[L] }}, materialize({{ zero[R] }})), {{ fn }}(identity({{ dividend[L] }}), identity({{ zero[R] }}))
 {%- endfor -%};
 SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] }}), toTypeName({{ dividend[L] }} - {{ divisor[R] }}), toTypeName({{ dividend[L] }} * {{ divisor[R] }}), toTypeName({{ dividend[L] }} / {{ divisor[R] }}), toTypeName(intDiv({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(modulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(positiveModulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloLegacy({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(intDivOrNull({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloOrNull({{ dividend[L] }}, {{ divisor[R] }}));
 {%- endmacro %}
