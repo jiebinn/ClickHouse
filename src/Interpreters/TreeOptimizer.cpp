@@ -16,7 +16,6 @@
 #include <Interpreters/RedundantFunctionsInOrderByVisitor.h>
 #include <Interpreters/RewriteCountVariantsVisitor.h>
 #include <Interpreters/ConvertStringsToEnumVisitor.h>
-#include <Interpreters/ConvertFunctionOrLikeVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/GatherFunctionQuantileVisitor.h>
@@ -44,12 +43,8 @@ namespace DB
 {
 namespace Setting
 {
-    extern const SettingsBool allow_hyperscan;
-    extern const SettingsBool reject_expensive_hyperscan_regexps;
     extern const SettingsBool convert_query_to_cnf;
     extern const SettingsBool enable_positional_arguments;
-    extern const SettingsUInt64 max_hyperscan_regexp_length;
-    extern const SettingsUInt64 max_hyperscan_regexp_total_length;
     extern const SettingsBool optimize_aggregators_of_group_by_keys;
     extern const SettingsBool optimize_append_index;
     extern const SettingsBool optimize_arithmetic_operations_in_aggregate_functions;
@@ -61,9 +56,6 @@ namespace Setting
     extern const SettingsBool optimize_time_filter_with_preimage;
     extern const SettingsBool optimize_using_constraints;
     extern const SettingsBool optimize_redundant_functions_in_order_by;
-    extern const SettingsBool optimize_or_like_chain;
-    extern const SettingsUInt64 optimize_or_like_chain_min_patterns;
-    extern const SettingsUInt64 optimize_or_like_chain_min_substrings;
 }
 
 namespace ErrorCodes
@@ -589,24 +581,6 @@ void transformIfStringsIntoEnum(ASTPtr & query)
     ConvertStringsToEnumVisitor(convert_data).visit(query);
 }
 
-void optimizeOrLikeChain(ASTPtr & query, const Settings & settings, const NamesAndTypesList & source_columns, ContextPtr context)
-{
-    ConvertFunctionOrLikeVisitor::Data data;
-    data.allow_hyperscan = settings[Setting::allow_hyperscan];
-    data.max_hyperscan_regexp_length = settings[Setting::max_hyperscan_regexp_length];
-    data.max_hyperscan_regexp_total_length = settings[Setting::max_hyperscan_regexp_total_length];
-    data.reject_expensive_hyperscan_regexps = settings[Setting::reject_expensive_hyperscan_regexps];
-    data.min_patterns_for_rewrite = settings[Setting::optimize_or_like_chain_min_patterns];
-    data.min_substrings_for_rewrite = settings[Setting::optimize_or_like_chain_min_substrings];
-    /// The `multiSearchAny*` / `multiMatchAny` rewrite targets accept only a `String` haystack; the
-    /// visitor uses these types to keep `FixedString`/`Enum` chains on the original `OR LIKE` form,
-    /// which accepts them. Types are looked up by column name (the LHS of each LIKE branch).
-    for (const auto & column : source_columns)
-        data.source_column_types.emplace(column.name, column.type);
-    data.context = std::move(context);
-    ConvertFunctionOrLikeVisitor(data).visit(query);
-}
-
 }
 
 void TreeOptimizer::optimizeIf(ASTPtr & query, Aliases & aliases, bool if_chain_to_multiif, bool multiif_to_if)
@@ -737,14 +711,8 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
     /// Remove duplicated columns from USING(...).
     optimizeUsing(select_query);
 
-    if (settings[Setting::optimize_or_like_chain])
-    {
-        /// `allow_hyperscan` and `max_hyperscan_regexp_*` are no longer entry-point gates here:
-        /// the rewrite emits `multiMatchAny` only when those settings allow it and falls back to
-        /// `match` with a combined regexp otherwise (see `ConvertFunctionOrLikeVisitor.cpp`), so
-        /// the optimization can still kick in even when Hyperscan is disabled or capped.
-        optimizeOrLikeChain(query, settings, result.source_columns, context);
-    }
+    /// Note: `optimize_or_like_chain` is a new-analyzer-only optimization (`ConvertOrLikeChainPass`);
+    /// the old analyzer does not rewrite `OR LIKE` chains.
 }
 
 }
