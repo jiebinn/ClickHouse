@@ -5131,8 +5131,11 @@ async function restoreFromHistory(state, token) {
     /// to this entry reproduces the displayed result even if the panel selection has since changed.
     last_database_for_download = result.database || '';
     /// Follows the PRODUCING connection likewise, so a download reproduces the result against the
-    /// server/user that produced it rather than the current live connection. Legacy entries saved
-    /// before the connection was snapshotted carry no `url`/`user`; fall back to the live values.
+    /// server/user that produced it rather than the current live connection. A legacy entry saved
+    /// before the connection was snapshotted carries no `url`/`user`: its producing connection is
+    /// UNKNOWN, so the result is NOT reproducible on the live one — Download is hidden below (fail
+    /// closed) rather than exporting the shown result from whatever server happens to be live now.
+    const download_reproducible = result.url !== undefined && result.user !== undefined;
     last_url_for_download = result.url ?? url_elem.value;
     last_user_for_download = result.user ?? user_elem.value;
     query_area.value = state.query;
@@ -5276,8 +5279,12 @@ async function restoreFromHistory(state, token) {
     }
 
     progressEl.finish();
-    /// A result is shown for this tab, so its download/copy actions apply to this query.
-    document.getElementById('download-div').style.display = 'block';
+    /// A result is shown for this tab, so its download/copy actions apply to this query — unless the
+    /// snapshot predates the producing-connection record (`download_reproducible` is false): its
+    /// producing connection is unknown, so keep Download hidden until the query is rerun on the
+    /// current connection (a rerun stamps a fresh, reproducible snapshot). Copy stays available: it
+    /// copies the already-fetched result client-side and hits no server.
+    document.getElementById('download-div').style.display = download_reproducible ? 'block' : 'none';
     document.getElementById('copy-div').style.display = is_raw ? 'block' : 'none';
 
     if (is_raw) {
@@ -5882,24 +5889,36 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     ///     snapshot (`tab.result.{url,user,database}`) for rendering, download and Back/Forward
     ///     restore, so nothing about the displayed result is lost.
     ///   - An editor-only entry (`fromRun` false): no reproducible run, so use the live connection.
-    /// A legacy snapshot predating the url/user snapshot falls back to the live values (mirroring
-    /// `restoreFromHistory`).
+    ///   - A legacy snapshot predating the url/user snapshot (unknown producing connection): treated
+    ///     as diverged, so `run=1` is dropped and the live connection is stamped (fail closed) rather
+    ///     than claiming the legacy result is reproducible on the live server (see below).
     const run_snapshot = fromRun ? tab.result : null;
+    /// A snapshot saved before the producing connection was recorded (a legacy tab restored from
+    /// persistence) carries no `url`/`user`, so the connection it ran against is UNKNOWN. It cannot
+    /// be proven reproducible on the live connection, so it is treated as diverged below (fail
+    /// closed): `run=1` is dropped and the live connection is stamped, never claiming the legacy
+    /// result is reproducible on the current server — which would otherwise auto-run the old query
+    /// on the wrong one on reload/share. A fresh run always records `url`/`user` (empty strings for
+    /// the default same-origin connection), so only pre-upgrade snapshots take this branch.
+    const snapshot_connection_known = !!run_snapshot
+        && run_snapshot.url !== undefined && run_snapshot.user !== undefined;
     /// Has the live target moved away from the connection/selection the query actually ran against?
     /// Compared with the SAME semantic identity as the restore gate (`window.onpopstate`) and the
     /// connection-change invalidation (`resetConnectionScopedState`): `sameServerAddress` +
     /// `effectiveConnectionUser`, with the selected database a namespace on that pair. So a
     /// cosmetic-only URL difference (a root-path trailing slash, a default port) or a password-only
-    /// change is not a divergence, matching those gates.
+    /// change is not a divergence, matching those gates. An unknown producing connection (a legacy
+    /// snapshot) always counts as diverged.
     const live_diverged = !!run_snapshot && (
-           (selected_database || null) !== (run_snapshot.database || null)
-        || !sameServerAddress(run_snapshot.url ?? url_elem.value, url_elem.value)
-        || effectiveConnectionUser(run_snapshot.url ?? url_elem.value, run_snapshot.user ?? user_elem.value)
+           !snapshot_connection_known
+        || (selected_database || null) !== (run_snapshot.database || null)
+        || !sameServerAddress(run_snapshot.url, url_elem.value)
+        || effectiveConnectionUser(run_snapshot.url, run_snapshot.user)
             !== effectiveConnectionUser(url_elem.value, user_elem.value));
     const use_snapshot = !!run_snapshot && !live_diverged;
     const entry_database = use_snapshot ? run_snapshot.database : selected_database;
-    const entry_server = use_snapshot ? (run_snapshot.url ?? url_elem.value) : url_elem.value;
-    const entry_user = use_snapshot ? (run_snapshot.user ?? user_elem.value) : user_elem.value;
+    const entry_server = use_snapshot ? run_snapshot.url : url_elem.value;
+    const entry_user = use_snapshot ? run_snapshot.user : user_elem.value;
 
     const state = {
         query: tab.query,
