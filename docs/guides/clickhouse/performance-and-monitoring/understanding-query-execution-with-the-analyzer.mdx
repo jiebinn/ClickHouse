@@ -68,7 +68,7 @@ Each node has corresponding children and the overall tree represents the overall
 
 ## Analyzer {#analyzer}
 
-ClickHouse currently has two architectures for the Analyzer. You can use the old architecture by setting: `enable_analyzer=0`. The new architecture is enabled by default. We're going to describe only the new architecture here, given the old one is going to be deprecated once the new analyzer is generally available.
+ClickHouse currently has two architectures for the Analyzer. You can use the old architecture by setting: `enable_analyzer=0`. The new architecture is enabled by default. We're going to describe only the new architecture here, given the old one is going to be deprecated once the analyzer is generally available.
 
 <Note>
 The new architecture should provide us with a better framework to improve ClickHouse's performance. However, given it is a fundamental component of the query processing steps, it also might have a negative impact on some queries and there are [known incompatibilities](/guides/clickhouse/performance-and-monitoring/analyzer#known-incompatibilities). You can revert back to the old analyzer by changing the `enable_analyzer` setting at the query or user level.

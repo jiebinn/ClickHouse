@@ -7,7 +7,7 @@ title: 'Analyzer'
 doc_type: 'reference'
 ---
 
-In ClickHouse version `24.3`, the new query analyzer was enabled by default.
+In ClickHouse version `24.3`, the analyzer was enabled by default.
 You can read more details about how it works [here](/guides/clickhouse/performance-and-monitoring/understanding-query-execution-with-the-analyzer#analyzer).
 
 ## Known incompatibilities {#known-incompatibilities}
@@ -200,7 +200,7 @@ The list of features that the analyzer currently doesn't support is given below:
 
 ## Cloud Migration {#cloud-migration}
 
-We are enabling the new query analyzer on all instances where it is currently disabled to support new functional and performance optimizations. This change enforces stricter SQL scoping rules, requiring customers to manually update non-compliant queries.
+We are enabling the analyzer on all instances where it is currently disabled to support new functional and performance optimizations. This change enforces stricter SQL scoping rules, requiring customers to manually update non-compliant queries.
 
 ### Migration workflow {#migration-workflow}
 

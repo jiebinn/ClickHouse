@@ -262,3 +262,16 @@ git ls-files -z "$ROOT_PATH" | xargs -0 stat "$STAT_FMT_FLAG" "$STAT_FMT" 2>/dev
     | while IFS= read -r file; do
         echo "File $file is larger than 5 MB. Large files should not be committed to git — download them at test time or build from source instead."
     done
+
+# The analyzer has been enabled by default since ClickHouse 24.3, so it is no longer "new".
+# Do not describe it as "new analyzer" or "new query analyzer" in documentation or comments;
+# write "the analyzer" or "Analyzer" instead.
+# Historical changelogs are excluded on purpose: they are a fixed record of past releases.
+# The pattern requires a space or hyphen between the words, so code identifiers that use
+# underscores (e.g. `use_new_analyzer`) are intentionally not matched.
+git ls-files $ROOT_PATH/src $ROOT_PATH/base $ROOT_PATH/programs $ROOT_PATH/utils $ROOT_PATH/docs $ROOT_PATH/tests |
+    grep -E '\.(md|mdx|cpp|h|sql|sh|py|j2)$' |
+    grep -vi 'changelog' |
+    xargs grep -HniP '\bnew[ \t-]+(query[ \t-]+)?analyzer\b' 2>/dev/null |
+    grep -P '.' &&
+    echo 'The analyzer is enabled by default since ClickHouse 24.3 and is no longer new. Write "the analyzer" or "Analyzer" instead of "new analyzer"/"new query analyzer" in the lines above.'
