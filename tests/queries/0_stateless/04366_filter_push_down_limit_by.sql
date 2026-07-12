@@ -1,3 +1,7 @@
+-- Tags: no-parallel-replicas
+-- ^ EXPLAIN indexes=1 asserts the pushed key predicate becomes the local primary key
+-- condition; under parallel replicas the table is read on remote replicas, so the
+-- coordinator plan carries no such condition and the assertions do not hold.
 -- Filter push down below LimitByStep on LIMIT BY key columns (issue #110112).
 -- A predicate referencing only the LIMIT BY key columns removes whole groups, so it is
 -- result-equivalent above or below the LIMIT BY and must reach storage as the driving
