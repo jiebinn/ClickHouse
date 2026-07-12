@@ -1716,7 +1716,19 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
 
         auto & file_segment = current_info.file_segments->front();
         if (file_segment.isDownloader())
+        {
+            /// Mirror the outer-cleanup invariant of `nextImplStep`: withdraw the shared remote reader
+            /// from the segment before releasing downloader ownership. If `readFromFileSegment` threw,
+            /// the inner `SCOPE_EXIT` below left the reader still borrowing the caller's `to` buffer (it
+            /// only un-borrows via `set(nullptr, 0)` on normal completion). Once `completePartAndResetDownloader`
+            /// releases us as downloader on the `PARTIALLY_DOWNLOADED_NO_CONTINUATION` path, a bypass waiter
+            /// could `extractRemoteFileReader` that still-borrowing reader and race on (and outlive) the
+            /// stale `to` buffer. Detaching it here keeps the reader exclusively ours until it is dropped.
+            if (std::uncaught_exceptions() > 0 || !implementation_buffer_can_be_reused)
+                file_segment.resetRemoteFileReader();
+
             file_segment.completePartAndResetDownloader();
+        }
     });
 
     while (!cancelled && read_bytes < n)
