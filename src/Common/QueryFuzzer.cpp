@@ -122,17 +122,6 @@ extern const int TOO_DEEP_RECURSION;
 namespace
 {
 
-/// Server-side test-only fault-injection delays. They exist purely to slow down parts of the TCP
-/// protocol for hedged-request tests. Mutating their value blows a test's small deliberate delay
-/// up to a multi-minute sleep in TCPHandler (this_thread::sleep_for, not interruptible by query
-/// cancellation), which trips the CI hung-check without exercising any real code path.
-bool isUninterruptibleTestSleepSetting(std::string_view name)
-{
-    return name == "sleep_in_send_data_ms"
-        || name == "sleep_in_send_tables_status_ms"
-        || name == "sleep_after_receiving_query_ms";
-}
-
 /// Configures a regexp column matcher with a random column-name-like glob pattern, storing the
 /// regexp the parser would produce (ILIKE/case-insensitive prepends `(?i)`). With `as_like` it
 /// renders as `* LIKE/ILIKE '<glob>'`; otherwise as the plain `COLUMNS('<regexp>')` form. Shared
@@ -5277,7 +5266,7 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
     {
         /// Fuzz existing setting values
         for (auto & c : set->changes)
-            if (fuzz_rand() % 50 == 0 && !isUninterruptibleTestSleepSetting(c.name))
+            if (fuzz_rand() % 50 == 0)
                 c.value = fuzzField(c.value);
     }
     else if (auto * param = typeid_cast<ASTQueryParameter *>(ast.get()))
@@ -5497,7 +5486,7 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                 if (alter_cmd->settings_changes)
                     if (auto * aset = alter_cmd->settings_changes->as<ASTSetQuery>())
                         for (auto & c : aset->changes)
-                            if (fuzz_rand() % 50 == 0 && !isUninterruptibleTestSleepSetting(c.name))
+                            if (fuzz_rand() % 50 == 0)
                                 c.value = fuzzField(c.value);
                 break;
             case ASTAlterCommand::RESET_SETTING:
