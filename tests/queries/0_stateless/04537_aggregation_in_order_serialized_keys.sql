@@ -10,8 +10,20 @@
 -- one `consume` call processes a whole block without yielding.
 --
 -- The fix makes the per-run in-order path use the plain `serialized` method (lazy, per-row key
--- serialization), restoring linear time. After the fix the query below returns instantly; before
--- it, it exceeds `max_execution_time` and throws.
+-- serialization), restoring linear time. After the fix the query below finishes well within the
+-- limit; before it, the per-block work is O(number_of_runs * block_size) and the query runs for
+-- many minutes (it originally tripped the AST-fuzzer Hung check), so it exceeds `max_execution_time`
+-- and throws.
+--
+-- The `max_execution_time` limit here is deliberately generous. It is a guard against the quadratic
+-- blowup, not a tight assertion on the linear runtime, and the two runtimes are orders of magnitude
+-- apart. On a release build the linear path takes a fraction of a second while the quadratic one
+-- takes tens of seconds; on a sanitizer build the linear path can still take tens of seconds under
+-- parallel load (a 20-second limit flaked here for exactly that reason) while the quadratic one runs
+-- for many minutes. A 120-second limit clears the linear path with a wide margin on every build and
+-- is still far below the quadratic runtime on the instrumented builds that run this suite (and on
+-- which the fuzzer that first surfaced this bug runs), so it catches a regression without any risk
+-- of a false timeout on the fixed code.
 
 DROP TABLE IF EXISTS t_agg_in_order_serialized;
 CREATE TABLE t_agg_in_order_serialized (s String, n UInt64) ENGINE = MergeTree ORDER BY s;
@@ -20,7 +32,7 @@ INSERT INTO t_agg_in_order_serialized SELECT toString(number), number FROM numbe
 
 SELECT count() FROM (SELECT s, n FROM t_agg_in_order_serialized GROUP BY s, n)
 SETTINGS optimize_aggregation_in_order = 1, optimize_read_in_order = 1,
-         max_threads = 1, max_block_size = 16384, max_execution_time = 20;
+         max_threads = 1, max_block_size = 16384, max_execution_time = 120;
 
 DROP TABLE t_agg_in_order_serialized;
 
@@ -29,10 +41,12 @@ DROP TABLE t_agg_in_order_serialized;
 --     AggregatingInOrderTransform -> FinishAggregatingInOrderTransform -> MergingAggregatedBucketTransform
 -- The `serialized` fallback must be scoped to the per-run `AggregatingInOrderTransform` path only;
 -- the whole-block `MergingAggregatedBucketTransform` merge (via `Aggregator::mergeBlocks`) keeps the
--- `prealloc_serialized` method, where it is a win. This test exercises that merge path and checks
--- that the multi-stream result is identical to regular aggregation and stays linear in time.
--- (The per-run path is still quadratic before the fix here too, so the `max_execution_time` guard
--- also catches a regression in this shape.)
+-- `prealloc_serialized` method, where it is a win. The value of this case is the correctness check
+-- below: the multi-stream in-order result must be identical to regular aggregation, which would
+-- break if the merge path were downgraded by mistake. The `max_execution_time` here is only a loose
+-- backstop: with several parts read in parallel the per-run quadratic work is spread across streams,
+-- so its wall-clock is not a reliable regression signal; the single-stream cases above and below are
+-- the primary quadratic-time guards.
 
 DROP TABLE IF EXISTS t_agg_in_order_serialized_mt;
 CREATE TABLE t_agg_in_order_serialized_mt (s String, n UInt64) ENGINE = MergeTree ORDER BY s;
@@ -44,7 +58,7 @@ INSERT INTO t_agg_in_order_serialized_mt SELECT toString(number), number FROM nu
 
 SELECT count() FROM (SELECT s, n FROM t_agg_in_order_serialized_mt GROUP BY s, n)
 SETTINGS optimize_aggregation_in_order = 1, optimize_read_in_order = 1,
-         max_threads = 4, max_block_size = 16384, max_execution_time = 60;
+         max_threads = 4, max_block_size = 16384, max_execution_time = 120;
 
 -- The multi-stream in-order result must be byte-for-byte identical to regular aggregation.
 SELECT
@@ -86,7 +100,7 @@ INSERT INTO t_agg_in_order_serialized_null
 
 SELECT count() FROM (SELECT s, n FROM t_agg_in_order_serialized_null GROUP BY s, n)
 SETTINGS optimize_aggregation_in_order = 1, optimize_read_in_order = 1,
-         max_threads = 1, max_block_size = 16384, max_execution_time = 20;
+         max_threads = 1, max_block_size = 16384, max_execution_time = 120;
 
 -- The nullable in-order result must be identical to regular aggregation.
 SELECT
