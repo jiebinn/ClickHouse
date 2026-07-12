@@ -49,12 +49,19 @@ function check_logs_credentials()
     __set_connection_args
     __shadow_credentials
     local code
-    # Catch both success and error to not fail on `set -e`
-    clickhouse-client "${CONNECTION_ARGS[@]:?}" -q 'SELECT 1 FORMAT Null' && return 0 || code=$?
-    if [ "$code" != 0 ]; then
-        echo 'Failed to connect to CI Logs cluster'
-        return $code
-    fi
+    # Retry the probe: the remote CI logs cluster occasionally resets the
+    # connection (NETWORK_ERROR 210), which is transient and unrelated to the
+    # credentials. A single attempt turned such a blip into "Failed to start
+    # log export" for the whole job.
+    local attempt
+    for attempt in 1 2 3; do
+        # Catch both success and error to not fail on `set -e`
+        clickhouse-client "${CONNECTION_ARGS[@]:?}" -q 'SELECT 1 FORMAT Null' && return 0 || code=$?
+        echo "Attempt ${attempt}/3 to connect to CI Logs cluster failed, exit code: ${code}"
+        [ "$attempt" -lt 3 ] && sleep "$((attempt * 5))"
+    done
+    echo 'Failed to connect to CI Logs cluster'
+    return "$code"
 }
 
 function setup_logs_replication()
