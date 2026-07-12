@@ -452,6 +452,7 @@
                 "reference/functions/regular-functions/geo/geometry",
                 "reference/functions/regular-functions/geo/geohash",
                 "reference/functions/regular-functions/geo/h3",
+                "reference/functions/regular-functions/geo/mvt",
                 "reference/functions/regular-functions/geo/polygon",
                 "reference/functions/regular-functions/geo/s2",
                 "reference/functions/regular-functions/geo/svg"
