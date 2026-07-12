@@ -804,7 +804,7 @@ ENGINE = HDFS(URI, format)
 - `format` - specifies one of the available file formats. To perform
 `SELECT` queries, the format must be supported for input, and to perform
 `INSERT` queries – for output. The available formats are listed in the
-[Formats](/sql-reference/formats#formats-overview) section.
+[Formats](/interfaces/formats#formats-overview) section.
 - [PARTITION BY expr]
 
 ### PARTITION BY {#partition-by}
