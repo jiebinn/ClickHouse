@@ -1,11 +1,16 @@
--- Tests for issue #100422: a correlated subquery (e.g. `exists((SELECT ...))`) inside a filter that
--- `convert_query_to_cnf` distributes over AND was cloned into several copies sharing one action name.
+-- Tests for issue #100422: a correlated subquery (e.g. `exists((SELECT ...))`) inside a filter that an
+-- optimization clones or distributes was copied into several copies sharing one action name.
 -- Decorrelation then added the same synthetic column on both sides of the generated join and
 -- `HashJoin::getNonJoinedBlocks` failed with `Unexpected number of columns in result sample block`.
--- All queries below must run without a logical error and return the same result as without CNF.
+-- Two avenues produce such a copy: `convert_query_to_cnf` distributes the filter over AND, and
+-- `optimize_and_compare_chain` derives transitive comparisons that clone a compared operand.
+-- All queries below must run without a logical error and return the same result as without the
+-- optimizations. Correlated subqueries require the analyzer, so keep it enabled.
 
+SET enable_analyzer = 1;
 SET allow_experimental_correlated_subqueries = 1;
 SET convert_query_to_cnf = 1;
+SET optimize_and_compare_chain = 1;
 
 DROP TABLE IF EXISTS t_04540;
 CREATE TABLE t_04540 (a UInt32) ENGINE = Memory;
