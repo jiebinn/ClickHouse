@@ -41,6 +41,7 @@ void insertPostgreSQLValue(
         IColumn & column, std::string_view value,
         ExternalResultDescription::ValueType type, DataTypePtr data_type,
         const UnorderedMapWithMemoryTracking<size_t, PostgreSQLArrayInfo> & array_info, size_t idx)
+try
 {
     switch (type)
     {
@@ -186,6 +187,15 @@ void insertPostgreSQLValue(
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported value type");
     }
+}
+catch (const pqxx::conversion_error & e)
+{
+    /// pqxx throws its own std::exception hierarchy when a PostgreSQL text value does not fit the
+    /// requested C++ type (e.g. the value 'name_0' read into a column declared as Int32). Convert it into
+    /// a DB::Exception so a type mismatch between the declared and the actual PostgreSQL type is reported
+    /// as a query error instead of escaping as a foreign exception and aborting the server.
+    throw Exception(ErrorCodes::BAD_ARGUMENTS,
+        "Cannot parse PostgreSQL value '{}' as {}: {}", value, data_type->getName(), e.what());
 }
 
 
