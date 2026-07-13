@@ -487,12 +487,28 @@ MutateTaskPtr MergeTreeDataMergerMutator::mutatePartToTemporaryPart(
     MutationCommandsConstPtr commands,
     MergeListEntry * merge_entry,
     time_t time_of_mutation,
-    ContextPtr context,
+    ContextMutablePtr context,
     const MergeTreeTransactionPtr & txn,
     ReservationSharedPtr space_reservation,
     TableLockHolder & holder,
     bool need_prefix)
 {
+    /// Reading and analysis performed while building the mutation pipeline can run nested, blocking
+    /// pipelines of their own via `CompletedPipelineExecutor` - most notably `buildOrderedSetInplace`
+    /// in `KeyCondition`, which materializes the right-hand side of `x IN (subquery)` to use it for
+    /// primary-key / skip-index analysis. Such a build has no way to observe mutation cancellation, so
+    /// a large set could block server shutdown or `KILL MUTATION` for a long time (see issue #51586).
+    /// The nested `CompletedPipelineExecutor` polls the query context's interactive-cancel callback, so
+    /// install one here that mirrors `MutationContext::checkOperationIsNotCanceled`. `context` is the
+    /// mutation's query context (`makeQueryContextForMutate`), so the callback is reachable from the
+    /// reading context via `getQueryContext`.
+    const String partition_id = future_part->part_info.getPartitionId();
+    context->setInteractiveCancelCallback(
+        [&blocker = merges_blocker, merge_entry, partition_id]()
+        {
+            return blocker.isCancelledForPartition(partition_id) || (*merge_entry)->is_cancelled;
+        });
+
     return std::make_shared<MutateTask>(
         future_part,
         metadata_snapshot,
