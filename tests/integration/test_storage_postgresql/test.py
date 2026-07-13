@@ -1245,6 +1245,29 @@ def test_postgres_query_passing_edge_cases(started_cluster):
         )
         node1.query("DROP TABLE pg_engine_type_mismatch")
 
+    # Numeric overflow: a PostgreSQL numeric value parses as a number but does not fit the declared
+    # ClickHouse Decimal. The Decimal text reader rejects it with a parse error, which the shared value
+    # layer normalizes to BAD_ARGUMENTS, so it surfaces as a query error (and reaches the
+    # MaterializedPostgreSQL catch) instead of aborting the server.
+    num_table = "test_query_passing_numeric"
+    cursor.execute(f"DROP TABLE IF EXISTS {num_table}")
+    cursor.execute(f"CREATE TABLE {num_table} (a integer, v numeric)")
+    node1.query(
+        f"INSERT INTO TABLE FUNCTION postgresql('{host}', 'postgres', '{num_table}', 'postgres', '{pg_pass}') "
+        "SELECT 1, 99999999999999999999999999999999999999"
+    )
+    started_cluster.postgres_conn.commit()
+    node1.query("DROP TABLE IF EXISTS pg_engine_decimal_overflow")
+    node1.query(
+        f"CREATE TABLE pg_engine_decimal_overflow (a Int32, v Decimal(10, 2)) "
+        f"ENGINE = PostgreSQL('{host}', 'postgres', query('SELECT a, v FROM {num_table}'), 'postgres', '{pg_pass}')"
+    )
+    assert "Cannot parse PostgreSQL value" in node1.query_and_get_error(
+        "SELECT * FROM pg_engine_decimal_overflow"
+    )
+    node1.query("DROP TABLE pg_engine_decimal_overflow")
+    cursor.execute(f"DROP TABLE {num_table}")
+
     cursor.execute(f"DROP TABLE {table_name}")
 
 
