@@ -413,8 +413,10 @@ void PostgreSQLReplicationHandler::assertInitialized() const
 /// same-database deployment over the default schema, so the legacy publication is only adopted when
 /// every table it publishes belongs to this engine's schema — otherwise the legacy objects belong to
 /// another engine, and adopting them would make the two consumers cross-talk (the very failure the
-/// schema-aware identity removes); in that case the schema-aware identity is kept and the attach
-/// proceeds as a fresh setup.
+/// schema-aware identity removes). In that case adoption is refused; and since the schema-aware slot is
+/// gone, proceeding under the schema-aware identity would run an initial sync and reload a snapshot into
+/// the already-existing nested tables (duplicating data on disk), so the attach fails closed with an
+/// exception instead of silently re-snapshotting a populated replica.
 void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::nontransaction & tx)
 {
     if (!is_attach)
@@ -460,13 +462,22 @@ void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::
         {
             if (row[0].as<std::string>() != postgres_schema)
             {
-                LOG_WARNING(
-                    log,
-                    "Legacy publication {} publishes a table from schema '{}', not this engine's schema '{}', "
-                    "so it belongs to another engine and is not adopted. Keeping replication slot {} and publication {}",
-                    doubleQuoteString(legacy_publication_name), row[0].as<std::string>(), postgres_schema,
-                    replication_slot, doubleQuoteString(publication_name));
-                return;
+                /// The legacy publication belongs to another engine, so it cannot be adopted. But the
+                /// schema-aware slot is gone, so returning here would let startSynchronization() run an
+                /// initial sync and reload a snapshot into the already-existing nested tables
+                /// (createNestedIfNeeded is a no-op once they exist), silently duplicating data on disk and
+                /// turning the attach into a full reload. Fail closed instead: surface the identity conflict
+                /// and let an operator resolve it (createNestedIfNeeded, the initial sync, and any
+                /// re-snapshot never run).
+                throw Exception(
+                    ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR,
+                    "Cannot start MaterializedPostgreSQL replication on attach: the schema-aware replication "
+                    "slot {} does not exist, and the legacy publication {} publishes a table from schema '{}', "
+                    "not this engine's schema '{}', so it belongs to another engine and cannot be adopted. "
+                    "Proceeding would reload the initial snapshot into the existing nested tables and duplicate "
+                    "data, so replication is refused. Resolve the replication-slot/publication conflict on the "
+                    "PostgreSQL side (or recreate this table) and retry.",
+                    replication_slot, doubleQuoteString(legacy_publication_name), row[0].as<std::string>(), postgres_schema);
             }
         }
     }

@@ -16,7 +16,7 @@ from helpers.postgres_utility import (
     get_postgres_conn,
     postgres_table_template_6,
 )
-from helpers.test_tools import assert_eq_with_retry
+from helpers.test_tools import assert_eq_with_retry, assert_logs_contain_with_retry
 
 cluster = ClickHouseCluster(__file__)
 instance = cluster.add_instance(
@@ -2578,8 +2578,11 @@ def test_legacy_identity_not_adopted_for_foreign_publication(started_cluster):
     # owns exactly the `<postgres_database>` slot and `<postgres_database>_ch_publication`. A
     # schema-scoped database that lost its schema-aware slot (e.g. after a PostgreSQL failover) must NOT
     # adopt them — two consumers on one slot and publication would cross-talk, the very failure the
-    # schema-aware identity removes. It must re-sync under its own schema-aware identity and leave the
-    # default-schema engine's objects untouched.
+    # schema-aware identity removes. But it also must NOT silently proceed under its own schema-aware
+    # identity: the schema-aware slot is gone, so proceeding would re-run the initial sync and reload a
+    # snapshot into the already-existing nested table, duplicating data. So the attach fails closed with
+    # an exception — the schema-aware slot is NOT recreated (no fresh sync ran) — and the default-schema
+    # engine's objects are left untouched.
     cursor = pg_manager.get_db_cursor()
     schema_name = "fp_schema"
     table = "fp_table"
@@ -2642,41 +2645,45 @@ def test_legacy_identity_not_adopted_for_foreign_publication(started_cluster):
     cursor.execute(f"SELECT pg_drop_replication_slot('{schema_aware_slot}')")
     instance.start_clickhouse()
 
-    # The schema-scoped database must NOT adopt the foreign legacy identity: the schema-aware slot is
-    # recreated (a fresh sync) and the legacy slot stays with the default-schema database.
-    slots = set()
-    for _ in range(120):
+    # The schema-scoped database must fail closed on attach: it neither adopts the foreign legacy
+    # identity nor re-runs the initial sync under its schema-aware identity. The attach throws, so the
+    # error surfaces in the log.
+    assert_logs_contain_with_retry(
+        instance, "not this engine's schema", retry_count=120, sleep_time=1
+    )
+
+    # The schema-aware slot is NOT recreated. Recreating it is the only thing that runs the initial sync
+    # (and re-snapshots the existing nested table), so its absence proves no re-snapshot happened. The
+    # wrapper always reads with FINAL, which would hide a duplicated snapshot, so this slot check — not a
+    # logical row count — is what proves the fail-closed behavior. The legacy slot stays with the
+    # default-schema database. Give the retrying startup task time to prove the slot stays absent.
+    for _ in range(15):
         cursor.execute(
             "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
         )
         slots = {row[0] for row in cursor.fetchall()}
-        if schema_aware_slot in slots:
-            break
+        assert (
+            schema_aware_slot not in slots
+        ), f"schema-aware slot was recreated; the attach must fail closed, got {slots}"
         time.sleep(1)
-    assert (
-        schema_aware_slot in slots
-    ), f"schema-aware slot was not recreated, got {slots}"
-    assert legacy_slot in slots
-    assert instance.contains_in_log("not this engine's schema")
+    assert legacy_slot in slots, f"legacy slot must stay untouched, got {slots}"
 
-    # Both databases keep replicating their own schema's table, without cross-talk.
+    # The default-schema database is untouched: it keeps replicating its own schema's table without any
+    # cross-talk from the schema-scoped database that failed to start.
     instance.query(
         f"INSERT INTO postgres_database.{table} SELECT number, number from numbers(50, 50)"
     )
-    instance.query(
-        f"INSERT INTO {pg_db}.{table} SELECT number, number + 1000 from numbers(30, 30)"
+    check_tables_are_synchronized(
+        instance,
+        table,
+        postgres_database="postgres_database",
+        materialized_database=mat_default_db,
     )
     assert_eq_with_retry(
         instance, f"SELECT count() FROM {mat_default_db}.{table}", "100\n"
     )
     assert_eq_with_retry(
-        instance, f"SELECT count() FROM {mat_schema_db}.{table}", "60\n"
-    )
-    assert_eq_with_retry(
         instance, f"SELECT countIf(value >= 1000) FROM {mat_default_db}.{table}", "0\n"
-    )
-    assert_eq_with_retry(
-        instance, f"SELECT countIf(value < 1000) FROM {mat_schema_db}.{table}", "0\n"
     )
 
     pg_manager.drop_materialized_db(mat_default_db)
