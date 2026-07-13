@@ -18,6 +18,10 @@ SELECT_FROM_SQLITE_TABLE = """SELECT sleepEachRow(0.0001), id, random_int, rando
 FROM test_sqlite.big_data_table
 SETTINGS max_block_size = 10000"""
 
+# Filled in by started_cluster: absolute path to the SQLite db file on the host,
+# used to take an exclusive lock and force SQLITE_BUSY on the reader.
+DB_FILE_ON_HOST = None
+
 
 @pytest.fixture(scope="module")
 def started_cluster():
@@ -28,6 +32,9 @@ def started_cluster():
         host_db_path = os.path.join(instance_path, "database", "user_files")
         os.makedirs(host_db_path, exist_ok=True)
         db_file_on_host = os.path.join(host_db_path, SQLITE_DB_FILE_NAME)
+
+        global DB_FILE_ON_HOST
+        DB_FILE_ON_HOST = db_file_on_host
 
         conn = sqlite3.connect(db_file_on_host)
         cursor = conn.cursor()
@@ -133,3 +140,57 @@ def test_cancel_query(started_cluster):
 
     query_thread.join()
     assert node1.contains_in_log("QUERY_WAS_CANCELLED_BY_CLIENT")
+
+
+def test_kill_query_while_sqlite_busy(started_cluster):
+    # Take an exclusive lock on the SQLite database from a separate connection so that
+    # sqlite3_step in SQLiteSource::generate returns SQLITE_BUSY. Before the fix the
+    # retry loop did a bare `continue`, busy-spinning a full CPU core and ignoring
+    # cancellation. Verify the read stays cancellable while the lock is held.
+    conn = sqlite3.connect(DB_FILE_ON_HOST, isolation_level=None)
+    conn.execute("BEGIN EXCLUSIVE")
+    conn.execute(
+        "INSERT INTO big_data_table (random_int, random_string) VALUES (1, 'x')"
+    )
+    try:
+        query_id = str(uuid.uuid4())
+
+        def execute_query():
+            _, error = node1.query_and_get_answer_with_error(
+                SELECT_FROM_SQLITE_TABLE,
+                query_id=query_id,
+            )
+            assert "DB::Exception: Query was cancelled" in error
+
+        query_thread = threading.Thread(target=execute_query)
+        query_thread.start()
+
+        node1.wait_for_log_line("Generate a chunk", look_behind_lines=0)
+        time.sleep(1)
+
+        # The query is stuck retrying on SQLITE_BUSY (lock is still held), so it must
+        # not have finished on its own.
+        assert (
+            int(
+                node1.query(
+                    f"SELECT count(*) FROM system.processes WHERE query_id='{query_id}'"
+                ).strip()
+            )
+            == 1
+        )
+
+        # KILL must cancel it promptly even though the lock is still held.
+        node1.query(f"KILL QUERY WHERE query_id='{query_id}' SYNC")
+        query_thread.join()
+
+        assert (
+            int(
+                node1.query(
+                    f"SELECT count(*) FROM system.processes WHERE query_id='{query_id}'"
+                ).strip()
+            )
+            == 0
+        )
+    finally:
+        conn.rollback()
+        conn.close()
