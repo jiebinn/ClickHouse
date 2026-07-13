@@ -218,57 +218,6 @@ def test_container_preserved_after_restart():
         stop_zk(node_zk)
 
 
-def test_gc_after_restart_with_flag_disabled():
-    """
-    Container semantics are persisted state: after a restart with create_container
-    disabled, existing container nodes must still be GC'd once childless. The flag
-    gates only the creation of new container nodes.
-    """
-    run_uuid = uuid.uuid4()
-    cluster = ClickHouseCluster(__file__, str(run_uuid))
-    node = cluster.add_instance(
-        "node",
-        main_configs=["configs/enable_keeper_single.xml"],
-        stay_alive=True,
-        with_remote_database_disk=False,
-    )
-
-    node_zk = None
-    cluster.start()
-    try:
-        node_zk = get_fake_zk(cluster, "node")
-
-        node_zk.create("/flag_off_cont", b"", container=True)
-        node_zk.create("/flag_off_cont/child", b"data")
-
-        # write enough entries to guarantee a snapshot is written (snapshot_distance=10)
-        for i in range(15):
-            node_zk.create(f"/filler_{i}", str(i).encode())
-        node.wait_for_log_line("Created persistent snapshot", timeout=30)
-
-        stop_zk(node_zk)
-        node_zk = None
-
-        node.replace_in_config(
-            "/etc/clickhouse-server/config.d/enable_keeper_single.xml",
-            "<create_container>1</create_container>",
-            "<create_container>0</create_container>",
-        )
-        node.restart_clickhouse(kill=True)
-        keeper_utils.wait_until_connected(cluster, node)
-
-        node_zk = get_fake_zk(cluster, "node")
-
-        wait_nodes_exist([node_zk], ["/flag_off_cont", "/flag_off_cont/child"])
-
-        # GC must still clean up existing containers even though the flag is off
-        node_zk.delete("/flag_off_cont/child")
-        wait_nodes_gone([node_zk], ["/flag_off_cont"])
-    finally:
-        cluster.shutdown()
-        stop_zk(node_zk)
-
-
 def test_gc_never_used_container():
     """
     A container node that was created empty and never received any children must

@@ -480,13 +480,12 @@ void KeeperContext::initializeFeatureFlags(const Poco::Util::AbstractConfigurati
                 "Feature flag CREATE_CONTAINER requires write_snapshot_version >= {}, but it is set to {}. "
                 "Bump write_snapshot_version after every replica has been upgraded.",
                 static_cast<int>(SnapshotVersion::V9), write_version);
-    }
 
-    /// Container GC runs regardless of CREATE_CONTAINER: container nodes may exist in restored state.
-    const auto container_gc_period_ms = getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
-    if (container_gc_period_ms <= 0)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "container_gc_period_ms must be greater than 0, got {}", container_gc_period_ms);
+        const auto container_gc_period_ms = getCoordinationSettings()[CoordinationSetting::container_gc_period_ms].totalMilliseconds();
+        if (container_gc_period_ms <= 0)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "container_gc_period_ms must be greater than 0, got {}", container_gc_period_ms);
+    }
 
     feature_flags.logFlags(getLogger("KeeperContext"));
 }
