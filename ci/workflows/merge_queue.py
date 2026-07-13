@@ -10,6 +10,11 @@ workflow = Workflow.Config(
         JobConfigs.style_check,
         JobConfigs.fast_test,
         *[job for job in JobConfigs.build_jobs if job.name == "Build (amd_binary)"],
+        # Reruns the PR's new/changed stateless tests against the merge group
+        # state, catching semantic conflicts with `master` changes that landed
+        # after the PR's last CI run (e.g. a new randomized setting in
+        # `tests/clickhouse-test`). Self-skips when the PR changes no tests.
+        *JobConfigs.stateless_tests_flaky_mq_jobs,
     ],
     artifacts=[
         *[
