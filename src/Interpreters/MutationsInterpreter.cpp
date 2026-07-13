@@ -1032,7 +1032,23 @@ void MutationsInterpreter::prepare(bool dry_run)
                 continue;
             }
 
-            if (!source.hasSecondaryIndex(it->name, metadata_snapshot))
+            /// An index over a persistent virtual column (e.g. the implicit minmax index
+            /// created by add_minmax_index_for_block_{number,offset}_column over
+            /// _block_number/_block_offset) cannot be materialized for a part that does not
+            /// have that column on disk: freshly inserted 0-level parts do not materialize
+            /// _block_number/_block_offset. Trying to do so reads a column absent from the
+            /// part and fails with UNKNOWN_IDENTIFIER (both when analyzing the index
+            /// expression here and later when recalculating the index). The insert path skips
+            /// such indices for the same reason (see collectSkipIndicesToMaterialize).
+            const auto part = source.getMergeTreeDataPart();
+            bool missing_virtual_column = part && std::any_of(
+                it->column_names.begin(), it->column_names.end(),
+                [&](const auto & column)
+                {
+                    return metadata_snapshot->isVirtualColumn(column) && !part->getColumnsDescription().has(column);
+                });
+
+            if (!missing_virtual_column && !source.hasSecondaryIndex(it->name, metadata_snapshot))
             {
                 auto query = (*it).expression_list_ast->clone();
                 auto syntax_result = TreeRewriter(context).analyze(query, all_columns);
