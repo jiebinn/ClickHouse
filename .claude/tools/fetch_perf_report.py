@@ -93,14 +93,13 @@ def fetch_url(url):
 
 
 def download_url(url, dest):
-    """Download a URL to a file, transparently decompressing. Returns True on success."""
-    try:
-        data = _read_url_bytes(url)
-    except RuntimeError:
-        return False
+    """Download a URL to a file, transparently decompressing. Raises on failure.
+
+    Shard-local failures are isolated by the `download_shard` worker, not here.
+    """
+    data = _read_url_bytes(url)
     with open(dest, "wb") as f:
         f.write(data)
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -274,8 +273,13 @@ def download_shard(shard, tmpdir):
     shard_num = shard["shard_num"]
     dest = os.path.join(tmpdir, f"{arch}_{shard_num}.tsv")
 
-    if not download_url(shard["tsv_url"], dest):
-        return shard, None, f"Failed to download {shard['tsv_url']}"
+    # Isolate all shard-local download/decompress failures (HTTP, network, timeout, missing zstd,
+    # corrupt archive, ...) as a per-shard error so one bad shard warns and the report continues
+    # with the rest rather than aborting the whole run.
+    try:
+        download_url(shard["tsv_url"], dest)
+    except Exception as e:
+        return shard, None, f"Failed to download {shard['tsv_url']}: {e}"
 
     # Prepend arch and shard_num columns so clickhouse-local can distinguish shards
     enriched = os.path.join(tmpdir, f"{arch}_{shard_num}_enriched.tsv")

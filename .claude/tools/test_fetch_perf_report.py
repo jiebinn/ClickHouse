@@ -164,8 +164,34 @@ def test_maybe_decompress_handles_plain_gzip_zstd():
     assert fpr.maybe_decompress(zst) == plain
 
 
+def test_download_shard_isolates_failures():
+    import gzip as _gzip
+    import subprocess as _sp
+    import urllib.error as _ue
+
+    shard = {"arch": "arm", "shard_num": 1, "tsv_url": "https://example/all-query-metrics.tsv"}
+    failures = [
+        _ue.URLError("connection refused"),
+        _sp.TimeoutExpired(cmd="zstd", timeout=120),
+        FileNotFoundError("zstd"),  # zstd binary unavailable
+        _gzip.BadGzipFile("not a gzip file"),
+        RuntimeError("HTTP 403"),
+    ]
+    original = fpr.download_url
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            for exc in failures:
+                fpr.download_url = lambda *a, _e=exc, **k: (_ for _ in ()).throw(_e)
+                result = fpr.download_shard(shard, tmp)  # must not raise
+                assert result[0] is shard and result[1] is None, (exc, result)
+                assert "Failed to download" in result[2], (exc, result)
+    finally:
+        fpr.download_url = original
+
+
 if __name__ == "__main__":
     test_classification_matches_compare_sh()
     test_summary_counts()
     test_maybe_decompress_handles_plain_gzip_zstd()
+    test_download_shard_isolates_failures()
     print("All fetch_perf_report tests passed (or skipped).")
