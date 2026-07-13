@@ -182,7 +182,7 @@ StepWithSign TableFunctionGenerateSeries<alias_num>::parseStep(ContextPtr contex
 
 void registerTableFunctionGenerateSeries(TableFunctionFactory & factory)
 {
-    factory.registerFunction<TableFunctionGenerateSeries<0>>({}, {.allow_readonly = true});
+    factory.registerFunction<TableFunctionGenerateSeries<0>>({.description = R"DOC(Returns a table with a single 'generate_series' column of integers from a start value to a stop value inclusive; an optional third argument sets the step (default 1). Same as generateSeries.)DOC", .category = FunctionDocumentation::Category::TableFunction}, {.allow_readonly = true});
     factory.registerFunction<TableFunctionGenerateSeries<1>>({.description = R"DOCS_MD(
 Alias: `generateSeries`
 
