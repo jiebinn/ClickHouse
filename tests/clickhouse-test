@@ -4802,7 +4802,6 @@ class BuildFlags:
     ADDRESS = "asan"
     UNDEFINED = "ubsan"
     MEMORY = "msan"
-    CFI = "cfi"
     WITH_COVERAGE = "with-coverage"
     WITH_COVERAGE_DEPTH = "with-coverage-depth"
     SANITIZERS = [THREAD, ADDRESS, UNDEFINED, MEMORY]
@@ -4842,13 +4841,6 @@ def collect_build_flags(args):
                 result.append(flag)
         SANITIZED = bool(result)
 
-    # CFI shows up in CXX_FLAGS as -fsanitize=cfi-vcall,... but it is not a memory
-    # sanitizer: it must not set SANITIZED (that would skip many unrelated tests) nor
-    # change RELEASE_NON_SANITIZED. Detect it here while `value` still holds CXX_FLAGS
-    # and append the flag only after those globals are computed, so `no-cfi` tags can
-    # skip tests that do not apply to the CFI build (e.g. profiler stack symbolization).
-    has_cfi = b"-fsanitize=cfi" in value
-
     # WITH_COVERAGE / WITH_COVERAGE_DEPTH have dedicated rows in system.build_options;
     # do not rely on CXX_FLAGS which uses FULL_CXX_FLAGS_NORMALIZED and may not include them.
     with_coverage = clickhouse_execute(
@@ -4872,9 +4864,6 @@ def collect_build_flags(args):
         result.append(BuildFlags.RELEASE)
 
     RELEASE_NON_SANITIZED = result == [BuildFlags.RELEASE]
-
-    if has_cfi:
-        result.append(BuildFlags.CFI)
 
     value = clickhouse_execute(
         args,
