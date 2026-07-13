@@ -750,10 +750,10 @@ AccessToken BigLakeCatalog::retrieveGoogleCloudAccessToken() const
 
 std::optional<StorageType> RestCatalog::getStorageType() const
 {
-    const auto config_snapshot = state.get();
-    if (config_snapshot->config.default_base_location.empty())
+    const auto state_snapshot = state.get();
+    if (state_snapshot->config.default_base_location.empty())
         return std::nullopt;
-    return parseStorageTypeFromLocation(config_snapshot->config.default_base_location);
+    return parseStorageTypeFromLocation(state_snapshot->config.default_base_location);
 }
 
 DB::ReadWriteBufferFromHTTPPtr RestCatalog::createReadBuffer(
@@ -929,6 +929,8 @@ bool RestCatalog::hasFlatNamespaces() const
 
 RestCatalog::Namespaces RestCatalog::listChildNamespaces(const std::string & base_namespace) const
 {
+    const auto state_snapshot = state.get();
+
     Poco::URI::QueryParameters base_params;
     if (!base_namespace.empty())
         base_params = createParentNamespaceParams(base_namespace);
@@ -953,7 +955,7 @@ RestCatalog::Namespaces RestCatalog::listChildNamespaces(const std::string & bas
             if (!page_token.empty())
                 params.push_back({"pageToken", page_token});
 
-            auto buf = createReadBuffer(state.get()->config.prefix / NAMESPACES_ENDPOINT, params);
+            auto buf = createReadBuffer(state_snapshot->config.prefix / NAMESPACES_ENDPOINT, params);
             String next_page_token;
             auto page_namespaces = parseNamespaces(*buf, base_namespace, next_page_token);
             LOG_DEBUG(
@@ -1080,6 +1082,8 @@ RestCatalog::Namespaces RestCatalog::parseNamespaces(DB::ReadBuffer & buf, const
 
 DB::Names RestCatalog::listTablesInNamespace(const std::string & base_namespace, size_t limit) const
 {
+    const auto state_snapshot = state.get();
+
     auto encoded_namespace = encodeNamespaceForURI(base_namespace);
     const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encoded_namespace / "tables";
 
@@ -1101,7 +1105,7 @@ DB::Names RestCatalog::listTablesInNamespace(const std::string & base_namespace,
         if (!page_token.empty())
             params.push_back({"pageToken", page_token});
 
-        auto buf = createReadBuffer(state.get()->config.prefix / endpoint, params);
+        auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, params);
 
         /// Pass through the remaining limit so that single-page short-circuiting still works
         /// when the caller is in `empty()` (limit=1) and the first page already contains a row.
@@ -1236,8 +1240,9 @@ bool RestCatalog::getTableMetadataImpl(
         headers.emplace_back("X-Iceberg-Access-Delegation", "vended-credentials");
     }
 
+    const auto state_snapshot = state.get();
     const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encodeNamespaceForURI(namespace_name) / "tables" / table_name;
-    auto buf = createReadBuffer(state.get()->config.prefix / endpoint, /* params */{}, headers);
+    auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, /* params */{}, headers);
 
     if (buf->eof())
     {
@@ -1357,7 +1362,8 @@ void RestCatalog::sendRequest(const String & endpoint, Poco::JSON::Object::Ptr r
 
 void RestCatalog::createNamespaceIfNotExists(const String & namespace_name, const String & location) const
 {
-    const std::string endpoint = (base_url / state.get()->config.prefix / NAMESPACES_ENDPOINT).generic_string();
+    const auto state_snapshot = state.get();
+    const std::string endpoint = (base_url / state_snapshot->config.prefix / NAMESPACES_ENDPOINT).generic_string();
 
     Poco::JSON::Object::Ptr request_body = new Poco::JSON::Object;
     {
@@ -1385,7 +1391,8 @@ void RestCatalog::createTable(const String & namespace_name, const String & tabl
 {
     createNamespaceIfNotExists(namespace_name, metadata_content->getValue<String>("location"));
 
-    const std::string endpoint = (base_url / state.get()->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables").generic_string();
+    const auto state_snapshot = state.get();
+    const std::string endpoint = (base_url / state_snapshot->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables").generic_string();
 
     Poco::JSON::Object::Ptr request_body = new Poco::JSON::Object;
     request_body->set("name", table_name);
@@ -1426,7 +1433,8 @@ void RestCatalog::createTable(const String & namespace_name, const String & tabl
 
 bool RestCatalog::updateMetadata(const String & namespace_name, const String & table_name, const String & /*new_metadata_path*/, Poco::JSON::Object::Ptr new_snapshot) const
 {
-    const std::string endpoint = (base_url / state.get()->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables" / table_name).generic_string();
+    const auto state_snapshot = state.get();
+    const std::string endpoint = (base_url / state_snapshot->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables" / table_name).generic_string();
 
     Poco::JSON::Object::Ptr request_body = new Poco::JSON::Object;
     {
@@ -1497,7 +1505,8 @@ bool RestCatalog::updateSchema(
     Poco::JSON::Object::Ptr new_schema,
     Int32 previous_schema_id) const
 {
-    const std::string endpoint = (base_url / state.get()->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables" / table_name).generic_string();
+    const auto state_snapshot = state.get();
+    const std::string endpoint = (base_url / state_snapshot->config.prefix / NAMESPACES_ENDPOINT / encodeNamespaceForURI(namespace_name) / "tables" / table_name).generic_string();
 
     Poco::JSON::Object::Ptr request_body = new Poco::JSON::Object;
     {
@@ -1643,10 +1652,11 @@ ICatalog::CredentialsRefreshCallback RestCatalog::getCredentialsConfigurationCal
         DB::HTTPHeaderEntries headers;
         headers.emplace_back("X-Iceberg-Access-Delegation", "vended-credentials");
 
+        const auto state_snapshot = state.get();
         const auto & table = storage_id.getTableName();
         auto [namespace_name, table_name] = DataLake::parseTableName(table);
         const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encodeNamespaceForURI(namespace_name) / "tables" / table_name;
-        auto buf = createReadBuffer(state.get()->config.prefix / endpoint, /* params */{}, headers);
+        auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, /* params */{}, headers);
 
         if (buf->eof())
         {
