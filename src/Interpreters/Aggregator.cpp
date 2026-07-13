@@ -2745,7 +2745,7 @@ Aggregator::AggregatedChunks Aggregator::convertToChunks(AggregatedDataVariants 
 
     double elapsed_seconds = watch.elapsedSeconds();
     LOG_DEBUG(log,
-        "Converted aggregated data to chunks. {} rows, {} in {} sec. ({:.3f} rows/sec., {}/sec.)",
+        "Converted aggregated data to chunks. {} rows, {} in {:.3f} sec. ({:.3f} rows/sec., {}/sec.)",
         rows, ReadableSize(bytes),
         elapsed_seconds, static_cast<double>(rows) / elapsed_seconds,
         ReadableSize(static_cast<double>(bytes) / elapsed_seconds));
@@ -3851,7 +3851,7 @@ Aggregator::AggregatedChunk Aggregator::mergeBlocks(
     double elapsed_seconds = watch.elapsedSeconds();
     LOG_DEBUG(
         log,
-        "Merged partially aggregated blocks for bucket #{}. Got {} rows, {} from {} source rows in {} sec. ({:.3f} rows/sec., {}/sec.)",
+        "Merged partially aggregated blocks for bucket #{}. Got {} rows, {} from {} source rows in {:.3f} sec. ({:.3f} rows/sec., {}/sec.)",
         bucket_num,
         rows,
         ReadableSize(bytes),

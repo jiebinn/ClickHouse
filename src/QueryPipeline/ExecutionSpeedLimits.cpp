@@ -66,7 +66,7 @@ void ExecutionSpeedLimits::throttle(
             if (min_execution_rps && rows_per_second < static_cast<double>(min_execution_rps))
                 throw Exception(
                     ErrorCodes::TOO_SLOW,
-                    "Query is executing too slow: {} rows/sec., minimum: {}",
+                    "Query is executing too slow: {:.3f} rows/sec., minimum: {}",
                     rows_per_second,
                     min_execution_rps);
 
@@ -74,7 +74,7 @@ void ExecutionSpeedLimits::throttle(
             if (min_execution_bps && bytes_per_second < static_cast<double>(min_execution_bps))
                 throw Exception(
                     ErrorCodes::TOO_SLOW,
-                    "Query is executing too slow: {} bytes/sec., minimum: {}",
+                    "Query is executing too slow: {:.3f} bytes/sec., minimum: {}",
                     bytes_per_second,
                     min_execution_bps);
 
