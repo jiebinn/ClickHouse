@@ -8,7 +8,7 @@
 -- previously-working query into an exception: the non-UTF-8 pattern keeps the chain off
 -- `multiMatchAny`, and we no longer fall back to a combined `match` alternation, so the original
 -- `OR` chain is kept unchanged. Verify the chain succeeds and returns the same result as the
--- un-rewritten OR chain, for both the new and the old analyzer.
+-- un-rewritten OR chain, for both the analyzer and the old analyzer.
 
 DROP TABLE IF EXISTS t_or_like_non_utf8;
 CREATE TABLE t_or_like_non_utf8 (s String) ENGINE = Memory;

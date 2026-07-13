@@ -9,7 +9,7 @@
 -- previously-working query into an exception: a chain that contains a raw `match()` regexp is kept
 -- off `multiMatchAny`, and we no longer fall back to a combined `match` alternation, so the original
 -- `OR` chain is kept unchanged. Verify the chain succeeds and returns the same result as the
--- un-rewritten OR chain, for both the new and the old analyzer.
+-- un-rewritten OR chain, for both the analyzer and the old analyzer.
 
 DROP TABLE IF EXISTS t_or_like_match_re2;
 CREATE TABLE t_or_like_match_re2 (s String) ENGINE = Memory;
