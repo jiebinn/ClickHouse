@@ -36,13 +36,16 @@ THIS_REPO = Path(__file__).resolve().parent.parent
 DEFAULT_DOCUSAURUS = Path.home() / "Desktop" / "clickhouse-docs"
 SKIP_DIRS = {"node_modules", ".git", "i18n", ".claude", ".mintlify", "scripts", "snippets", "static"}
 # Translation dirs are managed by the localisation bot — never migrate them.
-TRANSLATION_DIRS = {"ja", "ko", "ru", "zh", "es", "pt-BR"}
+TRANSLATION_DIRS = {"ar", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh"}
 # Same as SKIP_DIRS but allows the migrator's `--all` to descend into snippets/
 # so partials get the same transforms as pages.
 ITER_SKIP_DIRS = (SKIP_DIRS | TRANSLATION_DIRS) - {"snippets"}
 EXTS = (".md", ".mdx")
 RUNNABLE_IMPORT = 'import { RunnableCode } from "/snippets/components/RunnableCode/RunnableCode.jsx";'
 IMAGE_IMPORT = 'import { Image } from "/snippets/components/Image.jsx";'
+AGENT_PROMPT_IMPORT = (
+    'import { AgentPrompt } from "/snippets/components/AgentPrompt/AgentPrompt.jsx";'
+)
 ADMON_TAG = {"note": "Note", "tip": "Tip", "info": "Info", "warning": "Warning",
              "caution": "Warning", "danger": "Danger", "important": "Warning"}
 
@@ -728,6 +731,29 @@ def _override_kapalink_ask_ai(text: str) -> str:
     return re.sub(r"<KapaLink>(.*?)</KapaLink>", repl, text, flags=re.DOTALL)
 
 
+def _override_clickstack_collector_agent_prompt(text: str) -> str:
+    """Point the ClickStack collector prompt at the official agent skill.
+
+    The upstream Docusaurus page still uses the docs-hosted ``SKILL.md`` URL.
+    The canonical skill now lives in ``ClickHouse/agent-skills`` and is
+    installed through the Skills CLI.
+    """
+    text = re.sub(
+        r'prompt="[^"]*clickstack-otel-collector/SKILL\.md"',
+        'prompt="npx skills add clickhouse/agent-skills"',
+        text,
+    )
+    if "repositoryUrl=" not in text:
+        text = re.sub(
+            r'(^\s*description="[^"]*"\s*$)',
+            r'\1\n  repositoryUrl="https://github.com/ClickHouse/agent-skills"',
+            text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    return text
+
+
 POST_TRANSFORM_OVERRIDES: dict[str, callable] = {
     "docs/sql-reference/data-types/newjson.md": _override_newjson,
     "docs/use-cases/AI_ML/MCP/03_librechat.md": _override_librechat,
@@ -747,16 +773,16 @@ POST_TRANSFORM_OVERRIDES: dict[str, callable] = {
     "docs/interfaces/third-party/integrations.md": _override_third_party_libraries_sidebar,
     # <KapaLink> is a Docusaurus-only component; rewrite to a Mintlify Ask AI button.
     "docs/troubleshooting/index.md": _override_kapalink_ask_ai,
+    "docs/use-cases/observability/clickstack/managed-onboarding/setting-up-your-opentelemetry-collector.md": (
+        _override_clickstack_collector_agent_prompt
+    ),
 }
 
 
 def prune_unused_mdx_imports(text: str) -> str:
     """Drop `import X from '/path/foo.mdx';` lines where X is never used in
-    the body. Mintlify hoists an imported MDX snippet's own top-level imports
-    into the parent page's compiled scope; if the snippet is never rendered
-    (and only imported as dead code) it still contributes those declarations,
-    which collide with the page's own (e.g. both declare `Image`) and break
-    the page bundle ("Identifier 'X' has already been declared")."""
+    the body. Each snippet resolves the imports declared in its own file, so
+    retaining an unused nested snippet import only adds dead code."""
 
     def is_used(name: str, body: str) -> bool:
         # <Name>, <Name />, <Name/>, <Name attr=...>, {Name}, or {expr Name expr}
@@ -788,35 +814,6 @@ def prune_unused_mdx_imports(text: str) -> str:
     return "\n".join(out)
 
 
-def strip_snippet_component_imports(text: str, dest_path: Path | None) -> str:
-    """For files under `/snippets/`, drop imports of components from
-    `/snippets/components/`. Mintlify hoists snippet imports into every
-    page that imports the snippet, so when both the snippet and a host
-    page import (e.g.) `Image`, the combined bundle has two top-level
-    declarations of the same identifier and the page bundle errors out
-    with `Identifier 'Image' has already been declared`. Host pages
-    always carry these component imports themselves, so dropping the
-    snippet's copy is safe (and is the only thing that keeps the page
-    renderable)."""
-    if dest_path is None:
-        return text
-    try:
-        rel = dest_path.relative_to(THIS_REPO).as_posix()
-    except ValueError:
-        return text
-    if not rel.startswith("snippets/"):
-        return text
-
-    def keep(line: str) -> bool:
-        m = IMPORT_LINE_RE.match(line)
-        if not m:
-            return True
-        src = m.group("src")
-        return not src.startswith("/snippets/components/")
-
-    return "\n".join(line for line in text.split("\n") if keep(line))
-
-
 def transform_imports(text: str, lk: Lookups, issues: list[str], source_docu_path: Path | None = None, json_vars: dict[str, str] | None = None, dest_path: Path | None = None) -> tuple[str, dict[str, str]]:
     image_vars: dict[str, str] = {}
     if json_vars is None:
@@ -834,6 +831,33 @@ def transform_imports(text: str, lk: Lookups, issues: list[str], source_docu_pat
             return ("/" + dest_path.relative_to(THIS_REPO).as_posix()) == target_url
         except ValueError:
             return False
+
+    def _is_translated_snippet(target_url: str | None) -> bool:
+        if not target_url:
+            return False
+        parts = Path(target_url.lstrip("/")).parts
+        return (
+            len(parts) > 1
+            and parts[0] == "snippets"
+            and parts[1] in TRANSLATION_DIRS
+        )
+
+    def _prefer_snippet_candidate(
+        candidate: str,
+        common_suffix_length: int,
+        current: str | None,
+        current_suffix_length: int,
+    ) -> bool:
+        """Prefer the closest path match, then the default locale on ties.
+
+        The migrator only processes default-locale source files. Translation
+        directories contain snippets with the same basename and path suffix,
+        so an unordered tie can otherwise make an English snippet import a
+        translated copy.
+        """
+        if common_suffix_length != current_suffix_length:
+            return common_suffix_length > current_suffix_length
+        return _is_translated_snippet(current) and not _is_translated_snippet(candidate)
 
     def _import_or_drop(spec: str, target_url: str, basename: str) -> str:
         if _is_self_import(target_url):
@@ -881,7 +905,7 @@ def transform_imports(text: str, lk: Lookups, issues: list[str], source_docu_pat
                             n = 0
                             while n < len(cand_parts) and n < len(src_parts) and cand_parts[-1-n] == src_parts[-1-n]:
                                 n += 1
-                            if n > best_len:
+                            if _prefer_snippet_candidate(path, n, best, best_len):
                                 best, best_len = path, n
                         return _import_or_drop(spec, best, basename)
                     except (OSError, ValueError):
@@ -920,7 +944,7 @@ def transform_imports(text: str, lk: Lookups, issues: list[str], source_docu_pat
                 n = 0
                 while n < len(cand_parts) and n < len(src_parts) and cand_parts[-1-n] == src_parts[-1-n]:
                     n += 1
-                if n > best_len:
+                if _prefer_snippet_candidate(path, n, best, best_len):
                     best, best_len = path, n
             if best:
                 return _import_or_drop(spec, best, basename)
@@ -1116,6 +1140,33 @@ def transform_image_components(text: str, image_vars: dict[str, str]) -> str:
             return m.group(0)
         return f'<Image{before}img="{path}"{after}>'
     return pattern.sub(repl, text)
+
+
+# Docusaurus also permits inline webpack-style image expressions such as
+# `img={require('@site/static/images/example.png')}`. There is no `require`
+# function in Mintlify's browser runtime, so these expressions throw at render
+# time and the screenshots disappear. Rewrite them to public `/images/...`
+# paths, preferring the converted WebP asset when it exists in this repo.
+INLINE_SITE_IMAGE_REQUIRE_RE = re.compile(
+    r"img=\{\s*require\(\s*(['\"])@site/(?:static/)?images/([^'\"]+)\1\s*\)\s*\}"
+)
+
+
+def transform_inline_image_requires(text: str) -> str:
+    def repl(m: re.Match) -> str:
+        relative_path = Path(m.group(2))
+        asset_path = THIS_REPO / "images" / relative_path
+        if not asset_path.is_file() and relative_path.suffix.lower() in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+        }:
+            webp_path = relative_path.with_suffix(".webp")
+            if (THIS_REPO / "images" / webp_path).is_file():
+                relative_path = webp_path
+        return f'img="/images/{relative_path.as_posix()}"'
+
+    return INLINE_SITE_IMAGE_REQUIRE_RE.sub(repl, text)
 
 
 # ----- <SvgVar ... /> -> plain <img src="..." style={{width:"3rem"}} /> -----
@@ -2071,6 +2122,7 @@ def migrate_file(path: Path, lk: Lookups, force: bool, dry_run: bool, docusaurus
     text = transform_admonitions(text)
     text = transform_details(text)
     text = transform_tabs(text)
+    text = transform_inline_image_requires(text)
     text = transform_image_components(text, image_vars)
     text = transform_svg_components(text, image_vars)
     text = transform_image_logo_to_img(text)
@@ -2090,12 +2142,12 @@ def migrate_file(path: Path, lk: Lookups, force: bool, dry_run: bool, docusaurus
         text = _inject_import(text, RUNNABLE_IMPORT)
     if image_vars and "/snippets/components/Image.jsx" not in text:
         text = _inject_import(text, IMAGE_IMPORT)
+    if re.search(r"<AgentPrompt(?:[\s/>])", text) and "AgentPrompt/AgentPrompt.jsx" not in text:
+        text = _inject_import(text, AGENT_PROMPT_IMPORT)
 
-    # Dedupe imports to avoid `Identifier 'X' has already been declared`
-    # bundle errors that would render the page blank. See the two helpers
-    # for the underlying Mintlify hoisting behaviour.
+    # Remove unused nested snippet imports. Imports that remain stay local to
+    # the file that renders the imported snippet.
     text = prune_unused_mdx_imports(text)
-    text = strip_snippet_component_imports(text, path)
 
     # Apply any per-file override (rare; for upstream patterns that don't map
     # cleanly to a generic transform, e.g. <Link><CardSecondary/></Link>).
