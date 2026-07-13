@@ -47,3 +47,19 @@ INSERT INTO t_arith_key VALUES (1, 1, '2020-01-02');
 OPTIMIZE TABLE t_arith_key FINAL;
 SELECT a, b, d FROM t_arith_key ORDER BY a, b;
 DROP TABLE t_arith_key;
+
+-- Regression: getReturnTypeImpl is re-invoked from IFunction::compile when a stored arithmetic
+-- expression (here the sorting key a + k + 1) is JIT-compiled at pipeline-build time. After an ALTER
+-- rebinds the table metadata to a query context that then dies, that expression must still be
+-- type-resolvable. Before the fix this raised `Context has expired` (LOGICAL_ERROR).
+DROP TABLE IF EXISTS t_arith_key_jit;
+CREATE TABLE t_arith_key_jit (k Int64, a Nullable(Int64), v Int64)
+ENGINE = ReplacingMergeTree ORDER BY (k, a + k + 1)
+SETTINGS allow_nullable_key = 1;
+INSERT INTO t_arith_key_jit VALUES (1, 1, 1);
+INSERT INTO t_arith_key_jit VALUES (1, 1, 2);
+ALTER TABLE t_arith_key_jit ADD COLUMN c Int64; -- rebinds metadata to the ALTER query context, which then dies
+SELECT k, a FROM t_arith_key_jit FINAL WHERE k >= 0
+SETTINGS query_plan_optimize_lazy_final = 1, compile_expressions = 1,
+         min_count_to_compile_expression = 0, min_filtered_ratio_for_lazy_final = 0;
+DROP TABLE t_arith_key_jit;

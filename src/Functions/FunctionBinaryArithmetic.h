@@ -2149,9 +2149,13 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        /// Type resolution only runs during analysis, while the context is still alive; execution paths
-        /// use the precomputed builders instead and never reach getContext().
-        return getReturnTypeImplStatic(arguments, getContext());
+        /// Type resolution runs during analysis while the context is alive, but it is also re-invoked from
+        /// IFunction::compile when a stored expression (e.g. a table's sorting key) is JIT-compiled at
+        /// pipeline-build time - by then the query context that built the function may already be gone.
+        /// Only the plain-numeric path is JIT-compilable (interval/tuple/date/decimal operations are not),
+        /// and that path never dereferences the context, so lock the weak pointer instead of throwing
+        /// `Context has expired` on an expired context. See #54890.
+        return getReturnTypeImplStatic(arguments, context.lock());
     }
 
     static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context_)
