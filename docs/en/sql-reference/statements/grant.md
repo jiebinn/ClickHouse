@@ -608,6 +608,8 @@ Allows a user to execute [SYSTEM](../../sql-reference/statements/system.md) quer
   - `SYSTEM FLUSH`. Level: `GROUP`
     - `SYSTEM FLUSH DISTRIBUTED`. Level: `TABLE`. Aliases: `FLUSH DISTRIBUTED`
     - `SYSTEM FLUSH LOGS`. Level: `GLOBAL`. Aliases: `FLUSH LOGS`
+  - `SYSTEM UNLOAD`. Level: `GROUP`
+    - `SYSTEM UNLOAD DICTIONARY`. Level: `GLOBAL`. Aliases: `SYSTEM UNLOAD DICTIONARIES`, `UNLOAD DICTIONARY`, `UNLOAD DICTIONARIES`
 
 The `SYSTEM RELOAD EMBEDDED DICTIONARIES` privilege implicitly granted by the `SYSTEM RELOAD DICTIONARY ON *.*` privilege.
 
