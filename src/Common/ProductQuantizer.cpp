@@ -33,11 +33,6 @@ size_t randIndex(UInt64 & state, size_t bound)
     return bound ? static_cast<size_t>(splitmix64(state) % bound) : 0;
 }
 
-/// Scalar double nearest-centroid argmin over row-major centroids. Used only by k-means training (which runs on a
-/// bounded reservoir, not the hot per-row encode path): keeping it in double makes the learned codebook independent of
-/// the SIMD float encode kernel, so encoding stays a near-lossless re-expression of the same argmin.
-size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub);
-
 /// Squared L2 distance between two d-dim float vectors.
 double sqDist(const float * a, const float * b, size_t d)
 {
@@ -50,6 +45,9 @@ double sqDist(const float * a, const float * b, size_t d)
     return s;
 }
 
+/// Scalar double nearest-centroid argmin over row-major centroids. Used only by k-means training (which runs on a
+/// bounded reservoir, not the hot per-row encode path): keeping it in double makes the learned codebook independent of
+/// the SIMD float encode kernel, so encoding stays a near-lossless re-expression of the same argmin.
 size_t nearestCentroidScalar(const float * centroids, size_t k, size_t d_sub, const float * sub)
 {
     size_t best = 0;
