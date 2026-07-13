@@ -48,10 +48,14 @@
     'Int128':  "toInt128(-77)",
     'Int256':  "toInt256(-77)",
     'Decimal32':  "toDecimal32('-7.25', 2)",
-    'Decimal64':  "toDecimal64('-7.25', 4)",
-    'Decimal128': "toDecimal128('-7.25', 10)",
-    'Decimal256': "toDecimal256('-7.25', 20)"
+    'Decimal64':  "toDecimal64('-3.5', 4)",
+    'Decimal128': "toDecimal128('-12.75', 10)",
+    'Decimal256': "toDecimal256('-42.5', 20)"
 } %}
+{# The decimal 'other' entries differ per width so that a cross-width Decimal-vs-Decimal pair
+   feeds unequal operands into the const-shape unequal slots below; otherwise DecimalComparison's
+   constantVector / vectorConstant / both-const branches would only ever see equal decimals and an
+   operand-order bug in those branches for mixed decimals would go unnoticed. #}
 
 {% macro cmprow(label, l1, r1, l2, r2) -%}
 SELECT '{{ label }}'

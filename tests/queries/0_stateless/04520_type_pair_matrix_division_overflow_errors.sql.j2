@@ -33,12 +33,27 @@ SELECT '-- division of the minimal signed number by minus one, wide and narrow d
 SELECT '-- positiveModulo by the most negative divisor value';
 {{ fn_throws('positiveModulo', 'toInt256(-100)', 'toInt8(-128)', 'ILLEGAL_DIVISION') }}
 
+-- Unlike intDiv/modulo below, the OrNull wrapper of positiveModulo does not suppress the most
+-- negative divisor error (and positiveModuloOrZero does not exist), so it still throws.
+SELECT '-- positiveModuloOrNull does not suppress the most negative divisor error';
+{{ fn_throws('positiveModuloOrNull', 'toInt256(-100)', 'toInt8(-128)', 'ILLEGAL_DIVISION') }}
+
 SELECT '-- OrZero and OrNull variants of the same exceptional cases do not throw';
 SELECT intDivOrZero(materialize(CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')), materialize(toInt8(-1)));
 SELECT intDivOrNull(materialize(CAST('-170141183460469231731687303715884105728', 'Int128')), materialize(toInt64(-1)));
 SELECT moduloOrNull(materialize(toInt8(-128)), materialize(toInt128(-1)));
 SELECT intDivOrZero(materialize(toUInt8(1)), materialize(toUInt256(0)));
 SELECT moduloOrNull(materialize(toInt256(-1)), materialize(toUInt64(0)));
+-- Both the OrZero and the OrNull wrapper suppress the division overflow for every intDiv / modulo
+-- case above, in either width order (the single-column probes above only pin one wrapper each).
+SELECT
+    intDivOrNull(materialize(CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')), materialize(toInt8(-1))),
+    intDivOrZero(materialize(CAST('-170141183460469231731687303715884105728', 'Int128')), materialize(toInt64(-1))),
+    intDivOrZero(materialize(toInt8(-128)), materialize(toInt256(-1))),
+    intDivOrNull(materialize(toInt8(-128)), materialize(toInt256(-1))),
+    moduloOrZero(materialize(CAST('-170141183460469231731687303715884105728', 'Int128')), materialize(toInt64(-1))),
+    moduloOrNull(materialize(CAST('-170141183460469231731687303715884105728', 'Int128')), materialize(toInt64(-1))),
+    moduloOrZero(materialize(toInt8(-128)), materialize(toInt128(-1)));
 
 SELECT '-- combinations of a floating point number and a wide integer';
 SELECT materialize(toFloat64(1)) + materialize(toUInt256(1)); -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }

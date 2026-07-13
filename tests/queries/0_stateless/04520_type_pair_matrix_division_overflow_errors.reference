@@ -1,11 +1,13 @@
 -- division of the minimal signed number by minus one, wide and narrow dividends
 -- positiveModulo by the most negative divisor value
+-- positiveModuloOrNull does not suppress the most negative divisor error
 -- OrZero and OrNull variants of the same exceptional cases do not throw
 0
 \N
 \N
 0
 \N
+\N	0	0	\N	0	\N	0
 -- combinations of a floating point number and a wide integer
 1
 0

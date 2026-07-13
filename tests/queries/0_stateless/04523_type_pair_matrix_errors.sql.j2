@@ -45,6 +45,14 @@ SELECT '-- extreme values that must compare without overflow';
 SELECT materialize(CAST('-170141183460469231731687303715884105728', 'Int128')) < materialize(toDecimal32('1.5', 2));
 SELECT materialize(CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')) != materialize(toDecimal64('1.5', 4));
 
+-- The same extreme values in the reverse operand order do overflow: with the Decimal on the left,
+-- DecimalComparison scales the wide integer up to the Decimal scale (the scale_right instantiation),
+-- which is a distinct path from the wide-int-on-the-left (scale_left) direction above that compares
+-- them without overflow.
+SELECT '-- the reverse operand order overflows during scale conversion';
+{{ cmp_throws("toDecimal32('1.5', 2)", '>', "CAST('-170141183460469231731687303715884105728', 'Int128')", 'DECIMAL_OVERFLOW') }}
+{{ cmp_throws("toDecimal64('1.5', 4)", '!=', "CAST('-57896044618658097711785492504343953926634992332820282019728792003956564819968', 'Int256')", 'DECIMAL_OVERFLOW') }}
+
 SELECT '-- division by zero in every width direction';
 {{ fn_throws('intDiv', 'toUInt256(1)', 'toUInt8(0)', 'ILLEGAL_DIVISION') }}
 {{ fn_throws('intDiv', 'toUInt8(1)', 'toUInt256(0)', 'ILLEGAL_DIVISION') }}

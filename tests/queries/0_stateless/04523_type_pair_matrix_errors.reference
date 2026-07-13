@@ -6,4 +6,5 @@
 -- extreme values that must compare without overflow
 1
 1
+-- the reverse operand order overflows during scale conversion
 -- division by zero in every width direction
