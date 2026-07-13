@@ -2371,7 +2371,11 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
     create_context->setQueryContext(std::const_pointer_cast<Context>(current_context));
 
     /// Before actually creating/replacing the table, check if it will lead to cyclic dependencies.
-    checkTableCanBeAddedWithNoCyclicDependencies(create, query_ptr, create_context);
+    /// For a plain create this check runs later, after the existence fast path below: a
+    /// `CREATE TABLE IF NOT EXISTS` over an existing table must be a no-op even when the (new, unused)
+    /// definition would fail create-only validation, mirroring the check order of `doCreateTable`.
+    if (!is_plain_create)
+        checkTableCanBeAddedWithNoCyclicDependencies(create, query_ptr, create_context);
 
     auto make_drop_context = [&](bool bypass_size_guard) -> ContextMutablePtr
     {
@@ -2436,15 +2440,15 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
                         : (create.isView() ? "CREATE OR REPLACE VIEW" : "CREATE OR REPLACE TABLE"))
                     : "REPLACE TABLE"));
 
-        if (mode <= LoadingStrictnessLevel::CREATE)
-            database->checkTableNameLength(table_to_replace_name);
-
-        /// For a plain create the final name must not already exist. Check it up front so that (a) an
+        /// For a plain create the final name must not already exist. Check it up front, before the
+        /// create-only validations below (table name length, cyclic dependencies), so that (a) an
         /// `IF NOT EXISTS` create on an existing table is a no-op that does not run (and does not require
-        /// access to) the SELECT, and (b) a plain create over an existing table fails fast with
-        /// `TABLE_ALREADY_EXISTS` before the (potentially expensive) populate. This check is not under the
-        /// table DDL guard, so it can race with a concurrent create; the final RENAME below re-establishes
-        /// correctness (it fails if the target appeared meanwhile, which for `IF NOT EXISTS` is a no-op).
+        /// access to) the SELECT and does not fail validations that only matter when a table is actually
+        /// created (mirroring `doCreateTable`, where the existence check precedes them), and (b) a plain
+        /// create over an existing table fails fast with `TABLE_ALREADY_EXISTS` before the (potentially
+        /// expensive) populate. This check is not under the table DDL guard, so it can race with a
+        /// concurrent create; the final RENAME below re-establishes correctness (it fails if the target
+        /// appeared meanwhile, which for `IF NOT EXISTS` is a no-op).
         if (is_plain_create && database->isTableExist(table_to_replace_name, current_context))
         {
             if (create.if_not_exists)
@@ -2452,7 +2456,13 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
             throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists",
                 backQuoteIfNeed(create.getDatabase()), backQuoteIfNeed(table_to_replace_name));
         }
+
+        if (mode <= LoadingStrictnessLevel::CREATE)
+            database->checkTableNameLength(table_to_replace_name);
     }
+
+    if (is_plain_create)
+        checkTableCanBeAddedWithNoCyclicDependencies(create, query_ptr, create_context);
 
     /// A non-APPEND refreshable materialized view exclusively owns its target table. The replacement is
     /// built while the view being replaced still owns it, so reject only when a different view owns it.
