@@ -31,6 +31,16 @@ public:
 
     void transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &) override;
 
+    /// Window functions are always computed on the initiator (never on replicas), so a plan with a
+    /// window function must still be recognized as "simple enough" for the automatic parallel replicas
+    /// optimization (see `considerEnablingParallelReplicas`), otherwise it is rejected outright and no
+    /// statistics are collected. Hence we report support here.
+    ///
+    /// Note that, unlike `SortingStep`/`LimitStep`, `WindowStep` does NOT attach a
+    /// `RuntimeDataflowStatisticsCollector` in `transformPipeline`: it can never be the replica-output
+    /// boundary (replicas ship the pre-window columns, and the window result columns appended above are
+    /// never sent to the initiator), so instrumenting it would count the window result as replica output
+    /// and inflate the cost model.
     bool supportsDataflowStatisticsCollection() const override { return true; }
 
     void describeActions(JSONBuilder::JSONMap & map) const override;
