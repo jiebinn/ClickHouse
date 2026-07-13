@@ -34,3 +34,31 @@ echo -n "reports the real corruption in serialization.json: "
 echo "$RESULT" | grep -c "serialization.json" || true
 
 ${CLICKHOUSE_CLIENT} --query "DROP TABLE t_broken_proj_check SYNC"
+
+# The same, but for a projection part that legitimately lags behind the current projection schema:
+# after ALTER ADD COLUMN, a SELECT * projection includes the new column in its metadata while the
+# existing projection parts do not store it (and no mutation is pending, so nothing rewrites them).
+# The expected columns must come from the part itself, not from the current projection metadata.
+${CLICKHOUSE_CLIENT} --query "DROP TABLE IF EXISTS t_broken_proj_check_lagging SYNC"
+${CLICKHOUSE_CLIENT} --query "
+    CREATE TABLE t_broken_proj_check_lagging (id UInt64, v UInt16, PROJECTION p1 (SELECT * ORDER BY v))
+    ENGINE = MergeTree ORDER BY id"
+${CLICKHOUSE_CLIENT} --query "INSERT INTO t_broken_proj_check_lagging SELECT number, number % 10 FROM numbers(1000)"
+${CLICKHOUSE_CLIENT} --query "ALTER TABLE t_broken_proj_check_lagging ADD COLUMN extra UInt8"
+
+DATA_PATH=$(${CLICKHOUSE_CLIENT} --query "SELECT path FROM system.parts WHERE database = currentDatabase() AND table = 't_broken_proj_check_lagging' AND active")
+
+${CLICKHOUSE_CLIENT} --query "DETACH TABLE t_broken_proj_check_lagging"
+printf 'garbage' > "${DATA_PATH}p1.proj/serialization.json"
+${CLICKHOUSE_CLIENT} --send_logs_level=fatal --query "ATTACH TABLE t_broken_proj_check_lagging"
+
+RESULT=$(${CLICKHOUSE_CLIENT} --send_logs_level=fatal --query "CHECK TABLE t_broken_proj_check_lagging SETTINGS check_query_single_value_result = 0 FORMAT TSV")
+
+echo -n "lagging part check passed: "
+echo "$RESULT" | cut -f2
+echo -n "lagging part reports the misleading columns mismatch: "
+echo "$RESULT" | grep -c "Columns doesn.t match" || true
+echo -n "lagging part reports the real corruption in serialization.json: "
+echo "$RESULT" | grep -c "serialization.json" || true
+
+${CLICKHOUSE_CLIENT} --query "DROP TABLE t_broken_proj_check_lagging SYNC"
