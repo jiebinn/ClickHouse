@@ -723,20 +723,6 @@ void optimizeWithConstraints(Analyzer::CNF & cnf, const QueryTreeNodes & table_e
         addIndexConstraint(cnf, table_expressions, context);
 }
 
-bool containsCorrelatedSubquery(const QueryTreeNodePtr & node)
-{
-    if (isCorrelatedQueryOrUnionNode(node))
-        return true;
-
-    for (const auto & child : node->getChildren())
-    {
-        if (child && containsCorrelatedSubquery(child))
-            return true;
-    }
-
-    return false;
-}
-
 void optimizeNode(QueryTreeNodePtr & node, const QueryTreeNodes & table_expressions, const ContextPtr & context)
 {
     const auto & settings = context->getSettingsRef();

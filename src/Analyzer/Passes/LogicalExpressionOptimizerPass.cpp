@@ -1134,6 +1134,17 @@ private:
         if (function_node.getFunctionName() != "and" || function_node.getResultType()->isNullable())
             return;
 
+        /// This optimization derives transitive comparisons and clones an operand into each new
+        /// conjunct. When an operand holds a correlated subquery (e.g. `x < exists((SELECT ...))`),
+        /// cloning produces several copies of the subquery that share one action name. Decorrelation
+        /// then adds the same synthetic column on both sides of the generated join and
+        /// `HashJoin::getNonJoinedBlocks` fails the column-count check with `Unexpected number of
+        /// columns in result sample block`. A correlated subquery must be evaluated exactly once, so
+        /// skip the optimization for such a chain and keep the original expression - it executes
+        /// correctly without the transitive conjuncts.
+        if (containsCorrelatedSubquery(node))
+            return;
+
         /// Stop once this query has spent its AND-compare-chain hashing budget (measured in nodes
         /// hashed by getTreeHash since this visitor started).
         if (andCompareChainHashBudgetExceeded())
