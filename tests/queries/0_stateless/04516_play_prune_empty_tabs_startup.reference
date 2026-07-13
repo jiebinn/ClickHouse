@@ -1,5 +1,0 @@
-reconcileStartup
-(r.query || '').trim() !== ''
-r.result && r.result.ran
-pruned_blank_ids
-if (savedTabs.length)
