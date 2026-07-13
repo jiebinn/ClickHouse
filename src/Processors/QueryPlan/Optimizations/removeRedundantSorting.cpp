@@ -121,6 +121,9 @@ private:
         while (it != stack.rend() && it->node != parent_node)
             ++it;
 
+        /// parent_node is an ancestor of the just removed sorting, so it must be present in the stack
+        chassert(it != stack.rend());
+
         for (; it != stack.rend(); ++it)
         {
             const QueryPlan::Node * node = it->node;
