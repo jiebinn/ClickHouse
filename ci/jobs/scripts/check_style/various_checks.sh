@@ -268,7 +268,9 @@ git ls-files -z "$ROOT_PATH" | xargs -0 stat "$STAT_FMT_FLAG" "$STAT_FMT" 2>/dev
 # write "the analyzer" or "Analyzer" instead.
 # Historical changelogs are excluded on purpose: they are a fixed record of past releases.
 # The exclusion covers only the versioned release-note files inside `changelogs/` directories
-# and the aggregated `changelog.md`/`changelog.mdx` files. Live pages stay enforced, including
+# (also `private-changelogs/` — the private repository, where this check runs on the synced
+# tree, keeps its release records there) and the aggregated `changelog.md`/`changelog.mdx`
+# files. Live pages stay enforced, including
 # the landing/status/security pages that sit inside `changelogs/` directories (`index.mdx`,
 # `release-notes-index.mdx`, `release-status.mdx`, `security-changelog.mdx`) and docs whose path
 # merely contains the substring "changelog" (`keeper_changelogs.md`, `changelog_entry_guidelines.md`).
@@ -278,7 +280,7 @@ git ls-files -z "$ROOT_PATH" | xargs -0 stat "$STAT_FMT_FLAG" "$STAT_FMT" 2>/dev
 # "new and (the) old analyzer", where "new" refers to the analyzer at a distance.
 git ls-files $ROOT_PATH/src $ROOT_PATH/base $ROOT_PATH/programs $ROOT_PATH/utils $ROOT_PATH/docs $ROOT_PATH/tests |
     grep -E '\.(md|mdx|cpp|h|sql|sh|py|j2)$' |
-    grep -vE '(^|/)changelogs/(.+/)?v?[0-9][^/]*$|(^|/)changelog\.mdx?$' |
+    grep -vE '(^|/)(private-)?changelogs/(.+/)?v?[0-9][^/]*$|(^|/)changelog\.mdx?$' |
     xargs grep -HniP '\bnew([ \t]+and[ \t]+(the[ \t]+)?old)?[ \t-]+(query[ \t-]+)?analyzer\b' 2>/dev/null |
     grep -P '.' &&
     echo 'The analyzer is enabled by default since ClickHouse 24.3 and is no longer new. Write "the analyzer" or "Analyzer" instead of "new analyzer"/"new query analyzer" in the lines above.'
