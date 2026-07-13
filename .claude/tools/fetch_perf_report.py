@@ -699,11 +699,6 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Verify clickhouse is available
-    if shutil.which("clickhouse") is None:
-        print("Error: clickhouse not found in PATH.", file=sys.stderr)
-        sys.exit(1)
-
     # Resolve URL
     url = args.url
     if "github.com" in url and "/pull/" in url:
@@ -743,7 +738,15 @@ def main():
     shards = [s for s in shards if str(s.get("status", "")).upper() != "SKIPPED"]
 
     if not shards:
+        # All matching jobs were intentionally skipped: no perf data to analyze, but not a
+        # tool failure, so exit successfully.
         print("No shards to fetch (all matching jobs were skipped)", file=sys.stderr)
+        sys.exit(0)
+
+    # clickhouse (used for local classification of the downloaded data) is only needed once we
+    # know there is at least one shard to analyze.
+    if shutil.which("clickhouse") is None:
+        print("Error: clickhouse not found in PATH.", file=sys.stderr)
         sys.exit(1)
 
     print(f"Fetching {len(shards)} performance shard(s)...\n", file=sys.stderr)
