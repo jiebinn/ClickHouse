@@ -921,6 +921,21 @@ bool PostgreSQLReplicationHandler::isReplicationSlotExist(pqxx::nontransaction &
     if (result.empty())
         return false;
 
+    /// The LSN fields are NULL while the slot is still being created (PostgreSQL registers the slot
+    /// in pg_replication_slots before assigning it a consistent snapshot point), and are never set for
+    /// a physical slot of the same name. Converting the NULL would throw pqxx::conversion_error, which
+    /// is a std::logic_error and must not escape this function. Such a slot exists but cannot be
+    /// consumed from yet, so report a recoverable error: on the attach path the startup task retries,
+    /// and a slot caught mid-creation becomes ready by the next attempt.
+    if (result[0][1].is_null() || result[0][2].is_null())
+        throw Exception(
+            ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR,
+            "Replication slot {} exists, but it is not ready: restart_lsn is {}, confirmed_flush_lsn is {}. "
+            "It is either still being created, or it is not a logical replication slot",
+            slot_name,
+            result[0][1].is_null() ? "NULL" : result[0][1].as<std::string>(),
+            result[0][2].is_null() ? "NULL" : result[0][2].as<std::string>());
+
     start_lsn = result[0][2].as<std::string>();
 
     LOG_DEBUG(log, "Replication slot {} already exists (active: {}). Restart lsn position: {}, confirmed flush lsn: {}",
