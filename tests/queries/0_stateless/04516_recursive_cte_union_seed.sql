@@ -14,13 +14,16 @@ FROM (
 ORDER BY 1;
 
 -- Seed union has heterogeneous types, forcing supertype inference over the union seed.
-SELECT sum(n), count()
+-- The recursive arm is type-preserving (WHERE n < 0 yields no rows) and toTypeName(n)
+-- asserts the inferred supertype directly, so a mis-inferred seed type is visible
+-- instead of being masked by later recursive widening.
+SELECT toTypeName(n), n
 FROM (
     WITH RECURSIVE t AS (
         (SELECT toUInt8(1) AS n UNION DISTINCT SELECT toUInt64(300))
         UNION ALL
-        SELECT n + 1 FROM t WHERE n < 3
+        SELECT n FROM t WHERE n < 0
     )
     SELECT n FROM t ORDER BY n
 )
-ORDER BY 1;
+ORDER BY n;
