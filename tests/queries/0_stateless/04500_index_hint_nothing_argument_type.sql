@@ -12,3 +12,11 @@ SELECT anyLastRespectNullsStateOrDefaultDistinct(divide(toFixedString(NULL, JSON
 
 -- indexHint keeps working normally.
 SELECT toTypeName(indexHint(1)), indexHint(1), indexHint(NULL);
+
+-- The sibling ignore() has the same declared-result invariant (always UInt8), so a
+-- Nothing-typed argument must not rewrite its declared return type to Nothing either.
+-- See ignore.cpp useDefaultImplementationForNothing. Only the declared type is checked:
+-- unlike indexHint, ignore evaluates its arguments, and a non-empty Nothing column
+-- cannot be materialized, so the value form is not evaluable and is not the bug here.
+SELECT toTypeName(ignore(assumeNotNull(materialize(NULL))));
+SELECT toTypeName(ignore(1)), ignore(1), ignore(NULL);
