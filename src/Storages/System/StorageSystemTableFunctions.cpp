@@ -21,12 +21,6 @@ ColumnsDescription StorageSystemTableFunctions::getColumnsDescription()
     {
         {"name", std::make_shared<DataTypeString>(), "Name of a table function."},
         {"description", std::make_shared<DataTypeString>(), "Brief description of a table function."},
-        {"syntax", std::make_shared<DataTypeString>(), "How the table function is used, e.g. `s3(url [, ...])`."},
-        {"arguments", std::make_shared<DataTypeString>(), "The table function arguments."},
-        {"returned_value", std::make_shared<DataTypeString>(), "What the table function returns."},
-        {"examples", std::make_shared<DataTypeString>(), "Usage examples."},
-        {"introduced_in", std::make_shared<DataTypeString>(), "The ClickHouse version in which the table function was first introduced, in the form major.minor."},
-        {"categories", std::make_shared<DataTypeString>(), "The category of the table function."},
         {"allow_readonly", std::make_shared<DataTypeUInt8>(), "Flag that indicated whether a readonly user may use this function."}
     };
 }
@@ -45,13 +39,7 @@ void StorageSystemTableFunctions::fillData(MutableColumns & res_columns, Context
         if (documentation && properties)
         {
             res_columns[1]->insert(documentation->description);
-            res_columns[2]->insert(documentation->syntaxAsString());
-            res_columns[3]->insert(documentation->argumentsAsString());
-            res_columns[4]->insert(documentation->returnedValueAsString());
-            res_columns[5]->insert(documentation->examplesAsString());
-            res_columns[6]->insert(documentation->introducedInAsString());
-            res_columns[7]->insert(documentation->categoryAsString());
-            res_columns[8]->insert(properties->allow_readonly);
+            res_columns[2]->insert(properties->allow_readonly);
         }
         else
             throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown table function {}", function_name);
