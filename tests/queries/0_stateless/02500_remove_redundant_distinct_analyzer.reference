@@ -545,22 +545,8 @@ FROM
     GROUP BY a WITH ROLLUP
     ORDER BY a
 )
--- explain
-Expression (Project names)
-  Distinct (DISTINCT)
-    Distinct (Preliminary DISTINCT)
-      Expression ((Projection + (Change column names to column identifiers + Project names)))
-        Sorting (Sorting for ORDER BY)
-          Expression ((Before ORDER BY + Projection))
-            Rollup
-              MergingAggregated
-                Union
-                  Expression (Change remote column names to local column names)
-                    Aggregating
-                      Expression ((Before GROUP BY + Change column names to column identifiers))
-                        ReadFromSystemNumbers
-                  Expression (Change remote column names to local column names)
-                    ReadFromRemote (Read from remote replica)
+-- explain: DISTINCT preserved above a MergingAggregated merge step
+1	1
 -- execute
 0
 1
@@ -577,21 +563,8 @@ FROM
     GROUP BY GROUPING SETS ((a), ())
     ORDER BY a
 )
--- explain
-Expression (Project names)
-  Distinct (DISTINCT)
-    Distinct (Preliminary DISTINCT)
-      Expression ((Projection + (Change column names to column identifiers + Project names)))
-        Sorting (Sorting for ORDER BY)
-          Expression ((Before ORDER BY + Projection))
-            MergingAggregated
-              Union
-                Expression (Change remote column names to local column names)
-                  Aggregating
-                    Expression ((Before GROUP BY + Change column names to column identifiers))
-                      ReadFromSystemNumbers
-                Expression (Change remote column names to local column names)
-                  ReadFromRemote (Read from remote replica)
+-- explain: DISTINCT preserved above a MergingAggregated merge step
+1	1
 -- execute
 0
 1

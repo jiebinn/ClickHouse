@@ -514,20 +514,8 @@ FROM
     GROUP BY a WITH ROLLUP
     ORDER BY a
 )
--- explain
-Expression (Projection)
-  Distinct
-    Distinct (Preliminary DISTINCT)
-      Expression ((Before ORDER BY + Projection))
-        Sorting (Sorting for ORDER BY)
-          Expression (Before ORDER BY)
-            Rollup
-              MergingAggregated
-                Union
-                  Aggregating
-                    Expression (Before GROUP BY)
-                      ReadFromSystemNumbers
-                  ReadFromRemote (Read from remote replica)
+-- explain: DISTINCT preserved above a MergingAggregated merge step
+1	1
 -- execute
 0
 1
@@ -544,19 +532,8 @@ FROM
     GROUP BY GROUPING SETS ((a), ())
     ORDER BY a
 )
--- explain
-Expression (Projection)
-  Distinct
-    Distinct (Preliminary DISTINCT)
-      Expression ((Before ORDER BY + Projection))
-        Sorting (Sorting for ORDER BY)
-          Expression (Before ORDER BY)
-            MergingAggregated
-              Union
-                Aggregating
-                  Expression (Before GROUP BY)
-                    ReadFromSystemNumbers
-                ReadFromRemote (Read from remote replica)
+-- explain: DISTINCT preserved above a MergingAggregated merge step
+1	1
 -- execute
 0
 1

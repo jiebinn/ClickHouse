@@ -36,6 +36,19 @@ function run_query {
     $CLICKHOUSE_CLIENT -q "$ENABLE_OPTIMIZATION;$1"
 }
 
+# For distributed remote() queries the exact EXPLAIN plan (Union/local shard subtree) depends on
+# shard-routing settings CI randomizes (prefer_localhost_replica, parallel replicas). Assert only the
+# invariants that matter here via ILIKE probes: DISTINCT is preserved (not removed) and the merge stage
+# is MergingAggregated, plus the deterministic result.
+function run_query_distributed {
+    echo "-- query"
+    echo "$1"
+    echo "-- explain: DISTINCT preserved above a MergingAggregated merge step"
+    $CLICKHOUSE_CLIENT -q "$ENABLE_OPTIMIZATION;SELECT countIf(explain ILIKE '%Distinct%') > 0 AS distinct_kept, countIf(explain ILIKE '%MergingAggregated%') > 0 AS merging_aggregated FROM (EXPLAIN $1)"
+    echo "-- execute"
+    $CLICKHOUSE_CLIENT -q "$ENABLE_OPTIMIZATION;$1"
+}
+
 echo "-- Enabled $OPTIMIZATION_SETTING"
 echo "-- DISTINCT is only in most inner subquery"
 run_query "$query"
@@ -286,7 +299,7 @@ FROM
     GROUP BY a WITH ROLLUP
     ORDER BY a
 )"
-run_query "$query"
+run_query_distributed "$query"
 
 echo "-- distributed GROUP BY GROUPING SETS with a defaulted-key set before DISTINCT on the same columns => do _not_ remove DISTINCT (MergingAggregatedStep::isGroupingSets() merge path; the () set emits a defaulted-key row)"
 query="SELECT DISTINCT a
@@ -299,7 +312,7 @@ FROM
     GROUP BY GROUPING SETS ((a), ())
     ORDER BY a
 )"
-run_query "$query"
+run_query_distributed "$query"
 
 echo "-- GROUP BY WITH TOTALS before DISTINCT with on different columns => do _not_ remove DISTINCT"
 query="SELECT DISTINCT c
