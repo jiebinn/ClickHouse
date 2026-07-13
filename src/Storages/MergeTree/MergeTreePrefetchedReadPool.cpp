@@ -1,5 +1,6 @@
 #include <Core/Settings.h>
 #include <IO/Operators.h>
+#include <IO/ReadSettings.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
@@ -343,6 +344,13 @@ void MergeTreePrefetchedReadPool::fillPerPartStatistics()
     per_part_statistics.reserve(parts_ranges.size());
     const auto & settings = getContext()->getSettingsRef();
 
+    /// `prefetch_buffer_size` is clamped to `ReadSettings::MAX_READ_BUFFER_SIZE` on the runtime read
+    /// path (see `Context::getReadSettings`), so budget the same effective value here. Otherwise an
+    /// out-of-range `prefetch_buffer_size` would over-estimate the per-prefetch memory usage and could
+    /// wrongly disable prefetch even though the actual buffers can no longer exceed that maximum.
+    const size_t effective_prefetch_buffer_size
+        = std::min<UInt64>(settings[Setting::prefetch_buffer_size], ReadSettings::MAX_READ_BUFFER_SIZE);
+
     for (size_t i = 0; i < parts_ranges.size(); ++i)
     {
         auto & part_stat = per_part_statistics.emplace_back();
@@ -366,7 +374,7 @@ void MergeTreePrefetchedReadPool::fillPerPartStatistics()
                     column_size = read_info.data_part->getColumnSize(column->getNameInStorage()).data_compressed;
             }
 
-            part_stat.estimated_memory_usage_for_single_prefetch += std::min<size_t>(column_size, settings[Setting::prefetch_buffer_size]);
+            part_stat.estimated_memory_usage_for_single_prefetch += std::min<size_t>(column_size, effective_prefetch_buffer_size);
             ++part_stat.required_readers_num;
         };
 
