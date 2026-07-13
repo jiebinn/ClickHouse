@@ -1601,7 +1601,18 @@ size_t CachedOnDiskReadBufferFromFile::readFromFileSegment(
             /// is being concurrently replaced, and (unlike a LOGICAL_ERROR) it does not alert as a
             /// server bug. The predownloadForFileSegment and readBigAt paths fail the same way.
             if (file_segment.isDownloader())
+            {
+                /// Withdraw the shared remote reader before releasing the segment.
+                /// `setDownloadFinishedWithoutContinuation` publishes `PARTIALLY_DOWNLOADED_NO_CONTINUATION`
+                /// and wakes up the waiters, and from that moment another thread could take the
+                /// still-registered reader (`FileSegment::extractRemoteFileReader` is only state-gated,
+                /// not downloader-gated) and start mutating it, while `state.buf` still points at it --
+                /// the outer `SCOPE_EXIT` diagnostics in `nextImplStep`/`readBigAt` (and, in `readBigAt`,
+                /// the reader still borrowing the caller's `to` buffer) would then race on it. After the
+                /// withdrawal we own the reader exclusively. Mirrors `predownloadForFileSegment`.
+                file_segment.resetRemoteFileReader();
                 file_segment.setDownloadFinishedWithoutContinuation();
+            }
             throw Exception(
                 ErrorCodes::CANNOT_READ_ALL_DATA,
                 "Remote object was truncated between listing and reading: "
