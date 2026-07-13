@@ -26,6 +26,7 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int DEADLOCK_AVOIDED;
     extern const int DICTIONARIES_WAS_NOT_LOADED;
+    extern const int DICTIONARY_BEING_LOADED;
 }
 
 
@@ -669,6 +670,9 @@ public:
 
         if (info->isLoading())
         {
+            if (objects_being_loaded_by_current_thread().contains(name))
+                throw Exception(ErrorCodes::DICTIONARY_BEING_LOADED,
+                    "Dictionary {} is currently being loaded. It cannot be unloaded now.", name);
             LOG_TRACE(log, "{} '{}' is currently loading, cannot unload", type_name, name);
             return false;
         }
