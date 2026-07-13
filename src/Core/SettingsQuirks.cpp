@@ -48,6 +48,10 @@ namespace Setting
     extern const SettingsNonZeroUInt64 input_format_parquet_max_block_size;
     extern const SettingsNonZeroUInt64 max_block_size;
     extern const SettingsNonZeroUInt64 max_insert_block_size;
+    extern const SettingsNonZeroUInt64 max_read_buffer_size;
+    extern const SettingsUInt64 max_read_buffer_size_local_fs;
+    extern const SettingsUInt64 max_read_buffer_size_remote_fs;
+    extern const SettingsUInt64 prefetch_buffer_size;
     extern const SettingsUInt64 min_insert_block_size_rows;
     extern const SettingsUInt64 min_insert_block_size_bytes_for_materialized_views;
     extern const SettingsUInt64 min_external_table_block_size_rows;
@@ -114,6 +118,28 @@ void doSettingsSanityCheckClamp(Settings & current_settings, LoggerPtr log)
     CHECK_MAX_VALUE(input_format_parquet_max_block_size)
 
 #undef CHECK_MAX_VALUE
+
+    /// A read buffer never needs to be larger than this. An out-of-range value would be
+    /// passed straight to the allocator when constructing a read buffer, and with the
+    /// SIMD padding added by `BufferWithOwnMemory` it would trip the allocator size guard
+    /// with a `LOGICAL_ERROR` "Too large size passed to allocator".
+    static constexpr UInt64 max_sane_read_buffer_size = 256 * 1024 * 1024; /// 256 MiB
+
+#define CHECK_READ_BUFFER_SIZE(SETTING_VALUE) \
+    if (UInt64 buffer_size = current_settings[Setting::SETTING_VALUE]; buffer_size > max_sane_read_buffer_size) \
+    { \
+        if (log) \
+            LOG_WARNING( \
+                log, "Sanity check: '{}' value is too high ({}). Reduced to {}", #SETTING_VALUE, buffer_size, max_sane_read_buffer_size); \
+        current_settings[Setting::SETTING_VALUE] = max_sane_read_buffer_size; \
+    }
+
+    CHECK_READ_BUFFER_SIZE(max_read_buffer_size)
+    CHECK_READ_BUFFER_SIZE(max_read_buffer_size_local_fs)
+    CHECK_READ_BUFFER_SIZE(max_read_buffer_size_remote_fs)
+    CHECK_READ_BUFFER_SIZE(prefetch_buffer_size)
+
+#undef CHECK_READ_BUFFER_SIZE
 
 
     if (auto max_block_size = current_settings[Setting::max_block_size]; max_block_size == 0)

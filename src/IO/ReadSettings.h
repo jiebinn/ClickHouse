@@ -125,13 +125,6 @@ struct FilesystemCacheSettings
 
 struct ReadSettings
 {
-    /// Maximum allowed value for read buffer size settings.
-    /// A read buffer never needs to be larger than this, and it prevents absurd
-    /// memory allocations from fuzzed or misconfigured settings (a value near the
-    /// `size_t` range plus SIMD padding would otherwise trip the allocator size
-    /// guard with a `LOGICAL_ERROR` "Too large size passed to allocator").
-    static constexpr size_t MAX_READ_BUFFER_SIZE = 256ULL * 1024 * 1024; /// 256 MiB
-
     /// Local filesystem source parameters (read method, buffer size, mmap/direct-io thresholds).
     LocalFSReadSettings local_fs_settings;
 
