@@ -38,6 +38,21 @@ SELECT key, groupArray(value) OVER (PARTITION BY key % 10 ORDER BY key ROWS BETW
 FROM t
 FORMAT Null SETTINGS log_comment='04502_autopr_window_wide_output';
 
+-- Regression for the aggregated-window shape: a window function computed on the initiator ON TOP of an
+-- aggregation that runs on the replicas. Here the real replica-output boundary is the Aggregating step
+-- (it ships partial aggregation states to the initiator), and the Window step sits ABOVE it. Because
+-- `calculateHashTableCacheKeys` folds every node's children into a fresh hash round (a row-preserving
+-- step such as Window contributes no bytes of its own but is still hashed as a distinct wrapper of its
+-- child), the Window step's cache key strictly differs from the aggregation's, so
+-- `findCorrespondingNodeInSingleNodePlan` cannot mis-select the (uninstrumented) Window step as the
+-- boundary. If it did, the recorded output bytes would collapse to zero and the cost model would forget
+-- that replicas still ship the aggregation result. This query keeps aggregation and window in a single
+-- SELECT: `sum(sum(value)) OVER (...)` is a window function evaluated over the aggregate `sum(value)`.
+SELECT key % 10 AS k, sum(value) AS s, sum(sum(value)) OVER (ORDER BY key % 10) AS running
+FROM t
+GROUP BY k
+FORMAT Null SETTINGS log_comment='04502_autopr_aggregated_window';
+
 SET enable_parallel_replicas=0, automatic_parallel_replicas_mode=0;
 
 SYSTEM FLUSH LOGS query_log;
@@ -54,6 +69,21 @@ SELECT
         <= maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_window_wide_output') AS window_result_not_counted_as_output
 FROM system.query_log
 WHERE (event_date >= yesterday()) AND (event_time >= (NOW() - toIntervalMinute(15))) AND (current_database = currentDatabase()) AND (log_comment = '04502_autopr_window_wide_output') AND (type = 'QueryFinish')
+FORMAT TSVWithNames;
+
+-- For the aggregated-window query the replica-output boundary is the Aggregating step, which DOES collect
+-- output bytes (the aggregation states shipped to the initiator). Statistics must be collected (the plan
+-- passed the "simple enough" gate) and the recorded output must be pinned to that aggregation boundary:
+-- non-zero (it did not collapse to the uninstrumented Window step) and bounded by the input bytes (the
+-- window result was not counted as replica output).
+SELECT
+    maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_aggregated_window') > 0 AS stats_collected,
+    (maxIf(ProfileEvents['RuntimeDataflowStatisticsOutputBytes'], log_comment = '04502_autopr_aggregated_window') > 0)
+        AND (maxIf(ProfileEvents['RuntimeDataflowStatisticsOutputBytes'], log_comment = '04502_autopr_aggregated_window')
+             <= maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_aggregated_window'))
+        AS output_pinned_to_aggregation_boundary
+FROM system.query_log
+WHERE (event_date >= yesterday()) AND (event_time >= (NOW() - toIntervalMinute(15))) AND (current_database = currentDatabase()) AND (log_comment = '04502_autopr_aggregated_window') AND (type = 'QueryFinish')
 FORMAT TSVWithNames;
 
 DROP TABLE t;
