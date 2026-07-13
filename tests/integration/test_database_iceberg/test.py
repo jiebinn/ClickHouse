@@ -1259,6 +1259,90 @@ def test_system_tables_metadata_unresolvable_does_not_abort_scan(started_cluster
 
     node.query(f"DROP DATABASE IF EXISTS {CATALOG_NAME}")
 
+
+def test_merge_over_datalake_with_unresolvable_table_does_not_hang(started_cluster):
+    """
+    Regression test for the StorageMerge consumer of DatabaseDataLake::getTablesIterator.
+
+    Only system.tables (getTablesIteratorWithHint) keeps a row with a null storage object
+    for a table whose metadata is unresolvable. Every other consumer -- StorageMerge in
+    particular -- dereferences the storage object of every iterated row unconditionally
+    (ReadFromMerge::getSelectedTables skips null storage with `continue` without advancing
+    the iterator, so it would loop forever; traverseTablesUntil callers such as
+    supportsPrewhere / totalRows deref the table directly). getTablesIterator therefore must
+    NOT yield null-storage rows: it propagates the error when
+    database_datalake_require_metadata_access=1 and drops the unresolved table otherwise.
+
+    A SELECT through a Merge table over the catalog with one broken table must fail cleanly
+    or return only the resolvable tables' rows, never hang or crash during planning.
+    """
+    node = started_cluster.instances["node1"]
+
+    root_namespace = f"clickhouse_{uuid.uuid4()}"
+    namespace = f"{root_namespace}_test_merge_unresolvable"
+
+    catalog = load_catalog_impl(started_cluster)
+    catalog.create_namespace(namespace)
+
+    table_name = "broken_table"
+    create_table(catalog, namespace, table_name)
+
+    create_clickhouse_iceberg_database(started_cluster, node, CATALOG_NAME)
+
+    ## An explicitly-created Merge table with a declared structure skips schema inference, so a
+    ## SELECT through it reaches ReadFromMerge::getSelectedTables directly -- the read path the
+    ## bot flagged, where a null-storage iterator row would spin forever (`if (!storage)
+    ## continue;` never advances the iterator). (The merge() table function cannot exercise this
+    ## because it forces schema inference first, which resolves/errors before the read path.)
+    node.query("DROP TABLE IF EXISTS default.merge_over_datalake")
+    node.query(
+        f"CREATE TABLE default.merge_over_datalake (symbol Nullable(String)) "
+        f"ENGINE = Merge('{CATALOG_NAME}', '.*broken_table.*')"
+    )
+
+    node.query("SYSTEM ENABLE FAILPOINT datalake_try_get_table_throw")
+
+    ## Pre-fix, getTablesIterator handed StorageMerge a null-storage iterator row for the
+    ## broken table; ReadFromMerge::getSelectedTables then spun forever (`if (!storage)
+    ## continue;` never advances the iterator), so the SELECT hung. With the fix that row is
+    ## never yielded to StorageMerge -- the error is propagated (require_metadata_access
+    ## defaults to 1 in the storage context) instead. Either way the query must COMPLETE
+    ## within the timeout (a hang would trip the timeout and fail the test) and the server
+    ## must survive. A generous-but-bounded timeout converts the pre-fix hang into a clean
+    ## test failure rather than hanging the whole job.
+    def run_merge_select(require):
+        ## Completes (error or result) within the timeout == no infinite loop; return the
+        ## outcome text for a sanity assertion. A hang raises and fails the test.
+        try:
+            return node.query(
+                "SELECT count() FROM default.merge_over_datalake "
+                f"SETTINGS database_datalake_require_metadata_access = {require}",
+                timeout=60,
+            ).strip()
+        except QueryRuntimeException as e:
+            return str(e)
+
+    try:
+        for require in (1, 0):
+            outcome = run_merge_select(require)
+            ## Either a clean numeric result (unresolved table dropped -> 0 rows) or the
+            ## injected metadata error -- never a hang, never a crash/LOGICAL_ERROR.
+            assert (
+                outcome.isdigit()
+                or "Injected metadata resolution failure" in outcome
+                or "metadata" in outcome
+            ), f"require={require}: {outcome}"
+            assert "LOGICAL_ERROR" not in outcome, f"require={require}: {outcome}"
+
+            ## Server is still alive (i.e. no crash from a null-storage deref).
+            assert node.query("SELECT 1").strip() == "1", f"require={require}"
+    finally:
+        node.query("SYSTEM DISABLE FAILPOINT datalake_try_get_table_throw")
+        node.query("DROP TABLE IF EXISTS default.merge_over_datalake")
+
+    node.query(f"DROP DATABASE IF EXISTS {CATALOG_NAME}")
+
+
 def test_delete_on_lazy_initialized_table(started_cluster):
     """
     Regression test for https://github.com/ClickHouse/ClickHouse/issues/96806.
