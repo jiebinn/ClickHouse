@@ -4,7 +4,7 @@
 -- reinterpret the column (release). Fixed by #100365 at the analyzer level; this asserts
 -- correct results across a few combinators, which also guards the release silent-UB path.
 
-SELECT (SELECT sumDistinct(number)) FROM numbers(1) GROUP BY number WITH ROLLUP SETTINGS group_by_use_nulls = 1;
+SELECT number, (SELECT sumDistinct(number)) AS s FROM numbers(1) GROUP BY number WITH ROLLUP ORDER BY number NULLS LAST SETTINGS group_by_use_nulls = 1;
 
 SELECT number, (SELECT sumDistinct(number)) AS s
 FROM numbers(3) GROUP BY number WITH ROLLUP
