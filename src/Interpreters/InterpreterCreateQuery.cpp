@@ -2516,8 +2516,27 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         /// If table has dependencies - add them to the graph
         addTableDependencies(create, query_ptr, getContext());
 
+        /// For a plain `CREATE TABLE ... AS SELECT` the populate below runs against the internal temporary
+        /// table, so `InterpreterInsertQuery` would authorize `INSERT` on the random `_tmp_replace_*` name
+        /// rather than the final name. That would regress table-scoped grants: before this PR the plain-create
+        /// path checked `INSERT` on the final name directly, so `CREATE TABLE` + `INSERT ON db.dst` (not a
+        /// wildcard grant) was sufficient. To preserve that contract, authorize `INSERT` on the final name up
+        /// front -- as the user, over the columns that will be inserted -- and then skip the redundant
+        /// target-`INSERT` check on the temporary name inside the populate. The source `SELECT` access is
+        /// still checked by the populate as the user. REPLACE keeps its prior behavior: it never required
+        /// `INSERT` on the final name (only DROP/CREATE), so it does not get the up-front check or the skip.
+        if (is_plain_create && create.isCreateQueryWithImmediateInsertSelect())
+        {
+            auto temp_table = DatabaseCatalog::instance().getTable(
+                StorageID{create.getDatabase(), create.getTable(), create.uuid}, current_context);
+            auto temp_metadata = temp_table->getInMemoryMetadataPtr(current_context, false);
+            const Names insert_columns = temp_metadata->getSampleBlockNonMaterialized().getNames();
+            current_context->checkAccess(
+                AccessType::INSERT, StorageID{create.getDatabase(), table_to_replace_name}, insert_columns);
+        }
+
         /// Try fill temporary table
-        BlockIO fill_io = fillTableIfNeeded(create);
+        BlockIO fill_io = fillTableIfNeeded(create, /*skip_target_insert_access_check=*/is_plain_create);
         /// For queries like 'CREATE OR REPLACE TABLE ... AS SELECT * INSERT' might take a long time,
         /// passing this callback allows tcp sessions to send progress, stats and logs.
         /// It prevents getting socket timeout as well.
@@ -2682,7 +2701,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTemporaryTable(ASTCreateQuery &
     return fillTableIfNeeded(create);
 }
 
-BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
+BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create, bool skip_target_insert_access_check)
 {
     /// If the query is a CREATE SELECT, insert the data into the table.
     if (create.isCreateQueryWithImmediateInsertSelect())
@@ -2697,14 +2716,15 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
         else
             insert->select = create.select->clone();
 
-        return InterpreterInsertQuery(
-                   insert,
-                   getContext(),
-                   getContext()->getSettingsRef()[Setting::insert_allow_materialized_columns],
-                   /* no_squash */ false,
-                   /* no_destination */ false,
-                   /* async_isnert */ false)
-            .execute();
+        InterpreterInsertQuery interpreter(
+            insert,
+            getContext(),
+            getContext()->getSettingsRef()[Setting::insert_allow_materialized_columns],
+            /* no_squash */ false,
+            /* no_destination */ false,
+            /* async_isnert */ false);
+        interpreter.setSkipTargetInsertAccessCheck(skip_target_insert_access_check);
+        return interpreter.execute();
     }
 
     /// If the query is a CREATE TABLE .. CLONE AS ..., attach all partitions of the source table to the newly created table.
