@@ -1186,6 +1186,12 @@ CREATE TABLE system.table_functions
 (
     `name` String,
     `description` String,
+    `syntax` String,
+    `arguments` String,
+    `returned_value` String,
+    `examples` String,
+    `introduced_in` String,
+    `categories` String,
     `allow_readonly` UInt8
 )
 ENGINE = SystemTableFunctions
