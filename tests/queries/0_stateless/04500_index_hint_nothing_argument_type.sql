@@ -20,3 +20,12 @@ SELECT toTypeName(indexHint(1)), indexHint(1), indexHint(NULL);
 -- cannot be materialized, so the value form is not evaluable and is not the bug here.
 SELECT toTypeName(ignore(assumeNotNull(materialize(NULL))));
 SELECT toTypeName(ignore(1)), ignore(1), ignore(NULL);
+
+-- isZeroOrNull explicitly accepts a Nothing argument (dedicated Nothing branch in
+-- getReturnTypeImpl/executeImpl always yields UInt8), so the default Nothing-dispatch
+-- must not rewrite its declared return type to Nothing either. See isZeroOrNull.cpp
+-- useDefaultImplementationForNothing. As with ignore, only the declared type is checked:
+-- the argument assumeNotNull(materialize(NULL)) cannot be materialized as a non-empty
+-- Nothing column, so the value form is not evaluable and is not the bug here.
+SELECT toTypeName(isZeroOrNull(assumeNotNull(materialize(NULL))));
+SELECT toTypeName(isZeroOrNull(1)), isZeroOrNull(1), isZeroOrNull(0), isZeroOrNull(NULL);
