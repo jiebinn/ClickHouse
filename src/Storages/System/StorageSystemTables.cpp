@@ -813,7 +813,11 @@ protected:
 
                 if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2])
                 {
-                    ASTPtr ast = database->tryGetCreateTableQuery(table_name, context);
+                    /// Skip the catalog query for a null-storage row (unresolvable DataLakeCatalog
+                    /// table, or one dropped concurrently with the scan): tryGetCreateTableQuery
+                    /// re-enters DatabaseDataLake::getCreateTableQueryImpl, which can throw again
+                    /// and abort the whole scan. A null ast makes the block below emit defaults.
+                    ASTPtr ast = table ? database->tryGetCreateTableQuery(table_name, context) : nullptr;
                     auto * ast_create = ast ? ast->as<ASTCreateQuery>() : nullptr;
 
                     if (ast_create && !context->getSettingsRef()[Setting::show_table_uuid_in_table_create_query_if_not_nil])

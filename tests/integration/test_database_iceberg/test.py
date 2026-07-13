@@ -1243,6 +1243,21 @@ def test_system_tables_metadata_unresolvable_does_not_abort_scan(started_cluster
                 f"AND empty(parameterized_view_parameters) {settings}"
             )
             assert int(result.strip()) >= 1, f"parameterized_view_parameters default, require={require}"
+
+            ## create_table_query / engine_full / as_select re-enter the catalog metadata query
+            ## for a null-storage row. Selecting them must not re-throw and abort the scan; the
+            ## columns are defaulted to empty strings for the unresolvable table.
+            result = node.query(
+                f"SELECT name, create_table_query, engine_full, as_select FROM system.tables "
+                f"WHERE database = '{CATALOG_NAME}' {settings}"
+            )
+            assert table_name in result, f"create_table_query scan, require={require}"
+
+            result = node.query(
+                f"SELECT count() FROM system.tables WHERE database = '{CATALOG_NAME}' "
+                f"AND create_table_query = '' AND engine_full = '' AND as_select = '' {settings}"
+            )
+            assert int(result.strip()) >= 1, f"create_table_query default, require={require}"
     finally:
         node.query("SYSTEM DISABLE FAILPOINT datalake_try_get_table_throw")
 
