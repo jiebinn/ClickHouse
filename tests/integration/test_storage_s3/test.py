@@ -3637,11 +3637,17 @@ def test_query_condition_cache_overwrite_invalidation(started_cluster):
     )
 
     # First version of the object: every matching row carries val = 'v1'.
+    # Keep the row count small: with output_format_parquet_row_group_size = 1 each row is its own
+    # row group, so numbers(200) still produces enough row groups for the WHERE id < 100 filter to
+    # prune half of them (real cache misses and hits) while staying lighter than a single-write test
+    # like test_query_condition_cache. This test writes twice (v1 then the v2 overwrite), so a large
+    # count would make it the slowest, most memory-hungry test in the module and it would time out /
+    # get OOM-killed when the flaky check runs the whole module 3x concurrently under ASan.
     instance.query(
         f"""
         INSERT INTO {table_name}
         SELECT number AS id, 'v1' AS val
-        FROM numbers(1000)
+        FROM numbers(200)
         """
     )
 
@@ -3685,7 +3691,7 @@ def test_query_condition_cache_overwrite_invalidation(started_cluster):
         f"""
         INSERT INTO {table_name}
         SELECT number AS id, 'v2' AS val
-        FROM numbers(1000)
+        FROM numbers(200)
         """,
         settings={"s3_truncate_on_insert": 1},
     )
