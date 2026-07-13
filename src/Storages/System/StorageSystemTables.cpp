@@ -456,26 +456,26 @@ protected:
 
     void fillParametralizedViewData(MutableColumns & columns, const StoragePtr & table, size_t & res_index)
     {
-        if (table)
+        /// `table` can be null for an unresolvable table (e.g. a DataLakeCatalog table whose
+        /// metadata cannot be fetched). Always advance `res_index` so the column stays aligned
+        /// with the others; otherwise the whole system.tables scan aborts.
+        const auto metadata_snapshot = table ? table->getInMemoryMetadataPtr(context, false) : nullptr;
+        if (!metadata_snapshot)
         {
-            const auto metadata_snapshot = table->getInMemoryMetadataPtr(context, false);
-            if (!metadata_snapshot)
-            {
-                columns[res_index++]->insertDefault();
-                return;
-            }
-
-            NameToNameMap query_parameters_array = getSelectParamters(metadata_snapshot);
-            if (!query_parameters_array.empty())
-            {
-                Array changes;
-                for (const auto & [key, value] : query_parameters_array)
-                    changes.push_back(Tuple{key, value});
-                columns[res_index++]->insert(changes);
-            }
-            else
-                columns[res_index++]->insertDefault();
+            columns[res_index++]->insertDefault();
+            return;
         }
+
+        NameToNameMap query_parameters_array = getSelectParamters(metadata_snapshot);
+        if (!query_parameters_array.empty())
+        {
+            Array changes;
+            for (const auto & [key, value] : query_parameters_array)
+                changes.push_back(Tuple{key, value});
+            columns[res_index++]->insert(changes);
+        }
+        else
+            columns[res_index++]->insertDefault();
     }
 
 

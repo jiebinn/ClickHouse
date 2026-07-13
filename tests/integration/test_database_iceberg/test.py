@@ -1229,6 +1229,20 @@ def test_system_tables_metadata_unresolvable_does_not_abort_scan(started_cluster
                 f"AND total_rows IS NULL {settings}"
             )
             assert int(result.strip()) >= 1, f"total_rows default, require={require}"
+
+            ## parameterized_view_parameters needs the opened storage too. Selecting it alongside
+            ## other columns must keep the column aligned (defaulted to an empty array), not abort.
+            result = node.query(
+                f"SELECT name, parameterized_view_parameters FROM system.tables "
+                f"WHERE database = '{CATALOG_NAME}' {settings}"
+            )
+            assert table_name in result, f"parameterized_view_parameters scan, require={require}"
+
+            result = node.query(
+                f"SELECT count() FROM system.tables WHERE database = '{CATALOG_NAME}' "
+                f"AND empty(parameterized_view_parameters) {settings}"
+            )
+            assert int(result.strip()) >= 1, f"parameterized_view_parameters default, require={require}"
     finally:
         node.query("SYSTEM DISABLE FAILPOINT datalake_try_get_table_throw")
 
