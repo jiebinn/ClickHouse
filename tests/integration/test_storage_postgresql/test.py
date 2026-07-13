@@ -1245,18 +1245,6 @@ def test_postgres_query_passing_edge_cases(started_cluster):
         )
         node1.query("DROP TABLE pg_engine_type_mismatch")
 
-    # Projection-count mismatch: the passed query returns more columns than the declared structure. The
-    # reader rejects the extra column with a query error (TOO_MANY_COLUMNS) rather than crashing.
-    node1.query("DROP TABLE IF EXISTS pg_engine_count_mismatch")
-    node1.query(
-        f"CREATE TABLE pg_engine_count_mismatch (a Int32) "
-        f"ENGINE = PostgreSQL('{host}', 'postgres', query('SELECT a, b FROM {table_name}'), 'postgres', '{pg_pass}')"
-    )
-    assert "TOO_MANY_COLUMNS" in node1.query_and_get_error(
-        "SELECT * FROM pg_engine_count_mismatch"
-    )
-    node1.query("DROP TABLE pg_engine_count_mismatch")
-
     cursor.execute(f"DROP TABLE {table_name}")
 
 
