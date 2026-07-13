@@ -12,6 +12,12 @@ SET enable_join_runtime_filters = 1;
 -- exercise the crashing runtime-filter path (they fail on the pre-fix build) instead of
 -- silently passing under e.g. full_sorting_merge / partial_merge.
 SET join_algorithm = 'hash';
+-- The filter is only added for the RIGHT-build side (can_use_runtime_filter). CI randomizes
+-- query_plan_optimize_join_order_randomize, which feeds random cardinalities to the join-order
+-- optimizer and can swap ANY RIGHT JOIN into an ANY LEFT JOIN (build side becomes the left
+-- input), for which no runtime filter is built. Pin query_plan_join_swap_table='false' so the
+-- right table stays the build side and the filter is deterministically produced.
+SET query_plan_join_swap_table = 'false';
 
 -- { echoOn }
 WITH t AS (SELECT number, * FROM numbers(3))
@@ -39,7 +45,7 @@ FROM (
     EXPLAIN PLAN
     SELECT * FROM (SELECT number AS a FROM numbers(100)) AS l
     ANY RIGHT JOIN (SELECT number AS b FROM numbers(3)) AS r ON l.a = r.b
-    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash'
+    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash', query_plan_join_swap_table = 'false'
 );
 
 -- The filter must still be built when the build side has a duplicated NON-key column
@@ -51,5 +57,5 @@ FROM (
     EXPLAIN PLAN
     SELECT * FROM (SELECT number AS a FROM numbers(100)) AS l
     ANY RIGHT JOIN (SELECT number AS b, number + 1 AS c, c FROM numbers(3)) AS r ON l.a = r.b
-    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash'
+    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash', query_plan_join_swap_table = 'false'
 );
