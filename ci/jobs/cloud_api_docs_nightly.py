@@ -9,6 +9,7 @@ Fail-closed: the PR is only touched when regeneration succeeded and produced a
 real diff; a failed regeneration never pushes a branch or opens a PR.
 """
 
+import os
 import re
 import shlex
 
@@ -59,6 +60,14 @@ def has_changes():
 
 
 def open_or_refresh_pr():
+    repository = os.getenv("GITHUB_REPOSITORY", "")
+    if repository != REPOSITORY:
+        print(
+            "ERROR: the Cloud API docs workflow must run only in "
+            f"{REPOSITORY}, got {repository or '(unset)'}"
+        )
+        return False
+
     prepare = [
         'git config user.name "robot-clickhouse"',
         'git config user.email "robot-clickhouse@users.noreply.github.com"',
@@ -101,13 +110,14 @@ def open_or_refresh_pr():
     # while the drift never reaches reviewers.
     existing = Shell.get_output(
         f"gh pr list --head {BOT_BRANCH} --base master --state open "
-        "--json number --jq '.[].number'"
+        f"--repo {shlex.quote(REPOSITORY)} --json number --jq '.[].number'"
     ).strip()
     if existing:
         print(f"PR #{existing} already open; branch refreshed")
         return True
     return Shell.check(
         f"gh pr create --base master --head {BOT_BRANCH} "
+        f"--repo {shlex.quote(REPOSITORY)} "
         f"--title {shlex.quote(PR_TITLE)} --body {shlex.quote(PR_BODY)}",
         verbose=True,
     )
