@@ -7,6 +7,8 @@
 
 #include <libdeflate.h>
 
+#include <memory>
+
 namespace DB
 {
 
@@ -36,15 +38,21 @@ void LibdeflateDeflatingWriteBuffer::init(CompressionMethod compression_method, 
     if (compression_level < 1 || compression_level > 12)
         throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "libdeflate compression level must be in range [1, 12], got {}", compression_level);
 
-    compressor = libdeflate_alloc_compressor(compression_level);
-    if (!compressor)
+    /// Own the compressor through a guard until the throwing tracked allocation below succeeds:
+    /// if `scratch.resize` throws (for example on `MEMORY_LIMIT_EXCEEDED`) the constructor unwinds
+    /// without running `~LibdeflateDeflatingWriteBuffer`, which would otherwise leak the handle.
+    std::unique_ptr<libdeflate_compressor, decltype(&libdeflate_free_compressor)> compressor_holder(
+        libdeflate_alloc_compressor(compression_level), &libdeflate_free_compressor);
+    if (!compressor_holder)
         throw Exception(ErrorCodes::CANNOT_COMPRESS, "Failed to allocate libdeflate compressor for level {}", compression_level);
 
     /// gzip uses CRC32 (init 0), zlib uses Adler32 (init 1).
     checksum = method == CompressionMethod::Gzip ? 0 : 1;
 
     /// Worst-case output for a full chunk, plus slack for the per-chunk sync flush.
-    scratch.resize(libdeflate_deflate_compress_bound(compressor, memory.size()) + 16);
+    scratch.resize(libdeflate_deflate_compress_bound(compressor_holder.get(), memory.size()) + 16);
+
+    compressor = compressor_holder.release();
 }
 
 LibdeflateDeflatingWriteBuffer::~LibdeflateDeflatingWriteBuffer()

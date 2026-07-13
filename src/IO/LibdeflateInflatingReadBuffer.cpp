@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 
 namespace DB
 {
@@ -59,11 +60,17 @@ LibdeflateInflatingReadBuffer::LibdeflateInflatingReadBuffer(
     if (compression_method != CompressionMethod::Gzip && compression_method != CompressionMethod::Zlib)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "LibdeflateInflatingReadBuffer supports only gzip and zlib formats");
 
-    decompressor = libdeflate_alloc_decompressor();
-    if (!decompressor)
+    /// Own the decompressor through a guard until the throwing tracked allocation below succeeds:
+    /// if `in_buf.resize` throws (for example on `MEMORY_LIMIT_EXCEEDED`) the constructor unwinds
+    /// without running `~LibdeflateInflatingReadBuffer`, which would otherwise leak the handle.
+    std::unique_ptr<libdeflate_decompressor, decltype(&libdeflate_free_decompressor)> decompressor_holder(
+        libdeflate_alloc_decompressor(), &libdeflate_free_decompressor);
+    if (!decompressor_holder)
         throw Exception(ErrorCodes::CANNOT_DECOMPRESS, "Failed to allocate libdeflate decompressor");
 
     in_buf.resize(std::max<size_t>(buf_size, 16384));
+
+    decompressor = decompressor_holder.release();
 }
 
 LibdeflateInflatingReadBuffer::~LibdeflateInflatingReadBuffer()
