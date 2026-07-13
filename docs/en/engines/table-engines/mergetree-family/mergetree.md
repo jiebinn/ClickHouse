@@ -1325,9 +1325,9 @@ Statistics of type `tdigest` have high creation costs and potentially slow down 
 
 - `Uniq_v2`
 
-    A cardinality estimator that provides a distinct-value estimate for numeric types, `String`, and `FixedString` (including `Nullable` and `LowCardinality` wrappers). Similar to `Uniq` but internally uses [`uniqCombined`](/sql-reference/aggregate-functions/reference/uniqcombined)`(12)`. Consumes less memory and can be build faster.
+    Similar to `Uniq` but internally uses [`uniqCombined`](/sql-reference/aggregate-functions/reference/uniqcombined)`(12)`. Consumes less memory and can be build faster.
 
-    Syntax: `Uniq_v2`
+    Syntax: `uniq_v2`
 
 - `CountMin`
 
