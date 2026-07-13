@@ -885,6 +885,15 @@ class FunctionBinaryArithmetic : public IFunction, WithContext
     /// time while the context is alive (see the constructor). At most one is non-null for a given
     /// instance; a null builder means the corresponding special case does not apply. Precomputing them
     /// keeps executeImpl free of the context.
+    ///
+    /// Caveat: the four tuple-family builders below wrap `ITupleFunction`-derived functions
+    /// (`FunctionTupleOperator`, `FunctionDateOrDateTimeOperationTupleOfIntervals`,
+    /// `FunctionTupleOperationInterval`, `FunctionTupleOperatorByNumber`, `FunctionDotProduct`) that
+    /// still hold a strong `ContextPtr` internally and use it at execute time to resolve their
+    /// element-wise sub-functions. So the tuple special cases still pin the build-time query context
+    /// (they keep working precisely because the strong reference keeps it alive); only the plain
+    /// numeric/Date/interval/array paths are fully context-free. Making the `ITupleFunction` family
+    /// context-free is a planned follow-up.
     FunctionOverloadResolverPtr prepared_interval_function;
     FunctionOverloadResolverPtr prepared_date_tuple_of_intervals_function;
     FunctionOverloadResolverPtr prepared_merge_intervals_function;

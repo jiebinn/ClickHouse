@@ -2,6 +2,12 @@
 -- builders at build time and cache the Date/Time overflow behavior, so executeImpl never consults
 -- the query context. This keeps a stored expression (e.g. a sorting key) executable during a merge
 -- after the context that built it has been destroyed. Related: issue #54890.
+--
+-- Scope note: the tuple special cases (tuple + tuple, Date + tuple of intervals, interval + interval,
+-- tuple * number) are exercised below for behavior, but their cached sub-functions still hold a strong
+-- context reference internally, so those paths still retain (and are kept alive by) the build-time
+-- context; only the plain numeric/Date/interval/array paths are fully context-free. Making the tuple
+-- function family context-free is a planned follow-up.
 
 SET session_timezone = 'UTC';
 
