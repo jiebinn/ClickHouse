@@ -79,7 +79,7 @@ namespace CoordinationSetting
     extern const CoordinationSettingsNonZeroUInt64 ttl_gc_batch_size;
     extern const CoordinationSettingsUInt64 max_request_queue_size;
     extern const CoordinationSettingsUInt64 max_requests_batch_bytes_size;
-    extern const CoordinationSettingsUInt64 max_requests_batch_size;
+    extern const CoordinationSettingsNonZeroUInt64 max_requests_batch_size;
     extern const CoordinationSettingsUInt64 max_read_batch_bytes_size;
     extern const CoordinationSettingsUInt64 max_read_batch_size;
     extern const CoordinationSettingsMilliseconds operation_timeout_ms;
