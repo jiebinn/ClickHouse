@@ -365,6 +365,27 @@ void PostgreSQLReplicationHandler::checkConnectionAndStart()
         LOG_ERROR(log, "Unable to set up connection. Reconnection attempt will continue. Error message: {}", pqxx_error.what());
         startup_task->scheduleAfter(milliseconds_to_wait);
     }
+    catch (const Exception & e)
+    {
+        tryLogCurrentException(log);
+
+        if (!is_attach)
+            throw;
+
+        /// The attach-time legacy-identity ownership conflict (see adoptLegacyReplicationIdentityIfNeeded)
+        /// throws POSTGRESQL_REPLICATION_INTERNAL_ERROR before anything destructive runs and is recoverable:
+        /// once an operator resolves the replication-slot/publication conflict on the PostgreSQL side, a
+        /// later attempt succeeds. Keep retrying so replication starts on its own after the fix, instead of
+        /// leaving the attached table permanently unsynchronized until a server restart or a manual re-attach.
+        /// Each retry re-checks ownership and refuses again while the conflict persists, so no re-snapshot can
+        /// happen in the meantime. This mirrors the database-engine path, which retries via
+        /// DatabaseMaterializedPostgreSQL::tryStartSynchronization.
+        if (e.code() == ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR)
+        {
+            LOG_ERROR(log, "Replication cannot start yet. Retry attempt will continue. Error message: {}", e.message());
+            startup_task->scheduleAfter(milliseconds_to_wait);
+        }
+    }
     catch (...)
     {
         tryLogCurrentException(log);
@@ -505,7 +526,8 @@ void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::
             "cannot be adopted. Proceeding would either reload the initial snapshot into the existing nested "
             "tables and duplicate data, or consume another engine's replication slot and publication, so "
             "replication is refused. Resolve the replication-slot/publication conflict on the PostgreSQL side "
-            "(or recreate this table) and retry.",
+            "(or recreate this table): startup keeps retrying and replication starts automatically once the "
+            "conflict is resolved, without a server restart or a manual re-attach.",
             ownership_conflict);
 
     LOG_INFO(
