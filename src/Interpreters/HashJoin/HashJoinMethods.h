@@ -147,10 +147,13 @@ private:
 
     /// Joins right table columns which indexes are present in right_indexes using specified map.
     /// Makes filter (1 if row presented in right table) and returns offsets to replicate (for ALL JOINS).
+    /// `fast_path` compiles out the per-row null-map and join-mask checks for the common case of
+    /// non-nullable keys and no ON-section condition (the checks are done at runtime otherwise).
     template <
         typename KeyGetter,
         typename Map,
         bool need_filter,
+        bool fast_path,
         typename AddedColumns,
         typename Selector>
     static size_t joinRightColumns(
@@ -164,6 +167,7 @@ private:
         typename KeyGetter,
         typename Map,
         bool need_filter,
+        bool fast_path,
         typename AddedColumns,
         typename Selector>
     static size_t joinRightColumns(
