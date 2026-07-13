@@ -1,3 +1,8 @@
+-- Tags: long
+-- Tagged `long` because the throwing wide-integer (Int256/UInt256) divisions and Decimal
+-- scale conversions in this file are ~1000x slower under sanitizers, which pushes a single
+-- run over the flaky-check per-test time limit even though it is ~0.2s on a release build.
+--
 -- Exceptional cases of comparison and arithmetic over mixed type pairs involving
 -- Decimal and 128/256-bit integers. Companion of 04513_type_pair_matrix_comparison
 -- and 04514_type_pair_matrix_arithmetic, which cover the non-throwing matrix.
