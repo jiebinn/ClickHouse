@@ -131,6 +131,7 @@ namespace FailPoints
 {
     extern const char lightweight_show_tables[];
     extern const char datalake_try_get_table_return_nullptr[];
+    extern const char datalake_try_get_table_throw[];
 }
 
 namespace
@@ -632,6 +633,14 @@ StoragePtr DatabaseDataLake::tryGetTableImpl(const String & name, ContextPtr con
         return nullptr;
     });
 
+    /// Simulate a per-table metadata resolution failure (throws), so tests can exercise the
+    /// graceful-degradation path in getTablesIteratorWithHint that keeps the table in the
+    /// listing with a null storage object instead of aborting the whole scan.
+    fiu_do_on(FailPoints::datalake_try_get_table_throw,
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Injected metadata resolution failure for table '{}'", name);
+    });
+
     const bool with_vended_credentials = settings[DatabaseDataLakeSetting::vended_credentials].value;
     if (with_vended_credentials)
         table_metadata = table_metadata.withStorageCredentials();
@@ -956,20 +965,23 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIteratorWithHint(
                     }
                     catch (...)
                     {
+                        /// A single table's metadata failing to resolve must not abort the
+                        /// whole listing (e.g. a system.tables scan over the catalog) nor
+                        /// silently omit the table. Keep a row for it with a null storage
+                        /// object: metadata-dependent columns come back as defaults/NULL while
+                        /// the table still appears in the listing. Direct access to that one
+                        /// table (SELECT ... FROM db.table) still surfaces the real error.
                         if (context_->getSettingsRef()[Setting::database_datalake_require_metadata_access])
                         {
                             auto error_code = getCurrentExceptionCode();
                             auto error_message = getCurrentExceptionMessage(true, false, true, true);
-                            auto enhanced_message = fmt::format(
+                            LOG_WARNING(
+                                log,
                                 "Received error {} while fetching table metadata for existing table '{}'. "
-                                "If you want this error to be ignored, use database_datalake_require_metadata_access=0. Error: {}",
+                                "Keeping it in the listing with unresolved metadata. Error: {}",
                                 error_code,
                                 table_name,
                                 error_message);
-                            promise->set_exception(std::make_exception_ptr(Exception::createRuntime(
-                                error_code,
-                                enhanced_message)));
-                            return;
                         }
                         else
                             tryLogCurrentException(log, fmt::format("Ignoring table {}", table_name));
@@ -995,12 +1007,13 @@ DatabaseTablesIteratorPtr DatabaseDataLake::getTablesIteratorWithHint(
         if (filter_by_table_name && !filter_by_table_name(table_name))
             continue;
 
+        /// Keep a row even when the storage object could not be resolved (table_ptr is
+        /// null): the table still shows up in listings such as system.tables with default
+        /// values for metadata-dependent columns, instead of being silently dropped or
+        /// aborting the whole listing. See the per-table catch above.
         auto table_ptr = futures[future_index].get();
-        if (table_ptr)
-        {
-            [[maybe_unused]] bool inserted = tables.emplace(table_name, table_ptr).second;
-            chassert(inserted);
-        }
+        [[maybe_unused]] bool inserted = tables.emplace(table_name, table_ptr).second;
+        chassert(inserted);
         future_index++;
     }
     return std::make_unique<DatabaseTablesSnapshotIterator>(tables, getDatabaseName());

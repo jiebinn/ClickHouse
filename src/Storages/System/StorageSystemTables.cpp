@@ -277,13 +277,16 @@ ColumnPtr getFilteredTables(
                 for (; table_it->isValid(); table_it->next())
                 {
                     const auto & table = table_it->table();
-                    if (!table)
-                        continue; /// Table was concurrently dropped and should be skipped
+                    /// A null table means the storage object could not be resolved (concurrent
+                    /// drop, or unresolvable DataLakeCatalog metadata). Keep the name with an
+                    /// empty engine / Nil uuid rather than dropping the row, so predicates on
+                    /// `engine`/`uuid` see it (and it can be filtered out) instead of the table
+                    /// silently vanishing from system.tables.
                     table_column->insert(table_it->name());
                     if (engine_column)
-                        engine_column->insert(table->getName());
+                        engine_column->insert(table ? table->getName() : "");
                     if (uuid_column)
-                        uuid_column->insert(table->getStorageID().uuid);
+                        uuid_column->insert(table ? table->getStorageID().uuid : UUIDHelpers::Nil);
                 }
             }
             else
@@ -702,15 +705,20 @@ protected:
                     continue;
 
                 StoragePtr table = tables_it->table();
-                if (!table)
-                    continue; /// Table was concurrently dropped between iterator snapshot and table() call so we should skip it
+                /// A null table means the storage object could not be resolved: either the table
+                /// was concurrently dropped between the iterator snapshot and this table() call, or
+                /// (for DataLakeCatalog databases) its metadata is unresolvable. We still emit a row
+                /// for it -- with defaults/NULL for every column that needs the opened storage object
+                /// -- so a single broken table neither drops itself from the listing nor aborts the
+                /// whole system.tables scan. Every metadata-dependent column below is guarded on
+                /// `table` being non-null.
 
                 TableLockHolder lock;
 
                 /// The only column that requires us to hold a shared lock is data_paths as rename might alter them (on ordinary tables)
                 /// and it's not protected internally by other mutexes
                 static const size_t DATA_PATHS_INDEX = 5;
-                if (columns_mask[DATA_PATHS_INDEX])
+                if (table && columns_mask[DATA_PATHS_INDEX])
                 {
                     lock = table->tryLockForShare(context->getCurrentQueryId(), context->getSettingsRef()[Setting::lock_acquire_timeout]);
                     if (!lock)
@@ -734,8 +742,10 @@ protected:
 
                 if (columns_mask[src_index++])
                 {
-                    chassert(table != nullptr);
-                    res_columns[res_index++]->insert(table->getName());
+                    if (table)
+                        res_columns[res_index++]->insert(table->getName());
+                    else
+                        res_columns[res_index++]->insertDefault();
                 }
 
                 if (columns_mask[src_index++])
@@ -743,13 +753,17 @@ protected:
 
                 if (columns_mask[src_index++])
                 {
-                    chassert(lock != nullptr);
                     Array table_paths_array;
-                    if (auto paths = table->tryGetDataPaths())
+                    /// `lock` is only acquired above when `table` is non-null.
+                    if (table)
                     {
-                        table_paths_array.reserve(paths->size());
-                        for (const String & path : *paths)
-                            table_paths_array.push_back(path);
+                        chassert(lock != nullptr);
+                        if (auto paths = table->tryGetDataPaths())
+                        {
+                            table_paths_array.reserve(paths->size());
+                            for (const String & path : *paths)
+                                table_paths_array.push_back(path);
+                        }
                     }
                     res_columns[res_index++]->insert(table_paths_array);
                     /// We don't need the lock anymore
@@ -921,7 +935,7 @@ protected:
                 {
                     try
                     {
-                        auto total_bytes = table->totalBytes(context_copy);
+                        auto total_bytes = table ? table->totalBytes(context_copy) : std::nullopt;
                         if (total_bytes)
                             res_columns[res_index]->insert(*total_bytes);
                         else
@@ -940,7 +954,7 @@ protected:
                 {
                     try
                     {
-                        auto total_bytes_uncompressed = table->totalBytesUncompressed(context_copy->getSettingsRef());
+                        auto total_bytes_uncompressed = table ? table->totalBytesUncompressed(context_copy->getSettingsRef()) : std::nullopt;
                         if (total_bytes_uncompressed)
                             res_columns[res_index]->insert(*total_bytes_uncompressed);
                         else

@@ -1130,22 +1130,27 @@ def test_system_tables_with_nullptr_table(started_cluster):
     node.query("SYSTEM ENABLE FAILPOINT datalake_try_get_table_return_nullptr")
 
     try:
-        ## This triggers getFilteredTables with engine_column populated (the crash site).
+        ## getFilteredTables with engine_column populated (a former crash site). The table
+        ## whose storage object could not be resolved is now KEPT in the listing with an empty
+        ## engine, rather than being silently dropped.
         result = node.query(
-            f"SELECT engine FROM system.tables WHERE database = '{CATALOG_NAME}' "
+            f"SELECT name, engine FROM system.tables WHERE database = '{CATALOG_NAME}' "
             f"SETTINGS show_data_lake_catalogs_in_system_tables = 1"
         )
-        ## With the failpoint, all tables return nullptr so we get empty result.
-        assert result.strip() == ""
+        assert table_name in result
+        ## engine is empty for the unresolved table (nothing after the name + tab).
+        assert f"{table_name}\t" in result or f"{table_name}." in result
 
-        ## This triggers the fillData main loop path.
+        ## fillData main loop path: the row is present (not dropped) even though every
+        ## storage-dependent column is defaulted.
         result = node.query(
-            f"SELECT * FROM system.tables WHERE database = '{CATALOG_NAME}' "
+            f"SELECT count() FROM system.tables WHERE database = '{CATALOG_NAME}' "
             f"SETTINGS show_data_lake_catalogs_in_system_tables = 1"
         )
-        assert result.strip() == ""
+        assert int(result.strip()) >= 1
 
-        ## Also test with count() to exercise a different code path.
+        ## A predicate on engine still filters correctly: the unresolved table has an empty
+        ## engine, so it does not match a concrete engine pattern.
         result = node.query(
             f"SELECT count(engine) FROM system.tables WHERE database = '{CATALOG_NAME}' "
             f"AND engine LIKE '%ReplicatedMergeTree' "
@@ -1164,6 +1169,79 @@ def test_system_tables_with_nullptr_table(started_cluster):
         f"SETTINGS show_data_lake_catalogs_in_system_tables = 1"
     )
     assert int(result.strip()) > 0
+
+    node.query(f"DROP DATABASE IF EXISTS {CATALOG_NAME}")
+
+
+def test_system_tables_metadata_unresolvable_does_not_abort_scan(started_cluster):
+    """
+    Regression test for https://github.com/ClickHouse/ClickHouse/issues/110032.
+
+    When a table's metadata is unresolvable, a system.tables scan of the whole
+    DataLakeCatalog database must not abort (with database_datalake_require_metadata_access=1)
+    nor silently drop the table (with =0). Either way the table stays listed by name, with
+    default/empty values for the storage-dependent columns.
+    """
+    node = started_cluster.instances["node1"]
+
+    root_namespace = f"clickhouse_{uuid.uuid4()}"
+    namespace = f"{root_namespace}_test_unresolvable"
+
+    catalog = load_catalog_impl(started_cluster)
+    catalog.create_namespace(namespace)
+
+    table_name = "broken_table"
+    create_table(catalog, namespace, table_name)
+
+    create_clickhouse_iceberg_database(started_cluster, node, CATALOG_NAME)
+
+    ## Simulate a per-table metadata resolution failure (throws).
+    node.query("SYSTEM ENABLE FAILPOINT datalake_try_get_table_throw")
+
+    try:
+        for require in (1, 0):
+            settings = (
+                f"SETTINGS show_data_lake_catalogs_in_system_tables = 1, "
+                f"database_datalake_require_metadata_access = {require}"
+            )
+
+            ## Name-only fast path always worked; still lists the table.
+            result = node.query(
+                f"SELECT name FROM system.tables WHERE database = '{CATALOG_NAME}' {settings}"
+            )
+            assert table_name in result, f"name-only path, require={require}"
+
+            ## The whole-database scan requesting a storage-dependent column must NOT abort
+            ## and must NOT drop the table -- it is kept with an empty engine.
+            result = node.query(
+                f"SELECT name, engine FROM system.tables WHERE database = '{CATALOG_NAME}' {settings}"
+            )
+            assert table_name in result, f"full scan, require={require}"
+
+            result = node.query(
+                f"SELECT count() FROM system.tables WHERE database = '{CATALOG_NAME}' {settings}"
+            )
+            assert int(result.strip()) >= 1, f"count, require={require}"
+
+            ## total_rows (a per-column stat that needs the opened storage) is defaulted, not fatal.
+            result = node.query(
+                f"SELECT count() FROM system.tables WHERE database = '{CATALOG_NAME}' "
+                f"AND total_rows IS NULL {settings}"
+            )
+            assert int(result.strip()) >= 1, f"total_rows default, require={require}"
+    finally:
+        node.query("SYSTEM DISABLE FAILPOINT datalake_try_get_table_throw")
+
+    ## Direct access to the broken table still surfaces the error (query_and_get_error already
+    ## asserts the query failed; here we check it is the injected metadata failure).
+    node.query("SYSTEM ENABLE FAILPOINT datalake_try_get_table_throw")
+    try:
+        assert "Injected metadata resolution failure" in node.query_and_get_error(
+            f"SELECT * FROM {CATALOG_NAME}.`{namespace}.{table_name}` "
+            f"SETTINGS database_datalake_require_metadata_access = 1"
+        )
+    finally:
+        node.query("SYSTEM DISABLE FAILPOINT datalake_try_get_table_throw")
 
     node.query(f"DROP DATABASE IF EXISTS {CATALOG_NAME}")
 
