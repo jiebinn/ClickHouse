@@ -175,6 +175,55 @@ static void flattenArraySubqueryOnRightOfIn(
     in_second_argument = std::move(flattened_subquery);
 }
 
+/// Same as `flattenArraySubqueryOnRightOfIn`, but for a table expression on the right of IN whose
+/// columns are described by a storage snapshot instead of a subquery's projection (a `TableNode`,
+/// e.g. `x IN some_array_table`). If the table has a single Array column exactly one dimension
+/// deeper than the left argument, wrap it as a `SELECT column FROM table` subquery and flatten it,
+/// so its elements become the set elements — consistent with an array subquery, an array literal, or an
+/// array-returning function. Tables with a non-Array column, a wrong depth, or more than one column
+/// are left untouched, so the common `x IN table` path (and any `StorageSet` fast path) is unchanged.
+static void flattenArrayTableExpressionOnRightOfIn(
+    QueryTreeNodePtr & in_second_argument,
+    const QueryTreeNodePtr & in_first_argument,
+    const StorageSnapshotPtr & storage_snapshot,
+    const ContextPtr & context)
+{
+    if (in_first_argument->getNodeType() == QueryTreeNodeType::LAMBDA)
+        return;
+
+    auto columns = storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::Ordinary));
+    if (columns.size() != 1)
+        return;
+
+    const auto & column = columns.front();
+    const auto * rhs_array_type = typeid_cast<const DataTypeArray *>(column.type.get());
+    if (!rhs_array_type)
+        return;
+
+    const auto & lhs_type = in_first_argument->getResultType();
+    const auto * lhs_array_type = typeid_cast<const DataTypeArray *>(lhs_type.get());
+    const size_t lhs_depth = lhs_array_type ? lhs_array_type->getNumberOfDimensions() : 0;
+
+    if (rhs_array_type->getNumberOfDimensions() != lhs_depth + 1)
+        return;
+
+    /// Wrap the table as a `SELECT column FROM table` subquery, then flatten it like an array subquery.
+    auto column_node = std::make_shared<ColumnNode>(column, in_second_argument);
+
+    auto projection_list = std::make_shared<ListNode>();
+    projection_list->getNodes().push_back(std::move(column_node));
+
+    auto subquery = std::make_shared<QueryNode>(Context::createCopy(context));
+    subquery->setIsSubquery(true);
+    subquery->getProjectionNode() = std::move(projection_list);
+    subquery->getJoinTree() = in_second_argument;
+    subquery->resolveProjectionColumns(NamesAndTypes{column});
+
+    in_second_argument = std::move(subquery);
+
+    flattenArraySubqueryOnRightOfIn(in_second_argument, in_first_argument, context);
+}
+
 /// Builds and resolves `IF(isNull(element), NULL, has(array, element))`
 std::pair<QueryTreeNodePtr, ProjectionNames> QueryAnalyzer::makeNullSafeHas(
     QueryTreeNodePtr array_arg,    // [1,2,number]
@@ -1238,6 +1287,11 @@ ProjectionNames QueryAnalyzer::resolveFunction(QueryTreeNodePtr & node, Identifi
         {
             /// If table is already prepared set, we do not replace it with subquery.
             /// If table is not a StorageSet, we'll create plan to build set in the Planner.
+            ///
+            /// If its single column is an Array one dimension deeper than the left argument,
+            /// interpret it as the set of the array's elements, exactly like an array subquery,
+            /// an array literal, or an array-returning function on the right side of IN.
+            flattenArrayTableExpressionOnRightOfIn(in_second_argument, in_first_argument, table_node->getStorageSnapshot(), scope.context);
         }
         else if (table_function_node)
         {
@@ -1265,6 +1319,11 @@ ProjectionNames QueryAnalyzer::resolveFunction(QueryTreeNodePtr & node, Identifi
             in_second_argument_query_node->resolveProjectionColumns(std::move(projection_columns));
 
             in_second_argument = std::move(in_second_argument_query_node);
+
+            /// If the wrapped subquery's single column is an Array one dimension deeper than the left
+            /// argument, interpret it as the set of the array's elements, exactly like an array
+            /// subquery, an array literal, or an array-returning function on the right side of IN.
+            flattenArraySubqueryOnRightOfIn(in_second_argument, in_first_argument, scope.context);
         }
         else
         {

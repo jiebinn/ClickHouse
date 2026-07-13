@@ -58,6 +58,56 @@ FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
 ORDER BY x
 SETTINGS transform_null_in = 0;
 
+-- A direct table reference on the right of IN whose single column is an Array follows the same
+-- rule: its elements are the set elements, exactly like the equivalent `x IN (SELECT arr FROM t)`.
+-- Tables with a non-Array column, a wrong depth, or more than one column keep the ordinary
+-- set-of-values behavior.
+DROP TABLE IF EXISTS t_04512_arr;
+CREATE TABLE t_04512_arr (arr Array(UInt8)) ENGINE = Memory;
+INSERT INTO t_04512_arr VALUES ([1, 2, 3]);
+SELECT 2 IN t_04512_arr AS present, 5 IN t_04512_arr AS absent;
+-- Consistent with the subquery spelling.
+SELECT 2 IN t_04512_arr AS direct, 2 IN (SELECT arr FROM t_04512_arr) AS subquery;
+-- NOT IN is the negation.
+SELECT 2 NOT IN t_04512_arr AS notin_present, 5 NOT IN t_04512_arr AS notin_absent;
+
+-- Multiple rows: the set is the union of the elements of all the arrays.
+DROP TABLE IF EXISTS t_04512_rows;
+CREATE TABLE t_04512_rows (arr Array(UInt8)) ENGINE = Memory;
+INSERT INTO t_04512_rows VALUES ([1, 2]), ([3, 4]);
+SELECT 3 IN t_04512_rows AS present, 5 IN t_04512_rows AS absent;
+
+-- The left argument may be an Array with an Array(Array(...)) column on the right (depth + 1).
+DROP TABLE IF EXISTS t_04512_nested;
+CREATE TABLE t_04512_nested (arr Array(Array(UInt8))) ENGINE = Memory;
+INSERT INTO t_04512_nested VALUES ([[1, 2], [3, 4]]);
+SELECT [1, 2] IN t_04512_nested AS present, [9, 9] IN t_04512_nested AS absent;
+
+-- Equal depths (Array(T) on both sides) stay a one-element set, i.e. equality, not flattening.
+DROP TABLE IF EXISTS t_04512_eq;
+CREATE TABLE t_04512_eq (arr Array(UInt8)) ENGINE = Memory;
+INSERT INTO t_04512_eq VALUES ([0, 1, 2]);
+SELECT [0, 1, 2] IN t_04512_eq AS eq_in, [0, 1] IN t_04512_eq AS ne_in;
+
+-- Nullable elements honor `transform_null_in` exactly like the array-subquery case.
+DROP TABLE IF EXISTS t_04512_null;
+CREATE TABLE t_04512_null (arr Array(Nullable(UInt8))) ENGINE = Memory;
+INSERT INTO t_04512_null VALUES ([NULL, 1]);
+SELECT toNullable(1) IN t_04512_null AS one, CAST(NULL AS Nullable(UInt8)) IN t_04512_null AS null_elem SETTINGS transform_null_in = 1;
+
+-- Regression guard: a plain single-column (non-Array) table is an ordinary set of its values.
+DROP TABLE IF EXISTS t_04512_scalar;
+CREATE TABLE t_04512_scalar (x UInt8) ENGINE = Memory;
+INSERT INTO t_04512_scalar VALUES (1), (2), (3);
+SELECT 2 IN t_04512_scalar AS present, 5 IN t_04512_scalar AS absent;
+
+DROP TABLE t_04512_arr;
+DROP TABLE t_04512_rows;
+DROP TABLE t_04512_nested;
+DROP TABLE t_04512_eq;
+DROP TABLE t_04512_null;
+DROP TABLE t_04512_scalar;
+
 -- The same behavior must not depend on `rewrite_in_to_join`, which rewrites a non-constant
 -- `x IN (subquery)` into a correlated `EXISTS` before the regular IN handling runs. Without
 -- flattening the array subquery there too, the rewrite would compare `x = <array>` and keep the
@@ -81,3 +131,11 @@ SELECT x, x IN (SELECT arrayJoin([NULL, toNullable(1)])) AS in_res
 FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
 ORDER BY x
 SETTINGS transform_null_in = 1;
+
+-- A direct array table on the right of IN is unaffected by `rewrite_in_to_join`: the table is not a
+-- subquery at the point of the EXISTS rewrite, so it is flattened on the regular IN path as usual.
+DROP TABLE IF EXISTS t_04512_rwj;
+CREATE TABLE t_04512_rwj (arr Array(UInt8)) ENGINE = Memory;
+INSERT INTO t_04512_rwj VALUES ([1, 2, 3]);
+SELECT 2 IN t_04512_rwj AS present, 5 IN t_04512_rwj AS absent;
+DROP TABLE t_04512_rwj;
