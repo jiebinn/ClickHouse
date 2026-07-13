@@ -453,6 +453,16 @@ private:
     /// Copies each row's contiguous byte range verbatim into a String, without the trailing-zero
     /// trimming that executeToString does. Used for the Array -> String reinterpret, which must be an
     /// exact byte-for-byte inverse of String -> Array (see the call site for why trimming is wrong here).
+    ///
+    /// The bytes are copied verbatim on every architecture, with no per-row or per-element byte-order
+    /// adjustment. This is deliberate and required for the round-trip: the String -> Array path
+    /// (`ColumnArray::insertData`) splits the string into element-sized chunks and stores each chunk into
+    /// the array element memory verbatim, with no byte swapping on any endianness, so the inverse must do
+    /// the same. Unlike the scalar `executeToString`, which reverses the whole row on big-endian to keep
+    /// the little-endian String convention, reversing here would break element order — e.g.
+    /// `[toUInt16(0x0102), toUInt16(0x0304)]` has in-memory bytes `01 02 03 04` on big-endian, and a
+    /// whole-row reverse yields `04 03 02 01`, which reads back as `[0x0403, 0x0201]` instead of the
+    /// original array.
     static void NO_INLINE executeContiguousToString(const IColumn & src, ColumnString & dst, size_t input_rows_count)
     {
         ColumnString::Chars & data_to = dst.getChars();
@@ -469,13 +479,7 @@ private:
             /// `getDataAt` returns an empty range), and passing a null pointer to `memcpy` is undefined
             /// behavior even when the size is zero. Skip the copy in that case.
             if (!data.empty())
-            {
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
                 memcpy(&data_to[offset], data.data(), data.size());
-#else
-                reverseMemcpy(&data_to[offset], data.data(), data.size());
-#endif
-            }
             offset += data.size();
             offsets_to[i] = offset;
         }
