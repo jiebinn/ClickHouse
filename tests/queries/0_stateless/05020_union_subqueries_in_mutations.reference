@@ -1,0 +1,7 @@
+delete union distinct	[2]
+delete union all	[2]
+delete except	[0,2]
+delete intersect	[0,2]
+update union predicate	[2,9,9]
+update union assignment	[0,2,3]
+delete union distinct, old analyzer	[2]
