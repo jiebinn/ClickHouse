@@ -1230,15 +1230,32 @@ def test_postgres_query_passing_edge_cases(started_cluster):
     # Type mismatch on the engine path: the user declares an explicit structure that disagrees with the
     # actual query result types. The declared structure wins for the engine, and reading a text value into
     # the declared Int32 fails with a query error (BAD_ARGUMENTS) instead of aborting the server.
-    node1.query("DROP TABLE IF EXISTS pg_engine_type_mismatch")
+    # The same reader is used for every declared type, so a mismatch against any of them must surface as a
+    # query error, never as a foreign exception (pqxx or std::runtime_error from the text parsers) that
+    # would abort the server. Column b holds text like 'name_0', so reading it into each declared type below
+    # fails to parse.
+    for declared in ["Int32", "UUID", "Date", "DateTime", "DateTime64(6)", "Decimal(10, 2)"]:
+        node1.query("DROP TABLE IF EXISTS pg_engine_type_mismatch")
+        node1.query(
+            f"CREATE TABLE pg_engine_type_mismatch (a Int32, b {declared}) "
+            f"ENGINE = PostgreSQL('{host}', 'postgres', query('SELECT a, b FROM {table_name}'), 'postgres', '{pg_pass}')"
+        )
+        assert "Cannot parse PostgreSQL value" in node1.query_and_get_error(
+            "SELECT * FROM pg_engine_type_mismatch"
+        )
+        node1.query("DROP TABLE pg_engine_type_mismatch")
+
+    # Projection-count mismatch: the passed query returns more columns than the declared structure. The
+    # reader rejects the extra column with a query error (TOO_MANY_COLUMNS) rather than crashing.
+    node1.query("DROP TABLE IF EXISTS pg_engine_count_mismatch")
     node1.query(
-        f"CREATE TABLE pg_engine_type_mismatch (a Int32, b Int32) "
+        f"CREATE TABLE pg_engine_count_mismatch (a Int32) "
         f"ENGINE = PostgreSQL('{host}', 'postgres', query('SELECT a, b FROM {table_name}'), 'postgres', '{pg_pass}')"
     )
-    assert "Cannot parse PostgreSQL value" in node1.query_and_get_error(
-        "SELECT * FROM pg_engine_type_mismatch"
+    assert "TOO_MANY_COLUMNS" in node1.query_and_get_error(
+        "SELECT * FROM pg_engine_count_mismatch"
     )
-    node1.query("DROP TABLE pg_engine_type_mismatch")
+    node1.query("DROP TABLE pg_engine_count_mismatch")
 
     cursor.execute(f"DROP TABLE {table_name}")
 
