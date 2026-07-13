@@ -8034,6 +8034,18 @@ async function reconcileStartup() {
     /// preserving the edit.
     const stale_blank_reload_bare = stale_blank_reload && (url_query || '').trim() === '';
 
+    /// A `stale_blank_reload_bare` URL is only a stale echo of a blank tab this load just pruned, so
+    /// it is non-authoritative in every respect — including its `run=1` directive, which was written
+    /// for that pruned tab, not for whichever surviving/bootstrap tab the reconciliation below falls
+    /// back to. The deferred auto-run is already skipped for it (see the `!stale_blank_reload_bare`
+    /// guard on `postAll` below), but the directive must also be dropped from the global
+    /// `run_immediately`: the trailing `syncHistory` recomputes `run=1` as `run_immediately &&
+    /// tabReflectsRun(tab)`, so a clean, run-backed fallback tab (e.g. a surviving `Report`) would
+    /// otherwise be re-stamped with `run=1` and auto-execute on the NEXT reload, inheriting an
+    /// auto-run the user never asked of it. `defer_run_for_reconcile` was captured before startup
+    /// ran, so clearing the flag here leaves that guard's behavior intact and only closes the leak.
+    if (stale_blank_reload_bare) run_immediately = false;
+
     if (savedTabs.length) {
         if (bootstrap_dirty) {
             /// The user interacted with the bootstrap workspace while IndexedDB was still
@@ -8235,6 +8247,11 @@ async function reconcileStartup() {
         if (url_tab_name) {
             const cleaned_url = new URL(location.href);
             cleaned_url.searchParams.delete('tab');
+            /// Drop the stale `run=1` too (`run_immediately` was likewise cleared above): it was the
+            /// pruned blank tab's directive, and leaving it in the persisted URL would auto-run the
+            /// fresh bootstrap tab on the next reload (the no-hash case takes the synchronous
+            /// bottom-of-script `postAll`, so this replaceState is what stops it recurring).
+            cleaned_url.searchParams.delete('run');
             if (stale_blank_reload_bare) {
                 cleaned_url.hash = '';
                 query_area.value = '';
