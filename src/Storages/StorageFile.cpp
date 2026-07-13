@@ -28,6 +28,7 @@
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/EmptyReadBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <IO/ReadSettings.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 #include <IO/Archives/createArchiveReader.h>
@@ -512,13 +513,19 @@ std::unique_ptr<ReadBuffer> selectReadBuffer(
         }
     }
 
+    /// Clamp the read buffer size to a sane maximum. A read buffer never needs to be
+    /// larger, and an out-of-range value (e.g. a fuzzed `max_read_buffer_size`) would
+    /// otherwise be passed straight to the allocator, tripping its size guard with a
+    /// `LOGICAL_ERROR` "Too large size passed to allocator".
+    size_t buffer_size = std::min<UInt64>(context->getSettingsRef()[Setting::max_read_buffer_size], ReadSettings::MAX_READ_BUFFER_SIZE);
+
     std::unique_ptr<ReadBufferFromFileBase> res;
     if (S_ISREG(file_stat.st_mode) && (read_method == LocalFSReadMethod::pread || read_method == LocalFSReadMethod::mmap))
     {
         if (use_table_fd)
-            res = std::make_unique<ReadBufferFromFileDescriptorPRead>(table_fd, context->getSettingsRef()[Setting::max_read_buffer_size]);
+            res = std::make_unique<ReadBufferFromFileDescriptorPRead>(table_fd, buffer_size);
         else
-            res = std::make_unique<ReadBufferFromFilePRead>(current_path, context->getSettingsRef()[Setting::max_read_buffer_size]);
+            res = std::make_unique<ReadBufferFromFilePRead>(current_path, buffer_size);
 
         ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
     }
@@ -527,7 +534,7 @@ std::unique_ptr<ReadBuffer> selectReadBuffer(
 #if USE_LIBURING
         auto & reader = getIOUringReaderOrThrow(context);
         res = std::make_unique<AsynchronousReadBufferFromFileWithDescriptorsCache>(
-            reader, Priority{}, current_path, context->getSettingsRef()[Setting::max_read_buffer_size]);
+            reader, Priority{}, current_path, buffer_size);
 #else
         throw Exception(ErrorCodes::UNSUPPORTED_METHOD, "Read method io_uring is only supported in Linux");
 #endif
@@ -535,9 +542,9 @@ std::unique_ptr<ReadBuffer> selectReadBuffer(
     else
     {
         if (use_table_fd)
-            res = std::make_unique<ReadBufferFromFileDescriptor>(table_fd, context->getSettingsRef()[Setting::max_read_buffer_size]);
+            res = std::make_unique<ReadBufferFromFileDescriptor>(table_fd, buffer_size);
         else
-            res = std::make_unique<ReadBufferFromFile>(current_path, context->getSettingsRef()[Setting::max_read_buffer_size]);
+            res = std::make_unique<ReadBufferFromFile>(current_path, buffer_size);
 
         ProfileEvents::increment(ProfileEvents::CreatedReadBufferOrdinary);
     }

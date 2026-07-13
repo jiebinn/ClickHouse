@@ -57,6 +57,7 @@
 #include <Core/ServerSettings.h>
 #include <Core/Settings.h>
 #include <IO/ReadWriteBufferFromHTTP.h>
+#include <IO/ReadSettings.h>
 #include <IO/HTTPHeaderEntries.h>
 
 #include <algorithm>
@@ -616,7 +617,7 @@ std::pair<Poco::URI, std::unique_ptr<ReadWriteBufferFromHTTP>> StorageURLSource:
                            .withSettings(read_settings)
                            .withTimeouts(timeouts)
                            .withHostFilter(&context_->getRemoteHostFilter())
-                           .withBufSize(settings[Setting::max_read_buffer_size])
+                           .withBufSize(std::min<UInt64>(settings[Setting::max_read_buffer_size], ReadSettings::MAX_READ_BUFFER_SIZE))
                            .withRedirects(settings[Setting::max_http_get_redirects])
                            .withEnableUrlEncoding(settings[Setting::enable_url_encoding])
                            .withOutCallback(callback)
@@ -1551,7 +1552,7 @@ std::optional<time_t> IStorageURLBase::tryGetLastModificationTime(
                    .withSettings(context->getReadSettings())
                    .withTimeouts(getHTTPTimeouts(context))
                    .withHostFilter(&context->getRemoteHostFilter())
-                   .withBufSize(settings[Setting::max_read_buffer_size])
+                   .withBufSize(std::min<UInt64>(settings[Setting::max_read_buffer_size], ReadSettings::MAX_READ_BUFFER_SIZE))
                    .withRedirects(settings[Setting::max_http_get_redirects])
                    .withHeaders(headers)
                    .create(credentials);

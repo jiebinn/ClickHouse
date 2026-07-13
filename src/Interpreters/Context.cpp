@@ -8286,11 +8286,17 @@ ReadSettings Context::getReadSettings() const
             ErrorCodes::INVALID_SETTING_VALUE, "Invalid value '{}' for max_read_buffer_size", getSettingsRef()[Setting::max_read_buffer_size].value);
     }
 
-    res.local_fs_settings.buffer_size
-        = settings_ref[Setting::max_read_buffer_size_local_fs] ? settings_ref[Setting::max_read_buffer_size_local_fs] : settings_ref[Setting::max_read_buffer_size];
-    res.remote_fs_settings.buffer_size
-        = settings_ref[Setting::max_read_buffer_size_remote_fs] ? settings_ref[Setting::max_read_buffer_size_remote_fs] : settings_ref[Setting::max_read_buffer_size];
-    res.remote_fs_settings.large_buffer_size = settings_ref[Setting::prefetch_buffer_size];
+    /// Clamp read buffer sizes to a sane maximum. A read buffer never needs to be
+    /// larger, and an out-of-range value (e.g. a fuzzed `max_read_buffer_size_local_fs`)
+    /// would otherwise be passed straight to the allocator, tripping its size guard with
+    /// a `LOGICAL_ERROR` "Too large size passed to allocator".
+    res.local_fs_settings.buffer_size = std::min<UInt64>(
+        settings_ref[Setting::max_read_buffer_size_local_fs] ? settings_ref[Setting::max_read_buffer_size_local_fs] : settings_ref[Setting::max_read_buffer_size],
+        ReadSettings::MAX_READ_BUFFER_SIZE);
+    res.remote_fs_settings.buffer_size = std::min<UInt64>(
+        settings_ref[Setting::max_read_buffer_size_remote_fs] ? settings_ref[Setting::max_read_buffer_size_remote_fs] : settings_ref[Setting::max_read_buffer_size],
+        ReadSettings::MAX_READ_BUFFER_SIZE);
+    res.remote_fs_settings.large_buffer_size = std::min<UInt64>(settings_ref[Setting::prefetch_buffer_size], ReadSettings::MAX_READ_BUFFER_SIZE);
     res.local_fs_settings.direct_io_threshold = settings_ref[Setting::min_bytes_to_use_direct_io];
     res.local_fs_settings.mmap_threshold = settings_ref[Setting::min_bytes_to_use_mmap_io];
     res.priority = Priority{settings_ref[Setting::read_priority]};
