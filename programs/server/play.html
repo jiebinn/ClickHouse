@@ -8153,8 +8153,14 @@ async function reconcileStartup() {
                 /// bare link, even one whose name collides with a pruned blank tab). A whitespace-only
                 /// hash echoing a pruned blank tab is excluded by `stale_blank_reload_bare` — it is
                 /// handled by the fallback below, not treated as authoritative. Open a new tab
-                /// carrying the name (if any) and query.
-                const t = makeTab(url_tab_name || undefined, url_query);
+                /// carrying the name (if any) and query. A `stale_blank_reload` reaches here with
+                /// title matching skipped (see above), so a surviving tab may already hold
+                /// `url_tab_name` (a legacy duplicate-title workspace): disambiguate the recreated
+                /// tab's title with `uniqueTitle` so the persisted workspace keeps unique titles and
+                /// a later bare/shared `?tab=` can no longer resolve to — or overwrite — the wrong
+                /// tab. When the name does not collide (the common fresh/shared-link case)
+                /// `uniqueTitle` returns it unchanged, so this stays a no-op there.
+                const t = makeTab(url_tab_name ? uniqueTitle(url_tab_name) : undefined, url_query);
                 tabs.push(t);
                 activeTabId = t.id;
             } else {
