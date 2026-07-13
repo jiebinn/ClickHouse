@@ -124,7 +124,17 @@ void CompressionCodecFactory::fillCodecDescriptions(MutableColumns & res_columns
         [&](const auto &it)
         {
             const std::string &name = it.first;
-            CompressionCodecPtr tmp = it.second({}, nullptr);
+            CompressionCodecPtr tmp;
+            try
+            {
+                tmp = it.second({}, nullptr);
+            }
+            catch (...) // Ok: some codecs cannot be instantiated in this build configuration (e.g. the encryption
+                        // codecs register a creator that throws when the server is built without SSL support). They
+                        // cannot expose a description, so skip them rather than failing the whole `system.codecs` query.
+            {
+                return;
+            }
 
             res_columns[0]->insert(name);
             res_columns[1]->insert(tmp->getMethodByte());
