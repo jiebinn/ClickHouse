@@ -9,6 +9,7 @@ Fail-closed: the PR is only touched when regeneration succeeded and produced a
 real diff; a failed regeneration never pushes a branch or opens a PR.
 """
 
+import re
 import shlex
 
 from praktika.result import Result
@@ -46,6 +47,8 @@ of the changes that goes into CHANGELOG.md):
 Sync the ClickHouse Cloud API reference documentation from the OpenAPI spec.
 """
 
+TOKENIZED_GITHUB_URL = re.compile(r"(https://x-access-token:)[^@\s]+(@github\.com/)")
+
 
 def regenerate():
     return Shell.check(f"python3 {GENERATOR} --write", verbose=True)
@@ -82,7 +85,13 @@ def open_or_refresh_pr():
         "git -c http.https://github.com/.extraheader= push -f "
         f"{repo_url} {refspec}"
     )
-    if not Shell.check(push, verbose=False):
+    return_code, stdout, stderr = Shell.get_res_stdout_stderr(push, verbose=False)
+    if return_code != 0:
+        output = "\n".join(part for part in (stdout, stderr) if part)
+        output = TOKENIZED_GITHUB_URL.sub(r"\1***\2", output)
+        print("ERROR: failed to push the Cloud API docs bot branch")
+        if output:
+            print(output)
         return False
 
     # A force-push already refreshed any open PR, so a PR is created only when
