@@ -184,6 +184,11 @@ public:
     void cloneInplace(Node * node_to_replace, Node * subplan_root);
     QueryPlan clone() const;
 
+    /// Clone the subtree rooted at `subplan_root` (which may belong to another plan) into a new,
+    /// standalone plan. Unlike building a plan with `addStep`, this preserves branching subtrees
+    /// (multiple sources / multi-input steps).
+    static QueryPlan cloneSubtree(Node * subplan_root);
+
     static void cloneSubplanAndReplace(Node * node_to_replace, Node * subplan_root, Nodes & nodes);
 
 private:

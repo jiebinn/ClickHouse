@@ -156,25 +156,21 @@ public:
 private:
     QueryPlanPtr buildPlanFragment(QueryPlan::Node * split_node)
     {
-        auto plan_fragment = std::make_unique<QueryPlan>();
+        /// The split marker is a unary pass-through; the fragment to distribute is the subtree below
+        /// it. Clone it structurally: `QueryPlan::addStep` can only replay a linear chain and would
+        /// throw on a branching fragment (e.g. a view expanding to UNION ALL, or a JOIN).
+        auto plan_fragment = std::make_unique<QueryPlan>(QueryPlan::cloneSubtree(split_node->children.front()));
 
+        /// Mark the reads so the shipped fragment is deserialized in parallel-reading mode on replicas.
         Stack stack;
         traverseQueryPlan(
             stack,
-            *split_node,
+            *plan_fragment->getRootNode(),
             [&](auto &) {},
             [&](auto & node)
             {
-                auto * split_step = typeid_cast<ParallelReplicasSplitStep *>(node.step.get());
-                if (split_step)
-                    return;
-
-                auto * read_step = typeid_cast<ReadFromMergeTree *>(node.step.get());
-                if (read_step)
+                if (auto * read_step = typeid_cast<ReadFromMergeTree *>(node.step.get()))
                     read_step->enableParallelReadingFromReplicasForSerialization();
-
-                auto clone_step = node.step->clone();
-                plan_fragment->addStep(std::move(clone_step));
             });
 
         return plan_fragment;
