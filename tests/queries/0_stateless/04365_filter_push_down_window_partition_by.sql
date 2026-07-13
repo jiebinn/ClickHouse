@@ -1,13 +1,13 @@
+-- Tags: no-parallel-replicas
+-- ^ EXPLAIN indexes=1 asserts the pushed key predicate becomes the local primary key
+-- condition; under parallel replicas the table is read on remote replicas, so the
+-- coordinator plan carries no such condition and the assertions do not hold.
 -- Filter push down below WindowStep on PARTITION BY columns (issue #110109).
 -- A predicate referencing only the window PARTITION BY columns is safe to apply before
 -- the window, so it must reach storage as a primary key condition and enable pruning.
 
 SET enable_analyzer = 1;
 SET query_plan_filter_push_down = 1;
--- Under parallel replicas the pushed conjunct reaches storage as a plain Filter step,
--- not a primary key Condition (the KeyCondition is not built in the local plan), so the
--- "Condition:" detection below would see 0. Pin it off, like sibling test 00808.
-SET enable_parallel_replicas = 0;
 
 DROP TABLE IF EXISTS t_04365;
 CREATE TABLE t_04365 (key String, ts DateTime, val UInt64)
