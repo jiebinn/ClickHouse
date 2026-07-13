@@ -1,11 +1,11 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertion below
 --  cannot hold there; the query still returns exact results in that case.)
--- The `pq` (trained Product Quantization) method of the `Quantized(...)` column codec learns a per-part codebook with
+-- The `product` (trained Product Quantization) method of the `Quantized(...)` column codec learns a per-part codebook with
 -- k-means and stores one m-byte code per vector, exposed as the readable subcolumn `<column>.quantized`, plus the
 -- per-part codebook as the subcolumn `<column>.product_quantization_codebook`. The full-precision data is stored verbatim, so reading the
 -- vector itself (and the exact rescore) is unaffected. The codec is gated behind `allow_experimental_codecs`.
--- Syntax: `Quantized('pq', dimensions, nbits, m)`.
+-- Syntax: `Quantized('product', dimensions, nbits, m)`.
 
 SET allow_experimental_codecs = 1;
 SET vector_search_use_quantized_codes = 1;
@@ -22,12 +22,12 @@ DROP TABLE IF EXISTS quantize_pq;
 CREATE TABLE quantize_pq
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8))
+    vec Array(Float32) CODEC(Quantized('product', 64, 8, 8))
 )
 ENGINE = MergeTree ORDER BY id;
 
 -- The codec round-trips through SHOW CREATE.
-SELECT 'show_create_has_codec', position(create_table_query, 'Quantized(\'pq\', 64, 8, 8') > 0
+SELECT 'show_create_has_codec', position(create_table_query, 'Quantized(\'product\', 64, 8, 8') > 0
 FROM system.tables WHERE database = currentDatabase() AND name = 'quantize_pq';
 
 INSERT INTO quantize_pq (id, vec)
@@ -45,12 +45,12 @@ SELECT 'codebook_length', length(vec.product_quantization_codebook) FROM quantiz
 -- The full-precision vectors round-trip unchanged.
 SELECT 'full_precision_rows', count() FROM quantize_pq WHERE length(vec) = 64;
 
--- The planner rewrites ORDER BY distance LIMIT into a two-stage shortlist (ranked with `pqDistance` over the codes and
+-- The planner rewrites ORDER BY distance LIMIT into a two-stage shortlist (ranked with `productQuantizationDistance` over the codes and
 -- the per-part codebook) + lazy rescore against the full-precision vector.
 SELECT
     'plan',
     countIf(explain ILIKE '%quantized shortlist%') > 0 AS has_shortlist,
-    countIf(explain ILIKE '%pqDistance%') > 0 AS has_pq_distance,
+    countIf(explain ILIKE '%productQuantizationDistance%') > 0 AS has_pq_distance,
     countIf(explain ILIKE '%LazilyReadFromMergeTree%') > 0 AS has_lazy_read
 FROM
 (

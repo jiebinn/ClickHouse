@@ -65,7 +65,7 @@ constexpr size_t PRODUCT_QUANTIZATION_MAX_TRAINING_VECTORS = 100'000;
 /// Maximum number of training sample by a byte budget
 constexpr size_t PRODUCT_QUANTIZATION_MAX_TRAINING_BYTES = 256 * 1024 * 1024;
 
-/// Write state for the `pq` method: the codebook is trained from the first block and reused for the whole part, then
+/// Write state for the `product` method: the codebook is trained from the first block and reused for the whole part, then
 /// written once at the suffix.
 struct SerializedStateProductQuantization : public ISerialization::SerializeBinaryBulkState
 {
@@ -159,7 +159,7 @@ private:
 SerializationQuantizedVector::SerializationQuantizedVector(const SerializationPtr & nested_, const QuantizedCodecParams & params_)
     : SerializationWrapper(nested_)
     , params(params_)
-    , is_product_quantization(params_.method == "pq")
+    , is_product_quantization(params_.method == "product")
     , bytes_per_vector(is_product_quantization
           ? ProductQuantizer::bytesPerVector(params_.dimensions, params_.m, params_.bits)
           : VectorQuantizer::bytesPerVector(params_.method, params_.dimensions, params_.bits))
@@ -189,7 +189,7 @@ void SerializationQuantizedVector::enumerateStreams(
                           .withColumn(nullptr)
                           .withSerializationInfo(data.serialization_info);
 
-    /// The codes need the trained codebook, which is not available at enumerate time, so no lazy creator for `pq`.
+    /// The codes need the trained codebook, which is not available at enumerate time, so no lazy creator for `product`.
     if (!is_product_quantization && data.column && typeid_cast<const ColumnArray *>(data.column.get()))
         codes_data.withLazyColumnCreator([this, col = data.column]() -> ColumnPtr { return encodeCodes(*col, 0, col->size(), nullptr); });
 
@@ -197,7 +197,7 @@ void SerializationQuantizedVector::enumerateStreams(
     callback(settings.path);
     settings.path.pop_back();
 
-    /// The per-part trained codebook, exposed as the `<column>.product_quantization_codebook` subcolumn (`pq` only).
+    /// The per-part trained codebook, exposed as the `<column>.product_quantization_codebook` subcolumn (`product` only).
     if (is_product_quantization)
     {
         settings.path.push_back(Substream::ProductQuantizationCodebook);
@@ -334,8 +334,8 @@ ColumnPtr SerializationQuantizedVector::encodeCodes(const IColumn & column, size
 
     /// Build the encoder once and reuse it for every row, so the per-codebook setup (pq) or the deterministic projection
     /// (the data-independent methods) is not recomputed per row.
-    std::shared_ptr<ProductQuantizer::Encoder> encoder_pq;
-    std::shared_ptr<VectorQuantizer::Encoder> encoder_flat;
+    ProductQuantizer::EncoderPtr encoder_pq;
+    VectorQuantizer::EncoderPtr encoder_flat;
     if (is_product_quantization)
         encoder_pq = ProductQuantizer::createEncoder(codebook, params.dimensions, params.m, params.bits);
     else

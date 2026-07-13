@@ -13,8 +13,8 @@ struct QuantizedCodecParams
 {
     String method;            /// The quantization method
     size_t dimensions = 0;    /// The vector length
-    size_t bits = 0;          /// Overloaded: the number of leading dimensions kept by the `mrl_*` methods, and nbits per subspace for `pq`.
-    size_t m = 0;             /// The number of subspaces, used only by the trained `pq` (Product Quantization) method.
+    size_t bits = 0;          /// Overloaded: the number of leading dimensions kept by the `prefix_*` methods, and nbits per subspace for `product`.
+    size_t m = 0;             /// The number of subspaces, used only by the trained `product` (Product Quantization) method.
 };
 
 /// `Quantized(method, dimensions[, bits])` is a column codec for dense vector columns (`Array(Float32)` and friends).

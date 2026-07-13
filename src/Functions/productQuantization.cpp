@@ -101,13 +101,13 @@ CodebookView getCodebook(const ColumnWithTypeAndName & arg, const String & fn, s
 
 }
 
-/// Internal function `__pqDistance(quantized_vector, codebook, vector, dimensions, m, nbits, is_l2) -> Float32`.
+/// Internal function `__productQuantizationDistance(quantized_vector, codebook, vector, dimensions, m, nbits, is_l2) -> Float32`.
 ///
 /// Injected into the query plan by the vector-search optimizer; not registered in `FunctionFactory` (not user-callable).
 class FunctionPQDistance : public IFunction
 {
 public:
-    static constexpr auto name = "__pqDistance";
+    static constexpr auto name = "__productQuantizationDistance";
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 7; }
@@ -168,7 +168,7 @@ public:
         auto col_res = ColumnFloat32::create(input_rows_count);
         auto & res_data = col_res->getData();
         /// Prepare the ADC lookup tables once for a constant codebook (stride 0); rebuild per row for a per-row codebook.
-        std::shared_ptr<const ProductQuantizer::Query> query;
+        ProductQuantizer::QueryPtr query;
         for (size_t row = 0; row < input_rows_count; ++row)
         {
             if (!query || codebook.stride != 0)

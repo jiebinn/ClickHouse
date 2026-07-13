@@ -414,9 +414,9 @@ QuantizationMethod methodToCodec(std::string_view method)
         return QuantizationMethod::RaBitQ;
     if (method == "int8")
         return QuantizationMethod::Int8;
-    if (method == "mrl_int8")
+    if (method == "prefix_int8")
         return QuantizationMethod::PrefixInt8;
-    if (method == "mrl_bf16")
+    if (method == "prefix_bf16")
         return QuantizationMethod::PrefixBf16;
     throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown quantization method '{}'", method);
 }
@@ -426,7 +426,7 @@ bool VectorQuantizer::supportsL2(std::string_view method)
 {
     /// `rabitq` and `turboquant` are sign/rotation cosine estimators. They do not retain the vector norm, so their
     /// approximate distance can only rank by ang.
-    return method == "int8" || method == "mrl_int8" || method == "mrl_bf16";
+    return method == "int8" || method == "prefix_int8" || method == "prefix_bf16";
 }
 
 std::string VectorQuantizer::validateParams(std::string_view method, size_t dimensions, size_t bits)
@@ -485,9 +485,11 @@ struct VectorQuantizer::Encoder
     std::vector<float> work2;        /// turboquant: second per-vector scratch
 };
 
-std::shared_ptr<VectorQuantizer::Encoder> VectorQuantizer::createEncoder(std::string_view method, size_t dimensions, size_t bits)
+void VectorQuantizer::EncoderDeleter::operator()(Encoder * ptr) const noexcept { delete ptr; }
+
+VectorQuantizer::EncoderPtr VectorQuantizer::createEncoder(std::string_view method, size_t dimensions, size_t bits)
 {
-    auto encoder = std::make_shared<Encoder>();
+    EncoderPtr encoder(new Encoder());
     encoder->codec = methodToCodec(method);
     encoder->dimensions = dimensions;
     encoder->bits = bits;
@@ -616,15 +618,17 @@ struct VectorQuantizer::Query
     RaBitQQuery rabitq;
     TurboQuantQuery turbo;
     Int8Query int8;
-    /// `mrl`: the leading `bits` dimensions of the query (full precision), its prefix norm, and the metric.
+    /// `prefix`: the leading `bits` dimensions of the query (full precision), its prefix norm, and the metric.
     std::vector<float> mrl_query;
     float mrl_query_norm = 0.0f;
     bool is_l2 = false;
 };
 
-std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
+void VectorQuantizer::QueryDeleter::operator()(const Query * ptr) const noexcept { delete ptr; }
+
+VectorQuantizer::QueryPtr VectorQuantizer::prepareQuery(std::string_view method, const float * ref, size_t dimensions, size_t bits, bool is_l2)
 {
-    auto query = std::make_shared<Query>();
+    auto query = std::make_unique<Query>();
     query->codec = methodToCodec(method);
     query->dimensions = dimensions;
     query->bits = bits;
@@ -688,7 +692,7 @@ std::shared_ptr<const VectorQuantizer::Query> VectorQuantizer::prepareQuery(std:
             break;
         }
     }
-    return query;
+    return QueryPtr(query.release());
 }
 
 float VectorQuantizer::distance(const Query & query, const char * code)

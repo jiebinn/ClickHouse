@@ -268,9 +268,11 @@ struct ProductQuantizer::Encoder
     std::vector<float> acc;        /// k floats of per-vector kernel scratch (the encoder is used by one writer thread)
 };
 
-std::shared_ptr<ProductQuantizer::Encoder> ProductQuantizer::createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
+void ProductQuantizer::EncoderDeleter::operator()(Encoder * ptr) const noexcept { delete ptr; }
+
+ProductQuantizer::EncoderPtr ProductQuantizer::createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits)
 {
-    auto encoder = std::make_shared<Encoder>();
+    EncoderPtr encoder(new Encoder());
     encoder->m = m;
     encoder->d_sub = dimensions / m;
     encoder->k = numCentroids(nbits);
@@ -325,13 +327,15 @@ struct ProductQuantizer::Query
 
 /// Distance is asymmetric: the query is kept full-precision; a per-subspace lookup table of query-to-centroid
 /// partial distances is precomputed once per (query, codebook), and each code is then `m` table lookups summed.
-std::shared_ptr<const ProductQuantizer::Query>
+void ProductQuantizer::QueryDeleter::operator()(const Query * ptr) const noexcept { delete ptr; }
+
+ProductQuantizer::QueryPtr
 ProductQuantizer::prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2)
 {
     const size_t d_sub = dimensions / m;
     const size_t k = numCentroids(nbits);
 
-    auto q = std::make_shared<Query>();
+    auto q = std::make_unique<Query>();
     q->m = m;
     q->k = k;
     q->two_bytes = nbits > 8;
@@ -374,7 +378,7 @@ ProductQuantizer::prepareQuery(const float * codebook, size_t dimensions, size_t
             }
         }
     }
-    return q;
+    return QueryPtr(q.release());
 }
 
 float ProductQuantizer::distance(const Query & query, const char * code)

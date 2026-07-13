@@ -5395,7 +5395,7 @@ MergeTreeDataPartFormat MergeTreeData::choosePartFormat(
         for (const auto & column : metadata_snapshot->getColumns())
         {
             const auto params = tryExtractQuantizedCodecParams(column.codec);
-            if (params && params->method == "pq")
+            if (params && params->method == "product")
             {
                 part_type = PartType::Wide;
                 break;

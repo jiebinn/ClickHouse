@@ -1,11 +1,11 @@
 -- Tags: no-parallel-replicas
 -- (the two-stage codes rewrite is deliberately disabled under parallel replicas, so the plan-shape assertion below
 --  cannot hold there; the query still returns exact results in that case.)
--- The `mrl` (Matryoshka) method of the `Quantized(...)` codec keeps only the leading `leading_dimensions` of the vector
+-- The `prefix` (Matryoshka) method of the `Quantized(...)` codec keeps only the leading `leading_dimensions` of the vector
 -- as the readable subcolumn `<column>.quantized`, stored either as int8 (with a per-vector scale, +4 bytes) or as
 -- bfloat16. For MRL-trained embeddings the prefix carries most of the signal, so it is a cheap shortlist. The
 -- full-precision data is stored verbatim, so the exact rescore is unaffected. Syntax:
--- `Quantized('mrl', dimensions, leading_dimensions, 'int8'|'bf16')`.
+-- `Quantized('prefix', dimensions, leading_dimensions, 'int8'|'bf16')`.
 
 SET allow_experimental_codecs = 1;
 SET vector_search_use_quantized_codes = 1;
@@ -19,15 +19,15 @@ DROP TABLE IF EXISTS quantize_mrl;
 CREATE TABLE quantize_mrl
 (
     id UInt32,
-    vfull Array(Float32) CODEC(Quantized('mrl', 64, 64, 'bf16')), -- whole vector as bfloat16
-    vtrunc Array(Float32) CODEC(Quantized('mrl', 64, 16, 'int8'))  -- leading 16 dims as int8
+    vfull Array(Float32) CODEC(Quantized('prefix', 64, 64, 'bf16')), -- whole vector as bfloat16
+    vtrunc Array(Float32) CODEC(Quantized('prefix', 64, 16, 'int8'))  -- leading 16 dims as int8
 )
 ENGINE = MergeTree ORDER BY id;
 
 -- The methods round-trip through SHOW CREATE in their canonical form.
 SELECT 'show_create',
-    position(create_table_query, 'Quantized(\'mrl_bf16\', 64, 64') > 0,
-    position(create_table_query, 'Quantized(\'mrl_int8\', 64, 16') > 0
+    position(create_table_query, 'Quantized(\'prefix_bf16\', 64, 64') > 0,
+    position(create_table_query, 'Quantized(\'prefix_int8\', 64, 16') > 0
 FROM system.tables WHERE database = currentDatabase() AND name = 'quantize_mrl';
 
 INSERT INTO quantize_mrl (id, vfull, vtrunc)

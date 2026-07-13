@@ -1,4 +1,4 @@
--- Regression test: the `pq` codec stores one codebook value per part, but a scan reads it once per granule. The read
+-- Regression test: the `product` codec stores one codebook value per part, but a scan reads it once per granule. The read
 -- must broadcast that single value to every granule (a `ColumnConst`) without re-consuming the one-value stream -
 -- otherwise multi-granule parts fail with "Incorrect size of nested column in constructor of ColumnConst". A small
 -- `index_granularity` (and `max_block_size`) forces many granule reads from the single-value codebook stream while
@@ -13,7 +13,7 @@ DROP TABLE IF EXISTS quantize_pq_mg;
 CREATE TABLE quantize_pq_mg
 (
     id UInt32,
-    vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8))
+    vec Array(Float32) CODEC(Quantized('product', 64, 8, 8))
 )
 ENGINE = MergeTree ORDER BY id SETTINGS index_granularity = 1024;
 

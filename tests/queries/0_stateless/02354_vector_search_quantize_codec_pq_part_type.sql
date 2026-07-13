@@ -1,12 +1,12 @@
--- The trained `pq` method of the `Quantized(...)` codec stores a per-part codebook (one artifact for the whole column).
+-- The trained `product` method of the `Quantized(...)` codec stores a per-part codebook (one artifact for the whole column).
 -- A compact part serializes each granule with a fresh state, which would train and write a separate codebook per
--- granule, so a `pq` column must force its parts to be Wide even when the size/row thresholds would otherwise pick
+-- granule, so a `product` column must force its parts to be Wide even when the size/row thresholds would otherwise pick
 -- Compact. The data-independent methods are stateless per row and are not forced.
 
 SET allow_experimental_codecs = 1;
 
 DROP TABLE IF EXISTS quantize_pq_parttype;
-CREATE TABLE quantize_pq_parttype (id UInt32, vec Array(Float32) CODEC(Quantized('pq', 64, 8, 8)))
+CREATE TABLE quantize_pq_parttype (id UInt32, vec Array(Float32) CODEC(Quantized('product', 64, 8, 8)))
 ENGINE = MergeTree ORDER BY id
 SETTINGS min_bytes_for_wide_part = 1000000000, min_rows_for_wide_part = 1000000000;
 

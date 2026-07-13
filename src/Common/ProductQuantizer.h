@@ -34,9 +34,12 @@ struct ProductQuantizer
     static std::vector<float> trainCodebook(const float * vectors, size_t n, size_t dimensions, size_t m, size_t nbits, UInt64 seed = 0);
 
     struct Encoder;
+    /// Out-of-line deleter (defined in the .cpp) so the opaque `Encoder` can be owned by unique_ptr through this header.
+    struct EncoderDeleter { void operator()(Encoder * ptr) const noexcept; };
+    using EncoderPtr = std::unique_ptr<Encoder, EncoderDeleter>;
 
     /// Prepare an encoder for a codebook; the codebook is copied into the encoder, so it need not outlive the encoder.
-    static std::shared_ptr<Encoder> createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits);
+    static EncoderPtr createEncoder(const float * codebook, size_t dimensions, size_t m, size_t nbits);
 
     /// Encode one vector into `m` codes (exactly `bytesPerVector` bytes) with a prepared encoder. Use for bulk encoding.
     static void encode(Encoder & encoder, const float * vec, char * dst);
@@ -46,9 +49,11 @@ struct ProductQuantizer
     static void encode(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * vec, char * dst);
 
     struct Query;
+    struct QueryDeleter { void operator()(const Query * ptr) const noexcept; };
+    using QueryPtr = std::unique_ptr<const Query, QueryDeleter>;
 
     /// Prepare the ADC state once for a reference vector and codebook; `is_l2` selects L2Distance vs cosineDistance.
-    static std::shared_ptr<const Query>
+    static QueryPtr
     prepareQuery(const float * codebook, size_t dimensions, size_t m, size_t nbits, const float * query, bool is_l2);
 
     /// Calculates the approximate distance between the prepared query and one encoded vector (`code` is `bytesPerVector` bytes).

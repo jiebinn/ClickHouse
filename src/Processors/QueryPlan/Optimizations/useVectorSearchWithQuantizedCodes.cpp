@@ -145,7 +145,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
     if (!read_step->getContext()->getSettingsRef()[Setting::vector_search_use_quantized_codes])
         return false;
 
-    /// The shortlist uses internal functions (`__quantizeDistance`/`__pqDistance`) that are not registered in
+    /// The shortlist uses internal functions (`__quantizeDistance`/`__productQuantizationDistance`) that are not registered in
     /// FunctionFactory, so a remote node could not deserialize the plan. Leave the query exact when the plan is
     /// distributed (the vector-search-index path is skipped for the same reason above).
     if (settings.make_distributed_plan)
@@ -255,8 +255,8 @@ bool optimizeVectorSearchWithQuantizedCodes(
     const String & method = params->method;
     const UInt64 dimensions = params->dimensions;
     const UInt64 bits = params->bits;
-    /// The trained `pq` method also needs the per-part codebook subcolumn, and ranks with `pqDistance`.
-    const bool is_pq = method == "pq";
+    /// The trained `product` method also needs the per-part codebook subcolumn, and ranks with `productQuantizationDistance`.
+    const bool is_pq = method == "product";
     const String codebook_column = search_column + "." + SerializationQuantizedVector::product_quantization_subcolumn_name;
 
     /// ClickHouse lets a physical dotted column shadow a subcolumn (`ColumnsDescription::tryGetColumn` returns the
@@ -271,7 +271,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
 
     /// `rabitq`/`turboquant` are cosine-only estimators (they drop the vector norm), so their shortlist ranks by angle.
     /// Do not use it for an L2Distance query: a true L2-nearest row could be dropped before the exact rescore. Leave the
-    /// query exact instead. (`int8`, `mrl` and `pq` retain enough to rank L2.)
+    /// query exact instead. (`int8`, `prefix` and `product` retain enough to rank L2.)
     if (is_l2 && !is_pq && !VectorQuantizer::supportsL2(method))
         return false;
 
@@ -297,7 +297,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
 
     /// All checks passed - rewrite the plan.
 
-    /// 1. Pull the codes subcolumn (and, for the trained `pq` method, the per-part codebook subcolumn) into the read
+    /// 1. Pull the codes subcolumn (and, for the trained `product` method, the per-part codebook subcolumn) into the read
     /// list.
     std::vector<String> extra_columns{codes_column};
     if (is_pq)
@@ -337,7 +337,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
     QueryPlan::Node * inner_child_node = chain_nodes.empty() ? read_node : chain_nodes.front();
 
     /// 3. Build the approximate-distance expression: `quantizeDistance` for the data-independent methods, or
-    ///    `pqDistance` (with the per-part codebook) for the trained `pq` method.
+    ///    `productQuantizationDistance` (with the per-part codebook) for the trained `product` method.
     static constexpr auto approx_column_name = "__quantize_approx_distance";
     ActionsDAG approx_dag(inner_input_header->getColumnsWithTypeAndName());
     const auto & code_node = approx_dag.findInOutputs(codes_column);
@@ -368,7 +368,7 @@ bool optimizeVectorSearchWithQuantizedCodes(
     if (is_pq)
     {
         /// _approx := __pqDistance(vec.quantized, vec.pq_codebook, ref, dim, m, nbits, is_l2). The codebook is read as a
-        /// per-part broadcast column; `bits` carries nbits for the `pq` method. `__pqDistance` is an internal function
+        /// per-part broadcast column; `bits` carries nbits for the `product` method. `__productQuantizationDistance` is an internal function
         /// built directly (not resolved through FunctionFactory) so it is not exposed as a public SQL function.
         const auto & codebook_node = approx_dag.findInOutputs(codebook_column);
         const auto & m_node = approx_dag.addColumn(

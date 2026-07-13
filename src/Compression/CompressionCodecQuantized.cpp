@@ -29,7 +29,7 @@ CompressionCodecQuantized::CompressionCodecQuantized(const QuantizedCodecParams 
     args.emplace_back(make_intrusive<ASTLiteral>(params.method));
     args.emplace_back(make_intrusive<ASTLiteral>(static_cast<UInt64>(params.dimensions)));
     args.emplace_back(make_intrusive<ASTLiteral>(static_cast<UInt64>(params.bits)));
-    if (params.method == "pq")
+    if (params.method == "product")
         args.emplace_back(make_intrusive<ASTLiteral>(static_cast<UInt64>(params.m)));
     setCodecDescription("Quantized", args);
 }
@@ -82,31 +82,31 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
     params.method = method->value.safeGet<String>();
     params.dimensions = dimensions->value.safeGet<UInt64>();
 
-    /// Sugar for the Matryoshka prefix method: Quantized('mrl', dimensions, leading_dimensions, 'int8'|'bf16'). It stores
-    /// only the leading `leading_dimensions` of the vector, quantized to int8 (per-vector scale) or bfloat16. Fold the
-    /// format into the canonical method name ('mrl_int8'/'mrl_bf16') and put the prefix length in the `bits` slot, so the
-    /// rest of the pipeline (serialization, planner, distance) uses it like any other data-independent method.
-    if (params.method == "mrl")
+    /// Sugar for the prefix method: Quantized('prefix', dimensions, leading_dimensions, 'int8'|'bf16'). It stores only the
+    /// leading `leading_dimensions` of the vector, quantized to int8 (per-vector scale) or bfloat16 (useful for Matryoshka
+    /// embeddings). Fold the format into the canonical method name ('prefix_int8'/'prefix_bf16') and put the prefix length
+    /// in the `bits` slot, so the rest of the pipeline (serialization, planner, distance) uses it like any other method.
+    if (params.method == "prefix")
     {
         if (arguments->children.size() != 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
-                "Codec Quantized method 'mrl' requires Quantized('mrl', dimensions, leading_dimensions, format)");
+                "Codec Quantized method 'prefix' requires Quantized('prefix', dimensions, leading_dimensions, format)");
 
         const auto * leading_dimensions_literal = arguments->children[2]->as<ASTLiteral>();
         if (!leading_dimensions_literal || leading_dimensions_literal->value.getType() != Field::Types::UInt64)
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER,
-                "Third argument of codec Quantized('mrl', ...) (number of leading dimensions) must be an unsigned integer");
+                "Third argument of codec Quantized('prefix', ...) (number of leading dimensions) must be an unsigned integer");
         params.bits = leading_dimensions_literal->value.safeGet<UInt64>();
 
         const auto * format_literal = arguments->children[3]->as<ASTLiteral>();
         if (!format_literal || format_literal->value.getType() != Field::Types::String)
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER,
-                "Fourth argument of codec Quantized('mrl', ...) (format) must be a string literal: 'int8' or 'bf16'");
+                "Fourth argument of codec Quantized('prefix', ...) (format) must be a string literal: 'int8' or 'bf16'");
         const String format = format_literal->value.safeGet<String>();
         if (format != "int8" && format != "bf16")
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER,
-                "Codec Quantized('mrl', ...): format must be 'int8' or 'bf16', got '{}'", format);
-        params.method = "mrl_" + format;
+                "Codec Quantized('prefix', ...): format must be 'int8' or 'bf16', got '{}'", format);
+        params.method = "prefix_" + format;
 
         if (const std::string error = VectorQuantizer::validateParams(params.method, params.dimensions, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
@@ -128,13 +128,13 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
         params.m = m_literal->value.safeGet<UInt64>();
     }
 
-    /// The trained 'pq' (Product Quantization) method takes (dimensions, nbits, m); the data-independent methods take
-    /// (dimensions[, bits]).
-    if (params.method == "pq")
+    /// The trained 'product' (Product Quantization) method takes (dimensions, nbits, m); the data-independent methods
+    /// take (dimensions[, bits]).
+    if (params.method == "product")
     {
         if (arguments->children.size() != 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
-                "Codec Quantized method 'pq' requires Quantized('pq', dimensions, nbits, m)");
+                "Codec Quantized method 'product' requires Quantized('product', dimensions, nbits, m)");
         if (const auto error = ProductQuantizer::validateParams(params.dimensions, params.m, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
     }
@@ -142,7 +142,7 @@ QuantizedCodecParams parseQuantizeCodecArguments(const ASTPtr & arguments)
     {
         if (arguments->children.size() == 4)
             throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_CODEC_TYPE,
-                "Codec Quantized: the 4th parameter (m) is only valid for the 'pq' method");
+                "Codec Quantized: the 4th parameter (m) is only valid for the 'product' method");
         if (const std::string error = VectorQuantizer::validateParams(params.method, params.dimensions, params.bits); !error.empty())
             throw Exception(ErrorCodes::ILLEGAL_CODEC_PARAMETER, "Codec Quantized: {}", error);
     }

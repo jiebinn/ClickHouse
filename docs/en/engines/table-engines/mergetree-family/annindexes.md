@@ -662,8 +662,8 @@ Each method is a different point on the size / accuracy / metric trade-off. The 
 - `Quantized('rabitq', dimensions)` — one sign bit per coordinate plus an unbiased cosine-correction factor (`dimensions/8 + 4` bytes). A small, `popcount`-cheap, strong default. `cosineDistance` only.
 - `Quantized('turboquant', dimensions)` — two bits per coordinate (a 1-bit MSE code and a 1-bit residual code) for higher-fidelity candidates (`dimensions/4 + 4` bytes). `cosineDistance` only.
 - `Quantized('int8', dimensions)` — one `Int8` code per coordinate plus the vector norm (`dimensions + 4` bytes); the largest but most faithful flat code. Supports `L2Distance` and `cosineDistance`.
-- `Quantized('mrl', dimensions, leading_dimensions, 'int8'|'bf16')` — Matryoshka: keeps only the `leading_dimensions` leading coordinates, as `Int8` (with a per-vector scale) or `BFloat16`. Tiny codes for embeddings trained with Matryoshka Representation Learning. Supports `L2Distance` and `cosineDistance`.
-- `Quantized('pq', dimensions, nbits, m)` — Product Quantization: a per-part codebook trained with k-means; each vector becomes `m` codes of `nbits` bits (so `dimensions` must be a multiple of `m`). The most compact option and highest recall per byte, at the cost of a training step during insert. Supports `L2Distance` and `cosineDistance`.
+- `Quantized('prefix', dimensions, leading_dimensions, 'int8'|'bf16')` — Matryoshka: keeps only the `leading_dimensions` leading coordinates, as `Int8` (with a per-vector scale) or `BFloat16`. Tiny codes for embeddings trained with Matryoshka Representation Learning. Supports `L2Distance` and `cosineDistance`.
+- `Quantized('product', dimensions, nbits, m)` — Product Quantization: a per-part codebook trained with k-means; each vector becomes `m` codes of `nbits` bits (so `dimensions` must be a multiple of `m`). The most compact option and highest recall per byte, at the cost of a training step during insert. Supports `L2Distance` and `cosineDistance`.
 
 `rabitq` and `turboquant` require `dimensions` to be a multiple of 8.
 
@@ -682,7 +682,7 @@ SETTINGS vector_search_use_quantized_codes = 1;
 
 With `vector_search_use_quantized_codes = 1`, the optimizer rewrites the query into the two-stage plan automatically: it scans the quantized codes to collect a shortlist, then rescores the shortlist against the full-precision `vec`.
 The setting is off by default, so without it the same query runs as a plain exact scan — the codec never changes results, it only offers a faster path when you opt in.
-Use a distance function the chosen method supports: `cosineDistance` for all methods, `L2Distance` additionally for `int8`, `mrl` and `pq`.
+Use a distance function the chosen method supports: `cosineDistance` for all methods, `L2Distance` additionally for `int8`, `prefix` and `product`.
 
 #### Settings {#quantized-codecs-settings}
 
