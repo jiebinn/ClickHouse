@@ -1213,11 +1213,18 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
     }
 
     bool implementation_buffer_can_be_reused = false;
+    /// Number of in-flight exceptions when this scope is entered. Comparing the count at scope exit
+    /// against this baseline tells us whether *this* scope is unwinding because of a new exception, as
+    /// opposed to merely running while some outer exception is being unwound. The latter happens, for
+    /// example, when a read here is triggered from a destructor during rollback (e.g.
+    /// `MergeTreeData::Transaction::~Transaction`): a bare `std::uncaught_exceptions() > 0` would then
+    /// misfire and wrongly treat a successful read as a failure.
+    const auto uncaught_exceptions_on_entry = std::uncaught_exceptions();
     SCOPE_EXIT({
         try
         {
             /// Save state of current file segment before it is completed. But we'll use it only if exception happened.
-            if (std::uncaught_exceptions() > 0)
+            if (std::uncaught_exceptions() > uncaught_exceptions_on_entry)
                 nextimpl_step_log_info = getInfoForLog();
 
             chassert(!internal_buffer.empty());
@@ -1229,7 +1236,7 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
             auto & file_segment = info.file_segments->front();
 
             const bool could_be_downloader
-                = !state || state->read_type != ReadType::CACHED || std::uncaught_exceptions() > 0;
+                = !state || state->read_type != ReadType::CACHED || std::uncaught_exceptions() > uncaught_exceptions_on_entry;
 
             if (could_be_downloader && file_segment.isDownloader())
             {
@@ -1301,6 +1308,11 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
     state->buf->set(internal_buffer.begin(), internal_buffer.size());
     size_t size = 0;
     {
+        /// See the note on `uncaught_exceptions_on_entry` above: this frame may be running while an
+        /// outer exception is being unwound (e.g. a cached read issued from a destructor during
+        /// rollback). Detect whether `readFromFileSegment` itself throws by comparing the in-flight
+        /// exception count against the value captured just before the call, not against zero.
+        const auto uncaught_exceptions_before_read = std::uncaught_exceptions();
         SCOPE_EXIT({
             /// On normal completion we still exclusively own `state->buf`: either we are the segment's
             /// downloader for a `REMOTE_FS_READ_AND_PUT_IN_CACHE` read (downloader ownership is only
@@ -1317,7 +1329,7 @@ bool CachedOnDiskReadBufferFromFile::nextImplStep()
             /// `getRemoteFileReader`) and start mutating it. Touching it here (`set`) — or reading it in
             /// the `getInfoForLog` diagnostics of the enclosing `SCOPE_EXIT` — would then be a data
             /// race, so on the exception path drop our reference to it instead.
-            if (std::uncaught_exceptions() > 0)
+            if (std::uncaught_exceptions() > uncaught_exceptions_before_read)
                 state.reset();
             else
                 state->buf->set(nullptr, 0);
@@ -1710,6 +1722,10 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
     ReadFromFileSegmentStatePtr current_state;
     auto object_size = const_cast<CachedOnDiskReadBufferFromFile &>(*this).getFileSize();
 
+    /// See the note in `nextImplStep`: distinguish an exception thrown by this scope from an outer
+    /// exception being unwound through it (e.g. a cached read issued from a destructor during
+    /// rollback) by comparing against the count captured on entry, not against zero.
+    const auto uncaught_exceptions_on_entry = std::uncaught_exceptions();
     SCOPE_EXIT({
         if (current_info.file_segments->empty())
             return;
@@ -1724,7 +1740,7 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
             /// releases us as downloader on the `PARTIALLY_DOWNLOADED_NO_CONTINUATION` path, a bypass waiter
             /// could `extractRemoteFileReader` that still-borrowing reader and race on (and outlive) the
             /// stale `to` buffer. Detaching it here keeps the reader exclusively ours until it is dropped.
-            if (std::uncaught_exceptions() > 0 || !implementation_buffer_can_be_reused)
+            if (std::uncaught_exceptions() > uncaught_exceptions_on_entry || !implementation_buffer_can_be_reused)
                 file_segment.resetRemoteFileReader();
 
             file_segment.completePartAndResetDownloader();
@@ -1777,12 +1793,16 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
 
         [[maybe_unused]] size_t remaining_size_in_file_segment = file_segment.range().right - offset + 1;
         current_state->buf->set(to + read_bytes, n - read_bytes);
+        /// See the note in `nextImplStep`: detect an exception thrown by `readFromFileSegment` itself
+        /// (as opposed to an outer exception being unwound through this frame) by comparing against the
+        /// count captured just before the call, not against zero.
+        const auto uncaught_exceptions_before_read = std::uncaught_exceptions();
         SCOPE_EXIT({
             /// See the matching comment in `nextImplStep`: if `readFromFileSegment` threw, it may have
             /// released downloader ownership of the shared remote reader while `current_state->buf`
             /// still points at it, so another thread may now own and mutate it. Only un-borrow our
             /// buffer on normal completion, when we still exclusively own the reader.
-            if (std::uncaught_exceptions() == 0)
+            if (std::uncaught_exceptions() <= uncaught_exceptions_before_read)
                 current_state->buf->set(nullptr, 0);
         });
 
