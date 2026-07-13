@@ -30,14 +30,18 @@ $CLICKHOUSE_CLIENT -q "
     ) SETTINGS mutations_sync = 0"
 
 # Wait until the mutation has actually been running for a couple of seconds,
-# i.e. it is inside the set-building pipeline and not merely queued.
+# i.e. it is inside the set-building pipeline and not merely queued. Fail hard on
+# timeout: if the mutation never reaches this running `system.merges` state, then
+# `KILL MUTATION` below would cancel a still-queued mutation and the final `0` /
+# `100` output would match the reference without ever exercising the in-flight
+# `CompletedPipelineExecutor` cancellation path this test is meant to cover.
 i=0
 while [ "$($CLICKHOUSE_CLIENT -q "SELECT count() FROM system.merges WHERE database = currentDatabase() AND table = 't_cancel_in_set_build' AND is_mutation AND elapsed > 2")" -ne 1 ]; do
     sleep 0.3
     i=$((i + 1))
     if [ "$i" -gt 200 ]; then
-        echo "Mutation did not start in time"
-        break
+        echo "Mutation did not start in time" >&2
+        exit 1
     fi
 done
 
