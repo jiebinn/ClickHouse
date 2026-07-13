@@ -1082,7 +1082,7 @@ document.getElementById('mass-editor-textarea').addEventListener('input', e => {
 
 let metrics_editor_active = false;
 const metric_column_regex = /\b(?:ProfileEvent|CurrentMetric)_[A-Za-z0-9_]+\b/;
-const async_metric_condition_regex = /\bmetric\s*=\s*'[^']+'/;
+const async_metric_condition_regex = /\bmetric\s*(?:=|LIKE)\s*'[^']+'/;
 
 /// Extracts an ordered list of {kind, name} from a pasted text, ignoring unrecognized lines. Accepted lines:
 ///     extern const Event RejectedInserts;
@@ -1158,7 +1158,7 @@ function buildQueryFromTemplate(template, kind, name) {
     if (kind == 'AsyncMetric') {
         const token = template.match(async_metric_condition_regex)[0];
         const escaped_name = name.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
-        return template.replaceAll(token, `metric = '${escaped_name}'`);
+        return template.replaceAll(token, `metric LIKE '${escaped_name}'`);
     }
 
     const token = template.match(metric_column_regex)[0];
