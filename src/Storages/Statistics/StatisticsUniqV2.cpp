@@ -85,12 +85,7 @@ void StatisticsUniqV2::deserialize(ReadBuffer & buf, StatisticsFileVersion /*ver
     bool is_null = false;
     readBinary(is_null, buf);
 
-    /// `is_null` is whether the state was built through the `Null` wrapper (i.e. a `Nullable` column).
-    /// The format (V4) stores the column type name and skips statistics whose stored type differs from the
-    /// current one, so a `MODIFY COLUMN` flipping nullability rebuilds the statistic before we get here.
-    /// If the flags disagree anyway, the serialized layout does not match `collector` (e.g. an old non-null
-    /// `uniqCombined64` state vs the current nullable wrapper whose nested state lives past a flag prefix).
-    /// Reject it rather than corrupt it: the caller catches this and rebuilds the statistic.
+    /// Sanity check: If the nullable metadata disagrees, abort the load
     const bool collector_is_nullable = collector->getNestedFunction() != nullptr;
     if (is_null != collector_is_nullable)
         throw Exception(
