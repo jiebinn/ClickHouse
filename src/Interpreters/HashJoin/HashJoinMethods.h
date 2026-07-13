@@ -151,8 +151,6 @@ private:
         typename KeyGetter,
         typename Map,
         bool need_filter,
-        bool check_null_map,
-        JoinCommon::JoinMask::Kind join_mask_kind,
         typename AddedColumns,
         typename Selector>
     static size_t joinRightColumns(
@@ -166,33 +164,9 @@ private:
         typename KeyGetter,
         typename Map,
         bool need_filter,
-        bool check_null_map,
-        typename AddedColumns,
-        typename Selector>
-    static size_t joinRightColumnsSwitchJoinMaskKind(
-        std::vector<KeyGetter> && key_getter_vector,
-        const std::vector<const Map *> & mapv,
-        AddedColumns & added_columns,
-        JoinStuff::JoinUsedFlags & used_flags,
-        const Selector & selector);
-
-    template <
-        typename KeyGetter,
-        typename Map,
-        bool need_filter,
-        bool check_null_map,
-        JoinCommon::JoinMask::Kind join_mask_kind,
         typename AddedColumns,
         typename Selector>
     static size_t joinRightColumns(
-        KeyGetter & key_getter,
-        const Map * map,
-        AddedColumns & added_columns,
-        JoinStuff::JoinUsedFlags & used_flags,
-        const Selector & selector);
-
-    template <typename KeyGetter, typename Map, bool need_filter, bool check_null_map, typename AddedColumns, typename Selector>
-    static size_t joinRightColumnsSwitchJoinMaskKind(
         KeyGetter & key_getter,
         const Map * map,
         AddedColumns & added_columns,
