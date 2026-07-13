@@ -383,13 +383,6 @@ class JobConfigs:
             timeout=4 * 3600,
         ),
     )
-    cfi_stateless_jobs = common_ft_job_config.parametrize(
-        Job.ParamSet(
-            parameter="amd_cfi",
-            runs_on=RunnerLabels.FUNC_TESTER_AMD,
-            requires=[ArtifactNames.CH_AMD_CFI],
-        ),
-    )
     cfi_integration_jobs = common_integration_test_job_config.parametrize(
         *[
             Job.ParamSet(
