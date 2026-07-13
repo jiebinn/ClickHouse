@@ -353,6 +353,10 @@ static IMergeTreeDataPart::Checksums checkDataPart(
         }
     }
 
+    /// Keep the metadata snapshot alive for the whole loop: `projections_description` references into it.
+    auto metadata_snapshot = data_part->storage.getInMemoryMetadataPtr(nullptr, /*bypass_metadata_cache=*/true);
+    const auto & projections_description = metadata_snapshot->projections;
+
     std::string broken_projections_message;
     for (const auto & [name, projection] : data_part->getProjectionParts())
     {
@@ -365,9 +369,18 @@ static IMergeTreeDataPart::Checksums checkDataPart(
         try
         {
             bool noop = false;
+
+            /// A projection part that failed to load before its columns were set (e.g. because of a
+            /// corrupted serialization.json) has an empty column list. Checking against it would
+            /// report a misleading "columns don't match" error and hide the real corruption, so
+            /// take the expected columns from the projection metadata in that case.
+            NamesAndTypesList projection_columns = projection->getColumns();
+            if (projection_columns.empty() && projections_description.has(name))
+                projection_columns = projections_description.get(name).metadata->getColumns().getAll();
+
             projection_checksums = checkDataPart(
                 projection, *data_part_storage.getProjection(projection_file),
-                projection->getColumns(), projection->getType(),
+                projection_columns, projection->getType(),
                 projection->getFileNamesWithoutChecksums(),
                 read_settings, require_checksums, is_cancelled, noop, /* throw_on_broken_projection */false);
         }

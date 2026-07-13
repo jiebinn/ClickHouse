@@ -1,0 +1,3 @@
+part check passed: 0
+reports the misleading columns mismatch: 0
+reports the real corruption in serialization.json: 1
