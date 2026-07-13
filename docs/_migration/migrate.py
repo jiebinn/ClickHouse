@@ -735,14 +735,28 @@ def _override_clickstack_collector_agent_prompt(text: str) -> str:
     """Point the ClickStack collector prompt at the official agent skill.
 
     The upstream Docusaurus page still uses the docs-hosted ``SKILL.md`` URL.
-    The canonical skill now lives in ``ClickHouse/agent-skills`` and is
-    installed through the Skills CLI.
+    The canonical skill now lives in ``ClickHouse/agent-skills``. Installation
+    is a prerequisite; the copied prompt must then invoke the collector skill.
     """
     text = re.sub(
-        r'prompt="[^"]*clickstack-otel-collector/SKILL\.md"',
-        'prompt="npx skills add clickhouse/agent-skills"',
+        r'prompt="(?:[^"]*clickstack-otel-collector/SKILL\.md|'
+        r'npx skills add clickhouse/agent-skills)"',
+        (
+            'prompt="Use the clickstack-otel-collector skill to wire an '
+            'OpenTelemetry collector into my Managed ClickStack service."'
+        ),
         text,
     )
+    if "npx skills add clickhouse/agent-skills" not in text:
+        text = text.replace(
+            "<AgentPrompt",
+            "Install the official ClickHouse agent skills before using the setup assistant:\n\n"
+            "```bash\n"
+            "npx skills add clickhouse/agent-skills\n"
+            "```\n\n"
+            "<AgentPrompt",
+            1,
+        )
     if "repositoryUrl=" not in text:
         text = re.sub(
             r'(^\s*description="[^"]*"\s*$)',

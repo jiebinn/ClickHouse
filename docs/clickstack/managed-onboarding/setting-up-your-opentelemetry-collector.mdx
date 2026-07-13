@@ -16,8 +16,14 @@ import { AgentPrompt } from '/snippets/components/AgentPrompt/AgentPrompt.jsx';
 
 This guide walks you through deploying an OpenTelemetry collector against an existing Managed ClickStack service, or adapting your existing collector, before verifying that data is flowing through.
 
+Install the official ClickHouse agent skills before using the setup assistant:
+
+```bash
+npx skills add clickhouse/agent-skills
+```
+
 <AgentPrompt
-  prompt="npx skills add clickhouse/agent-skills"
+  prompt="Use the clickstack-otel-collector skill to wire an OpenTelemetry collector into my Managed ClickStack service."
   description="Your agent will set up the ClickStack OpenTelemetry collector for you. Works with Claude Code, Cursor, Codex, and other coding agents."
   repositoryUrl="https://github.com/ClickHouse/agent-skills"
   outline={[
