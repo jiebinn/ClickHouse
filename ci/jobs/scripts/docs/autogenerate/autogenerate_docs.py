@@ -537,13 +537,36 @@ def main(argv=None):
         migrate = import_migrate(docs_dir)
         lk, file_map = build_file_map(migrate, slug_map)
 
-    all_generators = (ALL_GENERATORS + aggregate_generators(docs_dir)
-                      + table_engine_generators(docs_dir, file_map)
-                      + database_engine_generators(docs_dir, file_map)
-                      + data_type_generators(docs_dir, file_map)
-                      + format_generators(docs_dir, file_map)
-                      + table_function_generators(docs_dir, file_map)
-                      + window_function_generators(docs_dir, file_map))
+    # These families discover their pages by iterating the slug map (file_map),
+    # which is only built with --remap-legacy. Without it they find nothing, so a
+    # --no-remap-legacy run must fail fast for them rather than silently reporting
+    # success while skipping whole categories. Each entry: (name prefix, builder).
+    remap_only_families = [
+        ("table-engine:", table_engine_generators),
+        ("database-engine:", database_engine_generators),
+        ("data-type:", data_type_generators),
+        ("format:", format_generators),
+        ("table-function:", table_function_generators),
+        ("window-function:", window_function_generators),
+    ]
+
+    all_generators = ALL_GENERATORS + aggregate_generators(docs_dir)
+    for prefix, builder in remap_only_families:
+        if args.remap:
+            all_generators += builder(docs_dir, file_map)
+            continue
+        # --no-remap-legacy: these pages cannot be discovered. Fail fast if the
+        # run would include this family (a full run, or an --only that targets it)
+        # instead of quietly generating nothing.
+        in_scope = not args.only or args.only in prefix or prefix in args.only
+        if in_scope:
+            raise SystemExit(
+                f"error: --no-remap-legacy cannot generate the "
+                f"'{prefix.rstrip(':')}' pages -- they are discovered through the "
+                f"slug map (_migration/slug-map.csv), which is only available with "
+                f"--remap-legacy (the default). Re-run with --remap-legacy, or use "
+                f"--only to restrict the run to families that do not need it "
+                f"(settings, functions, aggregate).")
     generators = [g for g in all_generators if not args.only or args.only in g["name"]]
 
     drift = 0
