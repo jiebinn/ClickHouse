@@ -336,7 +336,15 @@ MetadataGenerator::NextMetadataResult MetadataGenerator::generateManifestOnlySna
     summary->set(Iceberg::f_added_files_size, "0");
     summary->set(Iceberg::f_changed_partition_count, "0");
 
-    setSnapshotTotals(summary, parent_snapshot, 0, 0, 0, 0, 0, 0);
+    setSnapshotTotals(
+        summary,
+        parent_snapshot,
+        /*added_records=*/0,
+        /*added_files_size=*/0,
+        /*added_data_files=*/0,
+        /*added_delete_files=*/0,
+        /*added_position_deletes=*/0,
+        /*added_equality_deletes=*/0);
     new_snapshot->set(Iceberg::f_summary, summary);
 
     new_snapshot->set(Iceberg::f_schema_id, metadata_object->getValue<Int32>(Iceberg::f_current_schema_id));

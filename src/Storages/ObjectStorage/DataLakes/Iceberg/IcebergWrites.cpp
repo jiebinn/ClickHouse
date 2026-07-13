@@ -420,7 +420,7 @@ void generateManifestFile(
             = avro::GenericDatum(data_file_formats.empty() ? format : data_file_formats[file_idx]);
 
         /// Writes (field-id, value) pairs into the union-typed `field_name` array of the data_file record.
-        [[maybe_unused]] auto set_fields = [&]<typename K, typename T, typename U>(
+        auto set_fields = [&]<typename K, typename T, typename U>(
                               const std::vector<std::pair<K, T>> & statistics, const std::string & field_name, U && dump_function)
         {
             auto & data_file_record = data_file.field(field_name);
@@ -575,24 +575,19 @@ void generateManifestList(
     const std::vector<Int64> & entry_partition_spec_ids,
     const std::vector<std::vector<std::pair<Field, DataTypePtr>>> & entry_partition_summaries)
 {
-    if (!per_entry_content_types.empty() && per_entry_content_types.size() != manifest_entry_names.size())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "per_entry_content_types size does not match manifest entries");
-    if (!entry_partition_spec_ids.empty() && entry_partition_spec_ids.size() != manifest_entry_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "entry_partition_spec_ids size ({}) does not match number of manifest entries ({})",
-            entry_partition_spec_ids.size(), manifest_entry_names.size());
-    if (!entry_partition_summaries.empty() && entry_partition_summaries.size() != manifest_entry_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "entry_partition_summaries size ({}) does not match number of manifest entries ({})",
-            entry_partition_summaries.size(), manifest_entry_names.size());
+    chassert(
+        per_entry_content_types.empty() || per_entry_content_types.size() == manifest_entry_names.size(),
+        "per_entry_content_types size does not match number of manifest entries");
+    chassert(
+        entry_partition_spec_ids.empty() || entry_partition_spec_ids.size() == manifest_entry_names.size(),
+        "entry_partition_spec_ids size does not match number of manifest entries");
+    chassert(
+        entry_partition_summaries.empty() || entry_partition_summaries.size() == manifest_entry_names.size(),
+        "entry_partition_summaries size does not match number of manifest entries");
     /// When provided, existing_entry_counts marks a manifest-only rewrite and supplies per-entry counts.
-    if (!existing_entry_counts.empty() && existing_entry_counts.size() != manifest_entry_names.size())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "existing_entry_counts size ({}) does not match number of manifest entries ({})",
-            existing_entry_counts.size(), manifest_entry_names.size());
+    chassert(
+        existing_entry_counts.empty() || existing_entry_counts.size() == manifest_entry_names.size(),
+        "existing_entry_counts size does not match number of manifest entries");
     const bool manifest_only_rewrite = !existing_entry_counts.empty();
 
     Int32 version = metadata->getValue<Int32>(Iceberg::f_format_version);

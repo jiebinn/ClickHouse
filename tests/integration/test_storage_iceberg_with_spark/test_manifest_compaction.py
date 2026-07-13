@@ -759,6 +759,27 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
     original_snapshot_ids = get_all_snapshot_ids(table_path)
     assert original_snapshot_ids, "expected the pre-compaction metadata to record snapshots"
 
+    def data_file_basename(path):
+        return path.rstrip("/").split("/")[-1]
+
+    # Resolved (inheritance-applied) data sequence_number per data file, captured BEFORE compaction and
+    # keyed by the data file's basename. Reading the manifests raw would return null here: Spark writes
+    # ADDED entries without an explicit sequence number and Iceberg inherits it from the manifest list at
+    # read time, so system.iceberg_files (which resolves that inheritance) is the reliable source.
+    sequence_number_before = {}
+    rows_before = instance.query(
+        f"""
+        SELECT file_path, sequence_number
+        FROM system.iceberg_files
+        WHERE database = currentDatabase() AND table = '{TABLE_NAME}' AND content = 'DATA'
+        FORMAT TSV
+        """
+    ).strip()
+    for line in rows_before.splitlines():
+        file_path, sequence_number = line.split("\t")
+        sequence_number_before[data_file_basename(file_path)] = sequence_number
+    assert sequence_number_before, "expected to read pre-compaction data-file sequence numbers"
+
     instance.query(
         f"OPTIMIZE TABLE {TABLE_NAME} MANIFEST",
         settings={
@@ -779,6 +800,7 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
                 snapshot_id,
                 sequence_number,
                 file_sequence_number,
+                tupleElement(data_file, 'file_path') AS file_path,
                 tupleElement(data_file, 'content') AS content
             FROM file('{manifest}', Avro)
             FORMAT TSV
@@ -787,7 +809,7 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
         if not result:
             continue
         for line in result.splitlines():
-            status, snapshot_id, sequence_number, file_sequence_number, content = line.split("\t")
+            status, snapshot_id, sequence_number, file_sequence_number, file_path, content = line.split("\t")
             if int(content) != 0:  # data files only
                 continue
             # A metadata-only rewrite carries files forward: entries are EXISTING (status 0), not
@@ -803,6 +825,22 @@ def test_optimize_manifest_files_preserves_entry_lineage(started_cluster_iceberg
             )
             assert sequence_number != "\\N", "sequence_number must be preserved (non-null)"
             assert file_sequence_number != "\\N", "file_sequence_number must be preserved (non-null)"
+            # The rewrite must carry each file's original sequence numbers forward, not re-stamp them with
+            # the new (replace) snapshot's sequence number. Compare against the resolved pre-compaction
+            # values captured above: both the data sequence_number and the file_sequence_number, which for
+            # these plain-inserted files equal the file's original data sequence number.
+            key = data_file_basename(file_path)
+            assert key in sequence_number_before, (
+                f"carried-forward file {file_path} was not present before compaction"
+            )
+            assert sequence_number == sequence_number_before[key], (
+                f"data sequence_number for {file_path} changed from "
+                f"{sequence_number_before[key]} to {sequence_number}"
+            )
+            assert file_sequence_number == sequence_number_before[key], (
+                f"file_sequence_number for {file_path} changed from "
+                f"{sequence_number_before[key]} to {file_sequence_number}"
+            )
             entries_checked += 1
 
     assert entries_checked > 0, "no data-file entries found in consolidated manifest(s)"
