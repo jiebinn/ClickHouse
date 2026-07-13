@@ -2409,7 +2409,7 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 
 - `Uniq_V2`
 
-    Similar to `uniq` but internally uses a three-phase cardinality estimator (exact small-value set → hash set → HyperLogLog) equivalent to `uniqCombined64(12)`. Provides a distinct-value estimate for numeric types, `String`, and `FixedString` (including `Nullable` and `LowCardinality` wrappers) and consumes less memory and can be built faster.
+    Similar to `Uniq` but internally uses [`uniqCombined`](/sql-reference/aggregate-functions/reference/uniqcombined)`(12)`. Consumes less memory and can be build faster.
 
     Syntax: `Uniq_V2`
 
@@ -2427,7 +2427,7 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 | MinMax        | ✔                                                  | ✗                     |
 | TDigest       | ✔                                                  | ✗                     |
 | Uniq          | ✔                                                  | ✔                     |
-| Uniq_v2  | ✔                                                  | ✔                     |
+| Uniq_v2       | ✔                                                  | ✔                     |
 
 ### Supported operations {#supported-operations}
 
@@ -2437,7 +2437,7 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 | MinMax        | ✗                     | ✔                              |
 | TDigest       | ✗                     | ✔                              |
 | Uniq          | ✔                     | ✗                              |
-| Uniq_v2  | ✔                     | ✗                              |
+| Uniq_v2       | ✔                     | ✗                              |
 
 ## Column-level settings {#column-level-settings}
 
