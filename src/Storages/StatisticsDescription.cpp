@@ -60,7 +60,7 @@ StatisticsType stringToStatisticsType(String type)
     if (type == "uniq_v2")
         return StatisticsType::UniqV2;
 
-    throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown statistics type: {}. Supported statistics types are 'basic', 'countmin', 'minmax', 'tdigest', 'uniq' and 'uniq_v2'.", type);
+    throw Exception(ErrorCodes::INCORRECT_QUERY, "Unknown statistics type: {}. Supported statistics types are 'basic', 'countmin', 'minmax', 'tdigest', 'uniq' and 'uniq_v2'", type);
 }
 
 String statisticsTypeToString(StatisticsType type)
@@ -80,7 +80,7 @@ String statisticsTypeToString(StatisticsType type)
         case StatisticsType::UniqV2:
             return "uniq_v2";
         default:
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown statistics type: {}. Supported statistics types are 'basic', 'countmin', 'minmax', 'tdigest', 'uniq' and 'uniq_v2'.", type);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown statistics type: {}. Supported statistics types are 'basic', 'countmin', 'minmax', 'tdigest', 'uniq' and 'uniq_v2'", type);
     }
 }
 
