@@ -63,6 +63,11 @@ SELECT arraySort(arrayMap(x -> toUInt8(255 - x), range(256))) = arrayMap(x -> to
        arrayReverseSort(arrayMap(x -> toUInt8(x), range(256))) = arrayMap(x -> toUInt8(255 - x), range(256));
 SELECT arraySort(arrayMap(x -> toInt8(255 - x), range(256))) = arrayMap(x -> toInt8(x - 128), range(256)),
        arrayReverseSort(arrayMap(x -> toInt8(255 - x), range(256))) = arrayMap(x -> toInt8(127 - x), range(256));
+-- Already sorted long inputs take the sortedness pre-checks of `::sort` instead of the counting sort.
+SELECT arraySort(arrayMap(x -> toUInt8(x), range(256))) = arrayMap(x -> toUInt8(x), range(256)),
+       arrayReverseSort(arrayMap(x -> toUInt8(255 - x), range(256))) = arrayMap(x -> toUInt8(255 - x), range(256));
+SELECT arraySort(arrayMap(x -> toUInt8(intDiv(x, 2)), range(256))) = arrayMap(x -> toUInt8(intDiv(x, 2)), range(256)),
+       arrayReverseSort(arrayMap(x -> toUInt8(intDiv(255 - x, 2)), range(256))) = arrayMap(x -> toUInt8(intDiv(255 - x, 2)), range(256));
 
 SELECT 'consistency with the generic comparator path';
 WITH arrayMap(x -> toUInt8(cityHash64(number, x)), range(number % 33)) AS a
@@ -149,12 +154,12 @@ WITH arrayMap(x -> if(cityHash64(number, x) % 5 = 0, NULL, toInt32(cityHash64(nu
 SELECT 'Nullable(Int32)', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
      + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
 FROM numbers(300);
--- Sizes 200..349 straddle the counting sort threshold of 256 for one-byte types.
-WITH arrayMap(x -> toUInt8(cityHash64(number, x)), range(200 + number % 150)) AS a
+-- Sizes 40..339 straddle the counting sort threshold of 64 for one-byte types.
+WITH arrayMap(x -> toUInt8(cityHash64(number, x)), range(40 + number % 300)) AS a
 SELECT 'UInt8 long', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
      + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
 FROM numbers(100);
-WITH arrayMap(x -> toInt8(cityHash64(number, x)), range(200 + number % 150)) AS a
+WITH arrayMap(x -> toInt8(cityHash64(number, x)), range(40 + number % 300)) AS a
 SELECT 'Int8 long', sum(toString(arraySort(a)) != toString(arrayMap(t -> t.1, arraySort(arrayMap(x -> tuple(x), a)))))
      + sum(toString(arrayReverseSort(a)) != toString(arrayMap(t -> t.1, arrayReverseSort(arrayMap(x -> tuple(x), a)))))
 FROM numbers(100);

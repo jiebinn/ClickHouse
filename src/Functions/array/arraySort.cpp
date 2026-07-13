@@ -9,8 +9,6 @@
 #include <Common/iota.h>
 #include <base/extended_types.h>
 
-#include <limits>
-
 namespace DB
 {
 
@@ -87,32 +85,6 @@ struct GenericLess
     }
 };
 
-/// Zeroing and scanning the 256 counters amortizes only over longer ranges; below this measured
-/// threshold `::sort` wins on random data.
-constexpr size_t counting_sort_min_size = 256;
-/// The counters are UInt32; on longer ranges they could overflow, so such ranges take `::sort`.
-constexpr size_t counting_sort_max_size = std::numeric_limits<UInt32>::max();
-
-template <bool positive, typename T>
-void countingSort8(T * begin, T * end)
-{
-    /// XOR with the sign mask maps the values of a signed type to their rank as an unsigned bucket index.
-    constexpr UInt8 sign_mask = is_signed_v<T> ? 0x80 : 0;
-
-    UInt32 counts[256] = {};
-    for (T * p = begin; p != end; ++p)
-        ++counts[static_cast<UInt8>(static_cast<UInt8>(*p) ^ sign_mask)];
-
-    T * out = begin;
-    for (size_t i = 0; i < 256; ++i)
-    {
-        size_t bucket = positive ? i : 255 - i;
-        T value = static_cast<T>(static_cast<UInt8>(bucket ^ sign_mask));
-        std::fill_n(out, counts[bucket], value);
-        out += counts[bucket];
-    }
-}
-
 template <bool positive, typename ColumnType>
 ColumnPtr sortNumericValues(const ColumnType & column, const ColumnArray & array)
 {
@@ -147,14 +119,6 @@ ColumnPtr sortNumericValues(const ColumnType & column, const ColumnArray & array
             /// generic path passes to `compareAt`.
             T * nan_begin = std::partition(begin, end, [](T x) { return !isNaN(x); });
             sort_range(begin, nan_begin);
-        }
-        else if constexpr (sizeof(T) == 1)
-        {
-            size_t range_size = end - begin;
-            if (range_size >= counting_sort_min_size && range_size <= counting_sort_max_size)
-                countingSort8<positive>(begin, end);
-            else
-                sort_range(begin, end);
         }
         else
         {

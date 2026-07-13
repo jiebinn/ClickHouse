@@ -43,6 +43,8 @@ decimal types
 counting sort for long one-byte arrays
 1	1
 1	1
+1	1
+1	1
 consistency with the generic comparator path
 UInt8	0
 UInt16	0
