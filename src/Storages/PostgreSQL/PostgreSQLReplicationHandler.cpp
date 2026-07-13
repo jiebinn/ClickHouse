@@ -410,13 +410,16 @@ void PostgreSQLReplicationHandler::assertInitialized() const
 /// existing slot, run an initial sync and reload a snapshot into the already-existing nested tables,
 /// duplicating data. So, on attach, when the schema-aware objects do not exist but the legacy ones do,
 /// switch to the legacy names. The legacy names are schema-blind and therefore shared with a
-/// same-database deployment over the default schema, so the legacy publication is only adopted when
-/// every table it publishes belongs to this engine's schema — otherwise the legacy objects belong to
-/// another engine, and adopting them would make the two consumers cross-talk (the very failure the
-/// schema-aware identity removes). In that case adoption is refused; and since the schema-aware slot is
-/// gone, proceeding under the schema-aware identity would run an initial sync and reload a snapshot into
-/// the already-existing nested tables (duplicating data on disk), so the attach fails closed with an
-/// exception instead of silently re-snapshotting a populated replica.
+/// same-database deployment over the default schema (or another schema targeting the same bare table),
+/// so the existence of the legacy slot alone does not prove the legacy objects belong to this engine —
+/// only the legacy publication's table list carries the schema. The legacy identity is therefore only
+/// adopted when the legacy publication exists and every table it publishes belongs to this engine's
+/// schema. If the legacy publication is missing, empty, or publishes a table from another schema, the
+/// legacy slot is ambiguous or foreign, and adopting it (or returning to proceed under the schema-aware
+/// identity) would either hijack another engine's slot or, since the schema-aware slot is gone, run an
+/// initial sync and reload a snapshot into the already-existing nested tables (duplicating data on disk).
+/// In that case the attach fails closed with an exception instead of silently re-snapshotting a populated
+/// replica or hijacking another engine's replication slot.
 void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::nontransaction & tx)
 {
     if (!is_attach)
@@ -454,33 +457,56 @@ void PostgreSQLReplicationHandler::adoptLegacyReplicationIdentityIfNeeded(pqxx::
             return;
     }
 
-    if (publication_exists(legacy_publication_name))
+    /// The legacy slot and publication names are schema-blind, so the mere existence of the legacy slot
+    /// (Branch A above) does not prove the legacy objects belong to this engine — a same-database
+    /// deployment over the default schema (or another schema targeting the same bare table) owns
+    /// identically-named objects. The only schema-carrying evidence is the legacy publication's table list,
+    /// so the legacy identity is adopted only when the legacy publication exists and every table it
+    /// publishes belongs to this engine's schema. If it is missing, empty, or publishes a table from another
+    /// schema, ownership cannot be proven: the legacy slot is ambiguous or foreign and must be left
+    /// untouched. And since the schema-aware slot is gone, returning here to proceed under the schema-aware
+    /// identity would run an initial sync and reload a snapshot into the already-existing nested tables
+    /// (createNestedIfNeeded is a no-op once they exist), silently duplicating data on disk; while adopting
+    /// the legacy slot regardless would hijack another engine's slot. Fail closed instead: surface the
+    /// identity conflict and let an operator resolve it (createNestedIfNeeded, the initial sync, and any
+    /// re-snapshot never run).
+    String ownership_conflict;
+    if (!publication_exists(legacy_publication_name))
+        ownership_conflict = fmt::format(
+            "the legacy publication {} does not exist, so the schema-blind legacy replication slot cannot be "
+            "proven to belong to this engine's schema '{}'",
+            doubleQuoteString(legacy_publication_name), postgres_schema);
+    else
     {
         pqxx::result result{tx.exec(fmt::format(
             "SELECT DISTINCT schemaname FROM pg_publication_tables WHERE pubname = '{}'", legacy_publication_name))};
+        if (result.empty())
+            ownership_conflict = fmt::format(
+                "the legacy publication {} publishes no tables, so the schema-blind legacy replication slot "
+                "cannot be proven to belong to this engine's schema '{}'",
+                doubleQuoteString(legacy_publication_name), postgres_schema);
         for (const auto & row : result)
         {
             if (row[0].as<std::string>() != postgres_schema)
             {
-                /// The legacy publication belongs to another engine, so it cannot be adopted. But the
-                /// schema-aware slot is gone, so returning here would let startSynchronization() run an
-                /// initial sync and reload a snapshot into the already-existing nested tables
-                /// (createNestedIfNeeded is a no-op once they exist), silently duplicating data on disk and
-                /// turning the attach into a full reload. Fail closed instead: surface the identity conflict
-                /// and let an operator resolve it (createNestedIfNeeded, the initial sync, and any
-                /// re-snapshot never run).
-                throw Exception(
-                    ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR,
-                    "Cannot start MaterializedPostgreSQL replication on attach: the schema-aware replication "
-                    "slot {} does not exist, and the legacy publication {} publishes a table from schema '{}', "
-                    "not this engine's schema '{}', so it belongs to another engine and cannot be adopted. "
-                    "Proceeding would reload the initial snapshot into the existing nested tables and duplicate "
-                    "data, so replication is refused. Resolve the replication-slot/publication conflict on the "
-                    "PostgreSQL side (or recreate this table) and retry.",
-                    replication_slot, doubleQuoteString(legacy_publication_name), row[0].as<std::string>(), postgres_schema);
+                ownership_conflict = fmt::format(
+                    "the legacy publication {} publishes a table from schema '{}', not this engine's schema "
+                    "'{}', so it belongs to another engine",
+                    doubleQuoteString(legacy_publication_name), row[0].as<std::string>(), postgres_schema);
+                break;
             }
         }
     }
+
+    if (!ownership_conflict.empty())
+        throw Exception(
+            ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR,
+            "Cannot start MaterializedPostgreSQL replication on attach: {}, so the legacy replication identity "
+            "cannot be adopted. Proceeding would either reload the initial snapshot into the existing nested "
+            "tables and duplicate data, or consume another engine's replication slot and publication, so "
+            "replication is refused. Resolve the replication-slot/publication conflict on the PostgreSQL side "
+            "(or recreate this table) and retry.",
+            ownership_conflict);
 
     LOG_INFO(
         log,

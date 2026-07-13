@@ -2690,6 +2690,103 @@ def test_legacy_identity_not_adopted_for_foreign_publication(started_cluster):
     pg_manager.drop_materialized_db(mat_schema_db)
 
 
+def test_legacy_identity_not_adopted_when_publication_missing(started_cluster):
+    # Fail-close half of the legacy-identity adoption, publication-missing case. The legacy slot name is
+    # schema-blind, so the mere existence of a legacy slot does not prove the legacy objects belong to this
+    # engine — only the legacy publication's table list carries the schema. If, on attach, the schema-aware
+    # slot is gone and a schema-blind legacy slot survives but its legacy publication is missing (e.g.
+    # dropped on the PostgreSQL side, or the slot is an orphan left by a different engine over the same
+    # database), ownership cannot be proven, so the legacy slot must NOT be adopted. Adopting it would hijack
+    # a possibly-foreign slot; proceeding under the schema-aware identity would re-run the initial sync and
+    # reload a snapshot into the already-existing nested table, duplicating data. So the attach fails closed
+    # with an exception and the schema-aware slot is NOT recreated. Without the ownership requirement this
+    # branch would skip the schema check entirely (the publication it reads is absent), adopt the orphaned
+    # legacy slot, and recreate the legacy publication for this engine's schema.
+    cursor = pg_manager.get_db_cursor()
+    schema_name = "pm_schema"
+    table = "pm_table"
+    pg_db = "pm_src"
+    mat_schema_db = "mat_pm_schema"
+
+    create_postgres_schema(cursor, schema_name)
+    pg_manager.create_clickhouse_postgres_db(
+        database_name=pg_db,
+        schema_name=schema_name,
+        postgres_database="postgres_database",
+    )
+    create_postgres_table_with_schema(cursor, schema_name, table)
+    instance.query(
+        f"INSERT INTO {pg_db}.{table} SELECT number, number + 1000 from numbers(0, 30)"
+    )
+
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        materialized_database=mat_schema_db,
+        postgres_database="postgres_database",
+        settings=[f"materialized_postgresql_schema = '{schema_name}'"],
+    )
+    check_tables_are_synchronized(
+        instance, table, postgres_database=pg_db, materialized_database=mat_schema_db
+    )
+
+    # The freshly created schema-scoped database uses the schema-aware identity.
+    cursor.execute(
+        "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+    )
+    slots = [row[0] for row in cursor.fetchall()]
+    assert len(slots) == 1, f"expected exactly one slot, got {slots}"
+    schema_aware_slot = slots[0]
+    legacy_slot = "postgres_database"
+    legacy_publication = "postgres_database_ch_publication"
+    assert schema_aware_slot != legacy_slot
+
+    # While the server is down, the schema-aware slot is lost and a schema-blind legacy slot appears with NO
+    # matching legacy publication — an orphan that carries no ownership evidence.
+    instance.stop_clickhouse()
+    cursor.execute(f"SELECT pg_drop_replication_slot('{schema_aware_slot}')")
+    cursor.execute(
+        f"SELECT pg_create_logical_replication_slot('{legacy_slot}', 'pgoutput')"
+    )
+    cursor.execute(f"SELECT 1 FROM pg_publication WHERE pubname = '{legacy_publication}'")
+    assert not cursor.fetchall(), "the legacy publication must be absent for this test"
+    instance.start_clickhouse()
+
+    # The attach fails closed: the legacy slot cannot be proven to belong to this engine (its publication is
+    # missing), so it is not adopted and the initial sync does not run. The error surfaces in the log.
+    assert_logs_contain_with_retry(
+        instance, "cannot be proven to belong to this engine", retry_count=120, sleep_time=1
+    )
+
+    # The schema-aware slot is NOT recreated. Recreating it is the only thing that runs the initial sync (and
+    # re-snapshots the existing nested table), so its continued absence proves no re-snapshot happened. The
+    # orphaned legacy slot is left untouched, and no legacy publication is created for this engine's schema.
+    # Give the retrying startup task time to prove the slots stay as they were.
+    for _ in range(15):
+        cursor.execute(
+            "SELECT slot_name FROM pg_replication_slots WHERE database = 'postgres_database'"
+        )
+        slots = {row[0] for row in cursor.fetchall()}
+        assert (
+            schema_aware_slot not in slots
+        ), f"schema-aware slot was recreated; the attach must fail closed, got {slots}"
+        time.sleep(1)
+    assert legacy_slot in slots, f"orphaned legacy slot must stay untouched, got {slots}"
+    cursor.execute(f"SELECT 1 FROM pg_publication WHERE pubname = '{legacy_publication}'")
+    assert (
+        not cursor.fetchall()
+    ), "the legacy publication must not be recreated for this engine's schema"
+
+    pg_manager.drop_materialized_db(mat_schema_db)
+    # The manually created orphan legacy slot is not owned by the engine (the attach never adopted it), so
+    # DROP DATABASE leaves it behind; drop it explicitly.
+    cursor.execute(
+        f"SELECT slot_name FROM pg_replication_slots WHERE slot_name = '{legacy_slot}'"
+    )
+    if cursor.fetchall():
+        cursor.execute(f"SELECT pg_drop_replication_slot('{legacy_slot}')")
+
+
 if __name__ == "__main__":
     cluster.start()
     input("Cluster created, press any key to destroy...")
