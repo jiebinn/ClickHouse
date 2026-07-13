@@ -270,9 +270,9 @@ const ClickStack::EmbeddedResource * findEmbeddedResource(const std::string & re
         ClickStack::embedded_resources.begin(),
         ClickStack::embedded_resources.end(),
         resource_path,
-        [](const ClickStack::EmbeddedResource & resource, const std::string & p)
+        [](const ClickStack::EmbeddedResource & resource, const std::string & path)
         {
-            return resource.path < p;
+            return resource.path < path;
         });
 
     if (it == ClickStack::embedded_resources.end() || it->path != resource_path)
@@ -281,7 +281,7 @@ const ClickStack::EmbeddedResource * findEmbeddedResource(const std::string & re
 }
 
 /// Resolve a page request against Next.js-style dynamic routes.
-/// Ex: /trace/abc -> /trace/[traceId].html
+/// Example: /trace/abc -> /trace/[traceId].html
 const ClickStack::EmbeddedResource * resolveDynamicRoute(const std::string & resource_path)
 {
     static constexpr std::string_view html_suffix = ".html";

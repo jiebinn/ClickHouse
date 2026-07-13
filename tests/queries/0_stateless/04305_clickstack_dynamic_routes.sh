@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Verifies dynamic URL resolution for the embedded ClickStack UI
+
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
@@ -18,7 +20,6 @@ ${CLICKHOUSE_CURL} --compressed -sS "${BASE}/clickstack/dashboards/list" \
 ${CLICKHOUSE_CURL} -sS "${BASE}/clickstack/no-such-page" \
     | grep -oF 'Not found'
 
-# Malformed percent-encoding must produce a deterministic 400 instead of
-# letting Poco::URISyntaxException propagate as a 500 from the server stack.
+# Malformed percent-encoding must produce a deterministic 400
 ${CLICKHOUSE_CURL} -sS -o /dev/null -w '%{http_code}\n' "${BASE}/clickstack/%"
 ${CLICKHOUSE_CURL} -sS -o /dev/null -w '%{http_code}\n' "${BASE}/clickstack/%zz"

@@ -146,8 +146,7 @@ public:
 private:
     /// Overrides for response headers.
     std::unordered_map<String, String> http_response_headers_override;
-    /// Returns std::nullopt when the request URI contains a malformed
-    /// percent-encoding sequence and the handler should reject the request.
+    /// Returning std::nullopt means the handler should reject the request.
     std::optional<std::string> getResourcePath(const std::string & uri) const;
 };
 
