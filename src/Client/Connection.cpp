@@ -836,8 +836,6 @@ TablesStatusResponse Connection::getTablesStatus(const ConnectionTimeouts & time
     /// Interserver secret: prove cluster-secret knowledge for this request, since
     /// `TablesStatusRequest` is sent before any query is authenticated. Mirrors the
     /// per-query hash; reuses the `salt`/`nonce` already exchanged during the Hello.
-    /// Sent *before* the request body so the server can authenticate (or reject) without
-    /// decoding an unauthenticated request.
     if (server_revision >= DBMS_MIN_REVISION_WITH_INTERSERVER_SECRET_TABLES_STATUS && !cluster_secret.empty())
     {
 #if USE_SSL
@@ -846,6 +844,9 @@ TablesStatusResponse Connection::getTablesStatus(const ConnectionTimeouts & time
             data += std::to_string(nonce.value());
         data += cluster_secret;
         data += "TablesStatusRequest";
+        /// Bind the hash to the request body so a relayed hash cannot be reused for a
+        /// different set of tables (mirrors how the per-query secret hash covers the query).
+        data += request.getAuthDigest();
 
         std::string hash = encodeSHA256(data);
         writeStringBinary(hash, *out);
