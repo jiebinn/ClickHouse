@@ -493,15 +493,12 @@ MutateTaskPtr MergeTreeDataMergerMutator::mutatePartToTemporaryPart(
     TableLockHolder & holder,
     bool need_prefix)
 {
-    /// Reading and analysis performed while building the mutation pipeline can run nested, blocking
-    /// pipelines of their own via `CompletedPipelineExecutor` - most notably `buildOrderedSetInplace`
-    /// in `KeyCondition`, which materializes the right-hand side of `x IN (subquery)` to use it for
-    /// primary-key / skip-index analysis. Such a build has no way to observe mutation cancellation, so
-    /// a large set could block server shutdown or `KILL MUTATION` for a long time (see issue #51586).
-    /// The nested `CompletedPipelineExecutor` polls the query context's interactive-cancel callback, so
-    /// install one here that mirrors `MutationContext::checkOperationIsNotCanceled`. `context` is the
-    /// mutation's query context (`makeQueryContextForMutate`), so the callback is reachable from the
-    /// reading context via `getQueryContext`.
+    /// Building the mutation pipeline can run nested blocking pipelines via `CompletedPipelineExecutor` -
+    /// most notably `KeyCondition::buildOrderedSetInplace` materializing the right side of `x IN (subquery)`
+    /// to use it for primary-key / skip-index analysis. Such a build observes cancellation only through the
+    /// query context's interactive-cancel callback, so without one it blocks server shutdown and
+    /// `KILL MUTATION` until the subquery finishes (issue #51586). `context` is this mutation's query context
+    /// (`makeQueryContextForMutate`), which the reading context resolves via `getQueryContext`.
     const String partition_id = future_part->part_info.getPartitionId();
     context->setInteractiveCancelCallback(
         [&blocker = merges_blocker, merge_entry, partition_id]()
