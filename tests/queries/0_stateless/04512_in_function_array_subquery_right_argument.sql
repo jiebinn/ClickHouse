@@ -46,6 +46,18 @@ SELECT 3 IN (SELECT number FROM numbers(10)) AS present, 99 IN (SELECT number FR
 -- Regression guard: a multi-column subquery (tuple IN) is unaffected.
 SELECT (1, 2) IN (SELECT 1, 2) AS present, (1, 3) IN (SELECT 1, 2) AS absent;
 
+-- Nullable elements: with `transform_null_in = 1` a NULL element of the array is a member of the
+-- set, so a NULL left argument matches it, exactly like the scalar-subquery case. With the default
+-- `transform_null_in = 0` a comparison against NULL is unknown (NULL), as usual for IN.
+SELECT x, x IN (SELECT [NULL, toNullable(1)]) AS in_res
+FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
+ORDER BY x
+SETTINGS transform_null_in = 1;
+SELECT x, x IN (SELECT [NULL, toNullable(1)]) AS in_res
+FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
+ORDER BY x
+SETTINGS transform_null_in = 0;
+
 -- The same behavior must not depend on `rewrite_in_to_join`, which rewrites a non-constant
 -- `x IN (subquery)` into a correlated `EXISTS` before the regular IN handling runs. Without
 -- flattening the array subquery there too, the rewrite would compare `x = <array>` and keep the
@@ -54,3 +66,18 @@ SET allow_experimental_correlated_subqueries = 1;
 SET rewrite_in_to_join = 1;
 SELECT count() FROM numbers(10) WHERE number IN (SELECT groupArray(number) FROM numbers(10));
 SELECT count() FROM numbers(10) WHERE number NOT IN (SELECT groupArray(number) FROM numbers(5));
+
+-- Under `rewrite_in_to_join` the non-constant `x IN (subquery)` is lowered to a correlated EXISTS
+-- that compares with `equals`, which does not honor `transform_null_in` for a NULL set element.
+-- This is a pre-existing property of the rewrite that applies to a scalar subquery too, so the
+-- flattened array subquery behaves exactly like the equivalent `SELECT arrayJoin(...)` scalar
+-- subquery and adds no new inconsistency: the NULL row is 0 under the rewrite (it honors
+-- `transform_null_in` only on the regular IN path above, tested with the same data).
+SELECT x, x IN (SELECT [NULL, toNullable(1)]) AS in_res
+FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
+ORDER BY x
+SETTINGS transform_null_in = 1;
+SELECT x, x IN (SELECT arrayJoin([NULL, toNullable(1)])) AS in_res
+FROM (SELECT arrayJoin([NULL, toNullable(1), toNullable(2)]) AS x)
+ORDER BY x
+SETTINGS transform_null_in = 1;
