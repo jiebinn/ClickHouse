@@ -73,7 +73,7 @@ SELECT '{{ L }} vs {{ R }}'
 {%- for fn in ['intDivOrZero','intDivOrNull','moduloOrZero','moduloOrNull','positiveModuloOrNull'] -%}
 , {{ fn }}(materialize({{ dividend[L] }}), materialize({{ zero[R] }})), {{ fn }}(materialize({{ dividend[L] }}), {{ zero[R] }}), {{ fn }}({{ dividend[L] }}, materialize({{ zero[R] }})), {{ fn }}(identity({{ dividend[L] }}), identity({{ zero[R] }}))
 {%- endfor -%};
-SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] }}), toTypeName({{ dividend[L] }} - {{ divisor[R] }}), toTypeName({{ dividend[L] }} * {{ divisor[R] }}), toTypeName({{ dividend[L] }} / {{ divisor[R] }}), toTypeName(intDiv({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(modulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(positiveModulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloLegacy({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(intDivOrNull({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloOrNull({{ dividend[L] }}, {{ divisor[R] }}));
+SELECT '{{ L }} vs {{ R }} types', toTypeName({{ dividend[L] }} + {{ divisor[R] }}), toTypeName({{ dividend[L] }} - {{ divisor[R] }}), toTypeName({{ dividend[L] }} * {{ divisor[R] }}), toTypeName({{ dividend[L] }} / {{ divisor[R] }}), toTypeName(intDiv({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(modulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(positiveModulo({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloLegacy({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(intDivOrNull({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(moduloOrNull({{ dividend[L] }}, {{ divisor[R] }})), toTypeName(positiveModuloOrNull({{ dividend[L] }}, {{ divisor[R] }}));
 {%- endmacro %}
 
 -- A floating-point/wide-integer pair "a op b". Unlike the integer matrix, +, -, * are rejected
@@ -91,7 +91,7 @@ SELECT '{{ label }}', materialize({{ a }}) / materialize({{ b }}), {{ a }} / mat
 {%- for fn in ['intDivOrZero','intDivOrNull','moduloOrZero','moduloOrNull','positiveModuloOrNull'] -%}
 , {{ fn }}(materialize({{ a }}), materialize({{ bzero }})), {{ fn }}(materialize({{ a }}), {{ bzero }}), {{ fn }}({{ a }}, materialize({{ bzero }})), {{ fn }}(identity({{ a }}), identity({{ bzero }}))
 {%- endfor -%};
-SELECT '{{ label }} types', toTypeName({{ a }} / {{ b }}), toTypeName(intDiv({{ a }}, {{ b }})), toTypeName(modulo({{ a }}, {{ b }})), toTypeName(positiveModulo({{ a }}, {{ b }})), toTypeName(moduloLegacy({{ a }}, {{ b }})), toTypeName(intDivOrNull({{ a }}, {{ b }})), toTypeName(moduloOrNull({{ a }}, {{ b }}));
+SELECT '{{ label }} types', toTypeName({{ a }} / {{ b }}), toTypeName(intDiv({{ a }}, {{ b }})), toTypeName(modulo({{ a }}, {{ b }})), toTypeName(positiveModulo({{ a }}, {{ b }})), toTypeName(moduloLegacy({{ a }}, {{ b }})), toTypeName(intDivOrNull({{ a }}, {{ b }})), toTypeName(moduloOrNull({{ a }}, {{ b }})), toTypeName(positiveModuloOrNull({{ a }}, {{ b }}));
 {%- endmacro %}
 
 {% set ns = namespace(seen=[]) %}
