@@ -275,6 +275,32 @@ FROM
 )"
 run_query "$query"
 
+echo "-- distributed WITH ROLLUP before DISTINCT on the same columns => do _not_ remove DISTINCT (two-stage aggregation builds a MergingAggregated merge step; ROLLUP still adds a defaulted-key subtotal row)"
+query="SELECT DISTINCT a
+FROM
+(
+    SELECT
+        number AS a,
+        count() AS c
+    FROM remote('127.0.0.{1,2}', numbers(3))
+    GROUP BY a WITH ROLLUP
+    ORDER BY a
+)"
+run_query "$query"
+
+echo "-- distributed GROUP BY GROUPING SETS with a defaulted-key set before DISTINCT on the same columns => do _not_ remove DISTINCT (MergingAggregatedStep::isGroupingSets() merge path; the () set emits a defaulted-key row)"
+query="SELECT DISTINCT a
+FROM
+(
+    SELECT
+        number AS a,
+        count() AS c
+    FROM remote('127.0.0.{1,2}', numbers(3))
+    GROUP BY GROUPING SETS ((a), ())
+    ORDER BY a
+)"
+run_query "$query"
+
 echo "-- GROUP BY WITH TOTALS before DISTINCT with on different columns => do _not_ remove DISTINCT"
 query="SELECT DISTINCT c
 FROM

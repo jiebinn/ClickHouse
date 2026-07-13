@@ -533,6 +533,69 @@ Expression (Project names)
 0
 1
 2
+-- distributed WITH ROLLUP before DISTINCT on the same columns => do _not_ remove DISTINCT (two-stage aggregation builds a MergingAggregated merge step; ROLLUP still adds a defaulted-key subtotal row)
+-- query
+SELECT DISTINCT a
+FROM
+(
+    SELECT
+        number AS a,
+        count() AS c
+    FROM remote('127.0.0.{1,2}', numbers(3))
+    GROUP BY a WITH ROLLUP
+    ORDER BY a
+)
+-- explain
+Expression (Project names)
+  Distinct (DISTINCT)
+    Distinct (Preliminary DISTINCT)
+      Expression ((Projection + (Change column names to column identifiers + Project names)))
+        Sorting (Sorting for ORDER BY)
+          Expression ((Before ORDER BY + Projection))
+            Rollup
+              MergingAggregated
+                Union
+                  Expression (Change remote column names to local column names)
+                    Aggregating
+                      Expression ((Before GROUP BY + Change column names to column identifiers))
+                        ReadFromSystemNumbers
+                  Expression (Change remote column names to local column names)
+                    ReadFromRemote (Read from remote replica)
+-- execute
+0
+1
+2
+-- distributed GROUP BY GROUPING SETS with a defaulted-key set before DISTINCT on the same columns => do _not_ remove DISTINCT (MergingAggregatedStep::isGroupingSets() merge path; the () set emits a defaulted-key row)
+-- query
+SELECT DISTINCT a
+FROM
+(
+    SELECT
+        number AS a,
+        count() AS c
+    FROM remote('127.0.0.{1,2}', numbers(3))
+    GROUP BY GROUPING SETS ((a), ())
+    ORDER BY a
+)
+-- explain
+Expression (Project names)
+  Distinct (DISTINCT)
+    Distinct (Preliminary DISTINCT)
+      Expression ((Projection + (Change column names to column identifiers + Project names)))
+        Sorting (Sorting for ORDER BY)
+          Expression ((Before ORDER BY + Projection))
+            MergingAggregated
+              Union
+                Expression (Change remote column names to local column names)
+                  Aggregating
+                    Expression ((Before GROUP BY + Change column names to column identifiers))
+                      ReadFromSystemNumbers
+                Expression (Change remote column names to local column names)
+                  ReadFromRemote (Read from remote replica)
+-- execute
+0
+1
+2
 -- GROUP BY WITH TOTALS before DISTINCT with on different columns => do _not_ remove DISTINCT
 -- query
 SELECT DISTINCT c
