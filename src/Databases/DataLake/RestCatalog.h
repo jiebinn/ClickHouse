@@ -89,29 +89,6 @@ public:
 
     ICatalog::CredentialsRefreshCallback getCredentialsConfigurationCallback(const DB::StorageID & storage_id) override;
 
-    struct AuthState
-    {
-        std::optional<DB::HTTPHeaderEntry> auth_header;
-        std::string client_id;
-        std::string client_secret;
-        std::string tenant_id;
-        std::string bearer_token;
-    };
-    using AuthStateVersion = MultiVersion<AuthState>::Version;
-
-    AuthStateVersion getAuthStateSnapshot() const { return auth_state.get(); }
-
-protected:
-    RestCatalog(
-        const std::string & warehouse_,
-        const std::string & base_url_,
-        const std::string & auth_scope_,
-        const std::string & oauth_server_uri_,
-        bool oauth_server_use_request_body_,
-        DB::ContextPtr context_);
-
-    void createNamespaceIfNotExists(const String & namespace_name, const String & location) const;
-
     struct Config
     {
         /// Prefix is a path of the catalog endpoint,
@@ -124,13 +101,37 @@ protected:
         std::string toString() const;
     };
 
+    /// Credentials together with the catalog configuration they resolve to
+    /// (the /v1/config response depends on the credentials), published as one
+    /// atomic snapshot so readers never see a torn combination of them.
+    struct CatalogState
+    {
+        std::optional<DB::HTTPHeaderEntry> auth_header;
+        std::string client_id;
+        std::string client_secret;
+        std::string tenant_id;
+        std::string bearer_token;
+        Config config;
+    };
+    using CatalogStateVersion = MultiVersion<CatalogState>::Version;
+
+    CatalogStateVersion getStateSnapshot() const { return state.get(); }
+
+protected:
+    RestCatalog(
+        const std::string & warehouse_,
+        const std::string & base_url_,
+        const std::string & auth_scope_,
+        const std::string & oauth_server_uri_,
+        bool oauth_server_use_request_body_,
+        DB::ContextPtr context_);
+
+    void createNamespaceIfNotExists(const String & namespace_name, const String & location) const;
+
     const std::filesystem::path base_url;
     const LoggerPtr log;
 
-    /// Catalog configuration settings from /v1/config endpoint.
-    Config config;
-
-    MultiVersion<AuthState> auth_state{std::make_unique<const AuthState>()};
+    MultiVersion<CatalogState> state{std::make_unique<const CatalogState>()};
 
     /// Parameters for OAuth (common for REST catalog).
     bool update_token_if_expired = false;
@@ -144,7 +145,8 @@ protected:
     DB::ReadWriteBufferFromHTTPPtr createReadBuffer(
         const std::string & endpoint,
         const Poco::URI::QueryParameters & params = {},
-        const DB::HTTPHeaderEntries & headers = {}) const;
+        const DB::HTTPHeaderEntries & headers = {},
+        const std::optional<DB::HTTPHeaderEntries> & auth_headers = std::nullopt) const;
 
     Poco::URI::QueryParameters createParentNamespaceParams(const std::string & base_namespace) const;
 
@@ -182,8 +184,16 @@ protected:
         const std::string & table_name,
         TableMetadata & result) const;
 
-    Config loadConfig();
+    /// `auth_headers`, when set, is used for the request instead of the currently
+    /// published auth state (to load the config with credentials that are prepared
+    /// but not committed yet, see `OneLakeCatalog::prepareSettingsChanges`).
+    Config loadConfig(const std::optional<DB::HTTPHeaderEntries> & auth_headers = std::nullopt);
     virtual DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const;
+
+    /// Auth headers for a state that is not published yet: constructors load the config
+    /// before publishing the state. In client-credentials mode fetches an OAuth token
+    /// with the state's credentials and caches it in `access_token`.
+    DB::HTTPHeaderEntries getAuthHeadersForState(const CatalogState & unpublished_state);
 
     void validateAuthHeaders(const DB::HTTPHeaderEntry & header) const;
     static void parseCatalogConfigurationSettings(const Poco::JSON::Object::Ptr & object, Config & result);
@@ -221,9 +231,14 @@ public:
 
     DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const override;
 
-    void applySettingsChanges(const DB::SettingsChanges & changes) override;
+    ICatalog::PreparedSettingsChangesPtr prepareSettingsChanges(const DB::SettingsChanges & changes) override;
+
+    void commitSettingsChanges(ICatalog::PreparedSettingsChangesPtr prepared) override;
 
     static void validateSettingsChanges(const DB::SettingsChanges & changes, bool bearer_mode);
+
+private:
+    struct PreparedAuthChanges;
 };
 
 class BigLakeCatalog : public RestCatalog

@@ -414,12 +414,17 @@ void DatabaseDataLake::initializeOrLeaveUnavailable() const
                 "its credentials resolve to a permitted source. Set the server setting "
                 "s3_load_table_anonymously_if_credentials_restricted = 0 to fail loading instead. Reason: {}",
                 e.message());
-            catalog_impl = nullptr;
-            catalog_unavailable_reason = e.message();
+            resetCatalog(e.message());
         }
         else
             throw;
     }
+}
+
+void DatabaseDataLake::resetCatalog(String reason) const
+{
+    catalog_impl = nullptr;
+    catalog_unavailable_reason = std::move(reason);
 }
 
 std::shared_ptr<StorageObjectStorageConfiguration> DatabaseDataLake::getConfiguration(
@@ -781,7 +786,7 @@ StoragePtr DatabaseDataLake::tryGetTableImpl(const String & name, ContextPtr con
         auto rest_catalog = std::static_pointer_cast<DataLake::OneLakeCatalog>(catalog);
         if (!rest_catalog)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Catalog is not equals to one lake");
-        const auto auth = rest_catalog->getAuthStateSnapshot();
+        const auto auth = rest_catalog->getStateSnapshot();
         azure_configuration->setInitializationAsOneLake(
             auth->client_id,
             auth->client_secret,
@@ -1142,21 +1147,44 @@ void DatabaseDataLake::applySettingsChanges(const SettingsChanges & settings_cha
         storage->set(storage->settings, storage_settings_ast);
     }
 
+    std::shared_ptr<DataLake::ICatalog> local_catalog_snapshot;
     {
         std::lock_guard lock(catalog_mutex);
-        if (catalog_impl)
-            catalog_impl->applySettingsChanges(settings_changes);
-        else
-            catalog_unavailable_reason.clear();
+        local_catalog_snapshot = catalog_impl;
     }
 
+    /// Prepare the new catalog state without publishing it: validation, the eager token
+    /// fetch and the config reload may throw, and then nothing has changed yet.
+    DataLake::ICatalog::PreparedSettingsChangesPtr prepared_catalog_changes;
+    if (local_catalog_snapshot)
+        prepared_catalog_changes = local_catalog_snapshot->prepareSettingsChanges(settings_changes);
+
+    /// Persist the new metadata before publishing anything: if the write fails, the live
+    /// state is untouched and matches the old metadata on disk. The create query is built
+    /// from the patched definition because the live one is not swapped yet.
+    auto new_create_query = make_intrusive<ASTCreateQuery>();
+    new_create_query->setDatabase(getDatabaseName());
+    new_create_query->set(new_create_query->storage, new_engine_definition);
+    new_create_query->uuid = db_uuid;
+    DatabaseCatalog::instance().updateMetadataFile(getDatabaseName(), new_create_query);
+
+    /// Publish. Nothing below throws.
+    if (local_catalog_snapshot)
+        local_catalog_snapshot->commitSettingsChanges(std::move(prepared_catalog_changes));
     database_settings.set(std::move(new_settings));
     {
         std::lock_guard lock(mutex);
         database_engine_definition = new_engine_definition;
     }
-
-    DatabaseCatalog::instance().updateMetadataFile(getDatabaseName(), getCreateDatabaseQuery());
+    if (!local_catalog_snapshot)
+    {
+        /// The catalog was not built when the ALTER started. If a concurrent query
+        /// built it meanwhile, it used the old settings: drop it so the next access
+        /// rebuilds it with the new ones. Also clear a recorded construction failure
+        /// (e.g. credentials lost on RESTORE) for the same reason.
+        std::lock_guard lock(catalog_mutex);
+        resetCatalog(/* reason */ "");
+    }
 }
 
 ASTPtr DatabaseDataLake::getCreateTableQueryImpl(

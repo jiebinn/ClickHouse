@@ -186,6 +186,7 @@ def started_cluster():
                 "configs/backups.xml",
                 "configs/cluster.xml",
                 "configs/text_log.xml",
+                "configs/display_secrets.xml",
             ],
             user_configs=[],
             stay_alive=True,
@@ -1546,12 +1547,13 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
     assert new_token not in show_result
     assert "[HIDDEN]" in show_result
 
-    metadata = node.exec_in_container(
-        ["bash", "-c", f"cat /var/lib/clickhouse/metadata/{db_name}.sql"]
+    engine_full_with_secrets = node.query(
+        f"SELECT engine_full FROM system.databases WHERE name = '{db_name}'",
+        settings={"format_display_secrets_in_show_and_select": 1},
     )
-    assert "tenant-2" in metadata
-    assert new_token in metadata
-    assert old_token not in metadata
+    assert "tenant-2" in engine_full_with_secrets
+    assert new_token in engine_full_with_secrets
+    assert old_token not in engine_full_with_secrets
 
     node.restart_clickhouse()
 
@@ -1565,5 +1567,12 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
     )
     assert "tenant-2" in engine_full
     assert new_token not in engine_full
+
+    engine_full_with_secrets = node.query(
+        f"SELECT engine_full FROM system.databases WHERE name = '{db_name}'",
+        settings={"format_display_secrets_in_show_and_select": 1},
+    )
+    assert new_token in engine_full_with_secrets
+    assert old_token not in engine_full_with_secrets
 
     node.query(f"DROP DATABASE {db_name}")

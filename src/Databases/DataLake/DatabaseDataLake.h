@@ -131,6 +131,10 @@ private:
     /// aborted; a user-initiated create/attach stays fail-closed and the `ACCESS_DENIED` propagates.
     void initializeOrLeaveUnavailable() const TSA_REQUIRES(catalog_mutex);
 
+    /// Drop the cached catalog so the next `getCatalog` rebuilds it from the current settings,
+    /// recording `reason` when it is dropped because it could not be built (empty otherwise).
+    void resetCatalog(String reason) const TSA_REQUIRES(catalog_mutex);
+
     std::shared_ptr<StorageObjectStorageConfiguration> getConfiguration(
         DatabaseDataLakeStorageType type,
         DataLakeStorageSettingsPtr storage_settings) const;

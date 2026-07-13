@@ -312,7 +312,7 @@ TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
         /* oauth_server_use_request_body */false,
         context);
 
-    const auto snapshot_before = catalog.getAuthStateSnapshot();
+    const auto snapshot_before = catalog.getStateSnapshot();
     EXPECT_EQ(snapshot_before->tenant_id, "tenant-1");
     EXPECT_EQ(snapshot_before->bearer_token, "token-1");
     ASSERT_TRUE(snapshot_before->auth_header.has_value());
@@ -323,7 +323,7 @@ TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
     changes.emplace_back("onelake_tenant_id", "tenant-2");
     catalog.applySettingsChanges(changes);
 
-    const auto snapshot_after = catalog.getAuthStateSnapshot();
+    const auto snapshot_after = catalog.getStateSnapshot();
     EXPECT_EQ(snapshot_after->tenant_id, "tenant-2");
     EXPECT_EQ(snapshot_after->bearer_token, "token-2");
     ASSERT_TRUE(snapshot_after->auth_header.has_value());
@@ -336,7 +336,7 @@ TEST(RestCatalog, OneLakeApplySettingsChangesBearerMode)
     mode_switch.emplace_back("onelake_tenant_id", "tenant-3");
     mode_switch.emplace_back("onelake_client_id", "client-1");
     expectThrowsCode([&] { catalog.applySettingsChanges(mode_switch); }, DB::ErrorCodes::BAD_ARGUMENTS);
-    EXPECT_EQ(catalog.getAuthStateSnapshot()->tenant_id, "tenant-2");
+    EXPECT_EQ(catalog.getStateSnapshot()->tenant_id, "tenant-2");
 
     DB::SettingsChanges unknown_setting;
     unknown_setting.emplace_back("warehouse", "other");
