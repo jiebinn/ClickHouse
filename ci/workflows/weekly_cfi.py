@@ -10,10 +10,15 @@ from ci.defs.job_configs import JobConfigs
 # message, which surfaces as a test failure here.
 #
 # Runs every Monday at 03:00 UTC.
+
+# NOTE: event temporarily set to PULL_REQUEST to validate the amd_cfi build+test path
+# (now with -DSPLIT_DEBUG_SYMBOLS=ON) against this fork PR head. Revert to
+# Workflow.Event.SCHEDULE with `branches=[BASE_BRANCH]` and re-enable `cron_schedules`
+# before merging.
 workflow = Workflow.Config(
     name="WeeklyCFI",
-    event=Workflow.Event.SCHEDULE,
-    branches=[BASE_BRANCH],
+    event=Workflow.Event.PULL_REQUEST,
+    base_branches=[BASE_BRANCH],
     jobs=[
         *JobConfigs.cfi_build_job,
         *JobConfigs.cfi_stateless_jobs,
@@ -29,7 +34,6 @@ workflow = Workflow.Config(
     enable_cache=True,
     enable_report=True,
     enable_cidb=True,
-    cron_schedules=["0 3 * * 1"],
     pre_hooks=["python3 ./ci/jobs/scripts/workflow_hooks/store_data.py"],
 )
 
