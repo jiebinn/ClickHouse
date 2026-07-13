@@ -124,6 +124,8 @@ bool shouldUseAnalyzerForMutations(const ContextPtr & context)
     return context->getSettingsRef()[Setting::allow_experimental_analyzer];
 }
 
+}
+
 /// A mutation command's predicate and `UPDATE` expressions are stored as serialized SQL text and
 /// re-parsed on execution. Re-parsing resets any set-operation nodes (`UNION`/`INTERSECT`/`EXCEPT`)
 /// to their un-normalized form (`union_mode` becomes `UNION_DEFAULT` and the `is_normalized` flag is
@@ -142,8 +144,6 @@ void normalizeSetOperations(ASTPtr & ast, const ContextPtr & context)
         NormalizeSelectWithUnionQueryVisitor::Data data{settings[Setting::union_default_mode]};
         NormalizeSelectWithUnionQueryVisitor{data}.visit(ast);
     }
-}
-
 }
 
 ASTPtr prepareQueryAffectedAST(const std::vector<MutationCommand> & commands, const StoragePtr & storage, ContextPtr context)

@@ -10747,9 +10747,16 @@ void MergeTreeData::checkDropOrRenameCommandDoesntAffectInProgressMutations(
                     throw_exception(mutation_name, action, "column", command.column_name);
 
                 auto alter = mutation_command.ast();
+                /// The predicate and assignment expressions were re-parsed from the serialized mutation
+                /// command, so their set operations (UNION/INTERSECT/EXCEPT) are not normalized yet.
+                /// Normalize them before building the query tree, as `executeQuery` does, otherwise the
+                /// analyzer rejects an in-progress mutation that legitimately contains such a subquery.
                 if (alter && alter->predicate)
                 {
-                    auto query_tree = buildQueryTree(ASTPtr(alter->predicate), local_context);
+                    ASTPtr predicate(alter->predicate);
+                    normalizeSetOperations(predicate, local_context);
+
+                    auto query_tree = buildQueryTree(predicate, local_context);
                     auto identifiers = collectIdentifiersFullNames(query_tree);
 
                     if (identifiers.contains(command.column_name))
@@ -10764,7 +10771,10 @@ void MergeTreeData::checkDropOrRenameCommandDoesntAffectInProgressMutations(
                         if (assignment.column_name == command.column_name)
                             throw_exception(mutation_name, action, "column", command.column_name);
 
-                        auto query_tree = buildQueryTree(assignment.expression(), local_context);
+                        ASTPtr assignment_expression = assignment.expression();
+                        normalizeSetOperations(assignment_expression, local_context);
+
+                        auto query_tree = buildQueryTree(assignment_expression, local_context);
                         auto identifiers = collectIdentifiersFullNames(query_tree);
                         if (identifiers.contains(command.column_name))
                             throw_exception(mutation_name, action, "column", command.column_name);
