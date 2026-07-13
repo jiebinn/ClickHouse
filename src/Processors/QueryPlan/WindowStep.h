@@ -41,6 +41,13 @@ public:
     /// boundary (replicas ship the pre-window columns, and the window result columns appended above are
     /// never sent to the initiator), so instrumenting it would count the window result as replica output
     /// and inflate the cost model.
+    ///
+    /// For a window function over a bare table scan the replica-output boundary would be the reading
+    /// step itself, which records only input bytes, so output bytes cannot be estimated there;
+    /// `considerEnablingParallelReplicas` skips the optimization for such plans instead of feeding
+    /// `output_bytes = 0` (i.e. "shipping all pre-window rows to the initiator is free") into the cost
+    /// model. Statistics are collected when a proper boundary exists below the window, e.g. an
+    /// aggregation whose result the window function consumes.
     bool supportsDataflowStatisticsCollection() const override { return true; }
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

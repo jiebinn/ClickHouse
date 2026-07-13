@@ -1,8 +1,10 @@
--- Verify that a query plan containing a Window step is considered "simple enough" for the automatic
--- parallel replicas optimization, so that runtime dataflow statistics are collected for it.
--- Before the Window step supported dataflow statistics collection, any plan containing a window
--- function was rejected outright (`optimizeTree: Some steps in the plan don't support dataflow
--- statistics collection ... Unsupported steps: Window_...`) and no statistics were gathered.
+-- Verify how query plans containing a Window step interact with the automatic parallel replicas
+-- optimization. Before the Window step supported dataflow statistics collection, any plan containing a
+-- window function was rejected outright (`optimizeTree: Some steps in the plan don't support dataflow
+-- statistics collection ... Unsupported steps: Window_...`) and no statistics were gathered. Now the
+-- plan passes the "simple enough" gate, and statistics are collected when (and only when) the
+-- replica-output boundary can actually estimate the number of bytes replicas would send to the
+-- initiator.
 
 DROP TABLE IF EXISTS t;
 
@@ -18,24 +20,27 @@ SET automatic_parallel_replicas_min_bytes_per_replica=0;
 
 INSERT INTO t SELECT number, number * 2 FROM numbers(1e6);
 
--- The window function forces a Window step into the plan. With automatic_parallel_replicas_mode=2
--- statistics collection is enforced, so the reading step is instrumented and input bytes are recorded.
--- The window itself is computed on the coordinator, but the plan must still be recognized as simple enough.
+-- A window function over a bare table scan: with parallel replicas, the replicas would execute only the
+-- reading step (the window itself is computed on the initiator), so the matched statistics-collection
+-- boundary is the reading step itself. The reading step records only input bytes — output bytes cannot
+-- be estimated at this boundary — so `considerEnablingParallelReplicas` must skip the optimization
+-- entirely (fail close) instead of feeding `output_bytes = 0` (i.e. "shipping all pre-window rows to the
+-- initiator is free") into the cost model. No statistics must be collected for this query.
 SELECT key, sum(value) OVER (PARTITION BY key % 10 ORDER BY key) AS s
 FROM t
 FORMAT Null SETTINGS log_comment='04502_autopr_window_function_query';
 
--- Regression guard for the output side. The window is computed on the coordinator, so replicas only
--- ship the pre-window columns (recorded as input bytes) and the columns the window appends are never
--- sent to the initiator. The Window step must therefore NOT be instrumented as the replica-output
--- boundary. This query builds a very wide window result (`groupArray` over a 50-row frame, so each
--- output row carries an array of up to 51 values), which is far larger than the read `key`/`value`
--- columns. RuntimeDataflowStatisticsOutputBytes must stay bounded by the input bytes (in practice it is
--- zero, since the top of the replicas plan is the reading step): if the window result were mistakenly
+-- Regression guard for the output side. The window is computed on the coordinator, so the columns it
+-- appends are never sent to the initiator and must never be recorded as replica output. Here the real
+-- replica-output boundary is the Aggregating step (it ships partial aggregation states to the
+-- initiator), and the Window step sits above it building a very wide result (`groupArray` over a 50-row
+-- frame on ~100k groups, so the window output is far larger than everything read from the table). The
+-- recorded output bytes must stay bounded by the input bytes: if the window result were mistakenly
 -- counted as replica output, the recorded output bytes would balloon past the input bytes and this
 -- check would fail.
-SELECT key, groupArray(value) OVER (PARTITION BY key % 10 ORDER BY key ROWS BETWEEN 50 PRECEDING AND CURRENT ROW) AS a
+SELECT key % 100000 AS k, sum(value) AS s, groupArray(sum(value)) OVER (ORDER BY k ROWS BETWEEN 50 PRECEDING AND CURRENT ROW) AS a
 FROM t
+GROUP BY k
 FORMAT Null SETTINGS log_comment='04502_autopr_window_wide_output';
 
 -- Regression for the aggregated-window shape: a window function computed on the initiator ON TOP of an
@@ -57,7 +62,10 @@ SET enable_parallel_replicas=0, automatic_parallel_replicas_mode=0;
 
 SYSTEM FLUSH LOGS query_log;
 
-SELECT log_comment, ProfileEvents['RuntimeDataflowStatisticsInputBytes'] > 0 AS stats_collected
+-- The bare-scan window query must be skipped before any statistics collection: the read boundary cannot
+-- observe output bytes, and caching `output_bytes = 0` would make the cost model treat the network
+-- transfer of all pre-window rows as free.
+SELECT log_comment, ProfileEvents['RuntimeDataflowStatisticsInputBytes'] = 0 AS read_boundary_skipped
 FROM system.query_log
 WHERE (event_date >= yesterday()) AND (event_time >= (NOW() - toIntervalMinute(15))) AND (current_database = currentDatabase()) AND (log_comment = '04502_autopr_window_function_query') AND (type = 'QueryFinish')
 ORDER BY log_comment
@@ -65,8 +73,10 @@ FORMAT TSVWithNames;
 
 SELECT
     maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_window_wide_output') > 0 AS stats_collected,
-    maxIf(ProfileEvents['RuntimeDataflowStatisticsOutputBytes'], log_comment = '04502_autopr_window_wide_output')
-        <= maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_window_wide_output') AS window_result_not_counted_as_output
+    (maxIf(ProfileEvents['RuntimeDataflowStatisticsOutputBytes'], log_comment = '04502_autopr_window_wide_output') > 0)
+        AND (maxIf(ProfileEvents['RuntimeDataflowStatisticsOutputBytes'], log_comment = '04502_autopr_window_wide_output')
+             <= maxIf(ProfileEvents['RuntimeDataflowStatisticsInputBytes'], log_comment = '04502_autopr_window_wide_output'))
+        AS window_result_not_counted_as_output
 FROM system.query_log
 WHERE (event_date >= yesterday()) AND (event_time >= (NOW() - toIntervalMinute(15))) AND (current_database = currentDatabase()) AND (log_comment = '04502_autopr_window_wide_output') AND (type = 'QueryFinish')
 FORMAT TSVWithNames;
