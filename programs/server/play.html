@@ -5234,7 +5234,12 @@ function disarmMiddleclickPaste() {
     middleclick_paste_timeout = null;
 }
 query_area.addEventListener('keydown', e => {
-    const keyboard_paste = ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V'))
+    /// Match the physical `V` key via `e.code` rather than the printed character `e.key`: on a
+    /// non-Latin layout (e.g. Russian) `Ctrl`/`Cmd`+paste reports a non-'v' `e.key`, so keying off
+    /// the character would leave the guard armed and swallow the genuine paste. `e.code === 'KeyV'`
+    /// is layout-independent, matching how the OS binds the paste shortcut on such layouts.
+    /// `Shift+Insert` already keys off the layout-independent named key `'Insert'`.
+    const keyboard_paste = ((e.ctrlKey || e.metaKey) && e.code === 'KeyV')
         || (e.shiftKey && e.key === 'Insert');
     if (keyboard_paste) disarmMiddleclickPaste();
 });
