@@ -2789,11 +2789,15 @@ ColumnPtr executeStringInteger(const ColumnsWithTypeAndName & arguments, const A
                 && (is_over_big_int<T0> || is_over_big_int<T1>)
                 && IsDataTypeNumber<LeftDataType> && IsDataTypeNumber<RightDataType>;
 
-            /// `plus`, `minus`, `multiply` and floating division compute
-            /// `static_cast<ResultType>(a) op static_cast<ResultType>(b)`, so converting the
-            /// arguments to `ResultType` beforehand yields bit-identical results.
-            constexpr bool op_computes_in_result_type = is_plus || is_minus || is_multiply
-                || IsOperation<Op>::div_floating || is_div_floating_or_null;
+            /// Floating division computes `static_cast<ResultType>(a) / static_cast<ResultType>(b)`,
+            /// so converting the arguments to `ResultType` beforehand yields bit-identical results.
+            /// The same holds for `plus`, `minus` and `multiply`, but they keep their fused kernels:
+            /// they are memory-bound, and materializing a widened copy of the narrow operand made
+            /// them up to 1.6x slower on column-column arguments (the `bigint_arithm` perf test),
+            /// while their fused kernels are compact (~100 KB per translation unit for all mixed
+            /// wide pairs together). The division and modulo kernels below are compute-bound, so
+            /// the conversion does not slow them down measurably.
+            constexpr bool op_computes_in_result_type = IsOperation<Op>::div_floating || is_div_floating_or_null;
 
             /// Integer division casts both operands to the signed type of the dividend size when
             /// either operand is signed (`DivideIntegralImpl`), so when the dividend is at least as

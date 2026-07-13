@@ -1,6 +1,8 @@
 -- Mixed-type pairs involving Decimal or 128/256-bit integers are executed via a conversion
--- to a common type instead of a dedicated fused kernel. This test pins down the semantics
--- of the conversion path: values, result types, and the exceptional cases.
+-- to a common type instead of a dedicated fused kernel (comparisons, floating division, and
+-- the integer division and modulo families; `plus`, `minus` and `multiply` keep their fused
+-- kernels because they are memory-bound and the conversion would slow them down). This test
+-- pins down the semantics of the affected pairs: values, result types, and exceptional cases.
 
 SELECT '-- decimal vs integer comparisons (mixed pairs, non-constant columns)';
 SELECT materialize(toDecimal32('1.50', 2)) = materialize(toUInt8(1)), materialize(toDecimal32('1.00', 2)) = materialize(toUInt8(1));
