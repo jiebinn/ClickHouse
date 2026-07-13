@@ -267,11 +267,14 @@ git ls-files -z "$ROOT_PATH" | xargs -0 stat "$STAT_FMT_FLAG" "$STAT_FMT" 2>/dev
 # Do not describe it as "new analyzer" or "new query analyzer" in documentation or comments;
 # write "the analyzer" or "Analyzer" instead.
 # Historical changelogs are excluded on purpose: they are a fixed record of past releases.
+# The exclusion is anchored to actual changelog locations (the `changelogs/` directories and the
+# aggregated `changelog.md`/`changelog.mdx` files) so that live docs whose path merely contains the
+# substring "changelog" - such as `keeper_changelogs.md` or `changelog_entry_guidelines.md` - stay enforced.
 # The pattern requires a space or hyphen between the words, so code identifiers that use
 # underscores (e.g. `use_new_analyzer`) are intentionally not matched.
 git ls-files $ROOT_PATH/src $ROOT_PATH/base $ROOT_PATH/programs $ROOT_PATH/utils $ROOT_PATH/docs $ROOT_PATH/tests |
     grep -E '\.(md|mdx|cpp|h|sql|sh|py|j2)$' |
-    grep -vi 'changelog' |
+    grep -vE '(^|/)(changelogs/|changelog\.mdx?$)' |
     xargs grep -HniP '\bnew[ \t-]+(query[ \t-]+)?analyzer\b' 2>/dev/null |
     grep -P '.' &&
     echo 'The analyzer is enabled by default since ClickHouse 24.3 and is no longer new. Write "the analyzer" or "Analyzer" instead of "new analyzer"/"new query analyzer" in the lines above.'
