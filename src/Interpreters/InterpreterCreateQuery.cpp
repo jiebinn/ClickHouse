@@ -2395,12 +2395,23 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
     /// Replicated-database ZooKeeper transaction are propagated so the operations behave and replicate
     /// correctly. This is used only for the plain-create case; REPLACE keeps running as the user (its
     /// required access already includes DROP).
-    auto make_internal_context = [&]() -> ContextMutablePtr
+    ///
+    /// `bypass_size_guard` additionally zeroes `max_table_size_to_drop` / `max_partition_size_to_drop`. The
+    /// size guard is meaningful only for user-visible tables; a populated-then-abandoned temporary table can
+    /// exceed it, and its cleanup DROP must always succeed or the temporary table would be stranded. Pass it
+    /// for the cleanup DROPs; the publishing RENAME does not consult these settings, so it does not need it
+    /// (this mirrors the `bypass_size_guard` argument of `make_drop_context` used by REPLACE).
+    auto make_internal_context = [&](bool bypass_size_guard) -> ContextMutablePtr
     {
         ContextMutablePtr internal_context = Context::createCopy(current_context->getGlobalContext());
         internal_context->makeQueryContext();
         internal_context->setSettings(current_context->getSettingsRef());
         internal_context->setDDLOrOnClusterInternal(true);
+        if (bypass_size_guard)
+        {
+            internal_context->setSetting("max_table_size_to_drop", Field(UInt64{0}));
+            internal_context->setSetting("max_partition_size_to_drop", Field(UInt64{0}));
+        }
         if (auto txn = current_context->getZooKeeperMetadataTransaction())
         {
             internal_context->setQueryKindReplicatedDatabaseInternal();
@@ -2559,7 +2570,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         /// rename publishes an internal temporary table under the final name, so it runs with a full-access
         /// context (the user is not required to hold RENAME/DROP on the temporary table); REPLACE keeps
         /// running as the user.
-        ContextPtr rename_context = is_plain_create ? ContextPtr{make_internal_context()} : current_context;
+        ContextPtr rename_context = is_plain_create ? ContextPtr{make_internal_context(/*bypass_size_guard=*/false)} : current_context;
         InterpreterRenameQuery interpreter_rename{ast_rename, rename_context};
         interpreter_rename.setPreSwapCheck(
             [&current_context](const StorageID & to_drop_id)
@@ -2578,7 +2589,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
             /// without error. For a plain create without IF NOT EXISTS (and for REPLACE) the error propagates.
             if (is_plain_create && create.if_not_exists && e.code() == ErrorCodes::TABLE_ALREADY_EXISTS)
             {
-                InterpreterDropQuery(ast_drop, make_internal_context()).execute();
+                InterpreterDropQuery(ast_drop, make_internal_context(/*bypass_size_guard=*/true)).execute();
                 create.setTable(table_to_replace_name);
                 return {};
             }
@@ -2618,11 +2629,13 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
     {
         /// Drop the temp table we just created if it was not renamed to the target name.
         /// Bypassing the size guard is safe here: the temp name is unique to this call. For a plain create
-        /// use a full-access context: the user is not required to hold DROP on the internal temporary table
-        /// (its cleanup must not turn a denied source SELECT into an ACCESS_DENIED on the temporary table).
+        /// use a full-access context (also size-guard-bypassed): the user is not required to hold DROP on the
+        /// internal temporary table (its cleanup must not turn a denied source SELECT into an ACCESS_DENIED on
+        /// the temporary table), and the cleanup must succeed even after the temporary table has grown past
+        /// `max_table_size_to_drop`, or a late failure would strand it.
         if (created && !renamed)
         {
-            auto drop_context = is_plain_create ? make_internal_context() : make_drop_context(/*bypass_size_guard=*/true);
+            auto drop_context = is_plain_create ? make_internal_context(/*bypass_size_guard=*/true) : make_drop_context(/*bypass_size_guard=*/true);
             try
             {
                 InterpreterDropQuery(ast_drop, drop_context).execute();
