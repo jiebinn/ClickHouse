@@ -142,7 +142,10 @@ protected:
 
     Poco::Net::HTTPBasicCredentials credentials{};
 
+    /// `catalog_state` is the snapshot the caller derived the endpoint from, so that one
+    /// request never mixes the endpoint of one state version with the auth of another.
     DB::ReadWriteBufferFromHTTPPtr createReadBuffer(
+        const CatalogState & catalog_state,
         const std::string & endpoint,
         const Poco::URI::QueryParameters & params = {},
         const DB::HTTPHeaderEntries & headers = {},
@@ -184,21 +187,18 @@ protected:
         const std::string & table_name,
         TableMetadata & result) const;
 
-    /// `auth_headers`, when set, is used for the request instead of the currently
-    /// published auth state (to load the config with credentials that are prepared
-    /// but not committed yet, see `OneLakeCatalog::prepareSettingsChanges`).
-    Config loadConfig(const std::optional<DB::HTTPHeaderEntries> & auth_headers = std::nullopt);
-    virtual DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const;
-
-    /// Auth headers for a state that is not published yet: constructors load the config
-    /// before publishing the state. In client-credentials mode fetches an OAuth token
-    /// with the state's credentials and caches it in `access_token`.
-    DB::HTTPHeaderEntries getAuthHeadersForState(const CatalogState & unpublished_state);
+    /// `catalog_state` may be a state that is not published yet (constructors and
+    /// `OneLakeCatalog::prepareSettingsChanges` load the config before publishing).
+    /// `auth_headers`, when set, is used instead of headers derived from `catalog_state`
+    /// (to authenticate with an OAuth token that is prepared but not cached yet).
+    Config loadConfig(const CatalogState & catalog_state, const std::optional<DB::HTTPHeaderEntries> & auth_headers = std::nullopt);
+    virtual DB::HTTPHeaderEntries getAuthHeaders(const CatalogState & catalog_state, bool update_token) const;
 
     void validateAuthHeaders(const DB::HTTPHeaderEntry & header) const;
     static void parseCatalogConfigurationSettings(const Poco::JSON::Object::Ptr & object, Config & result);
 
     void sendRequest(
+        const CatalogState & catalog_state,
         const String & endpoint,
         Poco::JSON::Object::Ptr request_body,
         const String & method = Poco::Net::HTTPRequest::HTTP_POST,
@@ -229,7 +229,7 @@ public:
         return DB::DatabaseDataLakeCatalogType::ICEBERG_ONELAKE;
     }
 
-    DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const override;
+    DB::HTTPHeaderEntries getAuthHeaders(const CatalogState & catalog_state, bool update_token) const override;
 
     ICatalog::PreparedSettingsChangesPtr prepareSettingsChanges(const DB::SettingsChanges & changes) override;
 
@@ -262,7 +262,7 @@ public:
         return DB::DatabaseDataLakeCatalogType::ICEBERG_BIGLAKE;
     }
 
-    DB::HTTPHeaderEntries getAuthHeaders(bool update_token) const override;
+    DB::HTTPHeaderEntries getAuthHeaders(const CatalogState & catalog_state, bool update_token) const override;
 
     const std::string & getGoogleADCClientId() const { return google_adc_client_id; }
     const std::string & getGoogleADCClientSecret() const { return google_adc_client_secret; }

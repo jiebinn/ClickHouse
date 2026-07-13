@@ -199,7 +199,7 @@ RestCatalog::RestCatalog(
         initial_state.auth_header = parseAuthHeader(auth_header_);
         validateAuthHeaders(initial_state.auth_header.value());
     }
-    initial_state.config = loadConfig(getAuthHeadersForState(initial_state));
+    initial_state.config = loadConfig(initial_state);
     state.set(std::make_unique<const CatalogState>(std::move(initial_state)));
 }
 
@@ -221,10 +221,10 @@ RestCatalog::RestCatalog(
 }
 
 
-RestCatalog::Config RestCatalog::loadConfig(const std::optional<DB::HTTPHeaderEntries> & auth_headers)
+RestCatalog::Config RestCatalog::loadConfig(const CatalogState & catalog_state, const std::optional<DB::HTTPHeaderEntries> & auth_headers)
 {
     Poco::URI::QueryParameters params = {{"warehouse", warehouse}};
-    auto buf = createReadBuffer(CONFIG_ENDPOINT, params, /* headers */{}, auth_headers);
+    auto buf = createReadBuffer(catalog_state, CONFIG_ENDPOINT, params, /* headers */{}, auth_headers);
 
     std::string json_str;
     readJSONObjectPossiblyInvalid(json_str, *buf);
@@ -271,52 +271,38 @@ void RestCatalog::validateAuthHeaders(const DB::HTTPHeaderEntry & header) const
     getContext()->getGlobalContext()->getHTTPHeaderFilter().checkAndNormalizeHeaders(header_to_check);
 }
 
-DB::HTTPHeaderEntries RestCatalog::getAuthHeaders(bool update_token) const
+DB::HTTPHeaderEntries RestCatalog::getAuthHeaders(const CatalogState & catalog_state, bool update_token) const
 {
     fiu_do_on(DB::FailPoints::check_database_datalake_negative,
     {
         throw DB::Exception(DB::ErrorCodes::FAULT_INJECTED, "Injecting fault when checking database");
     });
 
-    const auto auth = state.get();
-
     /// Option 1: user specified auth header manually.
     /// Header has format: 'Authorization: <scheme> <token>'.
-    if (auth->auth_header.has_value())
+    if (catalog_state.auth_header.has_value())
     {
-        return DB::HTTPHeaderEntries{auth->auth_header.value()};
+        return DB::HTTPHeaderEntries{catalog_state.auth_header.value()};
     }
 
     /// Option 2: user provided grant_type, client_id and client_secret.
     /// We would make OAuthClientCredentialsRequest
     /// https://github.com/apache/iceberg/blob/3badfe0c1fcf0c0adfc7aa4a10f0b50365c48cf9/open-api/rest-catalog-open-api.yaml#L3498C5-L3498C34
-    if (!auth->client_id.empty())
+    if (!catalog_state.client_id.empty())
     {
+        /// The cached token may have been minted with other credentials than the ones in
+        /// `catalog_state` (e.g. right after `ALTER DATABASE ... MODIFY SETTING`); then the
+        /// request fails with 401/403 and is retried with `update_token = true`, fetching
+        /// a token with the snapshot's credentials.
         auto current = access_token.get();
         if (!current || update_token)
         {
-            access_token.set(std::make_unique<AccessToken>(retrieveAccessToken(auth->client_id, auth->client_secret)));
+            access_token.set(std::make_unique<AccessToken>(retrieveAccessToken(catalog_state.client_id, catalog_state.client_secret)));
             current = access_token.get();
         }
 
         DB::HTTPHeaderEntries headers;
         headers.emplace_back("Authorization", "Bearer " + current->token);
-        return headers;
-    }
-    return {};
-}
-
-DB::HTTPHeaderEntries RestCatalog::getAuthHeadersForState(const CatalogState & unpublished_state)
-{
-    if (unpublished_state.auth_header.has_value())
-        return DB::HTTPHeaderEntries{unpublished_state.auth_header.value()};
-
-    if (!unpublished_state.client_id.empty())
-    {
-        auto token = retrieveAccessToken(unpublished_state.client_id, unpublished_state.client_secret);
-        DB::HTTPHeaderEntries headers;
-        headers.emplace_back("Authorization", "Bearer " + token.token);
-        access_token.set(std::make_unique<AccessToken>(std::move(token)));
         return headers;
     }
     return {};
@@ -351,13 +337,13 @@ OneLakeCatalog::OneLakeCatalog(
         initial_state.client_secret = onelake_client_secret;
         update_token_if_expired = true;
     }
-    initial_state.config = loadConfig(getAuthHeadersForState(initial_state));
+    initial_state.config = loadConfig(initial_state);
     state.set(std::make_unique<const CatalogState>(std::move(initial_state)));
 }
 
-DB::HTTPHeaderEntries OneLakeCatalog::getAuthHeaders(bool update_token) const
+DB::HTTPHeaderEntries OneLakeCatalog::getAuthHeaders(const CatalogState & catalog_state, bool update_token) const
 {
-    auto headers = RestCatalog::getAuthHeaders(update_token);
+    auto headers = RestCatalog::getAuthHeaders(catalog_state, update_token);
     headers.emplace_back("User-Agent", fmt::format("ClickHouse/{}{} OneLake-Catalog", VERSION_STRING, VERSION_OFFICIAL));
     return headers;
 }
@@ -419,14 +405,14 @@ ICatalog::PreparedSettingsChangesPtr OneLakeCatalog::prepareSettingsChanges(cons
 
     auto prepared = std::make_unique<PreparedAuthChanges>();
 
-    /// Auth headers built from the not-yet-published credentials, so that the config
-    /// reload below both verifies the new credentials and sees the layout they resolve to.
+    /// In client-credentials mode, eagerly fetch a token with the not-yet-published
+    /// credentials: wrong credentials fail the ALTER right here, and the config reload
+    /// below authenticates with that token instead of the cached one.
     std::optional<DB::HTTPHeaderEntries> new_auth_headers;
     if (bearer_mode)
     {
         new_state.auth_header = DB::HTTPHeaderEntry("Authorization", "Bearer " + new_state.bearer_token);
         validateAuthHeaders(new_state.auth_header.value());
-        new_auth_headers = DB::HTTPHeaderEntries{new_state.auth_header.value()};
     }
     else if (new_state.client_id != old_state->client_id || new_state.client_secret != old_state->client_secret)
     {
@@ -436,7 +422,7 @@ ICatalog::PreparedSettingsChangesPtr OneLakeCatalog::prepareSettingsChanges(cons
 
     /// The config was loaded with the old credentials; the new ones may resolve the
     /// warehouse to a different prefix or base location, so reload it before publishing.
-    new_state.config = loadConfig(new_auth_headers);
+    new_state.config = loadConfig(new_state, new_auth_headers);
     prepared->new_state = std::make_unique<const CatalogState>(std::move(new_state));
     return prepared;
 }
@@ -585,11 +571,11 @@ BigLakeCatalog::BigLakeCatalog(
         access_token.set(std::make_unique<AccessToken>(retrieveGoogleCloudAccessToken()));
     }
     CatalogState initial_state;
-    initial_state.config = loadConfig();
+    initial_state.config = loadConfig(initial_state);
     state.set(std::make_unique<const CatalogState>(std::move(initial_state)));
 }
 
-DB::HTTPHeaderEntries BigLakeCatalog::getAuthHeaders(bool update_token) const
+DB::HTTPHeaderEntries BigLakeCatalog::getAuthHeaders(const CatalogState & catalog_state, bool update_token) const
 {
     /// Google Cloud OAuth2 for BigLake.
     /// Uses GCP metadata service or Application Default Credentials to get access token.
@@ -621,7 +607,7 @@ DB::HTTPHeaderEntries BigLakeCatalog::getAuthHeaders(bool update_token) const
         return headers;
     }
 
-    return RestCatalog::getAuthHeaders(update_token);
+    return RestCatalog::getAuthHeaders(catalog_state, update_token);
 }
 
 AccessToken BigLakeCatalog::retrieveGoogleCloudAccessTokenFromRefreshToken() const
@@ -757,6 +743,7 @@ std::optional<StorageType> RestCatalog::getStorageType() const
 }
 
 DB::ReadWriteBufferFromHTTPPtr RestCatalog::createReadBuffer(
+    const CatalogState & catalog_state,
     const std::string & endpoint,
     const Poco::URI::QueryParameters & params,
     const DB::HTTPHeaderEntries & headers,
@@ -771,7 +758,7 @@ DB::ReadWriteBufferFromHTTPPtr RestCatalog::createReadBuffer(
 
     auto create_buffer = [&](bool update_token)
     {
-        auto result_headers = auth_headers ? *auth_headers : getAuthHeaders(update_token);
+        auto result_headers = auth_headers ? *auth_headers : getAuthHeaders(catalog_state, update_token);
         std::move(headers.begin(), headers.end(), std::back_inserter(result_headers));
 
         return DB::BuilderRWBufferFromHTTP(url)
@@ -955,7 +942,7 @@ RestCatalog::Namespaces RestCatalog::listChildNamespaces(const std::string & bas
             if (!page_token.empty())
                 params.push_back({"pageToken", page_token});
 
-            auto buf = createReadBuffer(state_snapshot->config.prefix / NAMESPACES_ENDPOINT, params);
+            auto buf = createReadBuffer(*state_snapshot, state_snapshot->config.prefix / NAMESPACES_ENDPOINT, params);
             String next_page_token;
             auto page_namespaces = parseNamespaces(*buf, base_namespace, next_page_token);
             LOG_DEBUG(
@@ -1105,7 +1092,7 @@ DB::Names RestCatalog::listTablesInNamespace(const std::string & base_namespace,
         if (!page_token.empty())
             params.push_back({"pageToken", page_token});
 
-        auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, params);
+        auto buf = createReadBuffer(*state_snapshot, state_snapshot->config.prefix / endpoint, params);
 
         /// Pass through the remaining limit so that single-page short-circuiting still works
         /// when the caller is in `empty()` (limit=1) and the first page already contains a row.
@@ -1242,7 +1229,7 @@ bool RestCatalog::getTableMetadataImpl(
 
     const auto state_snapshot = state.get();
     const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encodeNamespaceForURI(namespace_name) / "tables" / table_name;
-    auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, /* params */{}, headers);
+    auto buf = createReadBuffer(*state_snapshot, state_snapshot->config.prefix / endpoint, /* params */{}, headers);
 
     if (buf->eof())
     {
@@ -1319,14 +1306,14 @@ bool RestCatalog::getTableMetadataImpl(
     return true;
 }
 
-void RestCatalog::sendRequest(const String & endpoint, Poco::JSON::Object::Ptr request_body, const String & method, bool ignore_result) const
+void RestCatalog::sendRequest(const CatalogState & catalog_state, const String & endpoint, Poco::JSON::Object::Ptr request_body, const String & method, bool ignore_result) const
 {
     std::ostringstream oss;  // STYLE_CHECK_ALLOW_STD_STRING_STREAM
     if (request_body)
         request_body->stringify(oss);
     const std::string body_str = DB::removeEscapedSlashes(oss.str());
 
-    DB::HTTPHeaderEntries headers = getAuthHeaders(/* update_token = */ true);
+    DB::HTTPHeaderEntries headers = getAuthHeaders(catalog_state, /* update_token = */ true);
     headers.emplace_back("Content-Type", "application/json");
 
     const auto & context = getContext();
@@ -1379,7 +1366,7 @@ void RestCatalog::createNamespaceIfNotExists(const String & namespace_name, cons
 
     try
     {
-        sendRequest(endpoint, request_body);
+        sendRequest(*state_snapshot, endpoint, request_body);
     }
     catch (...)
     {
@@ -1422,7 +1409,7 @@ void RestCatalog::createTable(const String & namespace_name, const String & tabl
 
     try
     {
-        sendRequest(endpoint, request_body);
+        sendRequest(*state_snapshot, endpoint, request_body);
     }
     catch (const DB::HTTPException & ex)
     {
@@ -1488,7 +1475,7 @@ bool RestCatalog::updateMetadata(const String & namespace_name, const String & t
 
     try
     {
-        sendRequest(endpoint, request_body);
+        sendRequest(*state_snapshot, endpoint, request_body);
     }
     catch (const DB::HTTPException & ex)
     {
@@ -1551,7 +1538,7 @@ bool RestCatalog::updateSchema(
 
     try
     {
-        sendRequest(endpoint, request_body);
+        sendRequest(*state_snapshot, endpoint, request_body);
     }
     catch (const DB::HTTPException & ex)
     {
@@ -1563,12 +1550,13 @@ bool RestCatalog::updateSchema(
 
 void RestCatalog::dropTable(const String & namespace_name, const String & table_name) const
 {
+    const auto state_snapshot = state.get();
     const std::string endpoint = fmt::format("{}/namespaces/{}/tables/{}?purgeRequested=False", base_url, namespace_name, table_name);
 
     Poco::JSON::Object::Ptr request_body = nullptr;
     try
     {
-        sendRequest(endpoint, request_body, Poco::Net::HTTPRequest::HTTP_DELETE, true);
+        sendRequest(*state_snapshot, endpoint, request_body, Poco::Net::HTTPRequest::HTTP_DELETE, true);
     }
     catch (const DB::HTTPException & ex)
     {
@@ -1656,7 +1644,7 @@ ICatalog::CredentialsRefreshCallback RestCatalog::getCredentialsConfigurationCal
         const auto & table = storage_id.getTableName();
         auto [namespace_name, table_name] = DataLake::parseTableName(table);
         const std::string endpoint = std::filesystem::path(NAMESPACES_ENDPOINT) / encodeNamespaceForURI(namespace_name) / "tables" / table_name;
-        auto buf = createReadBuffer(state_snapshot->config.prefix / endpoint, /* params */{}, headers);
+        auto buf = createReadBuffer(*state_snapshot, state_snapshot->config.prefix / endpoint, /* params */{}, headers);
 
         if (buf->eof())
         {
