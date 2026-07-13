@@ -4,13 +4,15 @@
 Every snippet resolves its own imports. A page-level import is not visible to
 a snippet imported by that page, and the same rule applies recursively when a
 snippet renders another snippet. This check requires every non-built-in MDX
-tag to have a local import.
+tag to have a local import and prevents snippets from importing the custom
+Image component, which can collide with a page-level Image import.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +22,7 @@ IMPORT_RE = re.compile(
     re.MULTILINE,
 )
 TAG_RE = re.compile(r"<\/?([A-Z][A-Za-z0-9_]*)\b")
+IMG_SRC_RE = re.compile(r"<img\b[^>]*\bsrc=['\"]([^'\"]+)['\"]", re.IGNORECASE)
 DECLARED_EXPORT_RE = re.compile(
     r"\bexport\s+(?:default\s+)?(?:const|let|var|function|class)\s+"
     r"([A-Z][A-Za-z0-9_]*)"
@@ -28,6 +31,7 @@ TRANSLATION_DIRS = {"ar", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh"}
 MINTLIFY_BUILTINS = {
     "Accordion",
     "CodeBlock",
+    "Frame",
     "Info",
     "Note",
     "Step",
@@ -95,6 +99,62 @@ def is_translation_source(source: str) -> bool:
     return len(parts) > 1 and parts[0] == "snippets" and parts[1] in TRANSLATION_DIRS
 
 
+def find_page_import_collisions(docs_root: Path) -> list[str]:
+    """Find bindings Mint would declare twice when expanding nested snippets."""
+    errors: list[str] = []
+    bindings_cache: dict[Path, list[Binding]] = {}
+
+    def bindings_for(path: Path) -> list[Binding]:
+        if path not in bindings_cache:
+            bindings_cache[path] = parse_bindings(
+                path.read_text(encoding="utf-8", errors="ignore")
+            )
+        return bindings_cache[path]
+
+    def collect_bindings(
+        path: Path,
+        visited: set[Path],
+        declarations: dict[str, list[tuple[Path, str]]],
+    ) -> None:
+        if path in visited or not path.is_file():
+            return
+        visited.add(path)
+        for binding in bindings_for(path):
+            declarations[binding.local].append((path, binding.source))
+            if is_nested_snippet_source(binding.source):
+                collect_bindings(
+                    docs_root / binding.source.lstrip("/"),
+                    visited,
+                    declarations,
+                )
+
+    for path in sorted(docs_root.rglob("*")):
+        if path.suffix not in {".md", ".mdx"}:
+            continue
+        relative_path = path.relative_to(docs_root)
+        if (
+            relative_path.parts[0] in TRANSLATION_DIRS
+            or relative_path.parts[0] == "snippets"
+        ):
+            continue
+
+        declarations: dict[str, list[tuple[Path, str]]] = defaultdict(list)
+        collect_bindings(path, set(), declarations)
+        for local, occurrences in sorted(declarations.items()):
+            if len(occurrences) < 2:
+                continue
+            details = "; ".join(
+                f"{owner.relative_to(docs_root).as_posix()} imports {source}"
+                for owner, source in occurrences
+            )
+            errors.append(
+                f"{relative_path.as_posix()}: duplicate import binding {local}: "
+                f"{details}"
+            )
+
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("docs_root", nargs="?", default=".")
@@ -107,6 +167,7 @@ def main() -> int:
 
     errors: list[str] = []
     checked = 0
+    checked_images = 0
 
     for path in sorted(snippets_root.rglob("*")):
         if path.suffix not in {".md", ".mdx"}:
@@ -125,6 +186,15 @@ def main() -> int:
         imported = {binding.local for binding in bindings}
         declared = set(DECLARED_EXPORT_RE.findall(visible_text))
 
+        if any(
+            binding.source == "/snippets/components/Image.jsx"
+            for binding in bindings
+        ):
+            errors.append(
+                f"{relative_path.as_posix()}: use <Frame><img ... /></Frame> "
+                "instead of importing the custom Image component"
+            )
+
         used_tags = set(TAG_RE.findall(visible_text))
         missing = sorted(used_tags - imported - declared - MINTLIFY_BUILTINS)
         if missing:
@@ -132,6 +202,16 @@ def main() -> int:
                 f"{relative_path.as_posix()}: missing local import(s) for "
                 + ", ".join(missing)
             )
+
+        for source in IMG_SRC_RE.findall(visible_text):
+            if not source.startswith("/"):
+                continue
+            checked_images += 1
+            target = docs_root / source.lstrip("/")
+            if not target.is_file():
+                errors.append(
+                    f"{relative_path.as_posix()}: local image does not exist: {source}"
+                )
 
         for binding in bindings:
             if not is_nested_snippet_source(binding.source):
@@ -148,13 +228,18 @@ def main() -> int:
                     f"snippet {binding.source}"
                 )
 
+    errors.extend(find_page_import_collisions(docs_root))
+
     if errors:
         print(f"Found {len(errors)} snippet import error(s):")
         for error in errors:
             print(f"  - {error}")
         return 1
 
-    print(f"Checked imports in {checked} snippet file(s): OK")
+    print(
+        f"Checked imports in {checked} snippet file(s) and "
+        f"{checked_images} local image reference(s): OK"
+    )
     return 0
 
 

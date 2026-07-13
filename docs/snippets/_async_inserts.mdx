@@ -1,6 +1,4 @@
 
-import { Image } from "/snippets/components/Image.jsx";
-
 Asynchronous inserts in ClickHouse provide a powerful alternative when client-side batching isn't feasible. This is especially valuable in observability workloads, where hundreds or thousands of agents send data continuously—logs, metrics, traces—often in small, real-time payloads. Buffering data client-side in these environments increases complexity, requiring a centralized queue to ensure sufficiently large batches can be sent.
 
 <Note>
@@ -11,7 +9,9 @@ Asynchronous inserts shift batching responsibility from the client to the server
 
 The core behavior is controlled via the [`async_insert`](/reference/settings/session-settings#async_insert) setting.
 
-<Image img="/images/bestpractices/async_inserts.webp" size="lg" alt="Async inserts"/>
+<Frame>
+  <img src="/images/bestpractices/async_inserts.webp" alt="Async inserts" />
+</Frame>
 
 Asynchronous inserts are supported over both the HTTP and native TCP interfaces.
 
