@@ -2440,21 +2440,53 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
                         : (create.isView() ? "CREATE OR REPLACE VIEW" : "CREATE OR REPLACE TABLE"))
                     : "REPLACE TABLE"));
 
-        /// For a plain create the final name must not already exist. Check it up front, before the
-        /// create-only validations below (table name length, cyclic dependencies), so that (a) an
-        /// `IF NOT EXISTS` create on an existing table is a no-op that does not run (and does not require
+        /// For a plain create the final name must not already exist (as an active table, as a dictionary, or
+        /// reserved by a detached table). Check it up front, before the create-only validations below (table
+        /// name length, cyclic dependencies) and before authorizing or running the populating SELECT, so that
+        /// (a) an `IF NOT EXISTS` create on a taken name is a no-op that does not run (and does not require
         /// access to) the SELECT and does not fail validations that only matter when a table is actually
         /// created (mirroring `doCreateTable`, where the existence check precedes them), and (b) a plain
-        /// create over an existing table fails fast with `TABLE_ALREADY_EXISTS` before the (potentially
-        /// expensive) populate. This check is not under the table DDL guard, so it can race with a
-        /// concurrent create; the final RENAME below re-establishes correctness (it fails if the target
-        /// appeared meanwhile, which for `IF NOT EXISTS` is a no-op).
-        if (is_plain_create && database->isTableExist(table_to_replace_name, current_context))
+        /// create over a taken name fails fast, with the same error `doCreateTable` reports, before the
+        /// (potentially expensive) populate. This mirrors the full existence handling of `doCreateTable`
+        /// (`isTableExist` plus the detached-name `checkMetadataFilenameAvailability` branch), not just the
+        /// active-table probe. This check is not under the table DDL guard, so it can race with a concurrent
+        /// create; the final RENAME below re-establishes correctness (it fails if the target appeared
+        /// meanwhile, which for `IF NOT EXISTS` is a no-op).
+        if (is_plain_create)
         {
-            if (create.if_not_exists)
-                return {};
-            throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists",
-                backQuoteIfNeed(create.getDatabase()), backQuoteIfNeed(table_to_replace_name));
+            if (database->isTableExist(table_to_replace_name, current_context))
+            {
+                if (create.if_not_exists)
+                    return {};
+                /// Preserve the established error contract: a name already used by a dictionary reports
+                /// `DICTIONARY_ALREADY_EXISTS`, not `TABLE_ALREADY_EXISTS` (mirrors `doCreateTable` and
+                /// `02973_dictionary_table_exception_fix`).
+                if (database->getTable(table_to_replace_name, current_context)->isDictionary())
+                    throw Exception(ErrorCodes::DICTIONARY_ALREADY_EXISTS, "Dictionary {}.{} already exists",
+                        backQuoteIfNeed(create.getDatabase()), backQuoteIfNeed(table_to_replace_name));
+                throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists",
+                    backQuoteIfNeed(create.getDatabase()), backQuoteIfNeed(table_to_replace_name));
+            }
+            else if (!create.attach)
+            {
+                /// The final name may still be reserved by a table in a detached / detached-permanently state:
+                /// its metadata file is present even though `isTableExist` is false. Mirror `doCreateTable` so
+                /// that `IF NOT EXISTS` is a no-op and a plain create fails with the metadata-name availability
+                /// error -- both before the populate. Otherwise a no-op could run the SELECT, raise a source
+                /// `ACCESS_DENIED`, or trigger scalar-subquery side effects, and a plain create could surface a
+                /// source-query failure instead of the existing detached-name error, before the RENAME finally
+                /// discovers the collision.
+                try
+                {
+                    database->checkMetadataFilenameAvailability(table_to_replace_name);
+                }
+                catch (const Exception &)
+                {
+                    if (create.if_not_exists)
+                        return {};
+                    throw;
+                }
+            }
         }
 
         if (mode <= LoadingStrictnessLevel::CREATE)
@@ -2511,6 +2543,21 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
         ast_drop->setDatabase(create.getDatabase());
         ast_drop->kind = ASTDropQuery::Drop;
     }
+
+    /// The populating INSERT SELECT runs against the internal temporary table, so its (random) name is
+    /// recorded in this query's access info and would surface in `system.query_log` `tables`. The temporary
+    /// table is an implementation detail whose random name is meaningless to the user and would make the log
+    /// non-deterministic, so scrub it. This must run on every exit after the populate may have touched the
+    /// temporary table -- the successful publish, the `IF NOT EXISTS` lost-race no-op, and any failure or
+    /// rethrow -- because `executeQuery.cpp` copies the access info into the log for failed queries too, so a
+    /// denied or failing `CREATE ... AS SELECT` would otherwise leak the internal name. The final table name is
+    /// added to the log independently, from the query's target (see `IInterpreter::extendQueryLogElem`).
+    auto scrub_temp_table_from_query_log = [&]()
+    {
+        if (create.isCreateQueryWithImmediateInsertSelect() && getContext()->hasQueryContext())
+            getContext()->getQueryContext()->removeQueryAccessInfoTable(
+                StorageID{create.getDatabase(), create.getTable()}.getFullTableName());
+    };
 
     bool created = false;
     bool renamed = false;
@@ -2619,6 +2666,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
             if (is_plain_create && create.if_not_exists && e.code() == ErrorCodes::TABLE_ALREADY_EXISTS)
             {
                 InterpreterDropQuery(ast_drop, make_internal_context(/*bypass_size_guard=*/true)).execute();
+                scrub_temp_table_from_query_log();
                 create.setTable(table_to_replace_name);
                 return {};
             }
@@ -2641,14 +2689,7 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
             for (const auto & task : current_context->getRefreshSet().findTasks({create.getDatabase(), table_to_replace_name}))
                 task->start();
 
-        /// The populating INSERT SELECT ran against the internal temporary table, so its (random) name was
-        /// recorded in this query's access info and would surface in `system.query_log` `tables`. The
-        /// temporary table is an implementation detail whose random name is meaningless to the user and would
-        /// make the log non-deterministic, so drop it here. The final table name is added to the log
-        /// independently, from the query's target (see `IInterpreter::extendQueryLogElem`).
-        if (create.isCreateQueryWithImmediateInsertSelect() && getContext()->hasQueryContext())
-            getContext()->getQueryContext()->removeQueryAccessInfoTable(
-                StorageID{create.getDatabase(), create.getTable()}.getFullTableName());
+        scrub_temp_table_from_query_log();
 
         create.setTable(table_to_replace_name);
 
@@ -2674,6 +2715,9 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
                 tryLogCurrentException("InterpreterCreateQuery", "Cannot DROP temporary table");
             }
         }
+        /// The temporary name is still set on `create` here (it is reset to the final name only on the success
+        /// and lost-race-no-op paths), so scrub it before the error propagates and gets logged.
+        scrub_temp_table_from_query_log();
         throw;
     }
 }
