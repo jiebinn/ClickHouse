@@ -116,8 +116,13 @@ function setup_logs_replication()
         echo -e "$statement_print"
         echo "::endgroup::"
 
+        # `metric_log` (and other wide `*_log` tables) expand into a `CREATE`
+        # statement larger than the remote server's default `max_query_size`
+        # (256 KiB), so raise it or the remote parse fails with `Code: 62.
+        # Max query size exceeded`.
         echo "$statement" | clickhouse-client --database_replicated_initial_query_timeout_sec=10 \
             --distributed_ddl_task_timeout=30 --distributed_ddl_output_mode=throw_only_active \
+            --max_query_size=4194304 \
             "${CONNECTION_ARGS[@]:?}" || continue
 
         echo "Creating table system.${table}_sender" >&2
