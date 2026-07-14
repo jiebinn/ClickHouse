@@ -12,3 +12,9 @@ matching predicate, run 1 (expect 1):
 1
 matching predicate, run 2 (expect 1):
 1
+after in-place rewrite, matching row is found (expect 1):
+1
+post-rewrite query was a cache miss (expect 1):
+1
+post-rewrite query was not a cache hit (expect 0):
+0
