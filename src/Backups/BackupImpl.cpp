@@ -28,6 +28,7 @@
 #include <IO/copyData.h>
 #include <Poco/Util/XMLConfiguration.h>
 #include <Poco/SAX/SAXParser.h>
+#include <Poco/SAX/XMLReader.h>
 
 #include <charconv>
 #include <filesystem>
@@ -738,6 +739,11 @@ void BackupImpl::readBackupMetadata()
 
     Poco::XML::SAXParser xml_parser;
     xml_parser.setContentHandler(&handler);
+    /// Keep the namespace prefix in the element name (the old DOM parser enabled this too). Without it a
+    /// prefixed element like <x:contents> arrives as local name "contents" and would be accepted as an
+    /// ordinary element; with it the handler sees "x:contents" and ignores it (writeBackupMetadata never
+    /// emits namespaces, so this only rejects hand-crafted manifests).
+    xml_parser.setFeature(Poco::XML::XMLReader::FEATURE_NAMESPACE_PREFIXES, true);
     try
     {
         xml_parser.parseMemoryNP(str.data(), str.size());

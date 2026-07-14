@@ -2,6 +2,7 @@
 
 #include <Common/Exception.h>
 #include <Poco/SAX/SAXParser.h>
+#include <Poco/SAX/XMLReader.h>
 
 #include <gtest/gtest.h>
 
@@ -42,6 +43,8 @@ namespace
 
         Poco::XML::SAXParser parser;
         parser.setContentHandler(&handler);
+        /// Mirror BackupImpl::readBackupMetadata so prefixed elements keep their prefix in the name.
+        parser.setFeature(Poco::XML::XMLReader::FEATURE_NAMESPACE_PREFIXES, true);
         parser.parseMemoryNP(xml.data(), xml.size());
         result.saved_exception = handler.saved_exception;
         return result;
@@ -236,4 +239,16 @@ TEST(BackupMetadataHandler, DuplicateFileFieldKeepsFirstValue)
         "</contents></config>");
     ASSERT_EQ(result.files.size(), 1u);
     EXPECT_EQ(result.files[0].at("size"), "1");
+}
+
+TEST(BackupMetadataHandler, NamespacePrefixedContentsIsNotTreatedAsContents)
+{
+    /// With namespace prefixes enabled (as in readBackupMetadata) a prefixed <x:contents> keeps its
+    /// prefix in the element name, so it does not match "contents": the header is never applied and no
+    /// files are collected (readBackupMetadata then rejects the manifest as having no <contents>).
+    auto result = parse(
+        "<config xmlns:x=\"urn:foo\"><version>1</version>"
+        "<x:contents><file><name>a</name><size>1</size></file></x:contents></config>");
+    EXPECT_FALSE(result.header_seen);
+    EXPECT_TRUE(result.files.empty());
 }
