@@ -763,17 +763,21 @@ BlockIO InterpreterSystemQuery::execute()
             ExternalDictionariesLoader::resetAll();
             break;
         }
-        case Type::UNLOAD_DICTIONARY: {
+        case Type::UNLOAD_DICTIONARY:
+        {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_DICTIONARY);
 
             auto & external_dictionaries_loader = system_context->getExternalDictionariesLoader();
             external_dictionaries_loader.unloadDictionary(query.getTable(), getContext());
+            ExternalDictionariesLoader::resetAll();
             break;
         }
-        case Type::UNLOAD_DICTIONARIES: {
+        case Type::UNLOAD_DICTIONARIES:
+        {
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_DICTIONARY);
             auto & external_dictionaries_loader = system_context->getExternalDictionariesLoader();
             external_dictionaries_loader.unloadAllDictionaries();
+            ExternalDictionariesLoader::resetAll();
             break;
         }
         case Type::RELOAD_MODEL:
