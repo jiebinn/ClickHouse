@@ -1,7 +1,7 @@
 [
   {
     "source": "/category/changelog",
-    "destination": "/"
+    "destination": "/resources/changelogs/oss/2026"
   },
   {
     "source": "/knowledgebase",
