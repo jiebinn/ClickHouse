@@ -1,0 +1,31 @@
+<test>
+    <settings>
+        <allow_suspicious_codecs>1</allow_suspicious_codecs>
+    </settings>
+
+    <substitutions>
+        <substitution>
+            <name>type</name>
+            <values>
+                <value>UInt8</value>
+                <value>UInt16</value>
+                <value>UInt32</value>
+                <value>UInt64</value>
+            </values>
+        </substitution>
+    </substitutions>
+
+    <create_query>
+        CREATE TABLE IF NOT EXISTS delta_decode_{type}
+        (n {type} CODEC(Delta))
+        ENGINE = MergeTree
+        ORDER BY tuple()
+    </create_query>
+
+    <fill_query>INSERT INTO delta_decode_{type} (n) SELECT number FROM system.numbers LIMIT 100000000 SETTINGS max_threads=1</fill_query>
+    <fill_query>OPTIMIZE TABLE delta_decode_{type} FINAL SETTINGS optimize_throw_if_noop = 1</fill_query>
+
+    <query>SELECT count() FROM delta_decode_{type} WHERE NOT ignore(n) SETTINGS max_threads=1</query>
+
+    <drop_query>DROP TABLE IF EXISTS delta_decode_{type}</drop_query>
+</test>
