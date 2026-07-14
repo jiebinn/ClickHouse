@@ -342,9 +342,17 @@ churn() {
     done
 }
 
-# Create a role and immediately reference it by name (CREATE USER ... DEFAULT
-# ROLE, CREATE QUOTA ... TO). On the buggy build the role gets evicted from the
-# local cache in between and one of these fails with UNKNOWN_ROLE.
+# Create access entities and immediately reference them by name (CREATE ROLE
+# ... SETTINGS PROFILE, CREATE USER ... DEFAULT ROLE, CREATE QUOTA ... TO). On
+# the buggy build any of the freshly created entities can be evicted from the
+# local cache in between, so the referencing statement fails with the
+# type-specific not-found error (THERE_IS_NO_PROFILE, UNKNOWN_ROLE,
+# UNKNOWN_USER -- all "There is no ..." from IAccessStorage::throwNotFound).
+# The race is generic across entity types, so every such error is a detection;
+# matching only UNKNOWN_ROLE would silently retry iterations where the race hit
+# the profile or user lookup first. Within a victim each entity is created
+# before use, names are unique per worker and nothing drops them mid-chain, so
+# on a fixed build none of these errors can appear.
 victim() {
     local w=$1 name="race_$w" out
     while [ "$(date +%s)" -lt "$END" ] && [ ! -e "$FOUND" ]; do
@@ -359,7 +367,7 @@ victim() {
             CREATE QUOTA $name KEYED BY user_name FOR INTERVAL 1 hour NO LIMITS TO $name;
         " 2>&1)
         case "$out" in
-            *UNKNOWN_ROLE* | *"There is no role"*)
+            *UNKNOWN_ROLE* | *THERE_IS_NO_PROFILE* | *UNKNOWN_USER* | *"There is no"*)
                 echo "$out" > "$FOUND"
                 return ;;
         esac
