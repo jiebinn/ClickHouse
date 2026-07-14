@@ -1951,6 +1951,14 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     /// databases (getUUID() == Nil, e.g. Ordinary) we keep the previous behavior: the table is created first
     /// and an orphan is left if the INSERT SELECT fails. Materialized/window views are excluded (they can own
     /// an inner table and carry source-view dependencies, so they keep the previous behavior for now).
+    ///
+    /// As a consequence, the final table name is only registered by the publishing RENAME, so the populating
+    /// `SELECT` runs while the destination does not yet exist. A `SELECT` that references the destination
+    /// itself -- directly (`CREATE TABLE dst ... AS SELECT * FROM dst`) or indirectly (e.g. via
+    /// `system.tables`) -- therefore no longer observes it as an already-created empty table the way the
+    /// previous create-then-populate order did. This narrow, intentional visibility change (the table becomes
+    /// visible only once fully populated) is covered by
+    /// `04547_create_as_select_destination_not_visible_during_populate`.
     if (create.isCreateQueryWithImmediateInsertSelect()
         && !create.is_materialized_view && !create.is_window_view
         && database && database->getUUID() != UUIDHelpers::Nil)
