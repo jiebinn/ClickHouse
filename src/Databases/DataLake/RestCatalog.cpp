@@ -74,7 +74,10 @@ namespace DB::FailPoints
 
 namespace DB::DatabaseDataLakeSetting
 {
+    extern const DatabaseDataLakeSettingsString onelake_tenant_id;
     extern const DatabaseDataLakeSettingsString onelake_bearer_token;
+    extern const DatabaseDataLakeSettingsString onelake_client_id;
+    extern const DatabaseDataLakeSettingsString onelake_client_secret;
 }
 
 namespace DataLake
@@ -350,8 +353,13 @@ DB::HTTPHeaderEntries OneLakeCatalog::getAuthHeaders(const CatalogState & catalo
 
 void OneLakeCatalog::validateSettingsChanges(const DB::SettingsChanges & changes, bool bearer_mode)
 {
-    static const std::unordered_set<std::string> bearer_mode_settings = {"onelake_tenant_id", "onelake_bearer_token"};
-    static const std::unordered_set<std::string> client_mode_settings = {"onelake_tenant_id", "onelake_client_id", "onelake_client_secret"};
+    static const std::unordered_set<std::string> bearer_mode_settings = {
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_tenant_id),
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_bearer_token)};
+    static const std::unordered_set<std::string> client_mode_settings = {
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_tenant_id),
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_id),
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_secret)};
 
     const auto & alterable_settings = bearer_mode ? bearer_mode_settings : client_mode_settings;
     for (const auto & change : changes)
@@ -391,13 +399,13 @@ ICatalog::PreparedSettingsChangesPtr OneLakeCatalog::prepareSettingsChanges(cons
 
     for (const auto & change : changes)
     {
-        if (change.name == "onelake_tenant_id")
+        if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_tenant_id))
             new_state.tenant_id = change.value.safeGet<String>();
-        else if (change.name == "onelake_bearer_token")
+        else if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_bearer_token))
             new_state.bearer_token = change.value.safeGet<String>();
-        else if (change.name == "onelake_client_id")
+        else if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_id))
             new_state.client_id = change.value.safeGet<String>();
-        else if (change.name == "onelake_client_secret")
+        else if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_secret))
             new_state.client_secret = change.value.safeGet<String>();
         else
             throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Unexpected setting `{}` after validation", change.name);

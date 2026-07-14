@@ -1545,6 +1545,7 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
     show_result = node.query(f"SHOW CREATE DATABASE {db_name}")
     assert "tenant-2" in show_result
     assert new_token not in show_result
+    assert old_token not in show_result
     assert "[HIDDEN]" in show_result
 
     engine_full_with_secrets = node.query(
