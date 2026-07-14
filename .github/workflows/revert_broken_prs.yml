@@ -354,30 +354,16 @@ jobs:
 
             # Notify the original author and reviewers that their PR was reverted. A plain
             # @mention in the PR body triggers a GitHub notification, so an author whose PR was
-            # auto-reverted finds out even if nobody pinged them in Slack. Reviewers are taken
-            # from submitted reviews. The author goes first, then reviewers, and the same
-            # filtering applies to both. Any failure listing reviews is non-fatal — a missing
-            # cc line must not block the revert.
+            # auto-reverted finds out even if nobody pinged them in Slack. Collect the author
+            # plus everyone who submitted a review, drop automation accounts (GitHub App logins
+            # end in a literal "[bot]"; ClickHouse's own robots do not, so they are named) and
+            # the "null" jq emits for a since-deleted account, then `sort -u` de-duplicates.
+            # Listing reviews is best-effort — a failure here must not block the revert.
             pr_author=$(echo "$pr_json" | jq -r '.user.login // empty')
-            reviewers=$(gh api "repos/$GH_REPO/pulls/$pr_number/reviews" --paginate --jq '.[].user.login // empty' 2>/dev/null \
-              | sort -u || true)
-
-            mentions=""
-            for user in $pr_author $reviewers; do
-              [ -z "$user" ] && continue
-              # Skip automation accounts, which do not need a notification: GitHub App logins
-              # end in a literal "[bot]" (the brackets are escaped so the case pattern treats
-              # them literally rather than as a glob character class), and ClickHouse's own
-              # robots do not, so they are listed by name. "null" is what jq would emit for a
-              # review left by a since-deleted account.
-              case "$user" in
-                null | *\[bot\] | clickhouse-gh | robot-clickhouse | clickhouse-robot-gh) continue ;;
-              esac
-              case " $mentions " in
-                *" @$user "*) continue ;;   # already mentioned
-              esac
-              mentions="${mentions:+$mentions }@$user"
-            done
+            mentions=$( { echo "$pr_author"; gh api "repos/$GH_REPO/pulls/$pr_number/reviews" --paginate --jq '.[].user.login // empty' 2>/dev/null; } \
+              | sed '/^$/d' \
+              | grep -vxE 'null|.*\[bot\]|clickhouse-gh|robot-clickhouse|clickhouse-robot-gh' \
+              | sort -u | sed 's/^/@/' | paste -sd' ' - || true)
 
             mentions_line=""
             if [ -n "$mentions" ]; then
