@@ -17,7 +17,10 @@ insert into ${CLICKHOUSE_DATABASE}.test select number, toString(number) from num
 backup table ${CLICKHOUSE_DATABASE}.test to Disk('backups', '${CLICKHOUSE_TEST_UNIQUE_NAME}');
 " | grep -o "BACKUP_CREATED"
 
+# Clamping the out-of-range setting emits a `SettingsSanity` warning; silence the server logs
+# so the shell test does not fail on non-empty stderr.
 ${CLICKHOUSE_CLIENT} -m --query "
+set send_logs_level = 'error';
 set min_bytes_to_use_direct_io = 1, max_read_buffer_size_local_fs = 10000000000000000000;
 restore table ${CLICKHOUSE_DATABASE}.test as ${CLICKHOUSE_DATABASE}.test2 from Disk('backups', '${CLICKHOUSE_TEST_UNIQUE_NAME}');
 " | grep -o "RESTORED"

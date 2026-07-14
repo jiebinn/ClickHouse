@@ -15,8 +15,12 @@ DATA_FILE="${CLICKHOUSE_USER_FILES:?}/${FILE_NAME}"
 
 ${CLICKHOUSE_CLIENT} --query "select number from numbers(1000) format CSV" > "${DATA_FILE}"
 
-${CLICKHOUSE_CLIENT} --query "
+# Clamping the out-of-range setting emits a `SettingsSanity` warning; silence the server logs
+# so the shell test does not fail on non-empty stderr.
+${CLICKHOUSE_CLIENT} -m --query "
+set send_logs_level = 'error';
 select sum(c1) from file('${FILE_NAME}', 'CSV', 'c1 UInt64')
-settings max_read_buffer_size = 10000000000000000000, storage_file_read_method = 'pread'"
+settings max_read_buffer_size = 10000000000000000000, storage_file_read_method = 'pread';
+"
 
 rm -f "${DATA_FILE}"
