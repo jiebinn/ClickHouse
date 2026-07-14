@@ -47,7 +47,7 @@ SETTINGS max_rows_to_transfer = 10, enable_analyzer = 0; -- { serverError SET_SI
 SELECT count() >= 0 FROM t1_dist WHERE a GLOBAL IN (SELECT a FROM t2_dist)
 SETTINGS max_rows_to_transfer = 10, transfer_overflow_mode = 'break';
 
--- Sanity: with the limit relaxed, the same queries succeed under the new
+-- Sanity: with the limit relaxed, the same queries succeed under the
 -- analyzer. This verifies that we haven't broken the happy path.
 SELECT count() FROM t1_dist AS t1 GLOBAL JOIN t2_dist AS t2 ON t1.a = t2.a
 SETTINGS max_rows_to_transfer = 0;

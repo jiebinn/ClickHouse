@@ -279,9 +279,24 @@ git ls-files -z "$ROOT_PATH" | xargs -0 stat "$STAT_FMT_FLAG" "$STAT_FMT" 2>/dev
 # underscores (e.g. `use_new_analyzer`) are intentionally not matched. Besides the adjacent
 # forms ("new analyzer", "new query analyzer"), it also catches the split phrasing
 # "new and (the) old analyzer", where "new" refers to the analyzer at a distance.
-git ls-files $ROOT_PATH/src $ROOT_PATH/base $ROOT_PATH/programs $ROOT_PATH/utils $ROOT_PATH/docs $ROOT_PATH/tests |
-    grep -E '\.(md|mdx|cpp|h|sql|sh|py|j2)$' |
-    grep -vE '(^|/)changelogs/(.+/)?v?[0-9][^/]*$|(^|/)private-changelogs/|(^|/)changelog\.mdx?$' |
-    xargs grep -HniP '\bnew([ \t]+and[ \t]+(the[ \t]+)?old)?[ \t-]+(query[ \t-]+)?analyzer\b' 2>/dev/null |
+# A second pass additionally catches wrapped comments where "new" ends one line and
+# "analyzer" continues on the next (possibly after a comment leader such as `--`, `#`,
+# `//` or `*`), which the line-oriented pattern above cannot see across the newline.
+analyzer_wording_files=$(
+    git ls-files $ROOT_PATH/src $ROOT_PATH/base $ROOT_PATH/programs $ROOT_PATH/utils $ROOT_PATH/docs $ROOT_PATH/tests |
+        grep -E '\.(md|mdx|cpp|h|sql|sh|py|j2)$' |
+        grep -vE '(^|/)changelogs/(.+/)?v?[0-9][^/]*$|(^|/)private-changelogs/|(^|/)changelog\.mdx?$'
+)
+{
+    # Adjacent forms on a single line, reported with the file name and line number.
+    echo "$analyzer_wording_files" |
+        xargs grep -HniP '\bnew([ \t]+and[ \t]+(the[ \t]+)?old)?[ \t-]+(query[ \t-]+)?analyzer\b' 2>/dev/null
+    # Wrapped comments spanning a single newline. The "-z" mode treats each file as one record
+    # so the pattern can match across the line break; it is anchored to exactly one newline to
+    # avoid matching a distant "new" and "analyzer" that merely appear in the same file.
+    echo "$analyzer_wording_files" |
+        xargs grep -HoPz '\bnew\b[ \t]*(query[ \t]*)?\n[ \t]*([-#*/;]+[ \t]*)?(query[ \t]*)?analyzer\b' 2>/dev/null |
+        tr '\0' '\n'
+} |
     grep -P '.' &&
     echo 'The analyzer is enabled by default since ClickHouse 24.3 and is no longer new. Write "the analyzer" or "Analyzer" instead of "new analyzer"/"new query analyzer" in the lines above.'
