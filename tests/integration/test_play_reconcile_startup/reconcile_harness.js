@@ -451,6 +451,13 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function runScenario(js, config) {
     const { sandbox, stores, stats } = makeContext(config);
     vm.runInContext(js, sandbox, { filename: 'play.html.js' });
+    /// A scenario may interact with the bootstrap workspace while IndexedDB is still opening
+    /// (see the dirty-startup scenario): run `config.duringLoad(sandbox)` inside the `openDelayMs`
+    /// window, before `reconcileStartup` takes over the workspace (`bootstrap_settled`).
+    if (config.duringLoad) {
+        await sleep(config.duringLoadDelayMs || 5);
+        config.duringLoad(sandbox);
+    }
     /// Startup is asynchronous: `reconcileStartup` awaits IndexedDB and ends with the debounced
     /// `scheduleSave` (400 ms), whose `persist` writes the reconciled workspace back. Wait for
     /// that write — it marks reconciliation as complete and persisted.
@@ -601,6 +608,46 @@ async function main() {
         check('stale-reload-run-race', 'no blank Scratch is re-persisted to IndexedDB',
             !r.persisted.some(p => p.title === 'Scratch'),
             r.persisted.map(p => p.title));
+    }
+
+    /// Guard (dirty-startup run leak): opening a `?run=1#<query>` auto-run link and typing into the
+    /// bootstrap workspace before IndexedDB resolves makes reconciliation keep the LIVE tabs
+    /// (`bootstrap_dirty`) and abandon the startup auto-run. The global `run_immediately` must be
+    /// cleared when that path wins: otherwise it survives the merge, and the next `syncHistory`
+    /// (e.g. switching into a clean, run-backed `Report` tab, whose `tabReflectsRun` is true) would
+    /// recompute `run=1` as `run_immediately && tabReflectsRun(tab)` and re-stamp `?run=1` onto
+    /// `Report`'s URL — so a later reload auto-executes a query the user never asked to auto-run.
+    {
+        const r = await runScenario(js, {
+            href: base + '?run=1#' + encodeURIComponent('SELECT 111'),
+            historyState: null,
+            openDelayMs: 30,
+            /// A genuine keystroke into the bootstrap editor while IndexedDB is still opening. The
+            /// page's real synthetic edits carry `isTrusted === false` and are ignored by
+            /// `markBootstrapDirty`; a plain event object with `isTrusted: true` mimics a real one.
+            duringLoad: (sandbox) => {
+                vm.runInContext(
+                    "query_area.value = 'SELECT 999';" +
+                    "query_area.dispatchEvent({ type: 'input', isTrusted: true });",
+                    sandbox);
+            },
+            seedTabs: [
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: { ran: true, query: 'SELECT 1', params: {} }, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't8', tabOrder: ['t8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('dirty-startup-run-leak', 'the live typed tab and the restored Report both survive the merge',
+            r.live.tabs.some(t => t.query === 'SELECT 999') && r.live.tabs.some(t => t.title === 'Report'),
+            r.live);
+        /// Now switch into the clean, run-backed Report, as the user would. With the leak,
+        /// `syncHistory` re-stamps `run=1` onto its URL; with the fix it does not.
+        const report = r.live.tabs.find(t => t.title === 'Report');
+        await vm.runInContext(`switchToTab(${JSON.stringify(report.id)})`, r.sandbox);
+        await sleep(50);
+        const switched_url = new URL(r.sandbox.location.href);
+        check('dirty-startup-run-leak', 'switching to the run-backed Report does not re-stamp run=1',
+            switched_url.searchParams.get('run') === null && switched_url.searchParams.get('tab') === 'Report',
+            r.sandbox.location.href);
     }
 
     if (failures) {

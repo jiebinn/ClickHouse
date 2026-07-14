@@ -8303,6 +8303,17 @@ async function reconcileStartup() {
             /// tabs alongside it, so neither the fresh work nor the persisted tabs are lost.
             /// Merely skipping the restore is not enough: the trailing `scheduleSave` would
             /// `clear()` the store (see `persist`) and drop the saved tabs permanently.
+            ///
+            /// Once the live bootstrap workspace wins, the startup `run=1` directive is spent: it
+            /// was meant to auto-run the URL's original query in the bootstrap tab, but the user's
+            /// live interaction superseded it and the deferred auto-run is skipped for a dirty
+            /// startup (see the `!bootstrap_dirty` guard on `postAll` below). It must also be
+            /// dropped from the global `run_immediately`, exactly as for `stale_blank_reload_bare`
+            /// above: otherwise the flag survives, and the next `syncHistory`/`saveHistory`
+            /// recomputes `run=1` as `run_immediately && tabReflectsRun(tab)`, so switching into a
+            /// clean, run-backed tab (e.g. a restored `Report`) would re-stamp `run=1` onto its URL
+            /// and auto-execute it on the NEXT reload — an auto-run the user never asked of it.
+            run_immediately = false;
             captureActiveTab();
             const liveTabs = tabs;
             /// Both id sequences start at `t1`, so the saved ids can collide with the live ids.
