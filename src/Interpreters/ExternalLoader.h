@@ -109,7 +109,7 @@ public:
     void joinLoadingThreads();
 
     /// Returns the status of the object.
-    /// If the object has not been loaded yet then the function returns Status::NOT_LOADED.
+    /// If the object is not currently loaded in memory then the function returns Status::NOT_LOADED.
     /// If the specified name isn't found in the configuration then the function returns Status::NOT_EXIST.
     Status getCurrentStatus(const String & name) const;
 
