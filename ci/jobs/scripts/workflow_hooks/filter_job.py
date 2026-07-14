@@ -445,7 +445,11 @@ def should_skip_merge_queue_job(job_name):
     deliberately minimal so it cannot skip the build/style/fast-test jobs the
     queue always needs. The skip condition matches the in-job selection in
     `functional_tests.py` (both rely on `Targeting.get_changed_tests`), so the
-    early exit and the config-time skip never disagree.
+    early exit and the config-time skip never disagree. `get_changed_tests`
+    resolves data fixtures (a `.parquet`/`.tsv` under `tests/queries/0_stateless/`,
+    even one nested in a subdirectory) back to the tests that consume them, so a
+    fixture-only PR still reruns the affected test surface instead of being
+    skipped here as "no changed tests".
     """
     global _info_cache
     if _info_cache is None:
