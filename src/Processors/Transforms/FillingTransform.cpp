@@ -1,6 +1,7 @@
 #include <Processors/Transforms/FillingTransform.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ProcessList.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/IDataType.h>
@@ -233,7 +234,8 @@ FillingTransform::FillingTransform(
     const SortDescription & sort_description_,
     const SortDescription & fill_description_,
     InterpolateDescriptionPtr interpolate_description_,
-    const bool use_with_fill_by_sorting_prefix_)
+    const bool use_with_fill_by_sorting_prefix_,
+    QueryStatusPtr process_list_element_)
     : ISimpleTransform(header_, std::make_shared<const Block>(transformHeader(*header_, fill_description_)), true)
     , sort_description(deduplicateSortDescription(sort_description_, *header_))
     , fill_description(fill_description_)
@@ -241,6 +243,7 @@ FillingTransform::FillingTransform(
     , filling_row(fill_description_)
     , next_row(fill_description_)
     , use_with_fill_by_sorting_prefix(use_with_fill_by_sorting_prefix_)
+    , process_list_element(std::move(process_list_element_))
 {
     if (interpolate_description)
     {
@@ -368,6 +371,20 @@ IProcessor::Status FillingTransform::prepare()
     }
 
     return ISimpleTransform::prepare();
+}
+
+bool FillingTransform::isCancelledOrTimeLimitExceeded()
+{
+    if (isCancelled())
+        return true;
+
+    /// A single WITH FILL range can expand into billions of rows inside one transform() call, so the
+    /// executor never gets a chance to enforce limits (max_execution_time) between work() calls.
+    /// Enforce it here too; this throws TIMEOUT_EXCEEDED / QUERY_WAS_CANCELLED when appropriate.
+    if (process_list_element)
+        return !process_list_element->checkTimeLimit();
+
+    return false;
 }
 
 void FillingTransform::interpolate(const MutableColumns & result_columns, Block & interpolate_block)
@@ -567,7 +584,7 @@ bool FillingTransform::generateSuffixIfNeeded(
         if (++rows_since_last_cancel_check == DEFAULT_BLOCK_SIZE)
         {
             rows_since_last_cancel_check = 0;
-            if (isCancelled())
+            if (isCancelledOrTimeLimitExceeded())
                 break;
         }
 
@@ -694,6 +711,14 @@ void FillingTransform::transformRange(
 
     for (size_t row_ind = range_begin; row_ind < range_end; ++row_ind)
     {
+        /// Stop promptly once the query is cancelled. The inner generation loops below already check
+        /// this, but a break there only ends the current gap; without this check the outer loop would
+        /// keep regenerating up to DEFAULT_BLOCK_SIZE rows for every remaining input row after
+        /// cancellation (a slow drain, effectively a hang for expensive per-row work like INTERPOLATE).
+        /// `isCancelled` is set by the executor when max_execution_time is exceeded or on KILL QUERY.
+        if (isCancelled())
+            break;
+
         logDebug("row", row_ind);
         logDebug("filling_row", filling_row);
         logDebug("next_row", next_row);
@@ -726,7 +751,7 @@ void FillingTransform::transformRange(
             if (++rows_since_last_cancel_check == DEFAULT_BLOCK_SIZE)
             {
                 rows_since_last_cancel_check = 0;
-                if (isCancelled())
+                if (isCancelledOrTimeLimitExceeded())
                     break;
             }
 
@@ -753,7 +778,7 @@ void FillingTransform::transformRange(
                     if (++rows_since_last_cancel_check == DEFAULT_BLOCK_SIZE)
                     {
                         rows_since_last_cancel_check = 0;
-                        if (isCancelled())
+                        if (isCancelledOrTimeLimitExceeded())
                             break;
                     }
 
@@ -764,7 +789,7 @@ void FillingTransform::transformRange(
 
                 } while (filling_row.next(next_row, filling_row_changed));
 
-                if (isCancelled())
+                if (isCancelledOrTimeLimitExceeded())
                     break;
             }
         }
@@ -889,6 +914,10 @@ void FillingTransform::transform(Chunk & chunk)
 
     for (size_t row_ind = 0; row_ind < num_rows;)
     {
+        /// Stop promptly on cancellation instead of processing every remaining range.
+        if (isCancelled())
+            break;
+
         /// find next range
         auto current_sort_prefix_end_pos = getRangeEnd(
             row_ind,
