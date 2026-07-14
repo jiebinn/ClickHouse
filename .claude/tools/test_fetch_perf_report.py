@@ -164,6 +164,34 @@ def test_maybe_decompress_handles_plain_gzip_zstd():
     assert fpr.maybe_decompress(zst) == plain
 
 
+def test_stream_to_file_handles_plain_gzip_zstd():
+    import gzip as _gzip
+    import io as _io
+    import subprocess as _sp
+
+    plain = b"metric\tleft\tright\n" + b"memory_usage\t100\t90\n" * 10000  # >4 bytes, multi-chunk
+    zst = _sp.run(["zstd", "-cq"], input=plain, capture_output=True).stdout
+    variants = {"plain": plain, "gzip": _gzip.compress(plain), "zstd": zst}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, body in variants.items():
+            dest = os.path.join(tmp, name)
+            # A BytesIO stands in for the urlopen response: same .read(size) contract.
+            fpr._stream_to_file(_io.BytesIO(body), dest)
+            with open(dest, "rb") as f:
+                assert f.read() == plain, name
+
+
+def test_prefixed_reader_reassembles_stream():
+    import io as _io
+
+    payload = bytes(range(256)) * 8
+    reader = fpr._PrefixedReader(payload[:4], _io.BytesIO(payload[4:]))
+    # Small reads across the prefix boundary and a final read-all must round-trip.
+    got = reader.read(2) + reader.read(5) + reader.read()
+    assert got == payload
+
+
 def test_download_shard_isolates_failures():
     import gzip as _gzip
     import subprocess as _sp
@@ -193,5 +221,7 @@ if __name__ == "__main__":
     test_classification_matches_compare_sh()
     test_summary_counts()
     test_maybe_decompress_handles_plain_gzip_zstd()
+    test_stream_to_file_handles_plain_gzip_zstd()
+    test_prefixed_reader_reassembles_stream()
     test_download_shard_isolates_failures()
     print("All fetch_perf_report tests passed (or skipped).")

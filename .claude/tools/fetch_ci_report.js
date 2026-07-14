@@ -115,8 +115,14 @@ function fetchUrl(urlString, credentials = null) {
       const chunks = [];
       stream.on('data', chunk => chunks.push(chunk));
       stream.on('end', () => {
-        const body = maybeDecompress(Buffer.concat(chunks)).toString('utf8');
-        resolve(body);
+        // maybeDecompress may throw (missing zstd binary, corrupt archive); a throw from this
+        // async handler would escape the Promise as an uncaught exception, so surface it as a
+        // normal rejection instead.
+        try {
+          resolve(maybeDecompress(Buffer.concat(chunks)).toString('utf8'));
+        } catch (err) {
+          reject(err);
+        }
       });
       stream.on('error', reject);
     });

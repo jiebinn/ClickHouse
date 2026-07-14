@@ -92,14 +92,74 @@ def fetch_url(url):
     return _read_url_bytes(url).decode("utf-8")
 
 
+class _PrefixedReader:
+    """File-like wrapper that yields `prefix` bytes before the rest of `stream`.
+
+    Lets us peek at the magic bytes for format detection and still stream the whole
+    body through a decompressor without ever holding it fully in memory.
+    """
+
+    def __init__(self, prefix, stream):
+        self._prefix = prefix
+        self._stream = stream
+
+    def read(self, size=-1):
+        if not self._prefix:
+            return self._stream.read(size)
+        if size is None or size < 0:
+            data, self._prefix = self._prefix + self._stream.read(), b""
+            return data
+        if size <= len(self._prefix):
+            data, self._prefix = self._prefix[:size], self._prefix[size:]
+            return data
+        data, self._prefix = self._prefix + self._stream.read(size - len(self._prefix)), b""
+        return data
+
+
+def _stream_to_file(resp, dest):
+    """Stream `resp` to `dest`, transparently decompressing zstd/gzip by magic bytes.
+
+    Compressed perf artifacts exist precisely for the large shards, and several shards
+    download in parallel, so the body is streamed in chunks rather than buffered.
+    """
+    header = resp.read(4)
+    source = _PrefixedReader(header, resp)
+    with open(dest, "wb") as f:
+        if header == b"\x28\xb5\x2f\xfd":  # zstd magic
+            try:
+                import zstandard  # optional dependency
+                shutil.copyfileobj(zstandard.ZstdDecompressor().stream_reader(source), f)
+            except ImportError:
+                proc = subprocess.Popen(["zstd", "-dcq"], stdin=subprocess.PIPE, stdout=f,
+                                        stderr=subprocess.PIPE)
+                shutil.copyfileobj(source, proc.stdin)
+                proc.stdin.close()
+                _, stderr = proc.communicate(timeout=120)
+                if proc.returncode != 0:
+                    raise RuntimeError(f"zstd decompression failed: {stderr.decode('utf-8', 'replace')}")
+        elif header[:2] == b"\x1f\x8b":  # gzip magic
+            with gzip.GzipFile(fileobj=source) as gz:
+                shutil.copyfileobj(gz, f)
+        else:
+            shutil.copyfileobj(source, f)
+
+
 def download_url(url, dest):
     """Download a URL to a file, transparently decompressing. Raises on failure.
 
-    Shard-local failures are isolated by the `download_shard` worker, not here.
+    Falls back to `url + '.zst'` on 404/403. Shard-local failures are isolated by the
+    `download_shard` worker, not here.
     """
-    data = _read_url_bytes(url)
-    with open(dest, "wb") as f:
-        f.write(data)
+    candidates = [url] if url.endswith(".zst") else [url, url + ".zst"]
+    last_error = None
+    for candidate in candidates:
+        try:
+            with urlopen(candidate, timeout=60) as resp:
+                _stream_to_file(resp, dest)
+                return
+        except HTTPError as e:
+            last_error = f"HTTP {e.code}: {e.reason} for {candidate}"
+    raise RuntimeError(last_error)
 
 
 # ---------------------------------------------------------------------------
