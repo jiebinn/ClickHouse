@@ -21,6 +21,10 @@ ${CLICKHOUSE_CLIENT} --allow_insert_into_iceberg=1 --query "
     ALTER TABLE ${TABLE} UPDATE c1 = c1 + 100 WHERE c0 < 3, DELETE WHERE c0 > 7
 " 2>&1 | grep -oF "NOT_IMPLEMENTED"
 
+# The rejected ALTER must have no side effects: all 10 rows must survive with
+# their original c1 values (no partial UPDATE of c0 < 3, no partial DELETE of c0 > 7).
+${CLICKHOUSE_CLIENT} --query "SELECT c0, c1 FROM ${TABLE} ORDER BY c0"
+
 # A single-command mutation still works.
 ${CLICKHOUSE_CLIENT} --allow_insert_into_iceberg=1 --query "ALTER TABLE ${TABLE} DELETE WHERE c0 > 7"
 ${CLICKHOUSE_CLIENT} --query "SELECT count() FROM ${TABLE}"
