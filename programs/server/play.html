@@ -5594,9 +5594,12 @@ function addTab() {
 }
 
 /// Like `addTab`, but the new tab starts pre-filled with `query` and becomes active.
-/// Used by the databases panel when a table is opened with a new-tab gesture (middle
-/// click or Shift/Ctrl/Cmd click). `guard_paste` is set for a genuine middle click, so
-/// the activation swallows the X11 PRIMARY paste that follows focusing the editor.
+/// Used by the databases panel when a table is opened with a new-tab gesture: middle
+/// click, Shift+click, or the platform's new-tab modifier click - Cmd+click on macOS,
+/// Ctrl+click elsewhere (on macOS `Ctrl+Click` is the context-menu click, not a new-tab
+/// gesture; see the manual matrix above `onTableActivate`). `guard_paste` is set for a
+/// genuine middle click, so the activation swallows the X11 PRIMARY paste that follows
+/// focusing the editor.
 function openQueryInNewTab(query, guard_paste = false) {
     markBootstrapDirty();   /// user created a tab; reconciliation must preserve it
     captureActiveTab();
