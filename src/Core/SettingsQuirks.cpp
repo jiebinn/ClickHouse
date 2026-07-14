@@ -120,9 +120,8 @@ void doSettingsSanityCheckClamp(Settings & current_settings, LoggerPtr log)
 #undef CHECK_MAX_VALUE
 
     /// A read buffer never needs to be larger than this. An out-of-range value would be
-    /// passed straight to the allocator when constructing a read buffer, and with the
-    /// SIMD padding added by `BufferWithOwnMemory` it would trip the allocator size guard
-    /// with a `LOGICAL_ERROR` "Too large size passed to allocator".
+    /// passed straight to the allocator when constructing a read buffer, tripping its size
+    /// guard with a `LOGICAL_ERROR` "Too large size passed to allocator".
     static constexpr UInt64 max_sane_read_buffer_size = 256 * 1024 * 1024; /// 256 MiB
 
 #define CHECK_READ_BUFFER_SIZE(SETTING_VALUE) \
