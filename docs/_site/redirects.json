@@ -1,5 +1,185 @@
 [
   {
+    "source": "/category/changelog",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/archive",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/2",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/3",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/4",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/5",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/6",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/7",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/8",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/9",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/10",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/11",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/12",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/page/13",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/best-practices",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/community",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/concepts",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/core-data-concepts",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/data-export",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/data-formats",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/data-ingestion",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/data-modelling",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/data-sources",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/deleting-data",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/deployments-and-scaling",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/errors-and-exceptions",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/functions",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/language-clients",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/managing-cloud",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/managing-data",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/native-clients-and-interfaces",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/performance-and-optimizations",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/runbooks",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/security-and-authentication",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/server-admin",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/settings",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/system-tables",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/tools-and-utilities",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/troubleshooting",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/use-cases",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/errors-and-exceptions/page/2",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/managing-cloud/page/2",
+    "destination": "/"
+  },
+  {
+    "source": "/knowledgebase/tags/performance-and-optimizations/page/2",
+    "destination": "/"
+  },
+  {
     "source": "/en/:path*",
     "destination": "/:path*"
   },
@@ -493,6 +673,14 @@
   },
   {
     "source": "/cloud/get-started/cloud/use-cases/ai_ml/agent_facing_analytics",
+    "destination": "/get-started/use-cases/agentic-analytics"
+  },
+  {
+    "source": "/cloud/get-started/cloud/use-cases/AI_ML",
+    "destination": "/get-started/use-cases/agentic-analytics"
+  },
+  {
+    "source": "/cloud/get-started/cloud/use-cases/AI_ML/agent_facing_analytics",
     "destination": "/get-started/use-cases/agentic-analytics"
   },
   {
@@ -27588,6 +27776,10 @@
     "destination": "/get-started/setup/cloud"
   },
   {
+    "source": "/resources/about/cloud",
+    "destination": "/products/cloud/getting-started/intro"
+  },
+  {
     "source": "/resources/about/history",
     "destination": "https://clickhouse.com/company/our-story"
   },
@@ -51458,5 +51650,109 @@
   {
     "source": "/api-reference/:path*",
     "destination": "/products/cloud/api-reference/:path*"
+  },
+  {
+    "source": "/engines/table-engines/special/query-runner",
+    "destination": "/reference/engines/table-engines/special/query-runner"
+  },
+  {
+    "source": "/getting-started/example-datasets/job",
+    "destination": "/get-started/sample-datasets/job"
+  },
+  {
+    "source": "/integrations/airflow",
+    "destination": "/integrations/connectors/data-ingestion/etl-tools/airflow-and-clickhouse"
+  },
+  {
+    "source": "/interfaces/documentation-search",
+    "destination": "/concepts/features/interfaces/documentation-search"
+  },
+  {
+    "source": "/interfaces/web-sql",
+    "destination": "/concepts/features/interfaces/web-sql"
+  },
+  {
+    "source": "/interfaces/web-ui-color-coding",
+    "destination": "/concepts/features/interfaces/web-ui-color-coding"
+  },
+  {
+    "source": "/operations/system-tables/hypothetical_indexes",
+    "destination": "/reference/system-tables/hypothetical_indexes"
+  },
+  {
+    "source": "/operations/system-tables/stemmers",
+    "destination": "/reference/system-tables/stemmers"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/groupformat",
+    "destination": "/reference/functions/aggregate-functions/groupFormat"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesBFloat16",
+    "destination": "/reference/functions/aggregate-functions/quantilesBFloat16"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesBFloat16Weighted",
+    "destination": "/reference/functions/aggregate-functions/quantilesBFloat16Weighted"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesDD",
+    "destination": "/reference/functions/aggregate-functions/quantilesDD"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesDeterministic",
+    "destination": "/reference/functions/aggregate-functions/quantilesDeterministic"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesExact",
+    "destination": "/reference/functions/aggregate-functions/quantilesExact"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesExactHigh",
+    "destination": "/reference/functions/aggregate-functions/quantilesExactHigh"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesExactLow",
+    "destination": "/reference/functions/aggregate-functions/quantilesExactLow"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesExactWeighted",
+    "destination": "/reference/functions/aggregate-functions/quantilesExactWeighted"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesExactWeightedInterpolated",
+    "destination": "/reference/functions/aggregate-functions/quantilesExactWeightedInterpolated"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesInterpolatedWeighted",
+    "destination": "/reference/functions/aggregate-functions/quantilesInterpolatedWeighted"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesPrometheusHistogram",
+    "destination": "/reference/functions/aggregate-functions/quantilesPrometheusHistogram"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesTDigest",
+    "destination": "/reference/functions/aggregate-functions/quantilesTDigest"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesTDigestWeighted",
+    "destination": "/reference/functions/aggregate-functions/quantilesTDigestWeighted"
+  },
+  {
+    "source": "/sql-reference/aggregate-functions/reference/quantilesTiming",
+    "destination": "/reference/functions/aggregate-functions/quantilesTiming"
+  },
+  {
+    "source": "/sql-reference/statements/hypothetical-index",
+    "destination": "/reference/statements/hypothetical-index"
+  },
+  {
+    "source": "/sql-reference/window-functions/ntile",
+    "destination": "/reference/functions/window-functions/ntile"
+  },
+  {
+    "source": "/use-cases/observability/clickstack/demo-days/2026/2026-06-12",
+    "destination": "/clickstack/demo-days/2026/2026-06-12"
   }
 ]
