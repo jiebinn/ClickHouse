@@ -132,10 +132,16 @@ def _stream_to_file(resp, dest):
             except ImportError:
                 proc = subprocess.Popen(["zstd", "-dcq"], stdin=subprocess.PIPE, stdout=f,
                                         stderr=subprocess.PIPE)
-                shutil.copyfileobj(source, proc.stdin)
-                proc.stdin.close()
-                _, stderr = proc.communicate(timeout=120)
-                if proc.returncode != 0:
+                # Feed the body in and wait for the child directly: communicate() would try to
+                # flush the already-closed stdin, which raises ValueError on most Python versions.
+                try:
+                    shutil.copyfileobj(source, proc.stdin)
+                    proc.stdin.close()
+                except BrokenPipeError:
+                    pass  # zstd exited early (e.g. corrupt input); the real error is on stderr
+                stderr = proc.stderr.read()
+                proc.stderr.close()
+                if proc.wait(timeout=120) != 0:
                     raise RuntimeError(f"zstd decompression failed: {stderr.decode('utf-8', 'replace')}")
         elif header[:2] == b"\x1f\x8b":  # gzip magic
             with gzip.GzipFile(fileobj=source) as gz:

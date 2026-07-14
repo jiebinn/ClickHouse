@@ -182,6 +182,31 @@ def test_stream_to_file_handles_plain_gzip_zstd():
                 assert f.read() == plain, name
 
 
+def test_stream_to_file_zstd_cli_fallback():
+    # Force the `zstd` CLI path even where `zstandard` is installed, so the fallback the PR
+    # advertises is exercised regardless of the host's optional dependencies.
+    import io as _io
+    import subprocess as _sp
+    import sys as _sys
+
+    plain = b"metric\tleft\tright\n" + b"memory_usage\t100\t90\n" * 10000
+    zst = _sp.run(["zstd", "-cq"], input=plain, capture_output=True).stdout
+
+    saved = _sys.modules.get("zstandard", "MISSING")
+    _sys.modules["zstandard"] = None  # makes `import zstandard` raise ImportError
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, "out")
+            fpr._stream_to_file(_io.BytesIO(zst), dest)
+            with open(dest, "rb") as f:
+                assert f.read() == plain
+    finally:
+        if saved == "MISSING":
+            _sys.modules.pop("zstandard", None)
+        else:
+            _sys.modules["zstandard"] = saved
+
+
 def test_prefixed_reader_reassembles_stream():
     import io as _io
 
@@ -222,6 +247,7 @@ if __name__ == "__main__":
     test_summary_counts()
     test_maybe_decompress_handles_plain_gzip_zstd()
     test_stream_to_file_handles_plain_gzip_zstd()
+    test_stream_to_file_zstd_cli_fallback()
     test_prefixed_reader_reassembles_stream()
     test_download_shard_isolates_failures()
     print("All fetch_perf_report tests passed (or skipped).")
