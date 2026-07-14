@@ -1731,6 +1731,7 @@ const char * ParserAlias::restricted_keywords[] =
     "ASOF",
     "BETWEEN",
     "CROSS",
+    "COMMENT",
     "PASTE",
     "FINAL",
     "FORMAT",
