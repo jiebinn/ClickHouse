@@ -11,6 +11,7 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Common/UnorderedMapWithMemoryTracking.h>
+#include <Common/VectorWithMemoryTracking.h>
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
@@ -301,7 +302,7 @@ public:
         /// the value buffer in place, so sorting the shared buffer directly is a data race. Sort a
         /// local copy of the node pointers; the values are always written in sorted order.
         const auto & data_ref = data(place);
-        std::vector<Node *> sorted_value(data_ref.value.begin(), data_ref.value.end());
+        VectorWithMemoryTracking<Node *> sorted_value(data_ref.value.begin(), data_ref.value.end());
         if (!data_ref.sorted)
             ::stableSort(sorted_value.begin(), sorted_value.end(), typename Data::Comparator{});
 
