@@ -3,8 +3,8 @@
 
   // Mintlify mounts desktop dropdown menus on demand, so their image assets are
   // otherwise discovered only when a user first opens a menu. Warm the small
-  // SVGs after the initial page load to keep them off the critical render path
-  // while ensuring every navbar dropdown is ready for its first interaction.
+  // SVGs at low priority as soon as the document is ready so every navbar
+  // dropdown is prepared for its first interaction.
   var NAV_ICON_PATHS = [
     '/images/icons/icon-get-started.svg',
     '/images/icons/icon-concepts.svg',
@@ -41,9 +41,9 @@
     });
   }
 
-  if (document.readyState === 'complete') {
-    warmNavIcons();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', warmNavIcons, { once: true });
   } else {
-    window.addEventListener('load', warmNavIcons, { once: true });
+    warmNavIcons();
   }
 })();
