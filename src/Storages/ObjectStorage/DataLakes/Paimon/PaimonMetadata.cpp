@@ -334,36 +334,45 @@ PaimonTableStatePtr PaimonMetadata::loadLatestState() const
         snapshot.watermark);
 }
 
+void PaimonMetadata::validateTableIdentity() const
+{
+    /// Detect external table recreation by checking schema-0 timeMillis.
+    /// This guard is intentionally NOT tied to isMetadataCacheActive(): the schema_processor
+    /// caches schemas by id regardless of the metadata files cache capacity, so a stale schema
+    /// could otherwise be silently reused after an external DROP + re-CREATE at the same path
+    /// when paimon_metadata_files_cache_size is reloaded to 0.  Run it whenever the table
+    /// identity was latched at create time.
+    if (persistent_components.schema0_time_millis == 0)
+        return;
+
+    auto schema0_info = table_client->getTableSchemaInfoById(0);
+    auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
+    Int64 current_schema0_time_millis = 0;
+    Paimon::getValueFromJSON(current_schema0_time_millis, schema0_json, "timeMillis");
+
+    if (current_schema0_time_millis != persistent_components.schema0_time_millis)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Underlying Paimon table was recreated (schema-0 timeMillis changed: {} -> {}). "
+            "Please DROP and re-CREATE the ClickHouse external table to pick up the new table identity.",
+            persistent_components.schema0_time_millis,
+            current_schema0_time_millis);
+}
+
 void PaimonMetadata::update(const ContextPtr & /*local_context*/)
 {
     /// NOTE: This method only refreshes the snapshot state.  It does NOT re-evaluate
     /// use_paimon_metadata_files_cache because cache_ptr lives in the immutable
     /// PaimonPersistentComponents (same design as IcebergMetadata::update).
 
-    /// 0. Detect external table recreation by checking schema-0 timeMillis.
-    /// This guard is intentionally NOT tied to isMetadataCacheActive(): the schema_processor
-    /// caches schemas by id regardless of the metadata files cache capacity, so a stale schema
-    /// could otherwise be silently reused after an external DROP + re-CREATE at the same path
-    /// when paimon_metadata_files_cache_size is reloaded to 0.  Run it whenever the table
-    /// identity was latched at create time.
-    if (persistent_components.schema0_time_millis != 0)
-    {
-        auto schema0_info = table_client->getTableSchemaInfoById(0);
-        auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
-        Int64 current_schema0_time_millis = 0;
-        Paimon::getValueFromJSON(current_schema0_time_millis, schema0_json, "timeMillis");
-
-        if (current_schema0_time_millis != persistent_components.schema0_time_millis)
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Underlying Paimon table was recreated (schema-0 timeMillis changed: {} -> {}). "
-                "Please DROP and re-CREATE the ClickHouse external table to pick up the new table identity.",
-                persistent_components.schema0_time_millis,
-                current_schema0_time_millis);
-    }
+    /// Validate table identity both before and after loading the snapshot, so a
+    /// DROP + re-CREATE between the guard and loadLatestState() cannot publish
+    /// a new table instance while reusing schemas cached by schema_id.
+    validateTableIdentity();
 
     /// 1. Load new state outside any lock (I/O operations)
     auto new_state = loadLatestState();
+    validateTableIdentity();
     if (!new_state)
     {
         LOG_WARNING(log, "Paimon table has no snapshots yet, skip update");

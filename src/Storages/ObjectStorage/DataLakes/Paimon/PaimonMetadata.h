@@ -119,6 +119,9 @@ private:
     /// Load latest state from object storage (I/O outside of any lock)
     PaimonTableStatePtr loadLatestState() const;
 
+    /// Validate that the underlying Paimon table still has the same identity.
+    void validateTableIdentity() const;
+
     /// Load state for a specific snapshot ID
     PaimonTableStatePtr loadStateForSnapshot(Int64 snapshot_id) const;
 
