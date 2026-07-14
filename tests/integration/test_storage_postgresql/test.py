@@ -1249,12 +1249,14 @@ def test_postgres_query_passing_edge_cases(started_cluster):
     # ClickHouse Decimal. The Decimal text reader rejects it with a parse error, which the shared value
     # layer normalizes to BAD_ARGUMENTS, so it surfaces as a query error (and reaches the
     # MaterializedPostgreSQL catch) instead of aborting the server.
+    # Seed the wide value on the PostgreSQL side so it stays an exact numeric. Inserting the same literal
+    # through ClickHouse would type it as Float64 and fail the INSERT with DECIMAL_OVERFLOW before reaching
+    # the read path this case is about.
     num_table = "test_query_passing_numeric"
     cursor.execute(f"DROP TABLE IF EXISTS {num_table}")
     cursor.execute(f"CREATE TABLE {num_table} (a integer, v numeric)")
-    node1.query(
-        f"INSERT INTO TABLE FUNCTION postgresql('{host}', 'postgres', '{num_table}', 'postgres', '{pg_pass}') "
-        "SELECT 1, 99999999999999999999999999999999999999"
+    cursor.execute(
+        f"INSERT INTO {num_table} VALUES (1, 99999999999999999999999999999999999999)"
     )
     started_cluster.postgres_conn.commit()
     node1.query("DROP TABLE IF EXISTS pg_engine_decimal_overflow")
