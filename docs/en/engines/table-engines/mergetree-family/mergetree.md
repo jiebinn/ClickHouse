@@ -1230,14 +1230,12 @@ ClickHouse versions 22.3 through 22.7 use a different cache configuration, see [
 
 ## Column statistics {#column-statistics}
 
-<CloudNotSupportedBadge/>
-
 The statistics declaration is in the columns section of the `CREATE` query for tables from the `*MergeTree*` Family:
 
 ```sql
 CREATE TABLE tab
 (
-    a Int64 STATISTICS(TDigest, Uniq),
+    a Int64 STATISTICS(tdigest, uniq),
     b Float64
 )
 ENGINE = MergeTree
@@ -1247,7 +1245,7 @@ ORDER BY a
 We can also manipulate statistics with `ALTER` statements:
 
 ```sql
-ALTER TABLE tab ADD STATISTICS b TYPE TDigest, Uniq;
+ALTER TABLE tab ADD STATISTICS b TYPE tdigest, uniq;
 ALTER TABLE tab DROP STATISTICS a;
 ```
 
@@ -1267,7 +1265,7 @@ Part pruning allows to skip reading entire data parts when the query filter cond
 CREATE TABLE test_stats
 (
     id UInt64,
-    value Int64 STATISTICS(MinMax)
+    value Int64 STATISTICS(minmax)
 )
 ENGINE = MergeTree
 ORDER BY id;
@@ -1297,7 +1295,7 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
   - for `String` and `FixedString` columns: the total byte length of non-`NULL` values (from which the average string length can be derived);
   - for `Nullable` and `LowCardinality(Nullable)` columns: the count of `NULL` values, which the optimizer uses to discount `NULL` rows from selectivity estimates.
 
-    A single `Basic` statistic can populate several of these at once — for example on a `Nullable(UInt32)` column it tracks both numeric min/max and the null count. Compared to `MinMax`, `Basic` additionally works on `String` / `FixedString` columns and can be declared on `Nullable` wrappers of types like `UUID` or `IPv6` purely to track the null count.
+    A single `basic` statistic can populate several of these at once — for example on a `Nullable(UInt32)` column it tracks both numeric min/max and the null count. Compared to `minmax`, `basic` additionally works on `String` / `FixedString` columns and can be declared on `Nullable` wrappers of types like `UUID` or `IPv6` purely to track the null count.
 
 - `minmax`
 
@@ -1331,12 +1329,12 @@ Statistics of type `countmin` have high creation costs and potentially slow down
 
 |               | (U)Int*, Float*, Decimal(*), Date*, Boolean, Enum* | IPv4 | String or FixedString |
 |---------------|----------------------------------------------------|----- |-----------------------|
-| Basic         | ✔                                                  | ✔    | ✔                     |
-| CountMin      | ✔                                                  | ✔    | ✔                     |
-| MinMax        | ✔                                                  | ✔    | ✗                     |
-| TDigest       | ✔                                                  | ✗    | ✗                     |
-| Uniq          | ✔                                                  | ✔    | ✔                     |
-| Uniq_v2       | ✔                                                  | ✔    | ✔                     |
+| basic         | ✔                                                  | ✔    | ✔                     |
+| countmin      | ✔                                                  | ✔    | ✔                     |
+| minmax        | ✔                                                  | ✔    | ✗                     |
+| tdigest       | ✔                                                  | ✗    | ✗                     |
+| uniq          | ✔                                                  | ✔    | ✔                     |
+| uniq_v2       | ✔                                                  | ✔    | ✔                     |
 
 All of the above also accept `Nullable` and `LowCardinality(Nullable)` wrappers of the listed types. `Basic` may additionally be declared on `Nullable` wrappers of types like `UUID` or `IPv6` purely to track the null count.
 
@@ -1344,14 +1342,14 @@ All of the above also accept `Nullable` and `LowCardinality(Nullable)` wrappers 
 
 |               | Equality filters (==) | Range filters (`>, >=, <, <=`) |
 |---------------|------------------------|---------------------------------|
-| Basic         | ✗                      | ✔ (numeric columns only)        |
-| CountMin      | ✔                      | ✗                               |
-| MinMax        | ✗                      | ✔ (numeric columns only)        |
-| TDigest       | ✗                      | ✔ (numeric columns only)        |
-| Uniq          | ✔                      | ✗                               |
-| Uniq_v2       | ✔                      | ✗                               |
+| basic         | ✗                      | ✔ (numeric columns only)        |
+| countmin      | ✔                      | ✗                               |
+| minmax        | ✗                      | ✔ (numeric columns only)        |
+| tdigest       | ✗                      | ✔ (numeric columns only)        |
+| uniq          | ✔                      | ✗                               |
+| uniq_v2       | ✔                      | ✗                               |
 
-For `Basic` on `String` / `FixedString` columns the statistic only records the total
+For `basic` on `String` / `FixedString` columns the statistic only records the total
 non-NULL byte length (used to estimate average string length) and the null count;
 range filters and part pruning are not driven by it.
 
