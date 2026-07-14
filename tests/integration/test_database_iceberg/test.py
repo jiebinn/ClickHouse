@@ -1571,7 +1571,7 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
     node.query(
         f"""
         ATTACH DATABASE {db_name} ENGINE = DataLakeCatalog('http://fake-onelake:1/api')
-        SETTINGS catalog_type = 'onelake', warehouse = 'wh', onelake_tenant_id = 'tenant-1', onelake_bearer_token = '{old_token}'
+        SETTINGS catalog_type = 'onelake', warehouse = 'wh', onelake_tenant_id = 'tenant-0', onelake_tenant_id = 'tenant-1', onelake_bearer_token = '{old_token}'
         """
     )
 
@@ -1612,6 +1612,8 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
 
     show_result = node.query(f"SHOW CREATE DATABASE {db_name}")
     assert "tenant-2" in show_result
+    assert "tenant-0" not in show_result
+    assert "tenant-1" not in show_result
     assert new_token not in show_result
     assert "[HIDDEN]" in show_result
 
@@ -1619,6 +1621,8 @@ def test_alter_database_settings_onelake_persistence(started_cluster):
         f"SELECT engine_full FROM system.databases WHERE name = '{db_name}'"
     )
     assert "tenant-2" in engine_full
+    assert "tenant-0" not in engine_full
+    assert "tenant-1" not in engine_full
     assert new_token not in engine_full
 
     engine_full_with_secrets = node.query(
