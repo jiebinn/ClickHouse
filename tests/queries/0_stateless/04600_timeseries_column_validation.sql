@@ -43,9 +43,14 @@ CREATE TABLE ts_valid ENGINE = TimeSeries;
 SELECT 'ok';
 DROP TABLE ts_valid;
 
--- The documented `time_series` type override is honored: the declared tuple types propagate to the column.
+-- The documented `time_series` type override is honored: the declared tuple element types propagate both to
+-- the outer `time_series` column AND inward to the generated samples INNER COLUMNS. Asserting only the outer
+-- column is not enough - a regression that kept the outer type but left the inner samples at the defaults
+-- (`timestamp DateTime64(3)`, `value Float64`) would still pass. The second SELECT pins the inner schema by
+-- extracting the `SAMPLES INNER COLUMNS` block from the stored definition.
 CREATE TABLE ts_override (time_series Array(Tuple(UInt32, Float32))) ENGINE = TimeSeries;
 SELECT type FROM system.columns WHERE database = currentDatabase() AND table = 'ts_override' AND name = 'time_series';
+SELECT extract(create_table_query, 'SAMPLES INNER COLUMNS \(([^)]*)\)') FROM system.tables WHERE database = currentDatabase() AND name = 'ts_override';
 DROP TABLE ts_override;
 
 -- Extra outer columns other than `time_series` (e.g. `metric_name`, `tags`) are NOT rejected: the outer
