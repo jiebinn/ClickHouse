@@ -8179,9 +8179,16 @@ const url_tab_name = current_url.searchParams.get('tab');
 /// absent query the same as an empty one: a bare `?tab=Name` must not wipe the saved query.
 const has_url_query = window.location.hash.length > 1;
 const url_query = query_area.value;          /// already decoded from the hash; may be ''
-/// When the URL carries a query, defer the auto-run until after IndexedDB reconciliation,
-/// so it runs in the right tab (a switch would otherwise abort an in-flight run).
-const defer_run_for_reconcile = run_immediately && has_url_query;
+/// Defer the startup auto-run (`run=1`) until after IndexedDB reconciliation for EVERY URL, not
+/// only ones carrying a `#<query>` hash. Two reasons: (1) reconciliation may switch the active tab,
+/// and a switch would abort an in-flight run, so the run must happen in the reconciled tab; (2) a
+/// bare `?tab=<blank>&run=1` reload must not auto-run at the top level before reconciliation has
+/// read `history.state`: that early `postAll` writes `history.state` for the bootstrap tab, after
+/// which `stale_blank_reload` stops matching the pruned blank tab and the authoritative path
+/// resurrects and re-persists it. The deferred run below is gated on a non-empty `query_area.value`,
+/// so a bare `run=1` with nothing to run is simply dropped — as before, when it auto-ran an empty
+/// query that produced nothing.
+const defer_run_for_reconcile = run_immediately;
 
 /// Reconcile the freshly loaded URL (query + tab name) against tabs saved in IndexedDB.
 async function reconcileStartup() {
@@ -8254,8 +8261,10 @@ async function reconcileStartup() {
     /// navigation with `history.state === null`, so it stays authoritative and opens the named tab
     /// even when its title happens to collide with a locally pruned blank tab. The
     /// `history.state.tabName === url_tab_name` guard keeps this scoped to an entry that actually
-    /// describes the URL's named tab. `history.state` is still the reloaded value here (nothing on
-    /// the paths that consult this flag has rewritten it yet).
+    /// describes the URL's named tab. `history.state` is still the reloaded value here: nothing has
+    /// rewritten it yet because the startup `run=1` auto-run — whose `postAll`/`saveHistory` would
+    /// stamp the bootstrap tab's state over it — is deferred to the end of this function for EVERY
+    /// URL (see `defer_run_for_reconcile`), not run at the top level before reconciliation.
     const stale_blank_reload = !!(url_tab_name
         && history.state
         && history.state.tabName === url_tab_name
@@ -8565,10 +8574,10 @@ if (query_area.value)
     resizeQueryAreaIfSlightlyOverflowing();
     updateQueryParams();
 }
-else if (run_immediately && !defer_run_for_reconcile)
-{
-    postAll();
-}
+/// No top-level auto-run: every startup `run=1` is deferred to `reconcileStartup` (see
+/// `defer_run_for_reconcile`). Running it here would fire before the workspace is reconciled —
+/// in the wrong (bootstrap) tab, and, for a bare `?tab=<blank>&run=1` reload, early enough to
+/// overwrite the `history.state` that `stale_blank_reload` relies on and resurrect the blank tab.
 
 dbReady = openDb();
 reconcileStartup();

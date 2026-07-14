@@ -261,7 +261,7 @@ function makeDocument() {
 
 /// ----- Fake IndexedDB (only what `openDb`/`loadFromDb`/`persist` use) --------------------
 
-function makeIndexedDB(seedTabs, seedMeta) {
+function makeIndexedDB(seedTabs, seedMeta, openDelayMs) {
     const stores = new Map();
     stores.set('tabs', { keyPath: 'id', data: new Map((seedTabs || []).map(r => [r.id, structuredClone(r)])) });
     stores.set('meta', { keyPath: 'key', data: new Map(seedMeta ? [['state', structuredClone(seedMeta)]] : []) });
@@ -289,6 +289,8 @@ function makeIndexedDB(seedTabs, seedMeta) {
     const indexedDB = {
         open(name, version) {
             const req = { onupgradeneeded: null, onsuccess: null, onerror: null, result: null };
+            /// `openDelayMs` lets a scenario make `IndexedDB.open` slower than any auto-run that
+            /// races startup reconciliation (see the stale-reload-run-race scenario).
             setTimeout(() => {
                 req.result = {
                     objectStoreNames: { contains: (n) => stores.has(n) },
@@ -305,7 +307,7 @@ function makeIndexedDB(seedTabs, seedMeta) {
                     close() {},
                 };
                 if (req.onsuccess) req.onsuccess();
-            }, 0);
+            }, openDelayMs || 0);
             return req;
         },
     };
@@ -371,11 +373,11 @@ function makeHistory(initialState, location) {
 
 /// ----- Context assembly -------------------------------------------------------------------
 
-function makeContext({ href, historyState, seedTabs, seedMeta }) {
+function makeContext({ href, historyState, seedTabs, seedMeta, openDelayMs }) {
     const document = makeDocument();
     const location = makeLocation(href);
     const history = makeHistory(historyState, location);
-    const { indexedDB, stores, stats } = makeIndexedDB(seedTabs, seedMeta);
+    const { indexedDB, stores, stats } = makeIndexedDB(seedTabs, seedMeta, openDelayMs);
 
     const sandbox = {
         document,
@@ -571,6 +573,34 @@ async function main() {
         check('stale-reload', 'the pruned blank tab is not resurrected; the survivor is restored',
             r.live.tabs.length === 1 && r.live.tabs[0].title === 'Report',
             r.live);
+    }
+
+    /// Guard (startup race): a bare stale `?tab=<pruned blank>&run=1` reload must still fall back
+    /// to the survivor even when `IndexedDB.open` is slower than the auto-run. `run=1` carries no
+    /// `#<query>` hash here, so the auto-run must NOT fire at the top level before reconciliation:
+    /// if it did, its `postAll`/`saveHistory` would rewrite `history.state` to the bootstrap tab
+    /// while `loadFromDb` was still opening, `stale_blank_reload` would stop matching the pruned
+    /// blank tab, and the authoritative path would recreate and re-persist `Scratch`. Delaying
+    /// `IndexedDB.open` by 30 ms makes that race deterministic. With the fix (every startup `run=1`
+    /// deferred to `reconcileStartup`), the workspace still falls back to `Report` and `Scratch`
+    /// stays pruned.
+    {
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch&run=1',
+            historyState: { tabId: 't7', tabName: 'Scratch' },
+            openDelayMs: 30,
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: { ran: true, query: 'SELECT 1', params: {} }, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7', 't8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('stale-reload-run-race', 'the blank tab is not resurrected under a slow IndexedDB open',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Report',
+            r.live);
+        check('stale-reload-run-race', 'no blank Scratch is re-persisted to IndexedDB',
+            !r.persisted.some(p => p.title === 'Scratch'),
+            r.persisted.map(p => p.title));
     }
 
     if (failures) {
