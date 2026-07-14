@@ -854,6 +854,7 @@ void Client::addExtraOptions(OptionsDescription & options_description)
         ("name", po::value<std::string>()->default_value("_data"), "name of the table")
         ("format", po::value<std::string>()->default_value("TabSeparated"), "data format")
         ("structure", po::value<std::string>(), "structure")
+        ("scalar", "Send as Scalar packet (not Data)")
         ("types", po::value<std::string>(), "types");
 
     /// Commandline options related to hosts and ports.
@@ -1256,6 +1257,11 @@ void Client::readArguments(
             }
             else
                 break;
+        }
+        /// Options with no value
+        else if (in_external_group && (arg == "--scalar"))
+        {
+            external_tables_arguments.back().emplace_back(arg);
         }
         else
         {

@@ -36,6 +36,7 @@ public:
     std::string file;       /// File with data or '-' if stdin
     std::string name;       /// The name of the table
     std::string format;     /// Name of the data storage format
+    bool scalar = false;    /// Send as Scalar
 
     /// Description of the table structure: (column name, data type name)
     VectorWithMemoryTracking<std::pair<std::string, std::string>> structure;

@@ -1,3 +1,9 @@
+#include <Columns/ColumnTuple.h>
+#include <Core/Block.h>
+#include <Core/ColumnsWithTypeAndName.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <Processors/Executors/PullingPipelineExecutor.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <boost/program_options.hpp>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/IStorage.h>
@@ -30,22 +36,60 @@ namespace DB
 namespace Setting
 {
     extern const SettingsUInt64 http_max_multipart_form_data_size;
+    extern const SettingsNonZeroUInt64 max_block_size;
 }
 
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int INCORRECT_RESULT_OF_SCALAR_SUBQUERY;
 }
+
+static Block materializeScalar(InputFormatPtr input)
+{
+    Pipe pipe(std::move(input));
+    QueryPipeline pipeline(std::move(pipe));
+    PullingPipelineExecutor executor(pipeline);
+
+    Block block;
+    while (block.rows() == 0 && executor.pull(block)) {}
+    if (block.rows() != 1)
+        throw Exception(ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY, "Scalar subquery returned more than one row");
+
+    Block tmp_block;
+    while (tmp_block.rows() == 0 && executor.pull(tmp_block)) {}
+    if (tmp_block.rows() > 0)
+        throw Exception(ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY, "Scalar subquery returned more than one block");
+
+    if (block.columns() == 1)
+        return block;
+
+    return Block(ColumnsWithTypeAndName{{
+        ColumnTuple::create(block.getColumns()),
+        std::make_shared<DataTypeTuple>(block.getDataTypes(), block.getNames()),
+        "tuple"
+    }});
+}
+
 ExternalTableDataPtr BaseExternalTable::getData(ContextPtr context)
 {
     initReadBuffer();
     initSampleBlock();
-    auto input = context->getInputFormat(format, *read_buffer, sample_block, context->getSettingsRef().get("max_block_size").safeGet<UInt64>());
+    auto input = context->getInputFormat(format, *read_buffer, sample_block, context->getSettingsRef()[Setting::max_block_size]);
 
     auto data = std::make_unique<ExternalTableData>();
     data->pipe = std::make_unique<QueryPipelineBuilder>();
-    data->pipe->init(Pipe(std::move(input)));
     data->table_name = name;
+    data->scalar = scalar;
+
+    if (scalar)
+    {
+        auto block = materializeScalar(std::move(input));
+        auto source = std::make_shared<SourceFromSingleChunk>(std::make_shared<const Block>(Block{block}));
+        data->pipe->init(Pipe(source));
+    }
+    else
+        data->pipe->init(Pipe(std::move(input)));
 
     return data;
 }
@@ -154,6 +198,8 @@ ExternalTable::ExternalTable(const boost::program_options::variables_map & exter
         format = external_options["format"].as<std::string>();
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "--format field have not been provided for external table");
+
+    scalar = external_options.contains("scalar");
 
     if (external_options.contains("structure"))
         parseStructureFromStructureField(external_options["structure"].as<std::string>());
