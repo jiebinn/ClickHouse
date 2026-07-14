@@ -17,6 +17,9 @@
 997007
 996007
 995007
+--- QCC ProfileEvents (warm has 0 hits, cached has hits)
+1
+1
 --- After DROP PARTITION: ground truth (QCC off) comes from partition 1
 499007
 498007
@@ -29,3 +32,28 @@
 497007
 496007
 495007
+--- QCC ProfileEvents after DROP PARTITION: no hits (key invalidated)
+1
+--- ASC after warming DESC: distinct direction key, must not hit
+7
+1007
+2007
+3007
+4007
+7
+1007
+2007
+3007
+4007
+1
+--- Negative LIMIT: correct result, TopK-QCC path does not engage
+4007
+3007
+2007
+1007
+7
+4007
+3007
+2007
+1007
+7
