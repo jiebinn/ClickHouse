@@ -845,11 +845,13 @@ private:
         info.last_successful_update_time = TimePoint();
     }
 
-    bool unload(Info * info){
+    bool unload(Info * info)
+    {
         if (!info)
             return false;
 
-        if (info->isLoading()){
+        if (info->isLoading())
+        {
             LOG_TRACE(log, "{} '{}' is being loaded, skipping the operation", type_name, info->name);
             return false;
         }
