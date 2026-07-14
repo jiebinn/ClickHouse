@@ -101,10 +101,10 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
   *
   * The kernel is written with generic clang vectors; the shuffles compile to single instructions
   * on the SSE2 (x86_64) and NEON (AArch64) baselines, so no arch-specific code or runtime dispatch
-  * is needed. Lanes are loaded in native byte order, which matches the little-endian on-disk
-  * format on these platforms; others fall back to the scalar loop below.
+  * is needed. Lanes are loaded in native byte order, so the fast path also requires a little-endian
+  * build to match the little-endian on-disk format; others fall back to the scalar loop below.
   */
-#if defined(__SSE2__) || (defined(__aarch64__) && defined(__ARM_NEON))
+#if (defined(__SSE2__) || (defined(__aarch64__) && defined(__ARM_NEON))) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define DELTA_CODEC_SIMD_DECOMPRESS
 
 template <typename T>
