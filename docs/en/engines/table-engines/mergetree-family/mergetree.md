@@ -1290,7 +1290,7 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 
 ### Available types of column statistics {#available-types-of-column-statistics}
 
-- `Basic`
+- `basic`
 
     A compact bundle of single-value summaries derived from a column. Depending on the column type, the following pieces are populated:
   - for any column whose values are represented by a number (integers, floats, `Decimal*`, `Date*`, `DateTime*`, `Enum*`, `IPv4`, ...): the minimum and maximum value, which allow to estimate the selectivity of range filters and enable part pruning;
@@ -1299,15 +1299,11 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 
     A single `Basic` statistic can populate several of these at once — for example on a `Nullable(UInt32)` column it tracks both numeric min/max and the null count. Compared to `MinMax`, `Basic` additionally works on `String` / `FixedString` columns and can be declared on `Nullable` wrappers of types like `UUID` or `IPv6` purely to track the null count.
 
-    Syntax: `basic`
-
-- `MinMax`
+- `minmax`
 
     The minimum and maximum column value which allows to estimate the selectivity of range filters on numeric columns.
 
-    Syntax: `minmax`
-
-- `TDigest`
+- `tdigest`
 
 :::warning
 Statistics of type `tdigest` have high creation costs and potentially slow down data ingest.
@@ -1315,29 +1311,21 @@ Statistics of type `tdigest` have high creation costs and potentially slow down 
 
     [TDigest](https://github.com/tdunning/t-digest) sketches which allow to compute approximate percentiles (e.g. the 90th percentile) for numeric columns.
 
-    Syntax: `tdigest`
+- `uniq`
 
-- `Uniq`
+    [BJKST](https://people.iith.ac.in/aravind/Files-CS5120/pc-lec14-BJKST.pdf) sketches which provide an estimation how many distinct values a column contains. Internally uses [`uniq`](/sql-reference/aggregate-functions/reference/uniq).
 
-    [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog) sketches which provide an estimation how many distinct values a column contains. Internally uses [`uniq`](/sql-reference/aggregate-functions/reference/uniq).
+- `uniq_v2`
 
-    Syntax: `uniq`
+    Similar to `uniq` but internally uses [`uniqCombined`](/sql-reference/aggregate-functions/reference/uniqcombined)`(12)` (a variant of [HyperLogLog](https://en.wikipedia.org/wiki/HyperLogLog)). Consumes less memory than `uniq` and can be build faster.
 
-- `Uniq_v2`
-
-    Similar to `Uniq` but internally uses [`uniqCombined`](/sql-reference/aggregate-functions/reference/uniqcombined)`(12)`. Consumes less memory and can be build faster.
-
-    Syntax: `uniq_v2`
-
-- `CountMin`
+- `countmin`
 
 :::warning
 Statistics of type `countmin` have high creation costs and potentially slow down data ingest.
 :::
 
     [CountMin](https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch) sketches which provide an approximate count of the frequency of each value in a column.
-
-    Syntax `countmin`
 
 ### Supported data types {#supported-data-types}
 
