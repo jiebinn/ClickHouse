@@ -531,43 +531,62 @@ def main(argv=None):
     repo_root = os.path.dirname(docs_dir)
     slug_map = args.slug_map or os.path.join(docs_dir, "_migration", "slug-map.csv")
 
-    migrate = lk = None
-    file_map = {}
-    if args.remap:
-        migrate = import_migrate(docs_dir)
-        lk, file_map = build_file_map(migrate, slug_map)
+    # The component-reference families (table/database engines, data types, formats,
+    # table/window functions) discover their pages by iterating the slug map
+    # (file_map), so build it even for a --no-remap-legacy run: those generators'
+    # names are what the fast-fail check needs to tell whether the current selection
+    # targets a family such a run cannot produce. The link/import remapping itself
+    # only runs under --remap-legacy, so drop `migrate`/`lk` afterwards in that mode.
+    migrate = import_migrate(docs_dir)
+    lk, file_map = build_file_map(migrate, slug_map)
+    if not args.remap:
+        migrate = lk = None
 
-    # These families discover their pages by iterating the slug map (file_map),
-    # which is only built with --remap-legacy. Without it they find nothing, so a
-    # --no-remap-legacy run must fail fast for them rather than silently reporting
-    # success while skipping whole categories. Each entry: (name prefix, builder).
     remap_only_families = [
-        ("table-engine:", table_engine_generators),
-        ("database-engine:", database_engine_generators),
-        ("data-type:", data_type_generators),
-        ("format:", format_generators),
-        ("table-function:", table_function_generators),
-        ("window-function:", window_function_generators),
+        table_engine_generators,
+        database_engine_generators,
+        data_type_generators,
+        format_generators,
+        table_function_generators,
+        window_function_generators,
     ]
 
     all_generators = ALL_GENERATORS + aggregate_generators(docs_dir)
-    for prefix, builder in remap_only_families:
-        if args.remap:
-            all_generators += builder(docs_dir, file_map)
-            continue
-        # --no-remap-legacy: these pages cannot be discovered. Fail fast if the
-        # run would include this family (a full run, or an --only that targets it)
-        # instead of quietly generating nothing.
-        in_scope = not args.only or args.only in prefix or prefix in args.only
-        if in_scope:
+    legacy_generators = []
+    for builder in remap_only_families:
+        legacy_generators += builder(docs_dir, file_map)
+
+    # `--only` is a plain substring match on generator names; apply exactly that in
+    # both the fast-fail check and the final selection so the two can never disagree
+    # (a substring that targets a family, e.g. `--only newjson`, must be caught).
+    def selected(gens):
+        return [g for g in gens if not args.only or args.only in g["name"]]
+
+    if args.remap:
+        all_generators += legacy_generators
+    else:
+        # --no-remap-legacy cannot emit the component-reference pages: they are
+        # discovered through the slug map and need its link/path remapping. If the
+        # current selection would include any of them -- a full run, or an --only
+        # substring that matches one under the same semantics as the final filter --
+        # fail fast instead of quietly generating nothing (which would report
+        # success while skipping whole categories).
+        blocked = selected(legacy_generators)
+        if blocked:
+            families = sorted({g["name"].split(":", 1)[0] for g in blocked})
             raise SystemExit(
-                f"error: --no-remap-legacy cannot generate the "
-                f"'{prefix.rstrip(':')}' pages -- they are discovered through the "
-                f"slug map (_migration/slug-map.csv), which is only available with "
-                f"--remap-legacy (the default). Re-run with --remap-legacy, or use "
-                f"--only to restrict the run to families that do not need it "
-                f"(settings, functions, aggregate).")
-    generators = [g for g in all_generators if not args.only or args.only in g["name"]]
+                "error: --no-remap-legacy cannot generate the "
+                f"{', '.join(families)} pages -- they are discovered through the "
+                "slug map (_migration/slug-map.csv) and need its link/path "
+                "remapping, which is only done with --remap-legacy (the default). "
+                "Re-run with --remap-legacy, or restrict --only to families that "
+                "do not need it (settings, functions, aggregate).")
+
+    generators = selected(all_generators)
+    # A selector that matches nothing is a mistake (a typo, or a family unavailable
+    # in this mode); never report success while doing nothing.
+    if args.only and not generators:
+        raise SystemExit(f"error: --only '{args.only}' matched no generator; nothing to do.")
 
     drift = 0
     for gen in generators:
