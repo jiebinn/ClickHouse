@@ -26,7 +26,6 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int DEADLOCK_AVOIDED;
     extern const int DICTIONARIES_WAS_NOT_LOADED;
-    extern const int DICTIONARY_BEING_LOADED;
 }
 
 
