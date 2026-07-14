@@ -42,7 +42,7 @@ def check():
             # Link the status to the workflow report page, where the error and
             # warning messages are listed in the notification panels at the top.
             try:
-                url = info.get_job_report_url()
+                url = info.get_report_url()
             except Exception as e:
                 print(f"WARNING: failed to build report url: {e}")
                 url = ""
