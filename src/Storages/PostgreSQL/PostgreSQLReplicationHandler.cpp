@@ -372,19 +372,21 @@ void PostgreSQLReplicationHandler::checkConnectionAndStart()
         if (!is_attach)
             throw;
 
-        /// The attach-time legacy-identity ownership conflict (see adoptLegacyReplicationIdentityIfNeeded)
-        /// throws POSTGRESQL_REPLICATION_INTERNAL_ERROR before anything destructive runs and is recoverable:
-        /// once an operator resolves the replication-slot/publication conflict on the PostgreSQL side, a
-        /// later attempt succeeds. Keep retrying so replication starts on its own after the fix, instead of
-        /// leaving the attached table permanently unsynchronized until a server restart or a manual re-attach.
-        /// Each retry re-checks ownership and refuses again while the conflict persists, so no re-snapshot can
-        /// happen in the meantime. This mirrors the database-engine path, which retries via
-        /// DatabaseMaterializedPostgreSQL::tryStartSynchronization.
+        /// On attach the startup task must keep retrying on any error so replication starts on its own once
+        /// a transient condition clears, instead of leaving the attached table permanently unsynchronized
+        /// until a server restart or a manual re-attach. Two examples: the attach-time legacy-identity
+        /// ownership conflict (see adoptLegacyReplicationIdentityIfNeeded) throws
+        /// POSTGRESQL_REPLICATION_INTERNAL_ERROR before anything destructive runs, and clears once an operator
+        /// resolves the replication-slot/publication conflict on the PostgreSQL side; a replication slot that
+        /// is momentarily still held active by a just-released connection throws instead, and clears as soon
+        /// as that connection goes away. Each retry re-checks ownership and refuses again while a conflict
+        /// persists, so no re-snapshot can happen in the meantime. This mirrors the database-engine path,
+        /// which retries via DatabaseMaterializedPostgreSQL::tryStartSynchronization.
         if (e.code() == ErrorCodes::POSTGRESQL_REPLICATION_INTERNAL_ERROR)
-        {
             LOG_ERROR(log, "Replication cannot start yet. Retry attempt will continue. Error message: {}", e.message());
-            startup_task->scheduleAfter(milliseconds_to_wait);
-        }
+        else
+            LOG_ERROR(log, "Failed to start replication, retry attempt will continue. Error message: {}", e.message());
+        startup_task->scheduleAfter(milliseconds_to_wait);
     }
     catch (...)
     {
@@ -392,6 +394,12 @@ void PostgreSQLReplicationHandler::checkConnectionAndStart()
 
         if (!is_attach)
             throw;
+
+        /// A non-Exception failure on attach (e.g. a pqxx::sql_error such as "replication slot is active for
+        /// PID N" when a just-released connection still holds the slot) is transient too - keep retrying so
+        /// replication resumes on its own, matching the Exception branch above and the database-engine path.
+        LOG_ERROR(log, "Failed to start replication, retry attempt will continue. Error message: {}", getCurrentExceptionMessage(false));
+        startup_task->scheduleAfter(milliseconds_to_wait);
     }
 }
 
