@@ -49,7 +49,7 @@ Unloads a dictionary `dictionary_name` to release its memory, if the dictionary 
 The dictionary is lazy-reloaded when necessary again.
 
 ```sql
-SYSTEM UNLOAD DICTIONARY [ON CLUSTER cluster_name] dictionary_name
+SYSTEM UNLOAD DICTIONARY dictionary_name
 ```
 
 The status of the dictionary can be checked by querying the `system.dictionaries` table.
@@ -63,7 +63,7 @@ SELECT name, status FROM system.dictionaries;
 The `SYSTEM UNLOAD DICTIONARIES` query unloads all dictionaries with a `LOADED` status (see the `status` column of [`system.dictionaries`](/operations/system-tables/dictionaries)), i.e dictionaries that have been successfully loaded before.
 
 ```sql
-SYSTEM UNLOAD DICTIONARIES [ON CLUSTER cluster_name]
+SYSTEM UNLOAD DICTIONARIES
 ```
 
 ## SYSTEM RELOAD MODELS {#reload-models}
