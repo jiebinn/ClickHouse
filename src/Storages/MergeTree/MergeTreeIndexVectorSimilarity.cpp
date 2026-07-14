@@ -507,9 +507,9 @@ MergeTreeIndexConditionVectorSimilarity::MergeTreeIndexConditionVectorSimilarity
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting 'hnsw_candidate_list_size_for_search' must not be 0");
 
     if (!std::isfinite(index_fetch_multiplier)
-        || index_fetch_multiplier <= 0.0f || static_cast<double>(index_fetch_multiplier) > MAX_INDEX_FETCH_MULTIPLIER
+        || index_fetch_multiplier < 1.0f || static_cast<double>(index_fetch_multiplier) > MAX_INDEX_FETCH_MULTIPLIER
         || (parameters && !std::isfinite(static_cast<double>(index_fetch_multiplier) * static_cast<double>(parameters->limit))))
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting 'vector_search_index_fetch_multiplier' must be greater than 0.0 and less than {}", MAX_INDEX_FETCH_MULTIPLIER);
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting 'vector_search_index_fetch_multiplier' must be greater than or equal to 1.0 and less than {}", MAX_INDEX_FETCH_MULTIPLIER);
 }
 
 bool MergeTreeIndexConditionVectorSimilarity::mayBeTrueOnGranule(MergeTreeIndexGranulePtr, const UpdatePartialDisjunctionResultFn & /*update_partial_disjunction_result_fn*/) const
