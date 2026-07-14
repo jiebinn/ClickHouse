@@ -57,7 +57,8 @@ function maybeDecompress(buf) {
   if (buf.length >= 4 && buf[0] === 0x28 && buf[1] === 0xb5 && buf[2] === 0x2f && buf[3] === 0xfd) {
     if (typeof zlib.zstdDecompressSync === 'function') return zlib.zstdDecompressSync(buf);
     const { execFileSync } = require('child_process');
-    return execFileSync('zstd', ['-dcq'], { input: buf, maxBuffer: 2 * 1024 * 1024 * 1024 });
+    // Bound the child: a wedged zstd would otherwise block the whole helper indefinitely.
+    return execFileSync('zstd', ['-dcq'], { input: buf, maxBuffer: 2 * 1024 * 1024 * 1024, timeout: 120000 });
   }
   if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
     return zlib.gunzipSync(buf);

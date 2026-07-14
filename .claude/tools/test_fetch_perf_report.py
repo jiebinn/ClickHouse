@@ -207,6 +207,45 @@ def test_stream_to_file_zstd_cli_fallback():
             _sys.modules["zstandard"] = saved
 
 
+def test_stream_to_file_zstd_cli_times_out():
+    # A wedged zstd must not hang the report forever: the watchdog kills it and the failure
+    # becomes a normal per-shard error. Uses a fake `zstd` on PATH that ignores stdin and never
+    # exits, plus a shrunk timeout so the test stays fast.
+    import io as _io
+    import stat as _stat
+    import sys as _sys
+    import time as _time
+
+    saved_mod = _sys.modules.get("zstandard", "MISSING")
+    saved_path = os.environ["PATH"]
+    saved_timeout = fpr._ZSTD_CLI_TIMEOUT_SEC
+    _sys.modules["zstandard"] = None  # force the CLI fallback
+    with tempfile.TemporaryDirectory() as tmp:
+        fake = os.path.join(tmp, "zstd")
+        with open(fake, "w") as f:
+            f.write("#!/bin/sh\nexec sleep 300\n")
+        os.chmod(fake, os.stat(fake).st_mode | _stat.S_IEXEC)
+        os.environ["PATH"] = tmp + os.pathsep + saved_path
+        fpr._ZSTD_CLI_TIMEOUT_SEC = 2
+        try:
+            zst_magic_input = b"\x28\xb5\x2f\xfd" + b"\x00" * 4096
+            dest = os.path.join(tmp, "out")
+            t0 = _time.time()
+            try:
+                fpr._stream_to_file(_io.BytesIO(zst_magic_input), dest)
+                assert False, "expected the wedged zstd to raise"
+            except RuntimeError as e:
+                assert "zstd decompression failed" in str(e), e
+            assert _time.time() - t0 < 30, "watchdog did not bound the wedged child"
+        finally:
+            fpr._ZSTD_CLI_TIMEOUT_SEC = saved_timeout
+            os.environ["PATH"] = saved_path
+            if saved_mod == "MISSING":
+                _sys.modules.pop("zstandard", None)
+            else:
+                _sys.modules["zstandard"] = saved_mod
+
+
 def test_prefixed_reader_reassembles_stream():
     import io as _io
 
@@ -248,6 +287,7 @@ if __name__ == "__main__":
     test_maybe_decompress_handles_plain_gzip_zstd()
     test_stream_to_file_handles_plain_gzip_zstd()
     test_stream_to_file_zstd_cli_fallback()
+    test_stream_to_file_zstd_cli_times_out()
     test_prefixed_reader_reassembles_stream()
     test_download_shard_isolates_failures()
     print("All fetch_perf_report tests passed (or skipped).")

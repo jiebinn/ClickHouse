@@ -43,6 +43,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, parse_qs
 from urllib.request import urlopen
@@ -116,6 +117,9 @@ class _PrefixedReader:
         return data
 
 
+_ZSTD_CLI_TIMEOUT_SEC = 120  # watchdog bound for the zstd-CLI decompression fallback
+
+
 def _stream_to_file(resp, dest):
     """Stream `resp` to `dest`, transparently decompressing zstd/gzip by magic bytes.
 
@@ -132,17 +136,27 @@ def _stream_to_file(resp, dest):
             except ImportError:
                 proc = subprocess.Popen(["zstd", "-dcq"], stdin=subprocess.PIPE, stdout=f,
                                         stderr=subprocess.PIPE)
-                # Feed the body in and wait for the child directly: communicate() would try to
-                # flush the already-closed stdin, which raises ValueError on most Python versions.
+                # A watchdog bounds the whole exchange: both the stdin write and the stderr read
+                # block indefinitely if the child wedges, so wait(timeout=) alone never fires.
+                # Killing the child unblocks both and turns a stuck shard into a normal error.
+                # (communicate() is unusable here: it flushes the already-closed stdin, which
+                # raises ValueError on most Python versions.)
+                watchdog = threading.Timer(_ZSTD_CLI_TIMEOUT_SEC, proc.kill)
+                watchdog.start()
                 try:
-                    shutil.copyfileobj(source, proc.stdin)
-                    proc.stdin.close()
-                except BrokenPipeError:
-                    pass  # zstd exited early (e.g. corrupt input); the real error is on stderr
-                stderr = proc.stderr.read()
-                proc.stderr.close()
-                if proc.wait(timeout=120) != 0:
-                    raise RuntimeError(f"zstd decompression failed: {stderr.decode('utf-8', 'replace')}")
+                    try:
+                        shutil.copyfileobj(source, proc.stdin)
+                        proc.stdin.close()
+                    except BrokenPipeError:
+                        pass  # zstd exited early (corrupt input or killed); real error is on stderr
+                    stderr = proc.stderr.read()
+                    proc.stderr.close()
+                    rc = proc.wait()
+                finally:
+                    watchdog.cancel()
+                if rc != 0:
+                    raise RuntimeError(f"zstd decompression failed (exit {rc}): "
+                                       f"{stderr.decode('utf-8', 'replace')}")
         elif header[:2] == b"\x1f\x8b":  # gzip magic
             with gzip.GzipFile(fileobj=source) as gz:
                 shutil.copyfileobj(gz, f)
