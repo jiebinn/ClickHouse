@@ -714,9 +714,11 @@ void QueryAnalyzer::replaceNodesWithPositionalArguments(QueryTreeNodePtr & node_
         /// initiator.
         if (scope.context->isPositionalArgumentsAlreadyResolved())
             return;
-        /// Skip on remote shard execution (SECONDARY_QUERY): same reasoning as above for
-        /// paths not covered by setPositionalArgumentsAlreadyResolved.
-        if (scope.context->getClientInfo().query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+        /// Skip only on remote shard execution (SECONDARY_QUERY): the initiator already
+        /// resolved positional arguments. Do not skip for contexts that never set the kind
+        /// (NO_QUERY), e.g. a Replicated database DDL worker running CREATE ... AS SELECT,
+        /// which must resolve positional arguments itself.
+        if (scope.context->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
             return;
     }
 
