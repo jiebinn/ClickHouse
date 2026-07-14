@@ -821,8 +821,15 @@ def main():
             # The merge-queue run gets a tighter budget: it delays merges
             # directly, and its reduced rerun_count needs less time anyway.
             FLAKY_CHECK_TIME_LIMIT = 20 * 60 if info.is_merge_queue_event else 45 * 60
+            # Floor the budget at a small positive value: `run_tests` interprets
+            # `global_time_limit == 0` as "pass no `--global_time_limit`", i.e. no
+            # cap at all. If setup already consumed the whole budget (more likely
+            # under the tighter merge-queue limit) a `0` here would turn the run
+            # unbounded, defeating the very latency bound it is meant to enforce.
+            # A minimal explicit limit keeps the run bounded while still doing one
+            # quick pass. Mirrors the targeted-check floor below.
             global_time_limit = max(
-                FLAKY_CHECK_TIME_LIMIT - int(stop_watch.duration), 0
+                FLAKY_CHECK_TIME_LIMIT - int(stop_watch.duration), 60
             )
             print(
                 f"Flaky-check time limit: {FLAKY_CHECK_TIME_LIMIT}s"
