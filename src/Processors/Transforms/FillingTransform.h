@@ -114,6 +114,10 @@ private:
     /// because a single WITH FILL range can expand into billions of rows within one transform() call
     /// and the executor only checks the time limit between calls.
     QueryStatusPtr process_list_element;
+
+    /// Latched once a `timeout_overflow_mode = 'break'` soft timeout fires, so both the inner and the
+    /// outer generation loops stop and the transform returns a partial result.
+    bool time_limit_exceeded = false;
 };
 
 class FillingNoopTransform final : public ISimpleTransform

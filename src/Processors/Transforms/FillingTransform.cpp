@@ -378,11 +378,21 @@ bool FillingTransform::isCancelledOrTimeLimitExceeded()
     if (isCancelled())
         return true;
 
+    /// In `timeout_overflow_mode = 'break'` the soft timeout is sticky: once it fires,
+    /// `checkTimeLimit` keeps returning false. Latch it so all loops (including the outer ones)
+    /// stop immediately without reading the clock again.
+    if (time_limit_exceeded)
+        return true;
+
     /// A single WITH FILL range can expand into billions of rows inside one transform() call, so the
     /// executor never gets a chance to enforce limits (max_execution_time) between work() calls.
-    /// Enforce it here too; this throws TIMEOUT_EXCEEDED / QUERY_WAS_CANCELLED when appropriate.
-    if (process_list_element)
-        return !process_list_element->checkTimeLimit();
+    /// Enforce it here too: in `throw` mode this throws TIMEOUT_EXCEEDED / QUERY_WAS_CANCELLED, and in
+    /// `break` mode it returns false, which we latch to stop generating rows and return a partial result.
+    if (process_list_element && !process_list_element->checkTimeLimit())
+    {
+        time_limit_exceeded = true;
+        return true;
+    }
 
     return false;
 }
@@ -711,12 +721,13 @@ void FillingTransform::transformRange(
 
     for (size_t row_ind = range_begin; row_ind < range_end; ++row_ind)
     {
-        /// Stop promptly once the query is cancelled. The inner generation loops below already check
-        /// this, but a break there only ends the current gap; without this check the outer loop would
-        /// keep regenerating up to DEFAULT_BLOCK_SIZE rows for every remaining input row after
-        /// cancellation (a slow drain, effectively a hang for expensive per-row work like INTERPOLATE).
-        /// `isCancelled` is set by the executor when max_execution_time is exceeded or on KILL QUERY.
-        if (isCancelled())
+        /// Stop promptly once the query is cancelled or the time limit is exceeded. The inner
+        /// generation loops below already check this, but a break there only ends the current gap;
+        /// without this check the outer loop would keep regenerating up to DEFAULT_BLOCK_SIZE rows for
+        /// every remaining input row (a slow drain, effectively a hang for expensive per-row work like
+        /// INTERPOLATE). It also matters in `timeout_overflow_mode = 'break'`, where the soft timeout
+        /// never sets `isCancelled`, so only the inner loops would stop otherwise.
+        if (isCancelledOrTimeLimitExceeded())
             break;
 
         logDebug("row", row_ind);
@@ -914,8 +925,8 @@ void FillingTransform::transform(Chunk & chunk)
 
     for (size_t row_ind = 0; row_ind < num_rows;)
     {
-        /// Stop promptly on cancellation instead of processing every remaining range.
-        if (isCancelled())
+        /// Stop promptly on cancellation or timeout instead of processing every remaining range.
+        if (isCancelledOrTimeLimitExceeded())
             break;
 
         /// find next range
