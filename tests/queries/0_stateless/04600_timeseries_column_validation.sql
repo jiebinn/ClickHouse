@@ -1,3 +1,8 @@
+-- Tags: no-replicated-database
+-- Reason: the DETACH/ATTACH round-trip below hangs in DatabaseReplicated mode because ATTACH TABLE
+-- with a TimeSeries engine goes through the replicated DDL log and requires replica sync (same as
+-- 04146_timeseries_attach_detach.sql).
+
 -- Test: exercises `TimeSeries` column-type validation during table creation.
 -- Covers `normalizeTimeSeriesDefinition`:
 --   - the prealpha columns `id`, `timestamp`, `value` are rejected from the outer column list (INCORRECT_QUERY);
