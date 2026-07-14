@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <type_traits>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
@@ -15,6 +16,7 @@
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
+#include <Common/assert_cast.h>
 #include <Common/likePatternToRegexp.h>
 
 
@@ -208,10 +210,19 @@ public:
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
     }
 
+    /// A value in `value_to_index` (see `buildEnumHaystackDictionary`) that marks a slot which does
+    /// not correspond to any declared enum value - either a hole inside `[min_value, max_value]`, or
+    /// (conceptually) a value outside that range. Undefined enum codes can still reach the column
+    /// through binary deserialization (`SerializationEnum` inherits its binary format from
+    /// `SerializationNumber`, which stores the raw code without validation), so such codes must be
+    /// detected and rejected, exactly as the `castColumn(..., String)` path does via `getNameForValue`.
+    static constexpr UInt32 enum_undefined_index = std::numeric_limits<UInt32>::max();
+
     /// Builds a deduplicated haystack for an `Enum` column, as requested in issue #73114:
     /// a `String` column holding the distinct enum names (in numeric-value order) and a plain
     /// array `value_to_index`, indexed by `enum_value - min_value`, that maps each enum value to
     /// the row of its name in the deduplicated column. `min_value` receives the smallest enum value.
+    /// Slots for undefined codes are filled with `enum_undefined_index` so they can be rejected later.
     /// A plain array is used instead of a hash map because `Enum` values are at most `Int16`.
     template <typename EnumType>
     static ColumnPtr buildEnumHaystackDictionary(
@@ -223,7 +234,7 @@ public:
         min_value = static_cast<Int64>(values.front().second);
         const Int64 max_value = static_cast<Int64>(values.back().second);
 
-        value_to_index.resize_fill(static_cast<size_t>(max_value - min_value) + 1, 0);
+        value_to_index.resize_fill(static_cast<size_t>(max_value - min_value) + 1, enum_undefined_index);
 
         auto distinct_names = ColumnString::create();
         distinct_names->reserve(values.size());
@@ -461,11 +472,21 @@ public:
             if constexpr (execution_error_policy == ExecutionErrorPolicy::Null)
                 final_null_map = ColumnUInt8::create(origin_input_rows_count);
 
-            const auto expand = [&](const auto & enum_data)
+            /// `enum_type` is only used to reproduce the `UNKNOWN_ELEMENT_OF_ENUM` exception that the
+            /// `castColumn(..., String)` path raises for undefined stored codes (see `enum_undefined_index`).
+            const auto expand = [&](const auto & enum_data, const auto & enum_type)
             {
+                const Int64 enum_max_shifted = static_cast<Int64>(enum_value_to_index.size()) - 1;
                 for (size_t i = 0; i < origin_input_rows_count; ++i)
                 {
-                    const size_t idx = enum_value_to_index[static_cast<size_t>(static_cast<Int64>(enum_data[i]) - enum_min_value)];
+                    const auto value = enum_data[i];
+                    const Int64 shifted = static_cast<Int64>(value) - enum_min_value;
+                    UInt32 idx = enum_undefined_index;
+                    if (shifted >= 0 && shifted <= enum_max_shifted)
+                        idx = enum_value_to_index[static_cast<size_t>(shifted)];
+                    if (idx == enum_undefined_index)
+                        /// Throws `UNKNOWN_ELEMENT_OF_ENUM`, matching the previous `castColumn` behavior.
+                        enum_type.getNameForValue(value);
                     final_vec_res[i] = vec_res[idx];
                     if constexpr (execution_error_policy == ExecutionErrorPolicy::Null)
                         final_null_map->getData()[i] = null_map->getData()[idx];
@@ -473,9 +494,9 @@ public:
             };
 
             if (const auto * col_enum8 = typeid_cast<const ColumnVector<Int8> *>(enum_source_column.get()))
-                expand(col_enum8->getData());
+                expand(col_enum8->getData(), assert_cast<const DataTypeEnum8 &>(*haystack_argument.type));
             else if (const auto * col_enum16 = typeid_cast<const ColumnVector<Int16> *>(enum_source_column.get()))
-                expand(col_enum16->getData());
+                expand(col_enum16->getData(), assert_cast<const DataTypeEnum16 &>(*haystack_argument.type));
             else
                 throw Exception(
                     ErrorCodes::ILLEGAL_COLUMN,

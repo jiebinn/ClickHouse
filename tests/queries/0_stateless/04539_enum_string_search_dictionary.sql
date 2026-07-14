@@ -58,6 +58,26 @@ SELECT 'Enum8 non-transform path (few rows)';
 SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es8_few;
 SELECT 'position', sum(position(c, 'A') != position(toString(c), 'A')) FROM t_es8_few;
 
+-- Undefined enum codes must be rejected in the transform path, exactly as the toString(...) path does.
+-- Codes outside the declared value range, and holes inside it, can reach an Enum column through binary
+-- deserialization (`SerializationEnum` inherits its binary format from `SerializationNumber`, which
+-- stores the raw code without validation). The optimized path must raise `UNKNOWN_ELEMENT_OF_ENUM`
+-- rather than reading out of bounds (out-of-range codes) or silently reusing a name (holes).
+-- Each block below has more rows than distinct enum names, so the transform path is taken.
+SELECT 'Undefined enum codes rejected';
+-- Out-of-range code (5) above the maximum value.
+SELECT position(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+SELECT like(x, '%A%') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+SELECT hasToken(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- Code (0) below the minimum value (negative shift).
+SELECT position(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(0, 0, 0, 0, 0)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- Hole inside the declared range (code 2 between the declared values 1 and 3).
+SELECT position(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''c'' = 3)', char(2, 2, 2, 2, 2)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- Undefined code mixed with valid codes in the same block.
+SELECT position(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(1, 2, 5, 1, 2)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- Enum16 out-of-range code (value 5000, little-endian bytes 136, 19).
+SELECT position(x, 'A') FROM format(RowBinary, 'x Enum16(''a'' = 1, ''A'' = 2)', char(136, 19, 136, 19, 136, 19)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+
 DROP TABLE t_es8;
 DROP TABLE t_es16;
 DROP TABLE t_es8_few;
