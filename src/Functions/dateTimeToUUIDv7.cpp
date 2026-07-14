@@ -119,8 +119,8 @@ As of September 2025, version 7 UUIDs are in draft status and their layout may c
 SELECT dateTimeToUUIDv7(toDateTime('2021-08-15 18:57:56', 'Asia/Shanghai'));
         )",
         R"(
-┌─dateTimeToUUIDv7(toDateTime('2021-08-15 18:57:56', 'Asia/Shanghai'))─┐
-│ 018f05af-f4a8-778f-beee-1bedbc95c93b                                   │
+┌─dateTimeToUUIDv7(toDateTime('2021-08-15 18:57:56', 'Asia/Shanghai'))────┐
+│ 018f05af-f4a8-778f-beee-1bedbc95c93b                                    │
 └─────────────────────────────────────────────────────────────────────────┘
         )"
     },
