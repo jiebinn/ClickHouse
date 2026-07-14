@@ -17,10 +17,14 @@ binary_build_job = Job.Config.get_job(
 
 # TODO: add alert on workflow failure
 
+# NOTE: event temporarily set to PULL_REQUEST to validate that the newly added
+# server Jepsen job is wired into the workflow correctly on this PR head. Revert
+# to Workflow.Event.SCHEDULE with `branches=[BASE_BRANCH]` and re-enable
+# `cron_schedules` before merging.
 workflow = Workflow.Config(
     name="NightlyJepsen",
-    event=Workflow.Event.SCHEDULE,
-    branches=[BASE_BRANCH],
+    event=Workflow.Event.PULL_REQUEST,
+    base_branches=[BASE_BRANCH],
     jobs=[
         binary_build_job,
         JobConfigs.jepsen_keeper,
@@ -34,7 +38,7 @@ workflow = Workflow.Config(
     enable_cache=True,
     enable_report=True,
     enable_cidb=True,
-    cron_schedules=["13 4 * * *"],
+    # cron_schedules=["13 4 * * *"],  # temporarily disabled for PR validation; restore before merge
     pre_hooks=["python3 ./ci/jobs/scripts/workflow_hooks/store_data.py"],
 )
 
