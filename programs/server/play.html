@@ -2446,7 +2446,7 @@ class QueryResultElement extends HTMLElement
             type_hint.appendChild(document.createTextNode(elem.type));
             th.appendChild(type_hint);
 
-            this._column_is_number[elem.name] = !!elem.type.match(/^(Nullable\()?(U?Int|Decimal|Float)/);
+            this._column_is_number[elem.name] = !!elem.type.match(/^(Nullable\()?(U?Int|Decimal|Float|BFloat)/);
             this._column_is_date[elem.name] = !!elem.type.match(/^(Nullable\()?Date/);
             this._appendColorizeToggle(th, elem.name);
 
