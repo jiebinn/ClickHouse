@@ -1385,10 +1385,14 @@ class JobConfigs:
         requires=["Build (amd_binary)"],
     )
     jepsen_server = Job.Config(
-        name=JobNames.JEPSEN_KEEPER,
+        name=JobNames.JEPSEN_SERVER,
         runs_on=RunnerLabels.STYLE_CHECK_AMD,
         command="python3 ./ci/jobs/jepsen_check.py server",
-        requires=["Build (amd_binary)"],
+        # Depend on jepsen_keeper (not just the build) so the two jobs never run
+        # concurrently: both drive the single shared `jepsen_group` autoscaling
+        # group and reset its desired capacity to 0 on exit, so a concurrent run
+        # would tear down the other's instances mid-test.
+        requires=["Build (amd_binary)", JobNames.JEPSEN_KEEPER],
     )
     libfuzzer_job = Job.Config(
         name=JobNames.LIBFUZZER_TEST,

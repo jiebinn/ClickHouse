@@ -24,6 +24,7 @@ workflow = Workflow.Config(
     jobs=[
         binary_build_job,
         JobConfigs.jepsen_keeper,
+        JobConfigs.jepsen_server,
     ],
     artifacts=[
         *ArtifactConfigs.clickhouse_binaries,

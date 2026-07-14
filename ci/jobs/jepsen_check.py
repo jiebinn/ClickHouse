@@ -263,9 +263,14 @@ def main():
         if len(test_result) == 0:
             status = Result.Status.FAIL
             description = "No test results found"
-        elif any(r.status == "FAIL" for r in test_result):
+        elif any(r.status == Result.Status.FAIL for r in test_result):
             status = Result.Status.FAIL
             description = "Found invalid analysis (ﾉಥ益ಥ）ﾉ ┻━┻"
+        elif any(r.status == Result.Status.ERROR for r in test_result):
+            # Crashed/indeterminate tests already fail the aggregate status via
+            # Result.create_from; keep the reported description accurate too.
+            status = Result.Status.ERROR
+            description = "Found crashed or indeterminate tests"
 
         additional_data.append(Utils.compress_zst(result_path / "store"))
     except Exception as ex:
