@@ -494,7 +494,7 @@ struct BackupsWorker::BackupStarter
         backup_coordination->startup();
 
         chassert(!backup);
-        backup = backups_worker.openBackupForWriting(backup_info, backup_settings, backup_id, backup_coordination, backup_context);
+        backup = backups_worker.openBackupForWriting(backup_info, backup_settings, backup_coordination, backup_context);
 
         backups_worker.doBackup(backup, backup_query, backup_id, backup_settings, backup_coordination, backup_context,
                                 on_cluster, cluster);
@@ -608,7 +608,6 @@ std::pair<BackupOperationID, BackupStatus> BackupsWorker::startMakingBackup(cons
 BackupMutablePtr BackupsWorker::openBackupForWriting(
     const BackupInfo & backup_info,
     const BackupSettings & backup_settings,
-    const String & backup_id,
     std::shared_ptr<IBackupCoordination> backup_coordination,
     const ContextPtr & context) const
 {
@@ -629,7 +628,7 @@ BackupMutablePtr BackupsWorker::openBackupForWriting(
     backup_create_params.data_file_name_prefix_length = *backup_settings.data_file_name_prefix_length;
     backup_create_params.backup_coordination = backup_coordination;
     backup_create_params.backup_uuid = backup_settings.backup_uuid;
-    backup_create_params.backup_id = backup_id;
+    backup_create_params.backup_id = backup_settings.id.empty() ? toString(*backup_settings.backup_uuid) : backup_settings.id;
     backup_create_params.deduplicate_files = backup_settings.deduplicate_files;
     backup_create_params.allow_s3_native_copy = backup_settings.allow_s3_native_copy;
     backup_create_params.allow_azure_native_copy = backup_settings.allow_azure_native_copy;

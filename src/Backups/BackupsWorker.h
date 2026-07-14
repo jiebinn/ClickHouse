@@ -86,7 +86,6 @@ private:
     BackupMutablePtr openBackupForWriting(
         const BackupInfo & backup_info,
         const BackupSettings & backup_settings,
-        const String & backup_id,
         std::shared_ptr<IBackupCoordination> backup_coordination,
         const ContextPtr & context) const;
 
