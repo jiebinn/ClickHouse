@@ -1,24 +1,34 @@
-/**
- * SectionSearch - an inline Inkeep search box scoped to one docs section.
- *
- * Usage in MDX:
- *   import { SectionSearch } from "/snippets/components/SectionSearch/SectionSearch.jsx";
- *
- *   <SectionSearch section="/reference/statements" label="Statements"
- *                  placeholder="Search SQL statements..." />
- *
- * Props:
- *   section     - URL path prefix results are restricted to (default '/reference/statements')
- *   label       - the (hidden) single tab name used for scoping (default 'Statements')
- *   placeholder - search input placeholder text
- *
- * The self-mounting embedded-search API lives in @inkeep/cxkit-js, a DIFFERENT
- * bundle from the site-wide modal (@inkeep/cxkit-mintlify, wired in
- * _site/customizations/inkeep-init.js). Both bundles assign window.Inkeep, so
- * this waits for the modal bundle to initialise, then traps embed.js's global
- * assignment into a private var — the site-wide modal/⌘K search is untouched.
- */
-export const SectionSearch = ({ section = '/reference/statements', label = 'Statements', placeholder = 'Search this section...' }) => {
+---
+title: Search
+description: Search ClickHouse documentation, changelogs, blogs, website pages, and GitHub issues.
+sidebarTitle: Search
+sidebar_label: Search
+sidebar_position: 2
+slug: /search
+doc_type: landing-page
+---
+
+export const globalTransformSource = (source) => {
+  let url = source.url || '';
+  const isPreview = url.indexOf('private-7c7dfe99.mintlify.app') !== -1;
+  if (isPreview) {
+    url = url.replace(/^https?:\/\/private-7c7dfe99\.mintlify\.app\//, 'https://clickhouse.com/docs/');
+  }
+  const tabs = [];
+  if (isPreview || /clickhouse\.com\/docs(\/|$)/.test(url)) {
+    tabs.push('Docs');
+  } else if (url.indexOf('github.com') !== -1 && /\/issues(\/|$)/.test(url)) tabs.push('Docs');
+  else if (/\/blog(\/|$)/.test(url)) tabs.push('Docs');
+  else if (url.indexOf('clickhouse.com') !== -1) tabs.push('Docs');
+  return Object.assign({}, source, { tabs, url });
+};
+
+export const GLOBAL_SEARCH = {
+  transformSource: globalTransformSource,
+  tabs: ['Docs'],
+};
+
+export const GlobalSearch = ({ placeholder = 'Search ClickHouse docs...' }) => {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -27,8 +37,8 @@ export const SectionSearch = ({ section = '/reference/statements', label = 'Stat
     // subtree on a theme toggle) never collides with a briefly-lingering
     // previous target of the same id, which left the widget mounting into a
     // stale node — the box vanishing after a couple of toggles.
-    window.__sectionSearchSeq = (window.__sectionSearchSeq || 0) + 1;
-    const TARGET_ID = 'inkeep-section-search-' + window.__sectionSearchSeq;
+    window.__globalSearchSeq = (window.__globalSearchSeq || 0) + 1;
+    const TARGET_ID = 'inkeep-global-search-' + window.__globalSearchSeq;
     el.id = TARGET_ID;
 
     // Public, client-side Inkeep keys (same values as inkeep-init.js — safe to
@@ -37,32 +47,14 @@ export const SectionSearch = ({ section = '/reference/statements', label = 'Stat
     const KEY_LOCAL = 'b25e5cf856ec9da60d250578b59dace8417359feeedcbc6b';
     const apiKey = /\.mintlify\.app$/.test(window.location.hostname) ? KEY_STAGING : KEY_LOCAL;
     const EMBED = 'https://cdn.jsdelivr.net/npm/@inkeep/cxkit-js@0.5/dist/embed.js';
-    const PREVIEW_HOST = 'private-7c7dfe99.mintlify.app';
-    const PREVIEW_RE = new RegExp('^https?://' + PREVIEW_HOST.replace(/\./g, '\\.') + '/');
-
-    // Reduce any result URL (preview host or canonical) to a bare docs path.
-    const toPath = (u) => (u || '')
-      .replace(PREVIEW_RE, 'https://clickhouse.com/docs/')
-      .replace(/^https?:\/\/clickhouse\.com\/docs/, '')
-      .replace(/^https?:\/\/[^/]+/, '')
-      .replace(/[?#].*$/, '');
-
     const config = {
       baseSettings: {
         apiKey,
         organizationDisplayName: 'ClickHouse',
         primaryBrandColor: '#fdff75',
-        // Rewrite preview links to canonical docs, and keep ONLY results whose
-        // path is under `section`. Out-of-section results get no tab, so — with
-        // a single configured tab — they render nowhere. Same tab-tagging
-        // scoping the global modal uses (inkeep-init.js).
-        transformSource: (source) => {
-          let url = source.url || '';
-          if (PREVIEW_RE.test(url)) url = url.replace(PREVIEW_RE, 'https://clickhouse.com/docs/');
-          const path = toPath(url);
-          const inSection = path === section || path.indexOf(section + '/') === 0;
-          return Object.assign({}, source, { url, tabs: inSection ? [label] : [] });
-        },
+        // Use the same corpus rules as the global modal, while combining its
+        // categories into the single inline result list used on this page.
+        transformSource: GLOBAL_SEARCH.transformSource,
         // Follow Mintlify's `.dark` class on <html>.
         colorMode: {
           sync: {
@@ -121,7 +113,7 @@ export const SectionSearch = ({ section = '/reference/statements', label = 'Stat
         shouldShowContentSnippets: true,
         contentSnippetLength: 200,
         shouldHighlightMatches: true,
-        tabs: [label],
+        tabs: GLOBAL_SEARCH.tabs,
       },
     };
 
@@ -139,7 +131,7 @@ export const SectionSearch = ({ section = '/reference/statements', label = 'Stat
       }
       el.dataset.inkeepMounted = '1';
       try { widget = api.EmbeddedSearch('#' + TARGET_ID, config); }
-      catch (e) { console.log('Inkeep section search failed:', e); }
+      catch (e) { console.log('Inkeep global search failed:', e); }
     };
 
     const loadEmbed = (trap) => {
@@ -212,7 +204,12 @@ export const SectionSearch = ({ section = '/reference/statements', label = 'Stat
       } catch (e) { /* ignore */ }
       if (el) el.dataset.inkeepMounted = '';
     };
-  }, [section, label, placeholder]);
+  }, [placeholder]);
 
   return <div ref={ref} className="not-prose" style={{ margin: '1.25rem 0' }} />;
 };
+
+
+Search across ClickHouse documentation and other ClickHouse resources.
+
+<GlobalSearch placeholder="Search ClickHouse docs..." />
