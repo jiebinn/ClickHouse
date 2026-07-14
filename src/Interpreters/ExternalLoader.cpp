@@ -837,11 +837,8 @@ private:
         info.exception = nullptr;
         info.state_id = 0;
         info.loading_id = 0;
-        info.error_count = 0;
         info.next_update_time = TimePoint::max();
-        info.loading_start_time = TimePoint();
         info.loading_end_time = TimePoint();
-        info.last_successful_update_time = TimePoint();
     }
 
     bool unload(Info * info)
