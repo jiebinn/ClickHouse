@@ -675,18 +675,13 @@ public:
         if (!info)
             return false;
 
+        if (info->isLoading())
+            throw Exception(ErrorCodes::DICTIONARY_BEING_LOADED,
+                "{} '{}' is currently being loaded, it cannot be unloaded now", type_name, name);
+
         if (!info->loaded())
         {
             LOG_TRACE(log, "{} '{}' is not loaded, nothing to unload", type_name, name);
-            return false;
-        }
-
-        if (info->isLoading())
-        {
-            if (objects_being_loaded_by_current_thread().contains(name))
-                throw Exception(ErrorCodes::DICTIONARY_BEING_LOADED,
-                    "Dictionary {} is currently being loaded. It cannot be unloaded now.", name);
-            LOG_TRACE(log, "{} '{}' is currently loading, cannot unload", type_name, name);
             return false;
         }
 
