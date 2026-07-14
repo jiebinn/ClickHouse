@@ -1763,8 +1763,13 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (!select_p.parse(pos, select, expected))
         return false;
 
+    auto select_comment = parseComment(pos, expected);
+    if (comment && select_comment)
+        throw Exception(
+            ErrorCodes::SYNTAX_ERROR,
+            "Comment for a view cannot be specified both before and after AS SELECT; please use only one");
     if (!comment)
-        comment = parseComment(pos, expected);
+        comment = select_comment;
 
     auto query = make_intrusive<ASTCreateQuery>();
     node = query;
