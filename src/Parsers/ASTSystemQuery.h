@@ -6,8 +6,6 @@
 #include <Server/ServerType.h>
 #include <base/EnumReflection.h>
 
-#include <base/EnumReflection.h>
-
 #include "config.h"
 
 #if USE_XRAY
