@@ -100,3 +100,15 @@ FROM (
     ANY RIGHT JOIN (SELECT number AS b, b + 1 AS bp1 FROM numbers(3)) AS r ON l.a = r.b + 1
     SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash', query_plan_join_swap_table = 'false'
 );
+
+-- Mixed predicates: the duplicate-key guard collects only the build column of a genuine left/right
+-- equi-join pair, not the build column of a single-side local filter. Here the join key is `b` (unique)
+-- and `c` is a duplicated NON-key column guarded by `r.c = 1`; the filter is only ever built on `b`, so
+-- the duplicated `c` must not disable it.
+SELECT countIf(explain LIKE '%BuildRuntimeFilter%') > 0
+FROM (
+    EXPLAIN PLAN
+    SELECT * FROM (SELECT number AS a FROM numbers(100)) AS l
+    ANY RIGHT JOIN (SELECT number AS b, 1 AS c, c FROM numbers(3)) AS r ON l.a = r.b AND r.c = 1
+    SETTINGS enable_join_runtime_filters = 1, join_algorithm = 'hash', query_plan_join_swap_table = 'false'
+);

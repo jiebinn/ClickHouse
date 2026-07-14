@@ -269,10 +269,15 @@ bool tryAddJoinRuntimeFilter(QueryPlan::Node & node, QueryPlan::Nodes & nodes, c
             auto [predicate_op, lhs, rhs] = condition.asBinaryPredicate();
             if (predicate_op != JoinConditionOperator::Equals)
                 continue;
-            if (lhs.fromRight())
-                build_key_names.insert(lhs.getColumnName());
-            if (rhs.fromRight())
+            /// Mirror preCalculateKeys(): only a genuine left/right equi-join PAIR contributes a build
+            /// key. A single-side local filter such as `r.c = 1` (build column vs constant) is not a
+            /// runtime-filter key, so it must not enlist `c` into the duplicate-key check — otherwise a
+            /// duplicated NON-key build column guarded by such a filter would needlessly disable the
+            /// filter (which is only ever built on the real key).
+            if (lhs.fromLeft() && rhs.fromRight())
                 build_key_names.insert(rhs.getColumnName());
+            else if (lhs.fromRight() && rhs.fromLeft())
+                build_key_names.insert(lhs.getColumnName());
         }
 
         const auto & build_header = *build_filter_node->step->getOutputHeader();
