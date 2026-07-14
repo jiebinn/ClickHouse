@@ -61,6 +61,7 @@ private:
     String current_text;
     Fields header_fields;
     Fields file_fields;
+    bool root_contents_seen = false;
 };
 
 }

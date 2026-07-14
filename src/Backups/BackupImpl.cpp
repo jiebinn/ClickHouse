@@ -613,10 +613,13 @@ void BackupImpl::readBackupMetadata()
             return it->second;
         };
 
-        version = static_cast<int>(to_uint64(req("version"), "version"));
-        if ((version < INITIAL_BACKUP_VERSION) || (version > CURRENT_BACKUP_VERSION))
+        /// Range-check the parsed UInt64 before narrowing to int: a value that fits in UInt64 but not in
+        /// int would otherwise wrap (e.g. 4294967298 -> 2) and pass the supported-range check.
+        const auto version_value = to_uint64(req("version"), "version");
+        if ((version_value < INITIAL_BACKUP_VERSION) || (version_value > CURRENT_BACKUP_VERSION))
             throw Exception(
-                ErrorCodes::BACKUP_VERSION_NOT_SUPPORTED, "Backup {}: Version {} is not supported", backup_name_for_logging, version);
+                ErrorCodes::BACKUP_VERSION_NOT_SUPPORTED, "Backup {}: Version {} is not supported", backup_name_for_logging, version_value);
+        version = static_cast<int>(version_value);
 
         timestamp = parse<::LocalDateTime>(req("timestamp")).to_time_t();
         uuid = parse<UUID>(req("uuid"));

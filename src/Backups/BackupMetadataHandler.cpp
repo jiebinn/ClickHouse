@@ -1,8 +1,15 @@
 #include <Backups/BackupMetadataHandler.h>
 
+#include <Common/Exception.h>
+
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int BACKUP_DAMAGED;
+}
 
 void BackupMetadataHandler::startElement(
     const Poco::XML::XMLString &,
@@ -20,6 +27,11 @@ void BackupMetadataHandler::startElement(
         /// ancestors; <contents> directly under the root fires on_header (all header leaves collected by then).
         if (name == "contents" && path.size() == 1)
         {
+            /// A well-formed manifest has exactly one top-level <contents>. Reject a second one instead of
+            /// re-applying the header and appending another file list (writeBackupMetadata never emits two).
+            if (root_contents_seen)
+                throw Exception(ErrorCodes::BACKUP_DAMAGED, "Backup metadata has more than one top-level <contents>");
+            root_contents_seen = true;
             if (on_header)
                 on_header(header_fields);
         }
@@ -50,9 +62,9 @@ void BackupMetadataHandler::endElement(
                 on_file(file_fields);
         }
         else if (path.size() == 2 && name != "contents")  /// header leaf: <root>/<leaf>
-            header_fields[name] = current_text;
+            header_fields.try_emplace(name, current_text);  /// keep the first value, like the old DOM getNodeByPath
         else if (path.size() == 4 && path[1] == "contents" && path[2] == "file")  /// file leaf
-            file_fields[name] = current_text;
+            file_fields.try_emplace(name, current_text);
         current_text.clear();
         if (!path.empty())
             path.pop_back();
