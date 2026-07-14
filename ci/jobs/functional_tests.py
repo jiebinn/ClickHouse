@@ -700,7 +700,14 @@ def main():
         # test subset at reduced concurrency). 0.7 stays comfortably above the
         # largest legitimate single-query need (the ~25 GiB stateful-load INSERT).
         sanitizers = ("asan", "tsan", "msan", "ubsan")
-        if any(san in args.options for san in sanitizers):
+        # In bugfix validation `args.options` is only `BugfixValidation`, so the
+        # sanitizer names never appear there. That mode instead downloads and swaps
+        # through several master-HEAD build-type binaries (`build_types`), most of
+        # them sanitizer builds, on the same memory-constrained runner. Key the
+        # ratio off those actual build types in that mode so the same runner-wide
+        # OOM cannot slip through the guard on the sanitizer bugfix-validation paths.
+        ratio_sources = build_types if is_bugfix_validation else [args.options]
+        if any(san in source for source in ratio_sources for san in sanitizers):
             commands.append(lambda: CH.set_memory_ratio(0.7))
 
         if is_flaky_check:
