@@ -1688,6 +1688,21 @@ Chunk StorageFileSource::generate()
                     static_cast<Int64>(file_stat.st_ino),
                     file_stat.st_size);
 
+                /// The version token above proves a rewrite only after the file has settled.
+                /// Filesystem timestamps are coarser than the wall clock (one clock tick of
+                /// ~1-10 ms on most Linux filesystems, a full second on ext3, two seconds on
+                /// FAT), so a rewrite that keeps the inode and the byte size and lands in the
+                /// same timestamp tick as the previous write produces an identical token. Once
+                /// the last modification is comfortably in the past, its tick is over and any
+                /// further write is guaranteed to change the token. The query condition cache
+                /// skips whole row groups based on this token, so for files modified more
+                /// recently - or with an mtime in the future, e.g. due to clock skew on a
+                /// network mount - it fails close and stays bypassed (see the gates below)
+                /// rather than risking stale results.
+                static constexpr Int64 file_version_settle_seconds = 3;
+                current_file_version_settled
+                    = static_cast<Int64>(mtim_sec) + file_version_settle_seconds <= static_cast<Int64>(time(nullptr));
+
                 if (getContext()->getSettingsRef()[Setting::engine_file_skip_empty_files] && file_stat.st_size == 0)
                     continue;
 
@@ -1735,11 +1750,14 @@ Chunk StorageFileSource::generate()
             /// restrict the reader to the surviving row groups (or skip the whole file). This mirrors
             /// the object-storage read path (`StorageObjectStorageSource`). The file version token
             /// (`current_file_cache_version`, part of `object_with_metadata`) is folded into the cache
-            /// key so an in-place rewrite yields a cache miss rather than stale results. Only formats
-            /// that expose bucket splitting (Parquet) ever populate the cache, so other formats miss.
+            /// key so an in-place rewrite yields a cache miss rather than stale results; the cache is
+            /// bypassed entirely while the token has not settled and cannot prove a rewrite. Only
+            /// formats that expose bucket splitting (Parquet) ever populate the cache, so other
+            /// formats miss.
             FileBucketInfoPtr buckets_to_read;
             QueryConditionCachePtr query_condition_cache;
-            if (object_with_metadata.has_value() && format_filter_info && format_filter_info->condition_hash)
+            if (object_with_metadata.has_value() && current_file_version_settled
+                && format_filter_info && format_filter_info->condition_hash)
                 query_condition_cache = getContext()->getQueryConditionCache();
 
             if (query_condition_cache)
@@ -1896,10 +1914,11 @@ Chunk StorageFileSource::generate()
 
         /// Populate the Query Condition Cache with the row groups that produced no matching rows,
         /// so subsequent queries with the same predicate can skip them. Mirrors the write path in
-        /// `StorageObjectStorageSource`. Gated on a real local file (version token available) and a
-        /// deterministic single-output predicate (`condition_hash`). Only Parquet reports matched
-        /// buckets; other formats return `nullopt` here and are silently skipped.
-        if (input_format && current_file_cache_version.has_value()
+        /// `StorageObjectStorageSource`. Gated on a real local file with a settled version token
+        /// (an unsettled token cannot prove a later rewrite, so caching would risk stale results)
+        /// and a deterministic single-output predicate (`condition_hash`). Only Parquet reports
+        /// matched buckets; other formats return `nullopt` here and are silently skipped.
+        if (input_format && current_file_cache_version.has_value() && current_file_version_settled
             && format_filter_info && format_filter_info->condition_hash)
         {
             try
