@@ -13,175 +13,175 @@
   },
   {
     "source": "/knowledgebase/archive",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/2",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/3",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/4",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/5",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/6",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/7",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/8",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/9",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/10",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/11",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/12",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/page/13",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/best-practices",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/community",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/concepts",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/core-data-concepts",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/data-export",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/data-formats",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/data-ingestion",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/data-modelling",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/data-sources",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/deleting-data",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/deployments-and-scaling",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/errors-and-exceptions",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/functions",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/language-clients",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/managing-cloud",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/managing-data",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/native-clients-and-interfaces",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/performance-and-optimizations",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/runbooks",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/security-and-authentication",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/server-admin",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/settings",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/system-tables",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/tools-and-utilities",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/troubleshooting",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/use-cases",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/errors-and-exceptions/page/2",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/managing-cloud/page/2",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/tags/performance-and-optimizations/page/2",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/en/:path*",
