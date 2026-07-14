@@ -119,18 +119,13 @@ void doSettingsSanityCheckClamp(Settings & current_settings, LoggerPtr log)
 
 #undef CHECK_MAX_VALUE
 
-    /// A read buffer never needs to be larger than this. An out-of-range value would be
-    /// passed straight to the allocator when constructing a read buffer, tripping its size
-    /// guard with a `LOGICAL_ERROR` "Too large size passed to allocator".
-    static constexpr UInt64 max_sane_read_buffer_size = 256 * 1024 * 1024; /// 256 MiB
-
 #define CHECK_READ_BUFFER_SIZE(SETTING_VALUE) \
-    if (UInt64 buffer_size = current_settings[Setting::SETTING_VALUE]; buffer_size > max_sane_read_buffer_size) \
+    if (UInt64 buffer_size = current_settings[Setting::SETTING_VALUE]; buffer_size > MAX_SANE_READ_BUFFER_SIZE) \
     { \
         if (log) \
             LOG_WARNING( \
-                log, "Sanity check: '{}' value is too high ({}). Reduced to {}", #SETTING_VALUE, buffer_size, max_sane_read_buffer_size); \
-        current_settings[Setting::SETTING_VALUE] = max_sane_read_buffer_size; \
+                log, "Sanity check: '{}' value is too high ({}). Reduced to {}", #SETTING_VALUE, buffer_size, MAX_SANE_READ_BUFFER_SIZE); \
+        current_settings[Setting::SETTING_VALUE] = MAX_SANE_READ_BUFFER_SIZE; \
     }
 
     CHECK_READ_BUFFER_SIZE(max_read_buffer_size)
