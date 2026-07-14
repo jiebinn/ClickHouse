@@ -355,16 +355,24 @@ jobs:
             # Notify the original author and reviewers that their PR was reverted. A plain
             # @mention in the PR body triggers a GitHub notification, so an author whose PR was
             # auto-reverted finds out even if nobody pinged them in Slack. Reviewers are taken
-            # from submitted reviews; drop bot accounts (e.g. clickhouse-gh) and de-duplicate,
-            # keeping the author first. Any failure listing reviews is non-fatal — a missing cc
-            # line must not block the revert.
+            # from submitted reviews. The author goes first, then reviewers, and the same
+            # filtering applies to both. Any failure listing reviews is non-fatal — a missing
+            # cc line must not block the revert.
             pr_author=$(echo "$pr_json" | jq -r '.user.login // empty')
-            reviewers=$(gh api "repos/$GH_REPO/pulls/$pr_number/reviews" --paginate --jq '.[].user.login' 2>/dev/null \
-              | grep -vi '\[bot\]$' | sort -u || true)
+            reviewers=$(gh api "repos/$GH_REPO/pulls/$pr_number/reviews" --paginate --jq '.[].user.login // empty' 2>/dev/null \
+              | sort -u || true)
 
             mentions=""
             for user in $pr_author $reviewers; do
               [ -z "$user" ] && continue
+              # Skip automation accounts, which do not need a notification: GitHub App logins
+              # end in a literal "[bot]" (the brackets are escaped so the case pattern treats
+              # them literally rather than as a glob character class), and ClickHouse's own
+              # robots do not, so they are listed by name. "null" is what jq would emit for a
+              # review left by a since-deleted account.
+              case "$user" in
+                null | *\[bot\] | clickhouse-gh | robot-clickhouse | clickhouse-robot-gh) continue ;;
+              esac
               case " $mentions " in
                 *" @$user "*) continue ;;   # already mentioned
               esac
