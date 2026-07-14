@@ -127,8 +127,10 @@ The other 46 sitemap URLs are generated navigation surfaces:
 - 3 `/knowledgebase/tags/*/page/*` pagination routes
 
 Resolved locally: `/search` is now a standalone page with an inline Inkeep
-search that uses the same result corpus as the global site search. The other
-45 generated routes redirect to the documentation home page.
+search that uses the same result corpus as the global site search.
+`/knowledgebase` and `/knowledgebase/` preserve the approved support-center
+landing page; the other 44 generated routes redirect to the documentation home
+page.
 
 ## Broken CSV destination at verification time
 

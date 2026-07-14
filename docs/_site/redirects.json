@@ -5,7 +5,11 @@
   },
   {
     "source": "/knowledgebase",
-    "destination": "/"
+    "destination": "/resources/support-center/home"
+  },
+  {
+    "source": "/knowledgebase/",
+    "destination": "/resources/support-center/home"
   },
   {
     "source": "/knowledgebase/archive",
