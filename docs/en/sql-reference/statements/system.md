@@ -45,8 +45,8 @@ SELECT name, status FROM system.dictionaries;
 
 ## SYSTEM UNLOAD DICTIONARY {#unload-dictionary}
 
-Unloads a dictionary `dictionary_name` to release its memory. The dictionary is lazy-reloaded when necessary again.
-Returns an error if the dictionary is being loaded while the UNLOAD command is issued.
+Unloads a dictionary `dictionary_name` to release its memory, if the dictionary status is `LOADED`.
+The dictionary is lazy-reloaded when necessary again.
 
 ```sql
 SYSTEM UNLOAD DICTIONARY [ON CLUSTER cluster_name] dictionary_name

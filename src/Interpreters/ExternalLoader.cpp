@@ -672,33 +672,15 @@ public:
     {
         std::lock_guard lock{mutex};
         Info * info = getInfo(name);
-        if (!info)
-            return false;
-
-        if (info->isLoading())
-            throw Exception(ErrorCodes::DICTIONARY_BEING_LOADED,
-                "{} '{}' is currently being loaded, it cannot be unloaded now", type_name, name);
-
-        if (!info->loaded())
-        {
-            LOG_TRACE(log, "{} '{}' is not loaded, nothing to unload", type_name, name);
-            return false;
-        }
-
-        resetInfoToUnloaded(name, *info);
-
-        return true;
+        return unload(info);
     }
 
     void unloadAll()
     {
         std::lock_guard lock{mutex};
-        for (auto & [name, info] : infos)
+        for (auto & [_, info] : infos)
         {
-            if (info.loaded() && !info.isLoading())
-            {
-                resetInfoToUnloaded(name, info);
-            }
+            unload(&info);
         }
     }
 
@@ -861,6 +843,26 @@ private:
         info.loading_start_time = TimePoint();
         info.loading_end_time = TimePoint();
         info.last_successful_update_time = TimePoint();
+    }
+
+    bool unload(Info * info){
+        if (!info)
+            return false;
+
+        if (info->isLoading()){
+            LOG_TRACE(log, "{} '{}' is being loaded, skipping the operation", type_name, info->name);
+            return false;
+        }
+
+        if (!info->loaded())
+        {
+            LOG_TRACE(log, "{} '{}' is not loaded, nothing to unload", type_name, info->name);
+            return false;
+        }
+
+        resetInfoToUnloaded(info->name, *info);
+
+        return true;
     }
 
     Info * getInfo(const String & name)
