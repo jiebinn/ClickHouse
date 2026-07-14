@@ -155,7 +155,15 @@ SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04
 SELECT '--- Negative LIMIT: correct result, TopK-QCC path does not engage';
 SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT -5 SETTINGS use_query_condition_cache = 0;
 SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT -5 SETTINGS log_comment = '04338_neg';
-SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_neg_pos2' FORMAT Null;
+-- The positive rerun after the negative query must return the SAME rows as the
+-- QCC-off ground truth, not merely report a cache hit. A FORMAT Null rerun would
+-- stay green even if 04338_neg (legitimately 0 hits) overwrote the positive TopK
+-- entry through a write-side key collision, so materialize the cached rerun and
+-- compare it row-for-row against the QCC-off ground truth.
+SELECT '--- Positive TopK ground truth (QCC off) after the negative run';
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS use_query_condition_cache = 0;
+SELECT '--- Positive TopK cached rerun: must match ground truth (not poisoned)';
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_neg_pos2';
 SYSTEM FLUSH LOGS query_log;
 SELECT '--- Negative LIMIT does not reuse the TopK entry (0 hits)';
 SELECT ProfileEvents['QueryConditionCacheHits'] = 0

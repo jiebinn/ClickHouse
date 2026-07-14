@@ -59,6 +59,18 @@
 2007
 1007
 7
+--- Positive TopK ground truth (QCC off) after the negative run
+499007
+498007
+497007
+496007
+495007
+--- Positive TopK cached rerun: must match ground truth (not poisoned)
+499007
+498007
+497007
+496007
+495007
 --- Negative LIMIT does not reuse the TopK entry (0 hits)
 1
 --- Positive TopK query still hits after the negative run (not poisoned)
