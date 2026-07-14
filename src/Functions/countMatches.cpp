@@ -201,9 +201,9 @@ The behavior of this function depends on the ClickHouse version:
         "Count digit sequences",
         "SELECT countMatches('hello 123 world 456 test', '[0-9]+')",
         R"(
-┌─countMatches('hello 123 world 456 test', '[0-9]+')──┐
-│                                                   2 │
-└─────────────────────────────────────────────────────┘
+┌─countMatches('hello 123 world 456 test', '[0-9]+')─┐
+│                                                  2 │
+└────────────────────────────────────────────────────┘
         )"
     }
     };

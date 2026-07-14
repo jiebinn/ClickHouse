@@ -2232,9 +2232,9 @@ formatDateTimeInJodaSyntax(datetime, format[, timezone])
 SELECT formatDateTimeInJodaSyntax(toDateTime('2010-01-04 12:34:56'), 'yyyy-MM-dd HH:mm:ss')
         )",
         R"(
-┌─formatDateTimeInJodaSyntax(toDateTime('2010-01-04 12:34:56'), 'yyyy-MM-dd HH:mm:ss')────┐
-│ 2010-01-04 12:34:56                                                                     │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+┌─formatDateTimeInJodaSyntax(toDateTime('2010-01-04 12:34:56'), 'yyyy-MM-dd HH:mm:ss')─┐
+│ 2010-01-04 12:34:56                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────┘
         )"}
     };
     FunctionDocumentation::IntroducedIn introduced_in_formatDateTimeInJodaSyntax = {20, 1};

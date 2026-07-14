@@ -230,9 +230,9 @@ Applies standard Unicode case folding. Preserves compatibility characters that a
         "Basic case folding",
         "SELECT caseFoldUTF8('Straße')",
         R"(
-┌─caseFoldUTF8('Straße')──┐
-│ strasse                 │
-└─────────────────────────┘
+┌─caseFoldUTF8('Straße')─┐
+│ strasse                │
+└────────────────────────┘
 )"
     }};
     factory.registerFunction<FunctionCaseFoldUTF8>({case_desc, case_syntax, case_args, {}, case_ret, case_examples, intro, cat});
@@ -251,9 +251,9 @@ stripping combining marks (Unicode category Mn), then recomposing via NFC.
         "Basic accent removal",
         "SELECT removeDiacriticsUTF8('café résumé naïve')",
         R"(
-┌─removeDiacriticsUTF8('café résumé naïve')──┐
-│ cafe resume naive                          │
-└────────────────────────────────────────────┘
+┌─removeDiacriticsUTF8('café résumé naïve')─┐
+│ cafe resume naive                         │
+└───────────────────────────────────────────┘
 )"
     }};
     factory.registerFunction<FunctionRemoveDiacriticsUTF8>({accent_desc, accent_syntax, accent_args, {}, accent_ret, accent_examples, intro, cat});

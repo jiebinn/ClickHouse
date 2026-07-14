@@ -167,9 +167,9 @@ SELECT
     toStringCutToZero('hello\0world')
         )",
         R"(
-┌─toStringCutToZero('hello')─┬─toStringCutToZero('hello\\0world')──┐
-│ hello                      │ hello                               │
-└────────────────────────────┴─────────────────────────────────────┘
+┌─toStringCutToZero('hello')─┬─toStringCutToZero('hello\0world')─┐
+│ hello                      │ hello                             │
+└────────────────────────────┴───────────────────────────────────┘
         )"
     }
     };

@@ -348,7 +348,7 @@ SELECT accurateCast(42, 'UInt16')
         )",
         R"(
 ┌─accurateCast(42, 'UInt16')─┐
-│                        42  │
+│                         42 │
 └────────────────────────────┘
         )"
     },
