@@ -74,6 +74,8 @@ namespace DB::FailPoints
 
 namespace DB::DatabaseDataLakeSetting
 {
+    extern const DatabaseDataLakeSettingsString catalog_credential;
+    extern const DatabaseDataLakeSettingsString auth_header;
     extern const DatabaseDataLakeSettingsString onelake_tenant_id;
     extern const DatabaseDataLakeSettingsString onelake_bearer_token;
     extern const DatabaseDataLakeSettingsString onelake_client_id;
@@ -344,6 +346,125 @@ OneLakeCatalog::OneLakeCatalog(
     state.set(std::make_unique<const CatalogState>(std::move(initial_state)));
 }
 
+void RestCatalog::validateSettingsChangesImpl(
+    const DB::SettingsChanges & changes,
+    const std::unordered_set<std::string> & alterable_settings,
+    const std::string & auth_mode_description)
+{
+    for (const auto & change : changes)
+    {
+        if (alterable_settings.empty())
+            throw DB::Exception(
+                DB::ErrorCodes::BAD_ARGUMENTS,
+                "Setting `{}` cannot be altered for a {}: the database was created without authentication settings",
+                change.name,
+                auth_mode_description);
+
+        if (!alterable_settings.contains(change.name))
+            throw DB::Exception(
+                DB::ErrorCodes::BAD_ARGUMENTS,
+                "Setting `{}` cannot be altered for a {} "
+                "(the authentication mode is fixed when the database is created; "
+                "alterable settings are: {})",
+                change.name,
+                auth_mode_description,
+                fmt::join(alterable_settings, ", "));
+
+        if (change.value.getType() != DB::Field::Types::String)
+            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` must be a string", change.name);
+
+        if (change.value.safeGet<String>().empty())
+            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` cannot be set to an empty value", change.name);
+    }
+}
+
+void RestCatalog::validateSettingsChanges(const DB::SettingsChanges & changes, bool credential_mode, bool header_mode)
+{
+    static const std::unordered_set<std::string> credential_mode_settings = {
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::catalog_credential)};
+    static const std::unordered_set<std::string> header_mode_settings = {
+        DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::auth_header)};
+    static const std::unordered_set<std::string> no_auth_settings = {};
+
+    if (credential_mode)
+        validateSettingsChangesImpl(changes, credential_mode_settings, "REST catalog with catalog credential authentication");
+    else if (header_mode)
+        validateSettingsChangesImpl(changes, header_mode_settings, "REST catalog with auth header authentication");
+    else
+        validateSettingsChangesImpl(changes, no_auth_settings, "REST catalog");
+}
+
+struct RestCatalog::PreparedAuthChanges : ICatalog::PreparedSettingsChanges
+{
+    std::unique_ptr<const CatalogState> new_state;
+    /// Set only when the OAuth credentials changed.
+    std::unique_ptr<AccessToken> new_access_token;
+};
+
+ICatalog::PreparedSettingsChangesPtr RestCatalog::prepareSettingsChanges(const DB::SettingsChanges & changes)
+{
+    const auto old_state = state.get();
+    CatalogState new_state = *old_state;
+
+    auto prepared = std::make_unique<PreparedAuthChanges>();
+    std::optional<DB::HTTPHeaderEntries> new_auth_headers;
+    applySettingsChangesToState(changes, *old_state, new_state, new_auth_headers, prepared->new_access_token);
+
+    /// The config was loaded with the old credentials; the new ones may resolve the
+    /// warehouse to a different prefix or base location, so reload it before publishing.
+    new_state.config = loadConfig(new_state, new_auth_headers);
+    prepared->new_state = std::make_unique<const CatalogState>(std::move(new_state));
+    return prepared;
+}
+
+void RestCatalog::commitSettingsChanges(ICatalog::PreparedSettingsChangesPtr prepared)
+{
+    auto * prepared_auth = dynamic_cast<PreparedAuthChanges *>(prepared.get());
+    if (!prepared_auth || !prepared_auth->new_state)
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Settings changes to commit were not prepared by this catalog");
+
+    state.set(std::move(prepared_auth->new_state));
+    if (prepared_auth->new_access_token)
+        access_token.set(std::move(prepared_auth->new_access_token));
+}
+
+void RestCatalog::applySettingsChangesToState(
+    const DB::SettingsChanges & changes,
+    const CatalogState & old_state,
+    CatalogState & new_state,
+    std::optional<DB::HTTPHeaderEntries> & new_auth_headers,
+    std::unique_ptr<AccessToken> & new_access_token)
+{
+    const bool credential_mode = !old_state.client_id.empty();
+    const bool header_mode = old_state.auth_header.has_value();
+
+    validateSettingsChanges(changes, credential_mode, header_mode);
+
+    for (const auto & change : changes)
+    {
+        if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::catalog_credential))
+        {
+            std::tie(new_state.client_id, new_state.client_secret) = parseCatalogCredential(change.value.safeGet<String>());
+        }
+        else if (change.name == DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::auth_header))
+        {
+            new_state.auth_header = parseAuthHeader(change.value.safeGet<String>());
+            validateAuthHeaders(new_state.auth_header.value());
+        }
+        else
+            throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Unexpected setting `{}` after validation", change.name);
+    }
+
+    if (credential_mode && (new_state.client_id != old_state.client_id || new_state.client_secret != old_state.client_secret))
+    {
+        /// Eagerly fetch a token with the not-yet-published credentials: wrong credentials
+        /// fail the ALTER right here, and the config reload authenticates with that token
+        /// instead of the cached one.
+        new_access_token = std::make_unique<AccessToken>(retrieveAccessToken(new_state.client_id, new_state.client_secret));
+        new_auth_headers = DB::HTTPHeaderEntries{{"Authorization", "Bearer " + new_access_token->token}};
+    }
+}
+
 DB::HTTPHeaderEntries OneLakeCatalog::getAuthHeaders(const CatalogState & catalog_state, bool update_token) const
 {
     auto headers = RestCatalog::getAuthHeaders(catalog_state, update_token);
@@ -361,39 +482,20 @@ void OneLakeCatalog::validateSettingsChanges(const DB::SettingsChanges & changes
         DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_id),
         DB::DatabaseDataLakeSettings::getSettingName(DB::DatabaseDataLakeSetting::onelake_client_secret)};
 
-    const auto & alterable_settings = bearer_mode ? bearer_mode_settings : client_mode_settings;
-    for (const auto & change : changes)
-    {
-        if (!alterable_settings.contains(change.name))
-            throw DB::Exception(
-                DB::ErrorCodes::BAD_ARGUMENTS,
-                "Setting `{}` cannot be altered for a OneLake catalog with {} authentication "
-                "(the authentication mode is fixed when the database is created; "
-                "alterable settings are: {})",
-                change.name,
-                bearer_mode ? "bearer token" : "client credentials",
-                fmt::join(alterable_settings, ", "));
-
-        if (change.value.getType() != DB::Field::Types::String)
-            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` must be a string", change.name);
-
-        if (change.value.safeGet<String>().empty())
-            throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Setting `{}` cannot be set to an empty value", change.name);
-    }
+    RestCatalog::validateSettingsChangesImpl(
+        changes,
+        bearer_mode ? bearer_mode_settings : client_mode_settings,
+        bearer_mode ? "OneLake catalog with bearer token authentication" : "OneLake catalog with client credentials authentication");
 }
 
-struct OneLakeCatalog::PreparedAuthChanges : ICatalog::PreparedSettingsChanges
+void OneLakeCatalog::applySettingsChangesToState(
+    const DB::SettingsChanges & changes,
+    const CatalogState & old_state,
+    CatalogState & new_state,
+    std::optional<DB::HTTPHeaderEntries> & new_auth_headers,
+    std::unique_ptr<AccessToken> & new_access_token)
 {
-    std::unique_ptr<const CatalogState> new_state;
-    /// Set only when the OAuth client credentials changed.
-    std::unique_ptr<AccessToken> new_access_token;
-};
-
-ICatalog::PreparedSettingsChangesPtr OneLakeCatalog::prepareSettingsChanges(const DB::SettingsChanges & changes)
-{
-    const auto old_state = state.get();
-    CatalogState new_state = *old_state;
-    const bool bearer_mode = !new_state.bearer_token.empty();
+    const bool bearer_mode = !old_state.bearer_token.empty();
 
     validateSettingsChanges(changes, bearer_mode);
 
@@ -411,43 +513,36 @@ ICatalog::PreparedSettingsChangesPtr OneLakeCatalog::prepareSettingsChanges(cons
             throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Unexpected setting `{}` after validation", change.name);
     }
 
-    auto prepared = std::make_unique<PreparedAuthChanges>();
-
-    /// In client-credentials mode, eagerly fetch a token with the not-yet-published
-    /// credentials: wrong credentials fail the ALTER right here, and the config reload
-    /// below authenticates with that token instead of the cached one.
-    std::optional<DB::HTTPHeaderEntries> new_auth_headers;
     if (bearer_mode)
     {
         new_state.auth_header = DB::HTTPHeaderEntry("Authorization", "Bearer " + new_state.bearer_token);
         validateAuthHeaders(new_state.auth_header.value());
     }
-    else if (new_state.client_id != old_state->client_id || new_state.client_secret != old_state->client_secret)
+    else if (new_state.client_id != old_state.client_id || new_state.client_secret != old_state.client_secret)
     {
-        prepared->new_access_token = std::make_unique<AccessToken>(retrieveAccessToken(new_state.client_id, new_state.client_secret));
-        new_auth_headers = DB::HTTPHeaderEntries{{"Authorization", "Bearer " + prepared->new_access_token->token}};
+        /// Eagerly fetch a token with the not-yet-published credentials: wrong credentials
+        /// fail the ALTER right here, and the config reload authenticates with that token
+        /// instead of the cached one.
+        new_access_token = std::make_unique<AccessToken>(retrieveAccessToken(new_state.client_id, new_state.client_secret));
+        new_auth_headers = DB::HTTPHeaderEntries{{"Authorization", "Bearer " + new_access_token->token}};
     }
-
-    /// The config was loaded with the old credentials; the new ones may resolve the
-    /// warehouse to a different prefix or base location, so reload it before publishing.
-    new_state.config = loadConfig(new_state, new_auth_headers);
-    prepared->new_state = std::make_unique<const CatalogState>(std::move(new_state));
-    return prepared;
-}
-
-void OneLakeCatalog::commitSettingsChanges(ICatalog::PreparedSettingsChangesPtr prepared)
-{
-    auto * prepared_auth = dynamic_cast<PreparedAuthChanges *>(prepared.get());
-    if (!prepared_auth || !prepared_auth->new_state)
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "Settings changes to commit were not prepared by OneLake catalog");
-
-    state.set(std::move(prepared_auth->new_state));
-    if (prepared_auth->new_access_token)
-        access_token.set(std::move(prepared_auth->new_access_token));
 }
 
 namespace
 {
+
+[[maybe_unused]] const bool rest_settings_alter_validator_registered = []
+{
+    CatalogSettingsAlterValidatorFactory::instance().registerValidator(
+        DB::DatabaseDataLakeCatalogType::ICEBERG_REST,
+        [](const DB::DatabaseDataLakeSettings & current_settings, const DB::SettingsChanges & changes)
+        {
+            const bool credential_mode = !current_settings[DB::DatabaseDataLakeSetting::catalog_credential].value.empty();
+            const bool header_mode = !current_settings[DB::DatabaseDataLakeSetting::auth_header].value.empty();
+            RestCatalog::validateSettingsChanges(changes, credential_mode, header_mode);
+        });
+    return true;
+}();
 
 [[maybe_unused]] const bool onelake_settings_alter_validator_registered = []
 {
@@ -524,7 +619,9 @@ AccessToken RestCatalog::retrieveAccessToken(const std::string & client_id, cons
     request.set("Accept", "application/json");
 
     std::ostream & os = session->sendRequest(request);
-    out_stream_callback(os);
+    /// The query-parameters flavor of the request has no body.
+    if (out_stream_callback)
+        out_stream_callback(os);
 
     Poco::Net::HTTPResponse response;
     std::istream & rs = session->receiveResponse(response);

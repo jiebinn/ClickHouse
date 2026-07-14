@@ -9,6 +9,7 @@
 #include <IO/HTTPHeaderEntries.h>
 #include <Interpreters/Context_fwd.h>
 #include <filesystem>
+#include <unordered_set>
 #include <Poco/JSON/Object.h>
 
 namespace DB
@@ -117,6 +118,20 @@ public:
 
     CatalogStateVersion getStateSnapshot() const { return state.get(); }
 
+    ICatalog::PreparedSettingsChangesPtr prepareSettingsChanges(const DB::SettingsChanges & changes) override;
+
+    void commitSettingsChanges(ICatalog::PreparedSettingsChangesPtr prepared) override;
+
+    /// Check that we actually support these settings alter
+    static void validateSettingsChangesImpl(
+        const DB::SettingsChanges & changes,
+        const std::unordered_set<std::string> & alterable_settings,
+        const std::string & auth_mode_description);
+
+    /// `credential_mode` means the catalog authenticates with `catalog_credential`,
+    /// `header_mode` with `auth_header`. The mode is fixed when the database is created.
+    static void validateSettingsChanges(const DB::SettingsChanges & changes, bool credential_mode, bool header_mode);
+
 protected:
     RestCatalog(
         const std::string & warehouse_,
@@ -187,10 +202,7 @@ protected:
         const std::string & table_name,
         TableMetadata & result) const;
 
-    /// `catalog_state` may be a state that is not published yet (constructors and
-    /// `OneLakeCatalog::prepareSettingsChanges` load the config before publishing).
-    /// `auth_headers`, when set, is used instead of headers derived from `catalog_state`
-    /// (to authenticate with an OAuth token that is prepared but not cached yet).
+    /// Load catalog config (special http handler) utilizing information from catalog_state and auth_headers.
     Config loadConfig(const CatalogState & catalog_state, const std::optional<DB::HTTPHeaderEntries> & auth_headers = std::nullopt);
     virtual DB::HTTPHeaderEntries getAuthHeaders(const CatalogState & catalog_state, bool update_token) const;
 
@@ -207,6 +219,20 @@ protected:
     std::pair<std::shared_ptr<IStorageCredentials>, String> getCredentialsAndEndpoint(Poco::JSON::Object::Ptr object, const String & location) const;
 
     AccessToken retrieveAccessToken(const std::string & client_id, const std::string & client_secret) const;
+
+    struct PreparedAuthChanges;
+
+    /// Hook for `prepareSettingsChanges`: validate `changes` and apply them to `new_state`,
+    /// building the new auth artifacts, without publishing anything. When the OAuth
+    /// credentials change, the eagerly fetched token goes into `new_access_token` and
+    /// `new_auth_headers`, so that wrong credentials fail the ALTER right here and the
+    /// config reload authenticates with the new token instead of the cached one.
+    virtual void applySettingsChangesToState(
+        const DB::SettingsChanges & changes,
+        const CatalogState & old_state,
+        CatalogState & new_state,
+        std::optional<DB::HTTPHeaderEntries> & new_auth_headers,
+        std::unique_ptr<AccessToken> & new_access_token);
 };
 
 class OneLakeCatalog : public RestCatalog
@@ -231,14 +257,18 @@ public:
 
     DB::HTTPHeaderEntries getAuthHeaders(const CatalogState & catalog_state, bool update_token) const override;
 
-    ICatalog::PreparedSettingsChangesPtr prepareSettingsChanges(const DB::SettingsChanges & changes) override;
-
-    void commitSettingsChanges(ICatalog::PreparedSettingsChangesPtr prepared) override;
-
+    /// `bearer_mode` means the catalog authenticates with `onelake_bearer_token`,
+    /// otherwise with the `onelake_client_id` + `onelake_client_secret` pair.
+    /// The mode is fixed when the database is created.
     static void validateSettingsChanges(const DB::SettingsChanges & changes, bool bearer_mode);
 
-private:
-    struct PreparedAuthChanges;
+protected:
+    void applySettingsChangesToState(
+        const DB::SettingsChanges & changes,
+        const CatalogState & old_state,
+        CatalogState & new_state,
+        std::optional<DB::HTTPHeaderEntries> & new_auth_headers,
+        std::unique_ptr<AccessToken> & new_access_token) override;
 };
 
 class BigLakeCatalog : public RestCatalog

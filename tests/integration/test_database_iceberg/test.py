@@ -1480,17 +1480,17 @@ def test_alter_database_settings_not_supported(started_cluster):
     error = node.query_and_get_error(
         f"ALTER DATABASE {db_name} MODIFY SETTING warehouse = 'other_warehouse'"
     )
-    assert "NOT_IMPLEMENTED" in error
+    assert "BAD_ARGUMENTS" in error
     error = node.query_and_get_error(
         f"ALTER DATABASE {db_name} MODIFY SETTING onelake_bearer_token = '{fake_token}'",
         query_id=qid_alter,
     )
-    assert "NOT_IMPLEMENTED" in error
+    assert "BAD_ARGUMENTS" in error
 
     error = node.query_and_get_error(
         f"ALTER DATABASE {db_name} MODIFY SETTING no_such_setting = 1"
     )
-    assert "NOT_IMPLEMENTED" in error or "UNKNOWN_SETTING" in error
+    assert "BAD_ARGUMENTS" in error or "UNKNOWN_SETTING" in error
 
     show_result = node.query(f"SHOW CREATE DATABASE {db_name}")
     assert "other_warehouse" not in show_result
@@ -1505,6 +1505,58 @@ def test_alter_database_settings_not_supported(started_cluster):
     )
     assert fake_token not in logged_query
     assert "[HIDDEN]" in logged_query
+
+    node.query(f"DROP DATABASE {db_name}")
+
+    glue_db_name = f"glue_alter_settings_{uuid.uuid4().hex}"
+    node.query(
+        f"""
+        ATTACH DATABASE {glue_db_name} ENGINE = DataLakeCatalog('http://fake-glue:1')
+        SETTINGS catalog_type = 'glue', region = 'us-east-1', storage_endpoint = 'http://fake-glue:1/x'
+        """
+    )
+    error = node.query_and_get_error(
+        f"ALTER DATABASE {glue_db_name} MODIFY SETTING region = 'eu-west-1'"
+    )
+    assert "NOT_IMPLEMENTED" in error
+    node.query(f"DROP DATABASE {glue_db_name}")
+
+
+def test_alter_database_settings_rest_auth_header(started_cluster):
+    node = started_cluster.instances["node1"]
+
+    db_name = f"rest_alter_auth_header_{uuid.uuid4().hex}"
+    old_header = f"Authorization: Bearer old_{uuid.uuid4().hex}"
+    new_header = f"Authorization: Bearer new_{uuid.uuid4().hex}"
+
+    node.query(
+        f"""
+        ATTACH DATABASE {db_name} ENGINE = DataLakeCatalog('http://fake-rest:1/api')
+        SETTINGS catalog_type = 'rest', warehouse = 'wh', auth_header = '{old_header}'
+        """
+    )
+
+    node.query(
+        f"ALTER DATABASE {db_name} MODIFY SETTING auth_header = '{new_header}'"
+    )
+
+    error = node.query_and_get_error(
+        f"ALTER DATABASE {db_name} MODIFY SETTING catalog_credential = 'id:secret'"
+    )
+    assert "BAD_ARGUMENTS" in error
+
+    show_result = node.query(f"SHOW CREATE DATABASE {db_name}")
+    assert new_header not in show_result
+    assert "[HIDDEN]" in show_result
+
+    node.restart_clickhouse()
+
+    engine_full_with_secrets = node.query(
+        f"SELECT engine_full FROM system.databases WHERE name = '{db_name}'",
+        settings={"format_display_secrets_in_show_and_select": 1},
+    )
+    assert new_header in engine_full_with_secrets
+    assert old_header not in engine_full_with_secrets
 
     node.query(f"DROP DATABASE {db_name}")
 
