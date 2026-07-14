@@ -52,8 +52,11 @@ LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'codepoint' alpha 1.0 pri
 LIFETIME(0)
 "
 
-# Batch with numbers()
-$CLICKHOUSE_CLIENT -q "SELECT number, naiveBayesClassifier('lang_byte_2', 'She painted the wall a bright yellow') FROM numbers(10) ORDER BY number"
+# Batch with numbers().
+# The dictionary name is qualified with the database so it resolves on remote replicas too: with
+# parallel replicas the secondary queries carry a fully-qualified table but keep their own current
+# database, so an unqualified dictionary name would not resolve there (same as `dictGet`).
+$CLICKHOUSE_CLIENT -q "SELECT number, naiveBayesClassifier('${CLICKHOUSE_DATABASE}.lang_byte_2', 'She painted the wall a bright yellow') FROM numbers(10) ORDER BY number"
 
 # Multiple models x multiple inputs. The model name must be a constant, so each model is a
 # separate UNION ALL branch with a literal name.
@@ -75,9 +78,9 @@ $CLICKHOUSE_CLIENT -q "
 SELECT model_name, input_text, classification
 FROM
 (
-    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifier('lang_byte_2', input_text) AS classification FROM input_texts
+    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifier('${CLICKHOUSE_DATABASE}.lang_byte_2', input_text) AS classification FROM input_texts
     UNION ALL
-    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifier('lang_codepoint_1', input_text) AS classification FROM input_texts
+    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifier('${CLICKHOUSE_DATABASE}.lang_codepoint_1', input_text) AS classification FROM input_texts
 )
 ORDER BY model_name, input_text
 "
@@ -86,9 +89,9 @@ $CLICKHOUSE_CLIENT -q "
 SELECT model_name, input_text, (result.1, round(result.2, 4))
 FROM
 (
-    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifierWithProb('lang_byte_2', input_text) AS result FROM input_texts
+    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifierWithProb('${CLICKHOUSE_DATABASE}.lang_byte_2', input_text) AS result FROM input_texts
     UNION ALL
-    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifierWithProb('lang_codepoint_1', input_text) AS result FROM input_texts
+    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifierWithProb('${CLICKHOUSE_DATABASE}.lang_codepoint_1', input_text) AS result FROM input_texts
 )
 ORDER BY model_name, input_text
 "
@@ -97,9 +100,9 @@ $CLICKHOUSE_CLIENT -q "
 SELECT model_name, input_text, arrayMap(p -> (p.1, round(p.2, 4)), result)
 FROM
 (
-    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifierWithAllProbs('lang_byte_2', input_text) AS result FROM input_texts
+    SELECT 'lang_byte_2' AS model_name, input_text, naiveBayesClassifierWithAllProbs('${CLICKHOUSE_DATABASE}.lang_byte_2', input_text) AS result FROM input_texts
     UNION ALL
-    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifierWithAllProbs('lang_codepoint_1', input_text) AS result FROM input_texts
+    SELECT 'lang_codepoint_1' AS model_name, input_text, naiveBayesClassifierWithAllProbs('${CLICKHOUSE_DATABASE}.lang_codepoint_1', input_text) AS result FROM input_texts
 )
 ORDER BY model_name, input_text
 "
