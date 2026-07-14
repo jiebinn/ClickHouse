@@ -123,8 +123,19 @@ ORDER BY event_time_microseconds DESC LIMIT 1;
 
 -- `condition_hash` folds the sort direction, so a warm `ORDER BY k DESC` entry
 -- must not be reused for `ORDER BY k ASC`: the direction change is a fresh key.
+-- First prove the DESC warm-up really populated a TopK entry (a rerun hits it);
+-- otherwise the ASC 0-hits below would be a miss for the wrong reason (no entry
+-- at all on the one-part post-drop dataset), leaving the direction fold untested.
 SYSTEM CLEAR QUERY CONDITION CACHE;
-SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 FORMAT Null;
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_descwarm' FORMAT Null;
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_descrerun' FORMAT Null;
+SYSTEM FLUSH LOGS query_log;
+SELECT '--- DESC rerun hits its warm entry (proves direction DESC populated QCC)';
+SELECT ProfileEvents['QueryConditionCacheHits'] > 0
+FROM system.query_log
+WHERE current_database = currentDatabase() AND log_comment = '04338_descrerun' AND type = 'QueryFinish'
+ORDER BY event_time_microseconds DESC LIMIT 1;
+
 SELECT '--- ASC after warming DESC: distinct direction key, must not hit';
 SELECT k FROM tab WHERE w = 7 ORDER BY k ASC LIMIT 5 SETTINGS use_query_condition_cache = 0;
 SELECT k FROM tab WHERE w = 7 ORDER BY k ASC LIMIT 5 SETTINGS log_comment = '04338_asc';
@@ -136,9 +147,25 @@ ORDER BY event_time_microseconds DESC LIMIT 1;
 
 -- A negative `LIMIT` is not a TopK plan (it becomes a `NegativeLimit` step with no
 -- `__topKFilter`), so it never engages the TopK-salted QCC path -- it must return
--- the correct rows and cannot be poisoned by, or poison, the TopK entries above.
+-- the correct rows and neither reuse nor poison the TopK entries. Warm a positive
+-- TopK entry, run the negative-limit query (0 hits: it does not reuse the entry),
+-- then rerun the positive query (still hits: the negative run did not poison it).
+SYSTEM CLEAR QUERY CONDITION CACHE;
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_neg_warm' FORMAT Null;
 SELECT '--- Negative LIMIT: correct result, TopK-QCC path does not engage';
 SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT -5 SETTINGS use_query_condition_cache = 0;
-SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT -5;
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT -5 SETTINGS log_comment = '04338_neg';
+SELECT k FROM tab WHERE w = 7 ORDER BY k DESC LIMIT 5 SETTINGS log_comment = '04338_neg_pos2' FORMAT Null;
+SYSTEM FLUSH LOGS query_log;
+SELECT '--- Negative LIMIT does not reuse the TopK entry (0 hits)';
+SELECT ProfileEvents['QueryConditionCacheHits'] = 0
+FROM system.query_log
+WHERE current_database = currentDatabase() AND log_comment = '04338_neg' AND type = 'QueryFinish'
+ORDER BY event_time_microseconds DESC LIMIT 1;
+SELECT '--- Positive TopK query still hits after the negative run (not poisoned)';
+SELECT ProfileEvents['QueryConditionCacheHits'] > 0
+FROM system.query_log
+WHERE current_database = currentDatabase() AND log_comment = '04338_neg_pos2' AND type = 'QueryFinish'
+ORDER BY event_time_microseconds DESC LIMIT 1;
 
 DROP TABLE tab;

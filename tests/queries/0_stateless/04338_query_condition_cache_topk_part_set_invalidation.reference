@@ -34,6 +34,8 @@
 495007
 --- QCC ProfileEvents after DROP PARTITION: no hits (key invalidated)
 1
+--- DESC rerun hits its warm entry (proves direction DESC populated QCC)
+1
 --- ASC after warming DESC: distinct direction key, must not hit
 7
 1007
@@ -57,3 +59,7 @@
 2007
 1007
 7
+--- Negative LIMIT does not reuse the TopK entry (0 hits)
+1
+--- Positive TopK query still hits after the negative run (not poisoned)
+1
