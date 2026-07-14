@@ -1,0 +1,27 @@
+<test>
+    <!-- Probe-dominated hash joins against small (cache-resident) build sides with Nullable
+         keys. With a tiny hash table the probe loop iteration is only a few cycles, so any
+         extra per-row work in `HashJoinMethods::joinRightColumns` shows up here first; the
+         Nullable-key shape exercises the null-map handling of the probe loop, which is not
+         covered by the other join tests (their Nullable cases use large build sides). -->
+
+    <query>
+        SELECT * FROM (SELECT toNullable(number) AS k FROM numbers_mt(5e8)) AS lhs
+        LEFT JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs USING (k)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='hash'
+    </query>
+
+    <query>
+        SELECT * FROM (SELECT if(number % 10 = 0, NULL, number) AS k FROM numbers_mt(5e8)) AS lhs
+        LEFT JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs USING (k)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='hash'
+    </query>
+
+    <query>
+        SELECT count() FROM (SELECT toNullable(number) AS k FROM numbers_mt(1e8)) AS lhs
+        INNER JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs USING (k)
+        SETTINGS max_threads=1, join_algorithm='hash'
+    </query>
+</test>
