@@ -1,5 +1,6 @@
 #include <Backups/BackupMetadataHandler.h>
 
+#include <Common/Exception.h>
 #include <Poco/SAX/SAXParser.h>
 
 #include <gtest/gtest.h>
@@ -189,4 +190,50 @@ TEST(BackupMetadataHandler, MalformedXmlThrowsFromParser)
     /// A parse error (mismatched tags) is reported by the parser itself, not captured in saved_exception.
     const std::string bad = "<config><version>2</version></contents>";
     EXPECT_ANY_THROW(parser.parseMemoryNP(bad.data(), bad.size()));
+}
+
+TEST(BackupMetadataHandler, MissingContentsDoesNotApplyHeader)
+{
+    /// Without a top-level <contents>, on_header must not fire (BackupImpl rejects this afterwards).
+    auto result = parse("<config><version>1</version><uuid>00000000-0000-0000-0000-000000000001</uuid></config>");
+    EXPECT_FALSE(result.header_seen);
+    EXPECT_TRUE(result.files.empty());
+    EXPECT_FALSE(result.saved_exception);
+}
+
+TEST(BackupMetadataHandler, FileOutsideContentsIsIgnored)
+{
+    /// A <file> that is not directly under <contents> must not be reported (callbacks are gated by path).
+    auto result = parse("<config><x><file><name>n</name><size>0</size></file></x></config>");
+    EXPECT_FALSE(result.header_seen);
+    EXPECT_TRUE(result.files.empty());
+}
+
+TEST(BackupMetadataHandler, DuplicateTopLevelContentsIsRejected)
+{
+    /// A second top-level <contents> must be rejected rather than re-applying the header / appending files.
+    auto result = parse(
+        "<config><version>1</version><contents></contents><contents></contents></config>");
+    ASSERT_TRUE(result.saved_exception);
+    EXPECT_THROW(std::rethrow_exception(result.saved_exception), DB::Exception);
+}
+
+TEST(BackupMetadataHandler, DuplicateHeaderFieldKeepsFirstValue)
+{
+    /// Duplicate scalar header fields keep the first value (matches the old DOM getNodeByPath behavior).
+    auto result = parse(
+        "<config><version>999</version><version>2</version>"
+        "<uuid>00000000-0000-0000-0000-000000000001</uuid><contents></contents></config>");
+    ASSERT_TRUE(result.header_seen);
+    EXPECT_EQ(result.header.at("version"), "999");
+}
+
+TEST(BackupMetadataHandler, DuplicateFileFieldKeepsFirstValue)
+{
+    auto result = parse(
+        "<config><version>2</version><contents>"
+        "<file><name>a</name><size>1</size><size>2</size></file>"
+        "</contents></config>");
+    ASSERT_EQ(result.files.size(), 1u);
+    EXPECT_EQ(result.files[0].at("size"), "1");
 }
