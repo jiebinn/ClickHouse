@@ -1982,6 +1982,77 @@ def test_numeric_int256_validation(started_cluster):
     cursor.execute("DROP TABLE IF EXISTS test_overflow")
 
 
+def test_detach_table_with_pending_bad_value(started_cluster):
+    # Regression test for https://github.com/ClickHouse/ClickHouse/issues/68032:
+    # A value that does not fit the ClickHouse type chosen for a PostgreSQL column makes the
+    # consumer fail while decoding the WAL record, so the table stays queued in `tables_to_sync`
+    # and the final sync of the batch is skipped (the consumer keeps retrying the same record).
+    # `DETACH TABLE ... PERMANENTLY` then removes the table's storage from the consumer while that
+    # stale queue entry remains. The next `syncTables()` used to look the now-missing storage up in
+    # `storages` and dereference the `end()` iterator, crashing the server with SIGSEGV. It must
+    # instead drop the stale entry and keep replicating the other tables.
+    #
+    # An unbounded PostgreSQL `numeric` maps to `Decimal128(38, 19)` (19 integer digits), so a value
+    # with more integer digits than that overflows on decode - exactly the situation from the issue.
+    cursor = pg_manager.get_db_cursor()
+    cursor.execute("DROP TABLE IF EXISTS test_detach_bad_value")
+    cursor.execute("DROP TABLE IF EXISTS test_detach_healthy")
+    cursor.execute(
+        "CREATE TABLE test_detach_bad_value (id serial PRIMARY KEY, num numeric NOT NULL)"
+    )
+    cursor.execute(
+        "CREATE TABLE test_detach_healthy (key integer PRIMARY KEY, value integer)"
+    )
+    cursor.execute("INSERT INTO test_detach_bad_value (num) VALUES (88)")
+    cursor.execute("INSERT INTO test_detach_healthy VALUES (1, 1)")
+
+    pg_manager.create_materialized_db(
+        ip=started_cluster.postgres_ip,
+        port=started_cluster.postgres_port,
+        settings=[
+            "materialized_postgresql_tables_list = 'test_detach_bad_value,test_detach_healthy'",
+            "materialized_postgresql_backoff_min_ms = 100",
+            "materialized_postgresql_backoff_max_ms = 100",
+        ],
+    )
+    # The initial snapshot (small, valid values) must synchronize for both tables.
+    check_tables_are_synchronized(
+        instance, "test_detach_healthy", postgres_database=pg_manager.get_default_database()
+    )
+
+    # 23 integer digits: does not fit into Decimal128(38, 19), so the consumer fails to decode this
+    # WAL record and keeps the table queued for sync (it retries the same record indefinitely).
+    cursor.execute(
+        "INSERT INTO test_detach_bad_value (num) VALUES (67806780999999999997777)"
+    )
+    # Wait until the consumer has actually hit the decoding error, so the DETACH below really races
+    # against a stale `tables_to_sync` entry rather than a benign empty queue.
+    instance.wait_for_log_line(
+        "Got error while receiving value for column", timeout=60
+    )
+
+    # Before the fix this crashed the server (SIGSEGV in MaterializedPostgreSQLConsumer::syncTables()).
+    instance.query("DETACH TABLE test_database.test_detach_bad_value PERMANENTLY")
+
+    # Removing the table from replication unblocks the consumer, so ongoing replication of the other
+    # table must resume: a row inserted after the DETACH has to be replicated.
+    cursor.execute("INSERT INTO test_detach_healthy VALUES (2, 2)")
+    check_tables_are_synchronized(
+        instance, "test_detach_healthy", postgres_database=pg_manager.get_default_database()
+    )
+    assert 2 == int(
+        instance.query("SELECT count() FROM test_database.test_detach_healthy")
+    )
+    # The server must still be alive and must not have crashed. `check_tables_are_synchronized` above
+    # already gave the consumer time to run `syncTables()` after the DETACH (where the crash happened).
+    assert "1" == instance.query("SELECT 1").strip()
+    assert not instance.contains_in_log("Received signal")
+
+    pg_manager.drop_materialized_db()
+    cursor.execute("DROP TABLE IF EXISTS test_detach_bad_value")
+    cursor.execute("DROP TABLE IF EXISTS test_detach_healthy")
+
+
 def test_aggregating_materialized_view(started_cluster):
     # Regression test for https://github.com/ClickHouse/ClickHouse/issues/39805:
     # creating an aggregating materialized view on top of a MaterializedPostgreSQL table
