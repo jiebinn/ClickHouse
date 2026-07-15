@@ -1299,11 +1299,11 @@ EXPLAIN indexes = 1 SELECT count() FROM test_stats WHERE value > 5000;
 
 - `minmax` (deprecated)
 
-    The minimum and maximum column value which allows to estimate the selectivity of range filters on numeric columns.
-
     :::note
-    `minmax` is deprecated and can no longer be created (`CREATE TABLE ... STATISTICS(minmax)` and `ALTER TABLE ... ADD/MODIFY STATISTICS ... TYPE minmax` throw an exception). It is a subset of `Basic`, which should be used instead. Existing tables and parts that still reference `minmax` keep working.
+    `minmax` statistics are deprecated and can no longer be created (`CREATE TABLE ... STATISTICS(minmax)` and `ALTER TABLE ... ADD/MODIFY STATISTICS ... TYPE minmax` return an error). Existing tables and parts with `minmax` statistics keep working. Use `basic` statistics instead.
     :::
+
+    The minimum and maximum column value which allows to estimate the selectivity of range filters on numeric columns.
 
 - `tdigest`
 
