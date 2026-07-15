@@ -1,5 +1,6 @@
 (ns jepsen.clickhouse.utils
-  (:require [jepsen.control.util :as cu]
+  (:require [slingshot.slingshot :refer [try+]]
+            [jepsen.control.util :as cu]
             [jepsen 
              [control :as c]
              [db :as db]]
@@ -121,19 +122,18 @@
 (defn kill-clickhouse!
   [node test]
   (info "Killing server on node" node)
-  (try
+  (try+
     (c/su
      (cu/stop-daemon! binary-path pid-file-path)
      (c/exec :rm :-fr (str data-dir "/status")))
-    (catch Exception e
-      ;; Best-effort kill. A node made unreachable by a nemesis (e.g.
-      ;; hammer-time) or a dropped SSH transport makes stop-daemon!'s
-      ;; `killall -w` hang until it throws :kill-timed-out; that must not crash
-      ;; teardown or the whole test. kill-clickhouse! is used both for teardown
-      ;; and as the killer-nemesis action, and in both cases an unreachable
-      ;; node already satisfies the intent, so log and continue.
-      (warn e "Failed to kill ClickHouse on node" node
-            "- continuing (node may be unreachable)"))))
+    ;; Only tolerate stop-daemon!'s own timeout: a node made unreachable by a
+    ;; nemesis (e.g. hammer-time) makes `killall -w` hang until the 30s timeout
+    ;; throws :kill-timed-out, which must not crash teardown or the killer
+    ;; nemeses. Genuine kill failures on a reachable node (nonzero exit, bad
+    ;; pidfile, permissions) are NOT caught here and still propagate.
+    (catch [:type :jepsen.control.util/kill-timed-out] _
+      (warn "stop-daemon! timed out killing ClickHouse on node" node
+            "- continuing (node likely unreachable)"))))
 
 (defn start-clickhouse!
   [node test clickhouse-alive? & binary-args]
