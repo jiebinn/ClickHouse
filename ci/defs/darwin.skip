@@ -39,9 +39,6 @@
 # Needs the 'pv' tool (not installed locally); loops until it sees timing output.
 02381_client_prints_server_side_time
 
-# Spawns the server binary and greps its stderr; hangs locally. Investigate (server-start behavior).
-02116_clickhouse_stderr
-
 # Local fast-test server did not enable system.text_log; CI does. Re-verify before unskipping.
 02813_starting_in_text_log
 
