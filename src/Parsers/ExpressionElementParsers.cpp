@@ -1731,7 +1731,6 @@ const char * ParserAlias::restricted_keywords[] =
     "ASOF",
     "BETWEEN",
     "CROSS",
-    "COMMENT",
     "PASTE",
     "FINAL",
     "FORMAT",
@@ -1772,6 +1771,8 @@ const char * ParserAlias::restricted_keywords[] =
     nullptr
 };
 
+thread_local bool ParserAlias::comment_as_alias_restricted = false;
+
 bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_as(Keyword::AS);
@@ -1798,6 +1799,12 @@ bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         for (const char ** keyword = restricted_keywords; *keyword != nullptr; ++keyword)
             if (0 == strcasecmp(name.data(), *keyword))
                 return false;
+
+        /// COMMENT is only restricted as an implicit alias in the scoped context
+        /// of parsing a materialized view AS SELECT body (see ParserCreateQuery),
+        /// so that ordinary SELECT/alias parsing elsewhere is unaffected.
+        if (comment_as_alias_restricted && 0 == strcasecmp(name.data(), "COMMENT"))
+            return false;
     }
 
     return true;

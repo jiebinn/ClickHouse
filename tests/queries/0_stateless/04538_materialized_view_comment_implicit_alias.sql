@@ -29,3 +29,8 @@ DROP TABLE src_04538;
 DROP TABLE dst_04538;
 
 CREATE MATERIALIZED VIEW mv_04538_dup (x UInt8) ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_04538 COMMENT 'post-select comment'; -- { clientError SYNTAX_ERROR }
+-- Regression test: implicit alias "comment" (without AS) must still work outside
+-- of a materialized view's AS SELECT body, since the restricted-keyword check
+-- for COMMENT is scoped only to that context.
+SELECT 1 comment;
+SELECT number FROM numbers(1) comment;

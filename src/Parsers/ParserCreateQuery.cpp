@@ -1,3 +1,4 @@
+#include <base/scope_guard.h>
 #include <IO/ReadHelpers.h>
 #include <Parsers/Access/ParserUserNameWithHost.h>
 #include <Parsers/ASTConstraintDeclaration.h>
@@ -1760,6 +1761,8 @@ bool ParserCreateViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (!s_as.ignore(pos, expected))
         return false;
 
+    ParserAlias::comment_as_alias_restricted = true;
+    SCOPE_EXIT({ ParserAlias::comment_as_alias_restricted = false; });
     if (!select_p.parse(pos, select, expected))
         return false;
 

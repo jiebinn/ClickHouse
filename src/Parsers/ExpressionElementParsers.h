@@ -410,6 +410,12 @@ public:
     {
     }
 
+    /// Scoped flag: when true, COMMENT is additionally treated as a restricted
+    /// (non-implicit-alias) keyword. Set/reset by ParserCreateQuery around
+    /// parsing of a materialized view's AS SELECT body, so that plain
+    /// SELECT/alias parsing elsewhere in the codebase is unaffected.
+    static thread_local bool comment_as_alias_restricted;
+
 private:
     static const char * restricted_keywords[];
 
