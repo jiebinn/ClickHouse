@@ -263,6 +263,7 @@ def main():
     is_llvm_coverage = False
     is_excluded_from_llvm = False
     is_per_test_coverage = False
+    is_distributed_plan = False
     runner_options = ""
     # optimal value for most of the jobs
     nproc = int(Utils.cpu_count() * 0.6)
@@ -318,6 +319,8 @@ def main():
             is_shared_catalog = True
         if "ParallelReplicas" in to:
             is_parallel_replicas = True
+        if "distributed plan" in to:
+            is_distributed_plan = True
 
     # If this PR only touches test files (no production/config code changed),
     # this job only needs to run if one of the changed tests would even be
@@ -414,6 +417,25 @@ def main():
             # shared server memory cap, so the OvercommitTracker kills queries across
             # all co-scheduled tests. Lower concurrency to keep peak total RSS under it.
             nproc = int(Utils.cpu_count() * 0.4)
+        elif (
+            is_distributed_plan
+            and "parallel" in test_options
+            and any(san in args.options for san in ("asan", "tsan", "msan", "ubsan"))
+        ):
+            # `--distributed-plan` fans each query across local parallel replicas,
+            # multiplying the server-side memory of every in-flight query. Under the
+            # parallel runner dozens of such queries share one server, so their
+            # aggregate RSS overruns the sanitizer memory cap
+            # (`max_server_memory_usage_to_ram_ratio` 0.7) and the OvercommitTracker
+            # rejects queries across all co-scheduled tests with
+            # `MEMORY_LIMIT_EXCEEDED`. This is the same failure mode as azure above,
+            # but the per-query multiplication makes it heavier, so cut concurrency
+            # below the azure level to keep peak total RSS under the cap. The job
+            # gets a larger `timeout` (see `job_configs.py`) to absorb the reduced
+            # throughput. Gated to sanitizer builds: only they carry the 0.7 cap,
+            # and the non-sanitizer distributed-plan parallel jobs (e.g. amd_debug)
+            # run comfortably at the default concurrency.
+            nproc = int(Utils.cpu_count() * 0.35)
         elif is_per_test_coverage:
             cidb_cluster = CIDBCluster()
             if not info.is_local_run:
@@ -694,11 +716,29 @@ def main():
             CH.set_random_timezone,
         ]
 
+        # Sanitizer builds run under heavy memory pressure: besides the server's
+        # own ASan overhead, the parallel runner keeps dozens of ASan-instrumented
+        # `clickhouse-client` processes alive at once (~0.4 GiB each, ~17 GiB in
+        # total on a 60 GiB host). With the default 0.9
+        # `max_server_memory_usage_to_ram_ratio` the server is allowed to grow to
+        # ~0.9 of RAM on its own, so it can drive the host into a global OOM and be
+        # killed at an RSS well below its own memory limit - before any query hits
+        # `MEMORY_LIMIT_EXCEEDED` - which surfaces as a "Server died" failure.
+        # Cap the server low enough that the clients' footprint still fits, so the
+        # server kills a runaway query gracefully instead of being OOM-killed by
+        # the host. This applies to every sanitizer run, not just the flaky check
+        # (which previously used 0.8, sufficient there only because it runs a small
+        # test subset at reduced concurrency). 0.7 stays comfortably above the
+        # largest legitimate single-query need (the ~25 GiB stateful-load INSERT).
+        # The heaviest configs also cut test concurrency (see the `nproc` block
+        # above, e.g. azure and distributed-plan) so that the *aggregate* RSS of
+        # concurrent queries stays under this cap too.
+        sanitizers = ("asan", "tsan", "msan", "ubsan")
+        if any(san in args.options for san in sanitizers):
+            commands.append(lambda: CH.set_memory_ratio(0.7))
+
         if is_flaky_check:
             commands.append(CH.enable_thread_fuzzer_config)
-            sanitizers = ("asan", "tsan", "msan", "ubsan")
-            if any(san in args.options for san in sanitizers):
-                commands.append(lambda: CH.set_memory_ratio(0.8))
 
         os.environ["MALLOC_CONF"] = (
             f"prof_prefix:{temp_dir}/jemalloc_profiles/clickhouse.jemalloc"
