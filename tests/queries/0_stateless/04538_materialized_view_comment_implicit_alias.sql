@@ -25,6 +25,25 @@ DROP TABLE mv_04538;
 -- Explicit AS alias with the word "comment" should still work (not affected by restricted_keywords fix)
 SELECT 1 AS comment;
 
+-- Regression test: comment specified before AS SELECT should not prevent
+-- an implicit alias named "comment" from being parsed correctly inside
+-- the SELECT body itself (bot-flagged scenario).
+CREATE VIEW v_04538 COMMENT 'view comment' AS SELECT 1 comment;
+
+SELECT comment FROM system.tables WHERE name = 'v_04538' AND database = currentDatabase();
+SELECT comment FROM v_04538;
+
+DROP TABLE v_04538;
+
+-- Regression test: implicit alias "comment" inside a materialized view AS SELECT
+-- body, when the view itself has no comment at all, should still work
+-- (bot-flagged scenario).
+CREATE MATERIALIZED VIEW mv_04538 TO dst_04538 AS SELECT x FROM src_04538 comment;
+
+SELECT x FROM dst_04538;
+
+DROP TABLE mv_04538;
+
 DROP TABLE src_04538;
 DROP TABLE dst_04538;
 

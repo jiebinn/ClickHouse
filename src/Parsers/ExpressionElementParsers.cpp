@@ -1771,8 +1771,6 @@ const char * ParserAlias::restricted_keywords[] =
     nullptr
 };
 
-thread_local bool ParserAlias::comment_as_alias_restricted = false;
-
 bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_as(Keyword::AS);
@@ -1800,11 +1798,23 @@ bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (0 == strcasecmp(name.data(), *keyword))
                 return false;
 
-        /// COMMENT is only restricted as an implicit alias in the scoped context
-        /// of parsing a materialized view AS SELECT body (see ParserCreateQuery),
-        /// so that ordinary SELECT/alias parsing elsewhere is unaffected.
-        if (comment_as_alias_restricted && 0 == strcasecmp(name.data(), "COMMENT"))
-            return false;
+        /// Special case: an implicit alias literally named COMMENT is only ambiguous
+        /// when it is immediately followed by a string literal at the very end of the
+        /// query (e.g. "... FROM t COMMENT 'x'"), which is the trailing view/table
+        /// comment syntax. In that specific situation, reject it as an alias so the
+        /// caller backtracks and the caller-level comment parser can consume it
+        /// instead. Everywhere else (e.g. "SELECT 1 comment", "FROM t comment,"),
+        /// COMMENT remains a perfectly valid implicit alias.
+        if (0 == strcasecmp(name.data(), "COMMENT"))
+        {
+            Pos peek = pos;
+            if (peek->type == TokenType::StringLiteral)
+            {
+                ++peek;
+                if (peek->type == TokenType::EndOfStream || peek->type == TokenType::Semicolon)
+                    return false;
+            }
+        }
     }
 
     return true;
