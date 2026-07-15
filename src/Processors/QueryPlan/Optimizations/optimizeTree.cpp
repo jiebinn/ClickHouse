@@ -596,8 +596,9 @@ void optimizeTreeSecondPass(
             auto & qcc_frame = qcc_stack.back();
             if (qcc_frame.next_child < qcc_frame.node->children.size())
             {
-                qcc_stack.push_back({.node = qcc_frame.node->children[qcc_frame.next_child]});
+                auto * next_node = qcc_frame.node->children[qcc_frame.next_child];
                 ++qcc_frame.next_child;
+                qcc_stack.push_back({.node = next_node});
                 continue;
             }
 

@@ -1517,12 +1517,15 @@ static std::optional<size_t> getTopKReusePredicateOnlyConditionHash(const Action
         if (where_children.empty())
             return std::nullopt;
 
-        /// The TopK dag is always `and(__topKFilter(...), <WHERE-root>)`: `buildFilterActionsDAG`
-        /// combines exactly two pushed filter nodes (the `__topKFilter` PREWHERE and the WHERE
-        /// root, which stays a single — possibly nested `and` — node), so stripping the internal
-        /// `__topKFilter` always leaves exactly one child. Hashing that child reproduces the key a
-        /// plain `SELECT ... WHERE <predicate>` wrote.
-        chassert(where_children.size() == 1);
+        /// The common TopK shape is `and(__topKFilter(...), <WHERE-root>)`, where the WHERE root is a
+        /// single (possibly nested `and`) node, so stripping the internal `__topKFilter` leaves exactly
+        /// one child whose hash reproduces the key a plain `SELECT ... WHERE <predicate>` wrote. But the
+        /// top-level `and` can also be flattened (`and(__topKFilter, a, b, ...)`), leaving several
+        /// children with no single node to hash; in that case we cannot reproduce a plain-WHERE key, so
+        /// skip the cross-query reuse (a plain multi-conjunct `WHERE` is keyed on its own single
+        /// `and(a, b, ...)` node, which we do not have here).
+        if (where_children.size() != 1)
+            return std::nullopt;
         return where_children.front()->getHash();
     }
 
