@@ -259,7 +259,7 @@ float raBitQNumeratorFromCounts(const RaBitQQuery & q, UInt64 pc, const UInt64 *
 
 /// Scalar bit-sliced dot: AND+popcount the +-1 sign code against each query bit-plane, 8 bytes at a time, and return
 /// `sum_i s_i * q_i`. `code` points at `q.code_bytes` packed sign bits (no trailing factor is read here).
-float raBitQNumeratorScalar(const RaBitQQuery & q, const char * code)
+float raBitQNumerator(const RaBitQQuery & q, const char * code)
 {
     const size_t code_bytes = q.code_bytes;
     const UInt8 * planes = q.planes.data();
@@ -286,12 +286,6 @@ float raBitQNumeratorScalar(const RaBitQQuery & q, const char * code)
             plane_pc[j] += static_cast<UInt64>(std::popcount(cw & static_cast<unsigned>(planes[static_cast<size_t>(j) * code_bytes + b])));
     }
     return raBitQNumeratorFromCounts(q, pc, plane_pc);
-}
-
-/// Dispatch to the Ice Lake (VPOPCNTDQ) kernel when available (decided once per query), else the scalar version.
-float raBitQNumerator(const RaBitQQuery & q, const char * code)
-{
-    return raBitQNumeratorScalar(q, code);
 }
 
 /// 'rabitq' estimator -> cosineDistance.
