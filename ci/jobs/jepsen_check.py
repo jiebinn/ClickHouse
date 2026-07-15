@@ -271,13 +271,21 @@ def main():
             # Result.create_from; keep the reported description accurate too.
             status = Result.Status.ERROR
             description = "Found crashed or indeterminate tests"
-
-        additional_data.append(Utils.compress_zst(result_path / "store"))
     except Exception as ex:
         print("Exception", ex)
         status = Result.Status.FAIL
         description = "No Jepsen output log"
         test_result = [Result("No Jepsen output log", Result.Status.FAIL)]
+
+    # Attach the store/ artifact separately from parsing: an early Jepsen crash
+    # may leave no store/ directory, and a compression failure must not
+    # overwrite the parsed FAIL/ERROR diagnosis above with a synthetic error.
+    store_path = result_path / "store"
+    if store_path.exists():
+        try:
+            additional_data.append(Utils.compress_zst(store_path))
+        except Exception as ex:
+            print("Failed to compress Jepsen store artifact:", ex)
 
     Result.create_from(
         results=test_result,
