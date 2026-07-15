@@ -8218,7 +8218,13 @@ async function reconcileStartup() {
     /// only re-persisted by the debounced `scheduleSave`, so a reload right after a rename echoes the
     /// NEW title while `IndexedDB` still holds the OLD one — a title match would miss it and resurrect
     /// the blank tab. The tab id is stable across an unsaved rename, so match on it instead.
+    /// The titles are additionally kept for LEGACY history entries that predate `tabId` (see
+    /// `stale_blank_reload`): for those the title is the only key available, and the rename
+    /// race above cannot affect them — any history write under the current code (including a
+    /// rename's synchronous rewrite) stamps `tabId`, so an entry without one was never
+    /// rewritten since the upgrade and still carries the same title `IndexedDB` holds.
     const pruned_blank_ids = new Set();
+    const pruned_blank_titles = new Set();
     if (loaded && loaded.records.length) {
         const order = (loaded.meta && loaded.meta.tabOrder) || [];
         const byId = new Map(loaded.records.map(r => [r.id, r]));
@@ -8241,6 +8247,7 @@ async function reconcileStartup() {
                 });
             } else {
                 pruned_blank_ids.add(r.id);
+                pruned_blank_titles.add(r.title);
             }
         }
         if (loaded.meta) {
@@ -8265,10 +8272,19 @@ async function reconcileStartup() {
     /// rewritten it yet because the startup `run=1` auto-run — whose `postAll`/`saveHistory` would
     /// stamp the bootstrap tab's state over it — is deferred to the end of this function for EVERY
     /// URL (see `defer_run_for_reconcile`), not run at the top level before reconciliation.
+    /// A LEGACY entry predating `tabId` (supported by `resolveTabForState` via its title fallback)
+    /// carries only `tabName`, so for it the pruned set is matched by title instead: the title is
+    /// the only key such an entry has, and it is reliable here precisely because the entry is
+    /// legacy — every history write under the current code stamps `tabId`, so an entry without one
+    /// was never rewritten by a rename and cannot be affected by the rename race described at
+    /// `pruned_blank_ids`. Without this fallback, reloading an upgraded pre-`tabId` session whose
+    /// URL names a pruned blank tab would recreate and re-persist that tab.
     const stale_blank_reload = !!(url_tab_name
         && history.state
         && history.state.tabName === url_tab_name
-        && pruned_blank_ids.has(history.state.tabId));
+        && (history.state.tabId
+            ? pruned_blank_ids.has(history.state.tabId)
+            : pruned_blank_titles.has(history.state.tabName)));
 
     /// A `stale_blank_reload` can still leave a query fragment in the URL: the pruned tab's own
     /// text was encoded into the hash by the last `writeHistoryEntry`, so `has_url_query` is true
@@ -8368,8 +8384,9 @@ async function reconcileStartup() {
         } else {
             let match = null;
             /// Skip title matching entirely when the URL is a stale reload echo of a just-pruned
-            /// blank tab (`stale_blank_reload`): the reloaded history entry's stable `tabId`
-            /// identifies the pruned tab, not any surviving tab that merely shares its title, so
+            /// blank tab (`stale_blank_reload`): the reloaded history entry (its stable `tabId`,
+            /// or the title fallback for a legacy entry predating `tabId`) identifies the pruned
+            /// tab, not any surviving tab that merely shares its title, so
             /// the URL is NOT authoritative and must not activate an unrelated same-titled tab.
             /// This matters only in legacy persisted workspaces that still hold duplicate titles
             /// (normally titles are kept unique, see `uniqueTitle`): there `named[0]` below would

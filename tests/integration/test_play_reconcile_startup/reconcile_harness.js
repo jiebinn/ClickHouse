@@ -582,6 +582,30 @@ async function main() {
             r.live);
     }
 
+    /// Guard (legacy history entry): the same stale reload, but with a `history.state` written by
+    /// a pre-`tabId` version of the page — it carries only `tabName` (`resolveTabForState` still
+    /// supports that shape via its title fallback). `stale_blank_reload` must recognize the pruned
+    /// blank tab by title for such an entry; keying only on `history.state.tabId` would leave the
+    /// guard false and let the authoritative path recreate and re-persist the blank tab on the
+    /// first reload after an upgrade.
+    {
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch',
+            historyState: { tabName: 'Scratch', query: '', params: {}, result: null },
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: null, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7', 't8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('stale-reload-legacy', 'the pruned blank tab is not resurrected for a legacy pre-tabId entry',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Report',
+            r.live);
+        check('stale-reload-legacy', 'no blank Scratch is re-persisted to IndexedDB',
+            !r.persisted.some(p => p.title === 'Scratch'),
+            r.persisted.map(p => p.title));
+    }
+
     /// Guard (startup race): a bare stale `?tab=<pruned blank>&run=1` reload must still fall back
     /// to the survivor even when `IndexedDB.open` is slower than the auto-run. `run=1` carries no
     /// `#<query>` hash here, so the auto-run must NOT fire at the top level before reconciliation:
