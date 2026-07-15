@@ -1731,7 +1731,7 @@ static std::unordered_map<String, CHSetting> serverSettings2 = {
     {"vector_search_index_fetch_multiplier",
      CHSetting(
          [](RandomGenerator & rg, FuzzConfig &) { return std::to_string(rg.thresholdGenerator<double>(0.2, 0.2, 0.0, 4.0)); },
-         {"0", "0.001", "0.01", "0.1", "0.5", "0.9", "0.99", "0.999", "1", "1.5", "2", "2.5"},
+         {"1", "1.5", "2", "2.5"},
          false)},
     {"vector_search_postfilter_multiplier",
      CHSetting(
