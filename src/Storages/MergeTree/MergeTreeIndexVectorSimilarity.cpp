@@ -501,8 +501,8 @@ MergeTreeIndexConditionVectorSimilarity::MergeTreeIndexConditionVectorSimilarity
     , max_limit(context->getSettingsRef()[Setting::max_limit_for_vector_search_queries])
     , is_rescoring(context->getSettingsRef()[Setting::vector_search_with_rescoring])
 {
-    static constexpr auto MIN_INDEX_FETCH_MULTIPLIER = 1.0;
-    static constexpr auto MAX_INDEX_FETCH_MULTIPLIER = 1000.0;
+    static constexpr auto MIN_INDEX_FETCH_MULTIPLIER = 1.0f;
+    static constexpr auto MAX_INDEX_FETCH_MULTIPLIER = 1000.0f;
 
     if (expansion_search == 0)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting 'hnsw_candidate_list_size_for_search' must not be 0");
