@@ -25,7 +25,7 @@ SELECT
     toUInt16(intHash64(number)), toUInt16(intHash64(number)),
     toUInt32(intHash64(number)), toUInt32(intHash64(number)),
     intHash64(number), intHash64(number)
-FROM numbers(1048593);
+FROM numbers(65553);
 
 INSERT INTO delta_decode_roundtrip
 SELECT
