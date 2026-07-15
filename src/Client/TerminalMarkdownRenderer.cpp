@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <functional>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -91,6 +92,101 @@ bool isMdxImport(std::string_view line)
         return false;
     return line.find(" from '") != std::string_view::npos || line.find(" from \"") != std::string_view::npos || line.starts_with("import '")
         || line.starts_with("import \"");
+}
+
+/// An MDX (JSX) component tag that constitutes a whole line of the documentation source, e.g.
+/// `<Note>`, `</Tabs>`, `<Tab title="Connection string">`, or a self-closing snippet reference
+/// such as `<WhenToUseJson />`.
+struct MdxTagLine
+{
+    std::string_view name;
+    std::string_view attributes;
+    bool closing = false;
+    bool self_closing = false;
+};
+
+/// Parses a line consisting solely of one MDX component tag: `<Name ...>`, `</Name>`, or `<Name ... />`.
+/// Component names start with an uppercase letter, which distinguishes them from literal HTML in the
+/// prose (e.g. `<br/>`); lines inside fenced code blocks never reach this parser.
+std::optional<MdxTagLine> parseMdxTagLine(std::string_view line)
+{
+    line = trimView(line);
+    if (line.size() < 3 || line.front() != '<' || line.back() != '>')
+        return {};
+
+    MdxTagLine tag;
+    std::string_view inner = trimView(line.substr(1, line.size() - 2));
+    if (inner.starts_with('/'))
+    {
+        tag.closing = true;
+        inner = trimView(inner.substr(1));
+    }
+    else if (inner.ends_with('/'))
+    {
+        tag.self_closing = true;
+        inner = trimView(inner.substr(0, inner.size() - 1));
+    }
+
+    if (inner.empty() || !(inner[0] >= 'A' && inner[0] <= 'Z'))
+        return {};
+    size_t p = 0;
+    while (p < inner.size() && (std::isalnum(static_cast<unsigned char>(inner[p]))))
+        ++p;
+    tag.name = inner.substr(0, p);
+
+    std::string_view rest = inner.substr(p);
+    if (!rest.empty() && !isInlineSpace(rest.front()))
+        return {}; /// not a bare component tag (e.g. a `<Name...>` placeholder with punctuation)
+    if (tag.closing && !trimView(rest).empty())
+        return {}; /// a closing tag carries no attributes
+    tag.attributes = trimView(rest);
+    return tag;
+}
+
+/// The value of a `name="value"` attribute in an MDX tag's attribute list, or empty if absent.
+std::string_view mdxAttribute(std::string_view attrs, std::string_view name)
+{
+    size_t pos = 0;
+    while (pos < attrs.size())
+    {
+        size_t found = attrs.find(name, pos);
+        if (found == std::string_view::npos)
+            return {};
+        pos = found + name.size();
+        const bool at_word_start = found == 0 || isInlineSpace(attrs[found - 1]);
+        std::string_view rest = attrs.substr(found + name.size());
+        while (!rest.empty() && isInlineSpace(rest.front()))
+            rest.remove_prefix(1);
+        if (!at_word_start || rest.empty() || rest.front() != '=')
+            continue;
+        rest = rest.substr(1);
+        while (!rest.empty() && isInlineSpace(rest.front()))
+            rest.remove_prefix(1);
+        if (rest.empty() || rest.front() != '"')
+            continue;
+        rest = rest.substr(1);
+        const size_t close = rest.find('"');
+        if (close == std::string_view::npos)
+            return {};
+        return rest.substr(0, close);
+    }
+    return {};
+}
+
+/// Mintlify admonition components used by embedded documentation pages (converted from the website's
+/// Mintlify sources); rendered like the equivalent `:::type` Docusaurus admonitions.
+bool isMdxAdmonitionComponent(std::string_view name)
+{
+    return name == "Note" || name == "Warning" || name == "Tip" || name == "Info" || name == "Check" || name == "Danger"
+        || name == "Caution";
+}
+
+/// Known layout-only MDX components: their tags are dropped while the content between an open/close
+/// pair keeps rendering as ordinary Markdown (a `Tab`/`Card` title is preserved, see `renderDocument`).
+bool isMdxLayoutComponent(std::string_view name)
+{
+    return name == "Tabs" || name == "Tab" || name == "TabItem" || name == "Card" || name == "CardGroup"
+        || name == "VerticalStepper" || name == "Image";
 }
 
 /// Human-readable text for an MDX badge component such as `<ExperimentalBadge/>`. Known badges get a
@@ -910,6 +1006,9 @@ private:
             return true;
         if (isMdxImport(stripped))
             return true;
+        if (auto tag = parseMdxTagLine(stripped);
+            tag && !tag->name.ends_with("Badge") && (isMdxAdmonitionComponent(tag->name) || isMdxLayoutComponent(tag->name) || tag->self_closing))
+            return true;
         size_t ml = 0;
         String marker;
         bool ordered = false;
@@ -953,6 +1052,56 @@ private:
             {
                 ++i;
                 continue;
+            }
+
+            /// A line that is a single MDX component tag: website machinery around Markdown content.
+            /// A Mintlify admonition (`<Note>` ... `</Note>`) renders like its `:::note` equivalent; a
+            /// `<Tab title="...">` / `<Card title="...">` keeps its title as a bold line so the alternatives
+            /// it introduces stay distinguishable; the other known component tags (and any self-closing
+            /// component, e.g. an imported snippet like `<WhenToUseJson />`) are dropped while the content
+            /// between an open/close pair keeps rendering as ordinary Markdown. Badges are not intercepted:
+            /// they keep their inline rendering (`[Experimental]`). Unknown non-self-closing tags render
+            /// literally, preserving `<...>` placeholders in prose.
+            if (auto tag = parseMdxTagLine(stripped); tag && !tag->name.ends_with("Badge"))
+            {
+                if (isMdxAdmonitionComponent(tag->name))
+                {
+                    if (!tag->closing && !tag->self_closing)
+                    {
+                        const String close_tag = "</" + String(tag->name) + ">";
+                        size_t close_pos = i + 1;
+                        std::vector<std::string_view> body_lines;
+                        while (close_pos < lines.size() && trimView(stripCR(lines[close_pos])) != close_tag)
+                        {
+                            body_lines.push_back(stripCR(lines[close_pos]));
+                            ++close_pos;
+                        }
+                        if (close_pos < lines.size())
+                        {
+                            String type(tag->name);
+                            std::transform(type.begin(), type.end(), type.begin(), [](char c) { return std::tolower(static_cast<unsigned char>(c)); });
+                            renderAdmonition(type, {}, body_lines);
+                            i = close_pos + 1;
+                            continue;
+                        }
+                    }
+                    /// A close tag, a self-closing tag, or an open tag with no matching close: drop the line.
+                    ++i;
+                    continue;
+                }
+                if (isMdxLayoutComponent(tag->name) || tag->self_closing)
+                {
+                    if (!tag->closing && !tag->self_closing)
+                    {
+                        std::string_view title = mdxAttribute(tag->attributes, "title");
+                        if (title.empty())
+                            title = mdxAttribute(tag->attributes, "label");
+                        if (!title.empty())
+                            layout(renderInline("**" + String(title) + "**"), 0, 0);
+                    }
+                    ++i;
+                    continue;
+                }
             }
 
             /// Docusaurus admonition: `:::type [title]` ... `:::`. The fences may use more than three

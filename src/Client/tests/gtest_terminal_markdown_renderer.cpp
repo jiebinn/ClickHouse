@@ -162,3 +162,44 @@ TEST(TerminalMarkdownRenderer, BadgeComponentRendered)
     EXPECT_EQ(plainRenderer().render("<ExperimentalBadge/>"), "[Experimental]\n");
     EXPECT_EQ(plainRenderer().render("<CloudNotSupportedBadge/>"), "[Not supported in ClickHouse Cloud]\n");
 }
+
+TEST(TerminalMarkdownRenderer, MintlifyAdmonitionComponent)
+{
+    /// Embedded pages converted from the website's Mintlify sources carry `<Note>` / `<Warning>` / ...
+    /// admonition components; they render like their `:::note` / `:::warning` equivalents.
+    EXPECT_EQ(plainRenderer().render("<Note>\nBe careful.\n</Note>"), "NOTE:\nBe careful.\n");
+    EXPECT_EQ(plainRenderer().render("<Warning>\nDo not do this.\n</Warning>"), "WARNING:\nDo not do this.\n");
+    /// An open tag with no matching close is dropped alone; the content still renders.
+    EXPECT_EQ(plainRenderer().render("<Tip>\nUnclosed."), "Unclosed.\n");
+}
+
+TEST(TerminalMarkdownRenderer, MintlifyTabsKeepTitlesAndContent)
+{
+    /// `<Tabs>`/`<Tab title="...">` wrappers are dropped, but each tab's title is kept as its own line:
+    /// the tabs present alternatives (e.g. the syntax variants of `azureBlobStorage`), and without the
+    /// titles the variants would run together indistinguishably.
+    EXPECT_EQ(
+        plainRenderer().render("<Tabs>\n<Tab title=\"Connection string\">\n\nUse a connection string.\n\n</Tab>\n"
+                               "<Tab title=\"Account key\">\n\nUse an account key.\n\n</Tab>\n</Tabs>"),
+        "Connection string\n\nUse a connection string.\n\nAccount key\n\nUse an account key.\n");
+}
+
+TEST(TerminalMarkdownRenderer, MintlifyCardKeepsTitleAndContent)
+{
+    EXPECT_EQ(
+        plainRenderer().render("<Card title=\"Looking for a guide?\" href=\"/concepts/json\" icon=\"book\">\n"
+                               "  Check out the JSON guide.\n</Card>"),
+        "Looking for a guide?\nCheck out the JSON guide.\n");
+}
+
+TEST(TerminalMarkdownRenderer, SelfClosingComponentIsDropped)
+{
+    /// A self-closing component on its own line, e.g. an imported website snippet: nothing to render.
+    EXPECT_EQ(plainRenderer().render("Before.\n\n<WhenToUseJson />\n\nAfter."), "Before.\n\nAfter.\n");
+}
+
+TEST(TerminalMarkdownRenderer, UnknownOpenTagRendersLiterally)
+{
+    /// A non-self-closing tag outside the known component set is prose (e.g. a placeholder), not MDX.
+    EXPECT_EQ(plainRenderer().render("<SearchPhrase>"), "<SearchPhrase>\n");
+}

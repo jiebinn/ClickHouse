@@ -642,6 +642,11 @@
         'ExperimentalBadge', 'BetaBadge', 'DeprecatedBadge',
         'CloudNotSupportedBadge', 'CloudAvailableBadge', 'PrivatePreviewBadge',
         'Tabs', 'TabItem', 'VerticalStepper', 'Image',
+        /// Mintlify components used by embedded pages converted from the website's Mintlify sources.
+        /// Admonitions (`<Note>` etc.) and titled wrappers (`<Tab>`, `<Card>`) are first rewritten by
+        /// `preprocessMarkdown` into renderable Markdown; the names here catch any leftover tags.
+        'Tab', 'Card', 'CardGroup',
+        'Note', 'Warning', 'Tip', 'Info', 'Check', 'Danger', 'Caution',
     ];
 
     /// Strip MDX-isms that occasionally leak into the documentation text: `import`/`export`
@@ -676,6 +681,22 @@
             .replace(/^[ \t]*export\s+default\b.*$/gm, '')
             .replace(/<import\b[^>]*\/?>/gi, '');
 
+        /// Mintlify admonition components (`<Note>` ... `</Note>`), used by embedded pages converted
+        /// from the website's Mintlify sources: mapped onto the `:::type` admonition syntax so they
+        /// render as admonitions instead of being dropped as unknown elements. The tags stand on
+        /// their own lines in those sources; any leftover inline tag is stripped by the loop below.
+        out = out
+            .replace(/^[ \t]*<(Note|Warning|Tip|Info|Check|Danger|Caution)>[ \t]*$/gm, (m, name) => ':::' + name.toLowerCase())
+            .replace(/^[ \t]*<\/(?:Note|Warning|Tip|Info|Check|Danger|Caution)>[ \t]*$/gm, ':::');
+
+        /// A `<Tab title="...">` / `<TabItem label="...">` / `<Card title="...">` introduces an
+        /// alternative (e.g. a syntax variant) or a callout whose heading carries meaning: keep the
+        /// title as a bold line; the wrapper tags themselves are stripped below.
+        out = out.replace(/<(?:Tab|TabItem|Card)(\s[^>]*)>/g, (m, attrs) => {
+            const title = /(?:^|\s)(?:title|label)="([^"]*)"/.exec(attrs);
+            return title ? '\n**' + title[1] + '**\n' : '';
+        });
+
         /// Remove the opening, closing, and self-closing tags of those components, keeping any
         /// content nested between an open/close pair.
         for (const name of components)
@@ -689,6 +710,13 @@
         /// does not occur in documentation prose, so this is safe; the terminal Markdown renderer strips
         /// `*Badge` components the same way.
         out = out.replace(/<\/?[A-Z][A-Za-z0-9]*Badge(?:\s[^>]*)?\/?>/g, '');
+
+        /// Likewise strip any remaining *self-closing* PascalCase component that was neither imported
+        /// nor named in the lists above — the website adds new components and snippets (in the vein of
+        /// `<WhenToUseJson />`) over time. A self-closing custom tag is unambiguously JSX — prose
+        /// placeholders like `<SearchPhrase>` are never self-closing — and if left in place it swallows
+        /// the rest of the document as its subtree (see the comment above `preprocessMarkdown`).
+        out = out.replace(/<[A-Z][A-Za-z0-9]*(?:\s[^>]*)?\/>/g, '');
 
         return out;
     }
