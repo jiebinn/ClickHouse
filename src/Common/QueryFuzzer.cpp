@@ -6005,10 +6005,11 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
             drop_query->is_dictionary = obj == 1;
             drop_query->is_view = obj == 2;
         }
-        /// DROP/DETACH TEMPORARY TABLE (mismatches with regular tables are rejected cleanly)
-        if (drop_query->kind != ASTDropQuery::Truncate && drop_query->table && !drop_query->is_dictionary && !drop_query->is_view
-            && fuzz_rand() % 20 == 0)
-            drop_query->setIsTemporary(!drop_query->isTemporary());
+        /// DETACH TEMPORARY is rejected outright and DROP TEMPORARY resolves only against session
+        /// temporary tables, so adding TEMPORARY to a regular db.t target just yields SYNTAX_ERROR /
+        /// UNKNOWN_TABLE. Only clear the flag from an already-temporary target (a valid regular drop).
+        if (drop_query->isTemporary() && fuzz_rand() % 20 == 0)
+            drop_query->setIsTemporary(false);
         /// TRUNCATE [ALL] TABLES FROM: flip the ALL modifier and the LIKE pattern flags
         if (drop_query->has_tables)
         {
