@@ -1,0 +1,11 @@
+--- QCC starts empty
+0
+--- Plain WHERE primes the predicate-only cache entry
+1
+--- TopK reuses the predicate-only entry on read and may add its own TopK-salted entry
+1
+--- TopK still returns the planted row
+10000
+--- Reverse: TopK-only entry must not poison plain WHERE
+1
+10000
