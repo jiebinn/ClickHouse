@@ -47,7 +47,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int CANNOT_READ_ALL_DATA;
+    extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
 namespace FailPoints
@@ -479,7 +479,7 @@ void FileSegment::write(char * from, size_t size, size_t offset_in_file)
         {
             /// A non-ErrnoException failure (e.g. a generic Exception thrown by the
             /// underlying object-storage read) after the cache file was created.
-            throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "Failpoint: simulated cache non-errno failure");
+            throw Exception(ErrorCodes::MEMORY_LIMIT_EXCEEDED, "Failpoint: simulated cache non-errno failure");
         });
 
         /// Size is equal to offset as offset for write buffer points to data end.
