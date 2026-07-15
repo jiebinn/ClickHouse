@@ -1517,13 +1517,13 @@ static std::optional<size_t> getTopKReusePredicateOnlyConditionHash(const Action
         if (where_children.empty())
             return std::nullopt;
 
-        if (where_children.size() == 1)
-            return where_children.front()->getHash();
-
-        size_t hash = 0;
-        for (const auto * child : where_children)
-            boost::hash_combine(hash, child->getHash());
-        return hash;
+        /// The TopK dag is always `and(__topKFilter(...), <WHERE-root>)`: `buildFilterActionsDAG`
+        /// combines exactly two pushed filter nodes (the `__topKFilter` PREWHERE and the WHERE
+        /// root, which stays a single — possibly nested `and` — node), so stripping the internal
+        /// `__topKFilter` always leaves exactly one child. Hashing that child reproduces the key a
+        /// plain `SELECT ... WHERE <predicate>` wrote.
+        chassert(where_children.size() == 1);
+        return where_children.front()->getHash();
     }
 
     if (isTopKFilterFunction(node))
@@ -1581,11 +1581,18 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
         /// `size_t` (not `UInt64`) so `boost::hash_combine` binds on platforms where
         /// they differ (e.g. Apple, where `size_t` is `unsigned long` but `UInt64` is `unsigned long long`).
         size_t condition_hash = dag->getHash();
-        size_t topk_reuse_predicate_only_hash = condition_hash;
+        size_t topk_reuse_predicate_only_hash = 0;
+        bool has_topk_reuse_predicate_only_hash = false;
         if (apply_top_k_salt && top_k_filter_info && top_k_filter_info->where_clause)
         {
+            /// Only reuse when stripping actually recovered a predicate-only hash. Otherwise the hash
+            /// would still carry `__topKFilter` (matching neither a plain `WHERE` entry nor the salted
+            /// TopK entry), so probing it would just be wasted cache lookups per part.
             if (auto stripped = getTopKReusePredicateOnlyConditionHash(dag))
+            {
                 topk_reuse_predicate_only_hash = *stripped;
+                has_topk_reuse_predicate_only_hash = true;
+            }
         }
 
         /// Mirror the salting done by `updateQueryConditionCache` on the WHERE write path: when the
@@ -1602,7 +1609,7 @@ void MergeTreeDataSelectExecutor::filterPartsByQueryConditionCache(
         /// condition hash the write side used, so only a query that ran the same set of indexes
         /// consults them. See getSkipIndexProfiledConditionHash and issue #108519.
         UInt64 profiled_condition_hash = getSkipIndexProfiledConditionHash(condition_hash, indexes);
-        const bool also_probe_topk_reuse_predicate_only_hash = apply_top_k_salt && top_k_filter_info && top_k_filter_info->where_clause;
+        const bool also_probe_topk_reuse_predicate_only_hash = has_topk_reuse_predicate_only_hash;
         const UInt64 topk_reuse_predicate_only_profiled_hash = also_probe_topk_reuse_predicate_only_hash
             ? getSkipIndexProfiledConditionHash(topk_reuse_predicate_only_hash, indexes) : 0;
 
