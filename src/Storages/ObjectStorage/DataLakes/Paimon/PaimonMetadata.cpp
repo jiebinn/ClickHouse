@@ -257,6 +257,7 @@ PaimonMetadata::PaimonMetadata(
 
     /// Load initial state
     auto initial_state = loadLatestState();
+    validateTableIdentity();
     if (initial_state)
     {
         std::atomic_store_explicit(&current_state, initial_state, std::memory_order_release);
@@ -365,10 +366,9 @@ void PaimonMetadata::update(const ContextPtr & /*local_context*/)
     /// use_paimon_metadata_files_cache because cache_ptr lives in the immutable
     /// PaimonPersistentComponents (same design as IcebergMetadata::update).
 
-    /// Validate table identity both before and after loading the snapshot, so a
-    /// DROP + re-CREATE between the guard and loadLatestState() cannot publish
-    /// a new table instance while reusing schemas cached by schema_id.
-    validateTableIdentity();
+    /// Validate table identity after loading the snapshot, so a DROP + re-CREATE
+    /// during loadLatestState() cannot publish a new table instance while reusing
+    /// schemas cached by schema_id.
 
     /// 1. Load new state outside any lock (I/O operations)
     auto new_state = loadLatestState();
@@ -543,6 +543,7 @@ ObjectIterator PaimonMetadata::iterate(
         if (!state)
         {
             state = loadLatestState();
+            validateTableIdentity();
             if (state)
                 std::atomic_store_explicit(&current_state, state, std::memory_order_release);
         }
