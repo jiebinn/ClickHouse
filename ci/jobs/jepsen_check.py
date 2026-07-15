@@ -260,17 +260,24 @@ def main():
     additional_data = []
     try:
         test_result = _parse_jepsen_output(jepsen_log_path)
+        has_fail = any(r.status == Result.Status.FAIL for r in test_result)
+        has_error = any(r.status == Result.Status.ERROR for r in test_result)
+        # Keep the description consistent with the status Result.create_from
+        # derives: it promotes the job to ERROR as soon as any result is ERROR
+        # (even alongside FAILs), so check ERROR-bearing cases before FAIL-only.
+        # A test-all run can emit both categories at once.
         if len(test_result) == 0:
             status = Result.Status.FAIL
             description = "No test results found"
-        elif any(r.status == Result.Status.FAIL for r in test_result):
-            status = Result.Status.FAIL
-            description = "Found invalid analysis (ﾉಥ益ಥ）ﾉ ┻━┻"
-        elif any(r.status == Result.Status.ERROR for r in test_result):
-            # Crashed/indeterminate tests already fail the aggregate status via
-            # Result.create_from; keep the reported description accurate too.
+        elif has_fail and has_error:
+            status = Result.Status.ERROR
+            description = "Found invalid analysis and crashed/indeterminate tests"
+        elif has_error:
             status = Result.Status.ERROR
             description = "Found crashed or indeterminate tests"
+        elif has_fail:
+            status = Result.Status.FAIL
+            description = "Found invalid analysis (ﾉಥ益ಥ）ﾉ ┻━┻"
     except Exception as ex:
         print("Exception", ex)
         status = Result.Status.FAIL
