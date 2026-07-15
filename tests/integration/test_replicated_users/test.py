@@ -325,10 +325,11 @@ CLIENT="clickhouse-client"
 # refreshEntities is slow and the eviction window is wide.
 for i in $(seq 0 $((SEED - 1))); do
     echo "CREATE SETTINGS PROFILE IF NOT EXISTS seed_$i SETTINGS max_execution_time=$((i % 100 + 1));"
-done | $CLIENT --multiquery
+done | $CLIENT --multiquery || { echo "SEED_FAILED"; exit 1; }
 
 FOUND=/tmp/race_found
-rm -f "$FOUND"
+UNEXPECTED=/tmp/race_unexpected
+rm -f "$FOUND" "$UNEXPECTED"
 END=$(( $(date +%s) + DURATION ))
 
 # Keep the /uuid children list volatile so a stale-snapshot watch refresh is
@@ -352,11 +353,19 @@ churn() {
 # matching only UNKNOWN_ROLE would silently retry iterations where the race hit
 # the profile or user lookup first. Within a victim each entity is created
 # before use, names are unique per worker and nothing drops them mid-chain, so
-# on a fixed build none of these errors can appear.
+# on a fixed build none of these errors can appear. Any other client failure is
+# not retryable either: it means the chain stopped exercising the intended
+# path, so the worker records it and exits nonzero to fail the driver.
+#
+# The `local` declarations are deliberately split: bash expands the whole
+# `local` command line before performing any of its assignments, so with
+# `set -u` a single `local w=$1 name="race_$w"` dies with "w: unbound
+# variable" before the loop even starts.
 victim() {
-    local w=$1 name="race_$w" out
+    local w=$1
+    local name="race_$w" out
     while [ "$(date +%s)" -lt "$END" ] && [ ! -e "$FOUND" ]; do
-        out=$($CLIENT --multiquery -q "
+        if out=$($CLIENT --multiquery -q "
             DROP SETTINGS PROFILE IF EXISTS $name;
             DROP QUOTA IF EXISTS $name;
             DROP USER IF EXISTS $name;
@@ -365,23 +374,38 @@ victim() {
             CREATE ROLE $name SETTINGS PROFILE $name;
             CREATE USER $name IDENTIFIED BY 'p' DEFAULT ROLE $name;
             CREATE QUOTA $name KEYED BY user_name FOR INTERVAL 1 hour NO LIMITS TO $name;
-        " 2>&1)
+        " 2>&1); then
+            continue
+        fi
         case "$out" in
             *UNKNOWN_ROLE* | *THERE_IS_NO_PROFILE* | *UNKNOWN_USER* | *"There is no"*)
                 echo "$out" > "$FOUND"
-                return ;;
+                return 0 ;;
+            *)
+                echo "$out" > "$UNEXPECTED"
+                return 1 ;;
         esac
     done
 }
 
-for w in $(seq 1 $CHURNERS); do churn "$w" & done
-for w in $(seq 1 $VICTIMS); do victim "$w" & done
-wait
+# Collect worker PIDs and wait on each: a bare `wait` discards worker exit
+# statuses, so a worker that died without detecting the race (e.g. on an
+# unexpected client error) would silently turn into NO_RACE.
+pids=""
+for w in $(seq 1 $CHURNERS); do churn "$w" & pids="$pids $!"; done
+for w in $(seq 1 $VICTIMS); do victim "$w" & pids="$pids $!"; done
+rc=0
+for p in $pids; do wait "$p" || rc=1; done
 
 if [ -e "$FOUND" ]; then
     echo "RACE_DETECTED"
     cat "$FOUND"
     exit 0
+fi
+if [ "$rc" -ne 0 ]; then
+    echo "WORKER_FAILED"
+    if [ -e "$UNEXPECTED" ]; then cat "$UNEXPECTED"; fi
+    exit 1
 fi
 echo "NO_RACE"
 """
