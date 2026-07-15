@@ -121,9 +121,19 @@
 (defn kill-clickhouse!
   [node test]
   (info "Killing server on node" node)
-  (c/su
-   (cu/stop-daemon! binary-path pid-file-path)
-   (c/exec :rm :-fr (str data-dir "/status"))))
+  (try
+    (c/su
+     (cu/stop-daemon! binary-path pid-file-path)
+     (c/exec :rm :-fr (str data-dir "/status")))
+    (catch Exception e
+      ;; Best-effort kill. A node made unreachable by a nemesis (e.g.
+      ;; hammer-time) or a dropped SSH transport makes stop-daemon!'s
+      ;; `killall -w` hang until it throws :kill-timed-out; that must not crash
+      ;; teardown or the whole test. kill-clickhouse! is used both for teardown
+      ;; and as the killer-nemesis action, and in both cases an unreachable
+      ;; node already satisfies the intent, so log and continue.
+      (warn e "Failed to kill ClickHouse on node" node
+            "- continuing (node may be unreachable)"))))
 
 (defn start-clickhouse!
   [node test clickhouse-alive? & binary-args]
