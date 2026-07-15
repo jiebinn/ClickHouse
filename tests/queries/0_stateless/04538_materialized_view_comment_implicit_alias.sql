@@ -22,11 +22,10 @@ SELECT comment FROM system.tables WHERE name = 'mv_04538' AND database = current
 
 DROP TABLE mv_04538;
 
--- Specifying a comment in both the pre-AS and post-SELECT position should throw a clear error
-CREATE MATERIALIZED VIEW mv_04538_dup (x UInt8) ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_04538 COMMENT 'post-select comment'; -- { serverError SYNTAX_ERROR }
-
 -- Explicit AS alias with the word "comment" should still work (not affected by restricted_keywords fix)
 SELECT 1 AS comment;
 
 DROP TABLE src_04538;
 DROP TABLE dst_04538;
+
+CREATE MATERIALIZED VIEW mv_04538_dup (x UInt8) ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_04538 COMMENT 'post-select comment'; -- { clientError SYNTAX_ERROR }
