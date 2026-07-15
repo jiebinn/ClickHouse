@@ -1024,9 +1024,9 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
     }
     else
     {
+        return createRemotePlanFragmentForParallelReplicas(
+            context, std::move(plan_fragment), coordinator, cluster, connection_pools, std::nullopt);
     }
-
-    return nullptr;
 }
 
 void executeQueryWithParallelReplicas(
