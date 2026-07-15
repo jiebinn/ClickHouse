@@ -59,6 +59,29 @@ namespace ErrorCodes
     extern const int CANNOT_STAT;
 }
 
+namespace
+{
+
+bool errnoIndicatesReadOnlyDisk(int err)
+{
+    return err == EROFS || err == EACCES || err == EPERM || err == ENOSPC || err == EDQUOT;
+}
+
+UInt64 getTotalSpaceByName(const String & name, const String & disk_path, UInt64 keep_free_space_bytes)
+{
+    struct statvfs fs{};
+    if (name == "default") /// for default disk we get space from path/data/
+        fs = getStatVFS((fs::path(disk_path) / "data" / "").string());
+    else
+        fs = getStatVFS(disk_path);
+    UInt64 total_size = fs.f_blocks * fs.f_frsize;
+    if (total_size < keep_free_space_bytes)
+        return 0;
+    return total_size - keep_free_space_bytes;
+}
+
+}
+
 std::mutex DiskLocal::reservation_mutex;
 
 
@@ -256,19 +279,6 @@ std::optional<UInt64> DiskLocal::tryReserve(UInt64 bytes, const std::optional<Re
     LOG_TRACE(logger, "Could not reserve {} on local disk {}. Not enough unreserved space", ReadableSize(bytes), backQuote(name));
 
     return {};
-}
-
-static UInt64 getTotalSpaceByName(const String & name, const String & disk_path, UInt64 keep_free_space_bytes)
-{
-    struct statvfs fs{};
-    if (name == "default") /// for default disk we get space from path/data/
-        fs = getStatVFS((fs::path(disk_path) / "data" / "").string());
-    else
-        fs = getStatVFS(disk_path);
-    UInt64 total_size = fs.f_blocks * fs.f_frsize;
-    if (total_size < keep_free_space_bytes)
-        return 0;
-    return total_size - keep_free_space_bytes;
 }
 
 std::optional<UInt64> DiskLocal::getTotalSpace() const
@@ -669,68 +679,47 @@ void DiskLocal::shutdown()
 
 void DiskLocal::checkAccessImpl(const String & path)
 {
-    /// `FS::canRead`/`FS::canWrite` return `false` only when access is explicitly denied (`EACCES`).
-    /// For any other failure - a removed directory (`ENOENT`), a read-only mount (`EROFS`), an
-    /// I/O error (`EIO`), etc. - they throw. In all of these cases the corresponding access is
-    /// unavailable, so a thrown exception is treated the same as a negative result. Otherwise the
-    /// exception would escape to `DiskLocalCheckThread::run`, which only adjusts the retry interval,
-    /// leaving `broken`/`readonly` stale and reporting a failed disk as healthy.
-    /// To avoid log noise on every periodic probe, the health-state changes are logged only on
-    /// transition (when the corresponding flag actually flips).
-
-    bool can_read = false;
-    String read_failure_reason;
-    try
+    if (!FS::canRead(disk_path, /*allow_throw=*/false))
     {
-        can_read = FS::canRead(disk_path);
-    }
-    catch (...)
-    {
-        read_failure_reason = getCurrentExceptionMessage(/* with_stacktrace = */ false);
-    }
-
-    if (!can_read)
-    {
-        if (!broken.exchange(true))
-            LOG_ERROR(logger, "There is no read access to disk {} ({}). Marking it as broken.{}",
-                name, disk_path, read_failure_reason.empty() ? "" : " Reason: " + read_failure_reason);
+        broken = true;
         throw Exception(ErrorCodes::PATH_ACCESS_DENIED, "There is no read access to disk {} ({}).", name, disk_path);
     }
-    broken = false;
 
-    bool can_write = false;
-    String write_failure_reason;
-    try
-    {
-        can_write = FS::canWrite(disk_path);
-    }
-    catch (...)
-    {
-        write_failure_reason = getCurrentExceptionMessage(/* with_stacktrace = */ false);
-    }
-
-    if (!can_write)
+    if (!FS::canWrite(disk_path, /*allow_throw=*/false))
     {
         if (!readonly.exchange(true))
-            LOG_WARNING(logger, "Cannot write to the root directory of disk {} ({}). Marking it as read-only.{}",
-                name, disk_path, write_failure_reason.empty() ? "" : " Reason: " + write_failure_reason);
+            LOG_INFO(logger, "Cannot write to the root directory of disk {} ({}).", name, disk_path);
+
+        broken = false;
         return;
     }
-    readonly = false;
 
-    /// Full read/write probe of the disk. A failure here (`ENOSPC`, `EIO`, a read-back mismatch, ...)
-    /// means the disk has an I/O problem, so mark it as broken and rethrow.
     try
     {
         IDisk::checkAccessImpl(path);
     }
-    catch (...)
+    catch (const ErrnoException & e)
     {
-        if (!broken.exchange(true))
-            LOG_ERROR(logger, "Read/write check for disk {} ({}) failed. Marking it as broken. Reason: {}",
-                name, disk_path, getCurrentExceptionMessage(/* with_stacktrace = */ false));
+        if (errnoIndicatesReadOnlyDisk(e.getErrno()))
+        {
+            if (!readonly.exchange(true))
+                LOG_INFO(logger, "Cannot write to disk {} ({}): {}", name, disk_path, getCurrentExceptionMessage(/* with_stacktrace = */ false));
+
+            broken = false;
+            return;
+        }
+
+        broken = true;
         throw;
     }
+    catch (...)
+    {
+        broken = true;
+        throw;
+    }
+
+    broken = false;
+    readonly = false;
 }
 
 void DiskLocal::setup()
