@@ -835,6 +835,7 @@ private:
         LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
         info.object = nullptr;
         info.exception = nullptr;
+        info.loading_id = 0;
     }
 
     bool unload(Info * info)
