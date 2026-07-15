@@ -38,6 +38,7 @@
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
+#include <Parsers/ASTCreateIndexQuery.h>
 #include <Parsers/ASTCreateNamedCollectionQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateSQLFunctionQuery.h>
@@ -45,6 +46,7 @@
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
+#include <Parsers/ASTDropIndexQuery.h>
 #include <Parsers/ASTDropNamedCollectionQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -77,6 +79,7 @@
 #include <Parsers/ASTShowIndexesQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTStatisticsDeclaration.h>
+#include <Parsers/ASTStreamSettings.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -5134,6 +5137,75 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
             }
         }
 
+        /// Fuzz STREAM [CURSOR {...}] modifier (streaming queries). The cursor is a map of
+        /// partition_id -> {block_number, block_offset}; values must stay within Int64 range
+        /// because the formatter renders them via Int64 and negatives would not reparse.
+        auto make_random_cursor = [&]() -> Map
+        {
+            static const Strings cursor_partition_ids = {"all", "0", "1", "20260101", "invalid_partition"};
+            static const UInt64 cursor_positions[] = {0, 1, 2, 10, 1000, 1000000};
+            Map cursor;
+            const size_t num_partitions = fuzz_rand() % 2 + 1;
+            /// Distinct partition ids: a flat leaf and a nested object under the same
+            /// key would collide in buildCursorTree when the cursor is formatted.
+            const size_t base = fuzz_rand() % cursor_partition_ids.size();
+            for (size_t i = 0; i < num_partitions; ++i)
+            {
+                const String & partition = cursor_partition_ids[(base + i) % cursor_partition_ids.size()];
+                const auto position = [&] { return cursor_positions[fuzz_rand() % std::size(cursor_positions)]; };
+                switch (fuzz_rand() % 8)
+                {
+                    case 0: /// Flat leaf instead of a {block_number, block_offset} object
+                        cursor.push_back(Tuple{partition, position()});
+                        break;
+                    case 1: /// Unknown leaf name
+                        cursor.push_back(Tuple{partition + ".unknown_field", position()});
+                        break;
+                    case 2: /// Missing block_number (only the optional block_offset)
+                        cursor.push_back(Tuple{partition + ".block_offset", position()});
+                        break;
+                    case 3: /// Extra nesting level
+                        cursor.push_back(Tuple{partition + ".nested.block_number", position()});
+                        break;
+                    default: /// Valid shape
+                        cursor.push_back(Tuple{partition + ".block_number", position()});
+                        if (fuzz_rand() % 2 == 0)
+                            cursor.push_back(Tuple{partition + ".block_offset", position()});
+                }
+            }
+            return cursor;
+        };
+        if (table_expr->stream_settings)
+        {
+            if (fuzz_rand() % 50 == 0)
+            {
+                /// Occasionally remove the STREAM clause entirely
+                auto & ch = table_expr->children;
+                ch.erase(std::remove(ch.begin(), ch.end(), table_expr->stream_settings), ch.end());
+                table_expr->stream_settings = {};
+            }
+            else if (fuzz_rand() % 10 == 0)
+            {
+                /// Toggle between bare STREAM and STREAM CURSOR, or regenerate the cursor
+                auto & stream = table_expr->stream_settings->as<ASTStreamSettings &>();
+                if (stream.settings.cursor_tree.has_value() && fuzz_rand() % 2 == 0)
+                    stream.settings.cursor_tree.reset();
+                else
+                    stream.settings.cursor_tree = make_random_cursor();
+            }
+        }
+        else if (table_expr->database_and_table_name && fuzz_rand() % 200 == 0)
+        {
+            /// Add STREAM [CURSOR {...}]. A bare STREAM read tails new data until
+            /// max_execution_time, so keep the probability low.
+            ASTStreamSettings::StreamSettings new_stream_settings;
+            if (fuzz_rand() % 2 == 0)
+                new_stream_settings.cursor_tree = make_random_cursor();
+            auto stream_node = make_intrusive<ASTStreamSettings>(std::move(new_stream_settings));
+            table_expr->stream_settings = stream_node;
+            table_expr->children.push_back(stream_node);
+        }
+
         fuzz(table_expr->children);
     }
     else if (auto * expr_list = typeid_cast<ASTExpressionList *>(ast.get()))
@@ -5953,6 +6025,20 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
         /// DROP SYNC: wait for all mutations/merges to finish before returning
         if (drop_query->kind == ASTDropQuery::Drop && fuzz_rand() % 20 == 0)
             drop_query->sync = !drop_query->sync;
+    }
+    else if (auto * create_index_query = typeid_cast<ASTCreateIndexQuery *>(ast.get()))
+    {
+        /// Apply the same index-specific mutations as CREATE TABLE and ALTER TABLE ADD INDEX
+        if (create_index_query->index_decl)
+            if (auto * idx = create_index_query->index_decl->as<ASTIndexDeclaration>())
+                fuzzIndexDeclaration(*idx);
+        if (fuzz_rand() % 20 == 0)
+            create_index_query->if_not_exists = !create_index_query->if_not_exists;
+    }
+    else if (auto * drop_index_query = typeid_cast<ASTDropIndexQuery *>(ast.get()))
+    {
+        if (fuzz_rand() % 20 == 0)
+            drop_index_query->if_exists = !drop_index_query->if_exists;
     }
     else if (auto * insert_query = typeid_cast<ASTInsertQuery *>(ast.get()))
     {
