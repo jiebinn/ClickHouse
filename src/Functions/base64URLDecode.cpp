@@ -20,7 +20,8 @@ REGISTER_FUNCTION(Base64URLDecode)
 {
     FunctionDocumentation::Description description = R"(
 Decodes a string from [Base64](https://en.wikipedia.org/wiki/Base64) representation using URL-safe alphabet, according to RFC 4648.
-The standard alphabet (`+` and `/`) is also accepted on decode, and ASCII whitespace characters in the input are ignored.
+The standard alphabet (`+` and `/`) is also accepted on decode.
+Since version 26.7, the whitespace characters space, tab (`\t`), line feed (`\n`), carriage return (`\r`), and form feed (`\f`) in the input are ignored (earlier versions rejected input containing them). Vertical tab (`\v`) and any other characters outside the Base64 alphabet are rejected.
 Throws an exception in case of error.
 )";
     FunctionDocumentation::Syntax syntax = "base64URLDecode(encoded)";
