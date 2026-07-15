@@ -36,10 +36,6 @@
 # Needs a `ch` symlink (clickhouse) on PATH, which the Darwin fast test env does not provide.
 03536_ch_as_client_and_local
 
-# Client/socket error-message text differs on macOS (errno strings), so grep'd error lines are missing.
-02550_client_connections_credentials
-03025_clickhouse_host_env
-
 # Needs the 'pv' tool (not installed locally); loops until it sees timing output.
 02381_client_prints_server_side_time
 
