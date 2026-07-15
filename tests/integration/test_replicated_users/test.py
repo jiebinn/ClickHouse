@@ -319,7 +319,10 @@ RACE_DURATION_SECONDS = 45
 #     background jobs + `wait` are the idiomatic and more readable fit.
 _RACE_DRIVER_BODY = r"""
 set -u
-CLIENT="clickhouse-client"
+# The integration-test containers mount the server binary at
+# /usr/bin/clickhouse and have no `clickhouse-client` symlink, so the client
+# must be invoked as `clickhouse client` ($CLIENT is expanded unquoted).
+CLIENT="/usr/bin/clickhouse client"
 
 # Bloat the /uuid children list so the (previously lock-free) snapshot read in
 # refreshEntities is slow and the eviction window is wide.
