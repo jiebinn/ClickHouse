@@ -20,10 +20,6 @@
 03803_transaction_mutation_race
 03916_attach_as_replicated_implicit_transaction
 
-# Obfuscator output is platform-dependent (model/hash differs on macOS), so the generated
-# identifiers do not match the reference.
-04037_obfuscator_dictionary_definitions
-
 # Memory limit not hit as expected on macOS (the query that should exceed MEMORY_LIMIT_EXCEEDED
 # succeeds), likely a memory-accounting difference.
 01961_roaring_memory_tracking
