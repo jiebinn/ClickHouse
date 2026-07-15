@@ -59,7 +59,7 @@ public:
     {
         const UInt64 n = arguments[1].column->getUInt(0);
         if (n == 0 || n > MAX_NGRAM_SIZE)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function {}: n must be between 1 and {}, got {}", name, MAX_NGRAM_SIZE, n);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Function {}: n must be in range [1, {}], got {}", name, MAX_NGRAM_SIZE, n);
 
         /// The mode and the padding tokens use the same encoding as the dictionary's layout parameters, so the
         /// same values can be passed to both and produce identical n-grams.

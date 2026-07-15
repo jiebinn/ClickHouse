@@ -554,7 +554,7 @@ void registerDictionaryNaiveBayes(DictionaryFactory & factory)
         if (n_raw == 0 || n_raw > MAX_NGRAM_SIZE)
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "NaiveBayes dictionary: n-gram size 'n' must be between 1 and {}, got {}",
+                "NaiveBayes dictionary: n-gram size 'n' must be in range [1, {}], got {}",
                 MAX_NGRAM_SIZE,
                 n_raw);
         const auto n = static_cast<UInt32>(n_raw);
