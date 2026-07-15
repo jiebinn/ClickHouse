@@ -5770,11 +5770,16 @@ function renderTabBar() {
 
         el.addEventListener('click', (e) => {
             if (e.target === closeEl) { e.stopPropagation(); closeTab(tab.id); return; }
+            /// On macOS `Ctrl+Click` is the secondary (context-menu) click, not a new-tab
+            /// gesture - leave it entirely to the browser (see `set_query_or_run`). The macOS
+            /// duplicate modifier is Cmd (`metaKey`), checked below.
+            if (isMac && e.ctrlKey) return;
             /// While the title is being edited inline, let clicks act on the editor (cursor placement,
             /// selection) rather than duplicating from the not-yet-committed title.
             if (e.target === titleEl && titleEl.isContentEditable) return;
-            /// Ctrl/Shift/Cmd+click on the title duplicates the tab (browser "open in new tab" gesture).
-            if (e.target === titleEl && (e.ctrlKey || e.shiftKey || e.metaKey)) { e.preventDefault(); duplicateTab(tab.id); return; }
+            /// Shift+click or the platform's new-tab modifier click (Cmd on macOS, Ctrl elsewhere)
+            /// on the title duplicates the tab (browser "open in new tab" gesture).
+            if (e.target === titleEl && (e.shiftKey || (isMac ? e.metaKey : e.ctrlKey))) { e.preventDefault(); duplicateTab(tab.id); return; }
             if (tab.id === activeTabId) {
                 if (e.target === titleEl) startTitleEdit(tab, titleEl);
             } else {
