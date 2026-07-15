@@ -120,6 +120,15 @@ DataLakeMetadataPtr PaimonMetadata::create(
     /// Create table client
     PaimonTableClientPtr table_client = std::make_shared<PaimonTableClient>(object_storage, table_path, global_context);
 
+    /// Always latch schema-0 timeMillis before loading any schema from the table.
+    /// This anchors the whole initialization to one table identity: if the upstream
+    /// table is `DROP` + `CREATE`d while `create` is reading metadata, the post-load
+    /// `validateTableIdentity` in the constructor will fail before publishing state.
+    auto schema0_info = table_client->getTableSchemaInfoById(0);
+    auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
+    Int64 schema0_time_millis = 0;
+    Paimon::getValueFromJSON(schema0_time_millis, schema0_json, "timeMillis");
+
     /// Get and validate schema
     auto schema_info = table_client->getLatestTableSchemaInfo();
     auto schema_json = table_client->getTableSchemaJSON(schema_info);
@@ -195,15 +204,6 @@ DataLakeMetadataPtr PaimonMetadata::create(
         LOG_TRACE(
             log,
             "Not using in-memory cache for paimon metadata files, because the setting use_paimon_metadata_files_cache is false.");
-
-    /// Always latch schema-0 timeMillis as the table identity, independent of whether the
-    /// metadata files cache is enabled.  It is used both for the cache-key prefix and for the
-    /// external-recreation guard in update(); the guard must not be tied to the cache being
-    /// active, because the schema_processor caches schemas by id regardless of cache capacity.
-    auto schema0_info = table_client->getTableSchemaInfoById(0);
-    auto schema0_json = table_client->getTableSchemaJSON(schema0_info);
-    Int64 schema0_time_millis = 0;
-    Paimon::getValueFromJSON(schema0_time_millis, schema0_json, "timeMillis");
 
     String table_cache_key_prefix;
     if (cache_ptr)
@@ -573,6 +573,7 @@ ObjectIterator PaimonMetadata::iterate(
     if (persistent_components.incremental_read_enabled && target_snapshot_id > 0)
     {
         auto target_state = loadStateForSnapshot(target_snapshot_id);
+        validateTableIdentity();
         if (target_state->isCompact())
             LOG_WARNING(log, "Target snapshot_id={} is a COMPACT snapshot. "
                 "Its delta manifest contains compaction output (not incremental changes). "
@@ -832,6 +833,7 @@ Strings PaimonMetadata::collectIncrementalDataFiles(
         auto snapshots = getSnapshotsBetween(
             *committed_snapshot_id, state->snapshot_id, max_consume_snapshots,
             /*skip_compact=*/true, last_scanned_snapshot_id);
+        validateTableIdentity();
 
         if (snapshots.empty())
         {
