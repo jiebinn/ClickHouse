@@ -60,7 +60,7 @@ struct TextSearchQuery
     UInt128 getHash() const { return hash; }
 
 private:
-    UInt128 calculateHash() const;
+    void initializeHash();
 
     /// Fields are immutable after construction, otherwise the precomputed hash becomes stale.
     String function_name;

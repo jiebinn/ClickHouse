@@ -69,10 +69,10 @@ TextSearchQuery::TextSearchQuery(
     , phrase_tokens(std::move(phrase_tokens_))
 {
     std::sort(tokens.begin(), tokens.end());
-    hash = calculateHash();
+    initializeHash();
 }
 
-UInt128 TextSearchQuery::calculateHash() const
+void TextSearchQuery::initializeHash()
 {
     SipHash hash_state;
     hash_state.update(function_name);
@@ -118,7 +118,7 @@ UInt128 TextSearchQuery::calculateHash() const
         }
     }
 
-    return hash_state.get128();
+    hash = hash_state.get128();
 }
 
 MergeTreeIndexConditionText::MergeTreeIndexConditionText(
