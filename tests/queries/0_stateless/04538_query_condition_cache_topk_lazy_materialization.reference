@@ -1,0 +1,8 @@
+1
+--- QCC starts empty
+0
+--- Same TopK plan re-runs reuse the same QCC entry
+1
+1
+--- Different LIMIT writes a separate entry
+2
