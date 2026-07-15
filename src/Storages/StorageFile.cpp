@@ -566,6 +566,36 @@ struct stat getFileStat(const String & current_path, bool use_table_fd, int tabl
     return file_stat;
 }
 
+/// Sub-second-precision version token for a file, folding in the inode and size so that an
+/// in-place rewrite which lands in the same timestamp tick as the previous write (see the
+/// settle-window comment at its call site) is still distinguishable from a rewrite that isn't.
+String computeFileCacheVersionToken(const struct stat & file_stat)
+{
+#if defined(OS_DARWIN)
+    const auto mtim_sec = file_stat.st_mtimespec.tv_sec;
+    const auto mtim_nsec = file_stat.st_mtimespec.tv_nsec;
+#else
+    const auto mtim_sec = file_stat.st_mtim.tv_sec;
+    const auto mtim_nsec = file_stat.st_mtim.tv_nsec;
+#endif
+    return fmt::format(
+        "{}.{:09}_{}_{}",
+        static_cast<Int64>(mtim_sec),
+        static_cast<Int64>(mtim_nsec),
+        static_cast<Int64>(file_stat.st_ino),
+        file_stat.st_size);
+}
+
+/// Re-stats `path` and reports whether it still produces `expected_token`. Used to bracket a
+/// local-file read (once right after opening, once right before trusting the read for the Query
+/// Condition Cache) so a rewrite by another writer that lands strictly between the initial `stat`
+/// and either checkpoint is caught instead of silently pinning a mismatched generation.
+bool fileCacheVersionTokenStillHolds(const String & path, const String & expected_token)
+{
+    struct stat current_stat{};
+    return 0 == stat(path.c_str(), &current_stat) && computeFileCacheVersionToken(current_stat) == expected_token;
+}
+
 std::unique_ptr<ReadBuffer> createReadBuffer(
     const String & current_path,
     const struct stat & file_stat,
@@ -1674,19 +1704,7 @@ Chunk StorageFileSource::generate()
                 /// Build a sub-second-precision version token for the format metadata cache key.
                 /// `st_mtime` alone is second-resolution, so an in-place rewrite within the same
                 /// second that keeps the file size unchanged would otherwise reuse a stale entry.
-#if defined(OS_DARWIN)
-                const auto mtim_sec = file_stat.st_mtimespec.tv_sec;
-                const auto mtim_nsec = file_stat.st_mtimespec.tv_nsec;
-#else
-                const auto mtim_sec = file_stat.st_mtim.tv_sec;
-                const auto mtim_nsec = file_stat.st_mtim.tv_nsec;
-#endif
-                current_file_cache_version = fmt::format(
-                    "{}.{:09}_{}_{}",
-                    static_cast<Int64>(mtim_sec),
-                    static_cast<Int64>(mtim_nsec),
-                    static_cast<Int64>(file_stat.st_ino),
-                    file_stat.st_size);
+                current_file_cache_version = computeFileCacheVersionToken(file_stat);
 
                 /// The version token above proves a rewrite only after the file has settled.
                 /// Filesystem timestamps are coarser than the wall clock (one clock tick of
@@ -1699,6 +1717,11 @@ Chunk StorageFileSource::generate()
                 /// recently - or with an mtime in the future, e.g. due to clock skew on a
                 /// network mount - it fails close and stays bypassed (see the gates below)
                 /// rather than risking stale results.
+#if defined(OS_DARWIN)
+                const auto mtim_sec = file_stat.st_mtimespec.tv_sec;
+#else
+                const auto mtim_sec = file_stat.st_mtim.tv_sec;
+#endif
                 static constexpr Int64 file_version_settle_seconds = 3;
                 current_file_version_settled
                     = static_cast<Int64>(mtim_sec) + file_version_settle_seconds <= static_cast<Int64>(time(nullptr));
@@ -1715,7 +1738,20 @@ Chunk StorageFileSource::generate()
                     read_buf = std::make_unique<EmptyReadBuffer>();
                 }
                 else
+                {
                     read_buf = createReadBuffer(current_path, file_stat, storage->use_table_fd, storage->table_fd, storage->compression_method, getContext());
+
+                    /// `createReadBuffer` opens the file by path, strictly after the `stat` above computed
+                    /// `current_file_cache_version`. Another writer - e.g. a second `File` table pointing at
+                    /// the same path, which is guarded by its own independent `rwlock` and so isn't excluded
+                    /// by ours - could truncate and rewrite the file in that window. Re-stat right after
+                    /// opening: if the token no longer matches what we just opened, it cannot be trusted to
+                    /// pin this read's generation, so fail close (the gates below skip both the Query
+                    /// Condition Cache lookup and, per the bracketing check further down, its population).
+                    if (!storage->use_table_fd && current_file_version_settled
+                        && !fileCacheVersionTokenStillHolds(current_path, *current_file_cache_version))
+                        current_file_version_settled = false;
+                }
             }
 
             size_t file_num = 0;
@@ -1917,9 +1953,14 @@ Chunk StorageFileSource::generate()
         /// `StorageObjectStorageSource`. Gated on a real local file with a settled version token
         /// (an unsettled token cannot prove a later rewrite, so caching would risk stale results)
         /// and a deterministic single-output predicate (`condition_hash`). Only Parquet reports
-        /// matched buckets; other formats return `nullopt` here and are silently skipped.
+        /// matched buckets; other formats return `nullopt` here and are silently skipped. The
+        /// re-stat bracket closes the window opened right after `createReadBuffer`: a rewrite that
+        /// happens while this file was being read would otherwise let a version token, still valid
+        /// at open time, get written together with row groups derived from bytes it no longer
+        /// describes.
         if (input_format && current_file_cache_version.has_value() && current_file_version_settled
-            && format_filter_info && format_filter_info->condition_hash)
+            && format_filter_info && format_filter_info->condition_hash
+            && fileCacheVersionTokenStillHolds(current_path, *current_file_cache_version))
         {
             try
             {
