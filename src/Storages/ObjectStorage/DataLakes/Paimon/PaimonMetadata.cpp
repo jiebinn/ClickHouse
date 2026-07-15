@@ -543,7 +543,9 @@ ObjectIterator PaimonMetadata::iterate(
         if (!state)
         {
             state = loadLatestState();
-            validateTableIdentity();
+            /// Publishing before the consumption-point validateTableIdentity() below is safe: that
+            /// check re-validates identity before any data is served, so a state from a recreated
+            /// table can only fail-close, never cause a silent stale read.
             if (state)
                 std::atomic_store_explicit(&current_state, state, std::memory_order_release);
         }
@@ -551,6 +553,14 @@ ObjectIterator PaimonMetadata::iterate(
 
     if (!state)
         return createKeysIterator({}, object_storage, callback); /// still no snapshot: return empty
+
+    /// Detect external table recreation before consuming the pinned/current/loaded state.
+    /// The normal path pins datalake_table_state during analysis (updateExternalDynamicMetadataIfExists)
+    /// and reaches here via extractTableState, so this is the only place that closes the
+    /// analysis->execution window where an external DROP + re-CREATE would otherwise be reused stale.
+    /// iterate() runs once per query read (the iterator is shared across streams), so this single
+    /// remote schema-0 check is negligible relative to the data scan it guards (fail-close).
+    validateTableIdentity();
 
     /// 2. Get schema from processor (cached)
     auto schema = persistent_components.schema_processor->getSchemaById(state->schema_id);
@@ -573,7 +583,6 @@ ObjectIterator PaimonMetadata::iterate(
     if (persistent_components.incremental_read_enabled && target_snapshot_id > 0)
     {
         auto target_state = loadStateForSnapshot(target_snapshot_id);
-        validateTableIdentity();
         if (target_state->isCompact())
             LOG_WARNING(log, "Target snapshot_id={} is a COMPACT snapshot. "
                 "Its delta manifest contains compaction output (not incremental changes). "
@@ -833,7 +842,6 @@ Strings PaimonMetadata::collectIncrementalDataFiles(
         auto snapshots = getSnapshotsBetween(
             *committed_snapshot_id, state->snapshot_id, max_consume_snapshots,
             /*skip_compact=*/true, last_scanned_snapshot_id);
-        validateTableIdentity();
 
         if (snapshots.empty())
         {
