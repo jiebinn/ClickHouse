@@ -788,6 +788,15 @@ Field QueryFuzzer::fuzzField(Field field)
                 *debug_stream << "map: shuffled pairs\n";
         }
 
+        /// Occasionally shuffle the flat key/value list as if it were a plain array, deliberately
+        /// breaking key/value adjacency to exercise malformed Map inputs.
+        if (fuzz_rand() % 5 == 0 && map.size() >= 2)
+        {
+            std::shuffle(map.begin(), map.end(), fuzz_rand);
+            if (debug_stream)
+                *debug_stream << "map: shuffled as array\n";
+        }
+
         for (auto & element : map)
         {
             element = fuzzField(element);
@@ -2143,10 +2152,16 @@ void QueryFuzzer::fuzzColumnDeclaration(ASTColumnDeclaration & column)
     if (fuzz_rand() % 50 == 0)
         column.primary_key_specifier = !column.primary_key_specifier;
 
-    /// Toggle EPHEMERAL value suppression (`col T EPHEMERAL <expr>` <-> `col T EPHEMERAL`);
-    /// hiding it needs an explicit type, else the column has neither type nor default.
-    if (column.default_specifier == ColumnDefaultSpecifier::Ephemeral && column.getDefaultExpression() && fuzz_rand() % 20 == 0)
+    if (column.default_specifier != ColumnDefaultSpecifier::Ephemeral)
     {
+        /// ephemeral_default only makes sense for EPHEMERAL. Clear it once the specifier flips away
+        /// (above), else formatImpl keeps hiding the expression and emits a bare, unparseable clause.
+        column.ephemeral_default = false;
+    }
+    else if (column.default_specifier == ColumnDefaultSpecifier::Ephemeral && column.getDefaultExpression() && fuzz_rand() % 20 == 0)
+    {
+        /// Toggle EPHEMERAL value suppression (`col T EPHEMERAL <expr>` <-> `col T EPHEMERAL`);
+        /// hiding it needs an explicit type, else the column has neither type nor default.
         if (column.ephemeral_default)
             column.ephemeral_default = false;
         else if (column.getType())
