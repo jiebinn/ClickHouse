@@ -392,9 +392,29 @@ profiles:
             config_file.write(c1)
         return res
 
-    def create_log_export_config(self):
+    def create_log_export_config(self, config_dir=None, install_sender_user=False):
         print("Create log export config")
-        config_file = Path(self.ch_config_dir) / "config.d" / "system_logs_export.yaml"
+        # Functional tests install their configs into `self.ch_config_dir`
+        # (`/etc/clickhouse-server`), which is the directory the server reads.
+        # The light install used by ClickBench keeps its config under `ci/tmp`
+        # instead, so the caller passes that directory to make the remote
+        # cluster definition (and the `ci_logs_sender` user) land where the
+        # light-started server actually reads it.
+        config_dir = config_dir or self.ch_config_dir
+
+        if install_sender_user:
+            # The `_watcher` materialized views created by `setup_log_cluster.sh`
+            # use `DEFINER = ci_logs_sender`, so that user must exist on the
+            # server. Functional tests install it via `tests/config/install.sh`;
+            # the light install used here does not, so install it explicitly.
+            Shell.check(
+                f"mkdir -p {config_dir}/users.d"
+                f" && cp ./tests/config/users.d/ci_logs_sender.yaml {config_dir}/users.d/",
+                verbose=True,
+                strict=True,
+            )
+
+        config_file = Path(config_dir) / "config.d" / "system_logs_export.yaml"
         config_file.parent.mkdir(parents=True, exist_ok=True)
 
         self.log_export_host, self.log_export_password = (
@@ -443,6 +463,12 @@ profiles:
 
     @staticmethod
     def stop_log_exports():
+        # Flush any buffered system-log records so the final queries are
+        # exported before the replication views are detached.
+        Shell.check(
+            'clickhouse-client --query "SYSTEM FLUSH LOGS"',
+            verbose=True,
+        )
         return Shell.check(
             "./ci/jobs/scripts/functional_tests/setup_log_cluster.sh --stop-log-replication",
             verbose=True,

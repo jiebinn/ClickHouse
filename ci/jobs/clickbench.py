@@ -40,7 +40,13 @@ def main():
             )
             if info.is_local_run:
                 return res
-            return res and ch.create_log_export_config()
+            # The light install keeps its config under `temp_dir`, so the export
+            # config and the `ci_logs_sender` user must be written there (not
+            # into the default `/etc/clickhouse-server`) for the running server
+            # to pick them up - same setup as SQLStorm and the stateless tests.
+            return res and ch.create_log_export_config(
+                config_dir=temp_dir, install_sender_user=True
+            )
 
         results.append(
             Result.from_commands_run(name="Install ClickHouse", command=install)
@@ -111,11 +117,10 @@ def main():
         )
         res = results[-1].is_ok()
 
-    # stop log replication
-    Shell.check(
-        "./ci/jobs/scripts/functional_tests/setup_log_cluster.sh --stop-log-replication",
-        verbose=True,
-    )
+    # Flush the final benchmark queries' system-log records and detach the
+    # replication views - same as SQLStorm and the stateless tests.
+    if not info.is_local_run:
+        ch.stop_log_exports()
 
     Result.create_from(
         results=results,
