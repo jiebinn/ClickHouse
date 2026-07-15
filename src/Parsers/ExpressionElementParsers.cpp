@@ -1808,9 +1808,10 @@ bool ParserAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (0 == strcasecmp(name.data(), "COMMENT"))
         {
             Pos peek = pos;
-            if (peek->type == TokenType::StringLiteral)
+            Expected peek_expected;
+            ASTPtr comment_literal;
+            if (ParserStringLiteral().parse(peek, comment_literal, peek_expected))
             {
-                ++peek;
                 if (peek->type == TokenType::EndOfStream || peek->type == TokenType::Semicolon)
                     return false;
             }

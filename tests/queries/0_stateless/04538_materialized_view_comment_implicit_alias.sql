@@ -73,3 +73,16 @@ SELECT comment FROM system.tables WHERE name = 'wv_04538_single' AND database = 
 
 DROP TABLE wv_04538_single;
 DROP TABLE src_wv_04538;
+
+-- Regression test: a heredoc-style comment literal ($tag$...$tag$) must also be
+-- recognized by the trailing-comment lookahead, not just ordinary quoted string
+-- literals, since parseComment() accepts both forms (bot-flagged scenario).
+DROP TABLE IF EXISTS heredoc_src_04538;
+DROP TABLE IF EXISTS heredoc_mv_04538;
+CREATE TABLE heredoc_src_04538 (x UInt8) ENGINE = Memory;
+CREATE MATERIALIZED VIEW heredoc_mv_04538 ENGINE = MergeTree ORDER BY tuple() AS SELECT x FROM heredoc_src_04538 COMMENT $heredoc$heredoc trailing comment$heredoc$;
+
+SELECT comment FROM system.tables WHERE name = 'heredoc_mv_04538' AND database = currentDatabase();
+
+DROP TABLE heredoc_mv_04538;
+DROP TABLE heredoc_src_04538;
