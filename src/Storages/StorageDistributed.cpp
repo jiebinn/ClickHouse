@@ -2535,7 +2535,12 @@ void registerStorageRemote(StorageFactory & factory)
         ///
         /// `isLoadingFromExistingMetadata` covers server startup (`FORCE_ATTACH`) and the legacy
         /// `force_restore_data` flag (`FORCE_RESTORE`): the definition already lives on disk and was
-        /// validated when it was first created on this server, so no check is re-run.
+        /// validated when it was first created on this server, so no check is re-run. A short
+        /// `ATTACH TABLE t` query, and the tables loaded by an `ATTACH DATABASE` query, reach here
+        /// with `args.mode == ATTACH`, but their definitions are likewise read back from the metadata
+        /// stored on this server (`attach_short_syntax`), not supplied by the user, so they are the
+        /// same existing-metadata case: only an `ATTACH` query that carries a full definition
+        /// introduces one that still needs validation.
         ///
         /// A backup `RESTORE` is different: it reaches here with `args.mode == SECONDARY_CREATE` and
         /// `args.is_restore_from_backup`, introducing the definition under a possibly different user, so it
@@ -2554,13 +2559,14 @@ void registerStorageRemote(StorageFactory & factory)
         /// they cannot access. Any other failure means the target could not be analyzed (and therefore
         /// cannot be read either, so there is nothing to leak), so the restore proceeds with the columns
         /// carried in the backup metadata.
-        const bool loading_from_existing_metadata = isLoadingFromExistingMetadata(args.mode);
+        const bool loading_from_existing_metadata = isLoadingFromExistingMetadata(args.mode) || args.query.attach_short_syntax;
 
         ColumnsDescription columns = args.columns;
 
         /// The table-function target must be analyzed under the user's context whenever the definition is
-        /// freshly introduced (`CREATE`, user `ATTACH`, or backup `RESTORE`) and can route back to a local
-        /// shard; only server startup, which loads already-validated metadata, skips it.
+        /// freshly introduced (`CREATE`, a full-definition `ATTACH`, or backup `RESTORE`) and can route
+        /// back to a local shard; only loads of already-validated stored metadata (server startup, short
+        /// `ATTACH`) skip it.
         const bool analyze_table_function_target
             = has_local_shard && parsed.remote_table_function_ptr && !loading_from_existing_metadata;
 
