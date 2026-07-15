@@ -1121,7 +1121,10 @@ String FuzzConfig::getRandomIcebergHistoryValue(const String & property)
         if (!res.empty() && res.back() == '\r')
             res.pop_back();
     }
-    return res.empty() ? "-1" : res;
+    /// Empty history (e.g. a table with no snapshots yet). Return the DEFAULT keyword so a
+    /// `SET iceberg_snapshot_id/iceberg_timestamp_ms = DEFAULT` resets the pin and clears its
+    /// `changed` flag, instead of pinning the never-valid -1 snapshot and poisoning the session.
+    return res.empty() ? "DEFAULT" : res;
 }
 
 String FuzzConfig::getRandomFileSystemCacheValue()
