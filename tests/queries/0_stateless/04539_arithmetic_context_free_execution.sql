@@ -61,6 +61,30 @@ OPTIMIZE TABLE t_arith_key FINAL;
 SELECT a, b, d FROM t_arith_key ORDER BY a, b;
 DROP TABLE t_arith_key;
 
+-- Regression: the same, for the interval path: the sorting key `d + INTERVAL 1 DAY` executes
+-- through the interval sub-function resolved when the expression was built by the CREATE query
+-- (prepared_interval_function), and must still be executable during a merge after that query
+-- context no longer exists.
+DROP TABLE IF EXISTS t_arith_key_interval;
+CREATE TABLE t_arith_key_interval (d Date, v Int64) ENGINE = MergeTree ORDER BY (d + INTERVAL 1 DAY);
+INSERT INTO t_arith_key_interval VALUES ('2020-01-02', 1);
+INSERT INTO t_arith_key_interval VALUES ('2020-01-01', 2);
+OPTIMIZE TABLE t_arith_key_interval FINAL;
+SELECT d, v FROM t_arith_key_interval ORDER BY d;
+DROP TABLE t_arith_key_interval;
+
+-- Regression: the same, for the array path: the sorting key `arr + [10, 20]` executes through the
+-- element-level sibling function resolved when the expression was built by the CREATE query
+-- (array_element_function), and must still be executable during a merge after that query
+-- context no longer exists.
+DROP TABLE IF EXISTS t_arith_key_array;
+CREATE TABLE t_arith_key_array (arr Array(UInt32), v Int64) ENGINE = MergeTree ORDER BY (arr + [10, 20]);
+INSERT INTO t_arith_key_array VALUES ([3, 4], 1);
+INSERT INTO t_arith_key_array VALUES ([1, 2], 2);
+OPTIMIZE TABLE t_arith_key_array FINAL;
+SELECT arr, v FROM t_arith_key_array ORDER BY arr;
+DROP TABLE t_arith_key_array;
+
 -- Regression: getReturnTypeImpl is re-invoked from IFunction::compile when a stored arithmetic
 -- expression (here the sorting key a + k + 1) is JIT-compiled at pipeline-build time. After an ALTER
 -- rebinds the table metadata to a query context that then dies, that expression must still be
