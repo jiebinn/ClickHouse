@@ -892,8 +892,11 @@ class FunctionBinaryArithmetic : public IFunction, WithContext
     /// still hold a strong `ContextPtr` internally and use it at execute time to resolve their
     /// element-wise sub-functions. So the tuple special cases still pin the build-time query context
     /// (they keep working precisely because the strong reference keeps it alive); only the plain
-    /// numeric/Date/interval/array paths are fully context-free. Making the `ITupleFunction` family
-    /// context-free is a planned follow-up.
+    /// numeric/Date/interval paths - and arrays whose element-level operation is one of those - are
+    /// fully context-free. Arrays over tuple-family elements (e.g. `[(1, 2)] + [(3, 4)]` or
+    /// `[INTERVAL 1 DAY] + [INTERVAL 1 HOUR]`) still pin the context the same way, through the
+    /// tuple-family builders cached by `array_element_function` below. Making the `ITupleFunction`
+    /// family context-free is a planned follow-up.
     FunctionOverloadResolverPtr prepared_interval_function;
     FunctionOverloadResolverPtr prepared_date_tuple_of_intervals_function;
     FunctionOverloadResolverPtr prepared_merge_intervals_function;
@@ -904,7 +907,9 @@ class FunctionBinaryArithmetic : public IFunction, WithContext
     /// evaluate the operation on the array element types, which differ from this function's (array)
     /// argument types, so this function's precomputed builders above do not apply to them. The element
     /// arithmetic is delegated to this sibling (whose own constructor resolves the element-level special
-    /// cases, recursively for nested arrays). Null when neither operand is an array.
+    /// cases, recursively for nested arrays - including, per the caveat above, tuple-family builders that
+    /// pin the context when the element types hit one of those cases). Null when neither operand is an
+    /// array.
     FunctionPtr array_element_function;
 
     static bool castType(const IDataType * type, auto && f)

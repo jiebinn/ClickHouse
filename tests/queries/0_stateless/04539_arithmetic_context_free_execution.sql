@@ -6,8 +6,10 @@
 -- Scope note: the tuple special cases (tuple + tuple, Date + tuple of intervals, interval + interval,
 -- tuple * number) are exercised below for behavior, but their cached sub-functions still hold a strong
 -- context reference internally, so those paths still retain (and are kept alive by) the build-time
--- context; only the plain numeric/Date/interval/array paths are fully context-free. Making the tuple
--- function family context-free is a planned follow-up.
+-- context. The same applies to arrays whose element-level operation is one of those cases (arrays of
+-- tuples, arrays of intervals): the element-level sibling function caches the same tuple-family
+-- sub-functions. Only the plain numeric/Date/interval paths, and arrays over them, are fully
+-- context-free. Making the tuple function family context-free is a planned follow-up.
 
 SET session_timezone = 'UTC';
 
@@ -39,6 +41,11 @@ SELECT materialize([1, 2, 3]) + materialize([4, 5, 6]);
 SELECT [1, 2, 3] * 2;
 SELECT [toDate('2020-01-01'), toDate('2020-06-01')] + [toIntervalDay(1), toIntervalDay(2)];
 SELECT [[1, 2], [3]] + [[10, 20], [30]];
+
+-- Arrays whose element-level operation is a tuple-family special case (see the scope note above:
+-- these still pin the build-time context through the sibling's cached tuple sub-functions).
+SELECT [(1, 2)] + [(3, 4)];
+SELECT [INTERVAL 1 DAY] + [INTERVAL 1 HOUR];
 
 -- Plain numeric arithmetic (no special case applies; the context is not touched at all).
 SELECT number + 1, number * 2, number - 3 FROM numbers(3);
