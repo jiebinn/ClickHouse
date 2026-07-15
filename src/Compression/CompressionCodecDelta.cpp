@@ -104,7 +104,8 @@ void compressDataForType(const char * source, UInt32 source_size, char * dest)
   * is needed. Lanes are loaded in native byte order, so the fast path also requires a little-endian
   * build to match the little-endian on-disk format; others fall back to the scalar loop below.
   */
-#if (defined(__SSE2__) || (defined(__aarch64__) && defined(__ARM_NEON))) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#if (((defined(__x86_64__) || defined(__i386__)) && defined(__SSE2__)) || (defined(__aarch64__) && defined(__ARM_NEON))) \
+    && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define DELTA_CODEC_SIMD_DECOMPRESS
 
 template <typename T>
