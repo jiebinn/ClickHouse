@@ -1730,16 +1730,10 @@ TEST_F(FileCacheTest, CachedReadBufferReadDuringExceptionUnwinding)
     std::string error;
     bool outer_exception_caught = false;
 
-    struct RunOnDestroy
-    {
-        std::function<void()> fn;
-        ~RunOnDestroy() { fn(); }
-    };
-
     try
     {
-        RunOnDestroy read_in_dtor{[&]()
-        {
+        /// The guard's destructor runs the reads while the exception below is being unwound.
+        SCOPE_EXIT({
             try
             {
                 {
@@ -1766,7 +1760,7 @@ TEST_F(FileCacheTest, CachedReadBufferReadDuringExceptionUnwinding)
             {
                 error = getCurrentExceptionMessage(true);
             }
-        }};
+        });
         throw std::runtime_error("The exception being unwound while the cached reads run");
     }
     catch (const std::runtime_error &)
