@@ -208,13 +208,20 @@ class SparkAndClickHouseCheck:
             # Decimals: match ClickHouse `toString`, which trims trailing zeros only in the
             # fractional part and drops a bare decimal point. A blunt TRIM TRAILING '0' would
             # also strip significant zeros (e.g. "10" -> "1"), causing false mismatches.
+            # `CAST(decimal AS STRING)` can emit scientific notation for a zero read from a lake
+            # file (e.g. "0E-11"), which ClickHouse never does; `format_number` always yields plain
+            # fixed-point (strip its grouping commas) and preserves full 38-digit precision.
             def spark_col_expr(col) -> str:
-                s = f"CAST({col.column_name} AS STRING)"
                 if isinstance(col.spark_type, DecimalType):
-                    s = (
-                        f"CASE WHEN {s} LIKE '%.%' "
-                        f"THEN TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM {s})) ELSE {s} END"
+                    plain = (
+                        f"regexp_replace(format_number({col.column_name}, {col.spark_type.scale}), ',', '')"
                     )
+                    s = (
+                        f"CASE WHEN {plain} LIKE '%.%' "
+                        f"THEN TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM {plain})) ELSE {plain} END"
+                    )
+                else:
+                    s = f"CAST({col.column_name} AS STRING)"
                 return f"COALESCE({s}, '{_NULL_SENTINEL}')"
 
             spark_strings = {
