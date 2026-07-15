@@ -5982,7 +5982,11 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
         const bool multi_table = drop_query->database_and_tables && drop_query->database_and_tables->children.size() > 1;
         if (!drop_query->has_tables && !drop_query->has_all && !multi_table && fuzz_rand() % 100 == 0)
         {
-            drop_query->kind = static_cast<ASTDropQuery::Kind>(fuzz_rand() % 3);
+            /// DETACH of a TEMPORARY table is always rejected (SYNTAX_ERROR), so keep DROP / TRUNCATE for it.
+            if (drop_query->isTemporary())
+                drop_query->kind = (fuzz_rand() % 2) ? ASTDropQuery::Truncate : ASTDropQuery::Drop;
+            else
+                drop_query->kind = static_cast<ASTDropQuery::Kind>(fuzz_rand() % 3);
             /// TRUNCATE DICTIONARY / VIEW does not reparse
             if (drop_query->kind == ASTDropQuery::Truncate)
             {
