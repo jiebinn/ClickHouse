@@ -27,8 +27,12 @@ workflow = Workflow.Config(
     base_branches=[BASE_BRANCH],
     jobs=[
         binary_build_job,
-        JobConfigs.jepsen_keeper,
-        JobConfigs.jepsen_server,
+        # Validation-only: run just the server Jepsen job for a faster loop
+        # (keeper Jepsen already passes). Keeper is dropped from this workflow,
+        # so override server's `requires` to not depend on it (job_configs keeps
+        # the keeper dependency for the real nightly). Before merging: restore
+        # `JobConfigs.jepsen_keeper` here and drop this `set_requires` override.
+        JobConfigs.jepsen_server.set_requires("Build (amd_binary)", reset=True),
     ],
     artifacts=[
         *ArtifactConfigs.clickhouse_binaries,
