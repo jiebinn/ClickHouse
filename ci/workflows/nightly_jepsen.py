@@ -17,22 +17,18 @@ binary_build_job = Job.Config.get_job(
 
 # TODO: add alert on workflow failure
 
-# NOTE: event temporarily set to PULL_REQUEST to validate that the newly added
-# server Jepsen job is wired into the workflow correctly on this PR head. Revert
-# to Workflow.Event.SCHEDULE with `branches=[BASE_BRANCH]` and re-enable
-# `cron_schedules` before merging.
 workflow = Workflow.Config(
     name="NightlyJepsen",
-    event=Workflow.Event.PULL_REQUEST,
-    base_branches=[BASE_BRANCH],
+    event=Workflow.Event.SCHEDULE,
+    branches=[BASE_BRANCH],
     jobs=[
         binary_build_job,
-        # Validation-only: run just the server Jepsen job for a faster loop
-        # (keeper Jepsen already passes). Keeper is dropped from this workflow,
-        # so override server's `requires` to not depend on it (job_configs keeps
-        # the keeper dependency for the real nightly). Before merging: restore
-        # `JobConfigs.jepsen_keeper` here and drop this `set_requires` override.
-        JobConfigs.jepsen_server.set_requires("Build (amd_binary)", reset=True),
+        JobConfigs.jepsen_keeper,
+        # Serialize server Jepsen after keeper: both use the single shared
+        # jepsen_group autoscaling group and must not run concurrently. This is
+        # an ordering dependency only (not an artifact requirement), so express
+        # it here with run_after rather than in the job's `requires`.
+        JobConfigs.jepsen_server.set_run_after(JobConfigs.jepsen_keeper.name),
     ],
     artifacts=[
         *ArtifactConfigs.clickhouse_binaries,
@@ -42,7 +38,7 @@ workflow = Workflow.Config(
     enable_cache=True,
     enable_report=True,
     enable_cidb=True,
-    # cron_schedules=["13 4 * * *"],  # temporarily disabled for PR validation; restore before merge
+    cron_schedules=["13 4 * * *"],
     pre_hooks=["python3 ./ci/jobs/scripts/workflow_hooks/store_data.py"],
 )
 
