@@ -1,19 +1,15 @@
 import pytest
 
-from helpers.cluster import CLICKHOUSE_CI_MIN_TESTED_VERSION, ClickHouseCluster
+from helpers.cluster import ClickHouseCluster
 
-# The `minmax` column statistics type is deprecated: it can no longer be created on the current
-# version (CREATE / ALTER ... STATISTICS(minmax) and auto_statistics_types='minmax' throw), but
-# tables and parts created by older versions that reference `minmax` must keep working after an
-# upgrade. This test creates such a table on an old server, upgrades, and checks that the table
-# attaches, the data and statistics remain readable, merges work, while new `minmax` statistics
-# can no longer be created.
+_OLD_VERSION = "26.5"
+
 cluster = ClickHouseCluster(__file__)
 node = cluster.add_instance(
     "node",
     with_zookeeper=False,
     image="clickhouse/clickhouse-server",
-    tag=CLICKHOUSE_CI_MIN_TESTED_VERSION,
+    tag=_OLD_VERSION,
     stay_alive=True,
     with_installed_binary=True,
 )

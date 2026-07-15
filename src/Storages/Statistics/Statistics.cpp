@@ -711,17 +711,6 @@ void MergeTreeStatisticsFactory::validate(const ColumnStatisticsDescription & st
 {
     for (const auto & [type, desc] : stats.types_to_desc)
     {
-        /// The `minmax` statistics type is deprecated: it is a subset of `basic`, which should be used instead.
-        /// Reject it only when it is declared explicitly (`STATISTICS(minmax)` in CREATE / ALTER) and newly
-        /// introduced by the current statement:
-        ///  - Implicit `minmax` produced by the `auto_statistics_types` setting is tolerated here (including on
-        ///    freshly-added columns of a table whose setting still lists `minmax`). Introducing `minmax` anew
-        ///    through that setting is rejected separately on the setting-change path (`validateAutoStatisticsTypes`).
-        ///  - `allow_deprecated_minmax` grandfathers explicit `minmax` that the column already carried in the
-        ///    existing metadata (e.g. a table created by an older version), so unrelated ALTERs of such old
-        ///    tables are not rejected.
-        /// This whole validation is also skipped when loading existing tables (ATTACH / startup), so old tables
-        /// and parts that still reference `minmax` keep working.
         if (type == StatisticsType::MinMax && !desc.is_implicit && !allow_deprecated_minmax)
             throw Exception(
                 ErrorCodes::INCORRECT_QUERY,
@@ -862,8 +851,6 @@ void validateAutoStatisticsTypes(const String & statistics_types_str)
     if (statistics_types_str.empty())
         return;
 
-    /// Runs only on the setting-change path (CREATE / ALTER ... MODIFY SETTING auto_statistics_types),
-    /// never when loading existing metadata, so tables that still carry `minmax` in the setting keep working.
     auto stats_ast_map = parseColumnStatisticsFromString(statistics_types_str);
     for (const auto & entry : stats_ast_map)
     {

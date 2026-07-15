@@ -1242,11 +1242,7 @@ void MergeTreeData::checkProperties(
             validate_complex_projection(projection.name, {"_block_offset"});
     }
 
-    /// On CREATE the constructor passes the very same metadata object as both `new` and `old` (there is no
-    /// prior version), whereas a genuine ALTER passes a distinct `old_metadata` snapshot. Only on an ALTER
-    /// can a column have "already carried" `minmax` before the statement, so the grandfathering below must be
-    /// restricted to that case — otherwise a fresh CREATE with explicit `minmax` would slip through, since its
-    /// aliased `old` metadata trivially already "has" the just-declared `minmax`.
+    /// On CREATE, `old_metadata` and `new_metadata` are the same object; on ALTER they differ.
     const bool is_alter = &old_metadata != &new_metadata;
 
     for (const auto & col : new_metadata.columns)
@@ -1254,12 +1250,8 @@ void MergeTreeData::checkProperties(
         if (col.statistics.empty())
             continue;
 
-        /// The deprecated `minmax` statistics type must not be rejected for tables that already reference it,
-        /// only for CREATE/ALTER statements that newly introduce it. It is tolerated when:
-        ///  - loading an existing table (ATTACH / server startup), so old tables and parts keep working; or
-        ///  - the column already carried `minmax` in the existing metadata, so an unrelated ALTER (e.g.
-        ///    `COMMENT COLUMN`) of an old table (whose explicit `minmax` has `is_implicit == false`) is not
-        ///    blocked. The rest of the statistics validation (unknown type, data-type support) still runs.
+        /// Allow deprecated `minmax` only when loading an existing table (attach/startup) or when
+        /// the column already carried `minmax` before an unrelated ALTER — never for a fresh introduction.
         bool allow_deprecated_minmax = attach
             || (is_alter
                 && old_metadata.columns.has(col.name)

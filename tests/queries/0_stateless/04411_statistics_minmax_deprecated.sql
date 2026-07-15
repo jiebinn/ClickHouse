@@ -1,12 +1,3 @@
--- Tags: no-fasttest
--- Tests that the deprecated `minmax` column statistics type can no longer be created, while `basic`
--- (its superset) works. The rejection covers the `auto_statistics_types` setting-change path (both
--- CREATE and ALTER ... MODIFY SETTING). Already-loaded old metadata that still carries `minmax` keeps
--- working and remains alterable: that upgrade path is covered by the integration test
--- test_statistics_minmax_upgrade.
-
-SET allow_statistics = 1;
-
 DROP TABLE IF EXISTS t_minmax_deprecated;
 
 -- Explicit `minmax` in CREATE is rejected.
