@@ -882,9 +882,16 @@ void StatementGenerator::generateNextTablePartition(
 
         if ((table_has_partitions = ((allow_parts == 2 || rg.nextMediumNumber() < 76) && fc.tableHasPartitions(detached, dname, tname))))
         {
+            String pval;
+
             if (allow_parts == 2 || (allow_parts == 1 && rg.nextBool()))
             {
                 pexpr->set_part(fc.tableGetRandomPartitionOrPart(rg.nextInFullRange(), detached, false, dname, tname));
+            }
+            else if (!detached && rg.nextBool() && !(pval = fc.tableGetRandomPartitionValue(rg.nextInFullRange(), dname, tname)).empty())
+            {
+                /// Partition key value form, e.g. `DROP PARTITION 202101` / `DROP PARTITION (202101, 'x')`
+                pexpr->set_partition(pval);
             }
             else
             {
@@ -1704,6 +1711,16 @@ std::optional<String> StatementGenerator::alterSingleTable(
         const bool has_projs = nprojs > 0;
         const bool has_constrs = nconstrs > 0;
         const bool has_col_settings = !allColumnSettings.at(t.engine.value).empty();
+        bool has_enum_col = false;
+
+        for (const auto & [_, val] : t.cols)
+        {
+            if (getColumnEnumType(val.tp.get()))
+            {
+                has_enum_col = true;
+                break;
+            }
+        }
 
         rg.pickWeighted({
             /// Order by
@@ -1974,6 +1991,23 @@ std::optional<String> StatementGenerator::alterSingleTable(
              }},
             {2 * static_cast<uint32_t>(no_oracle && has_idxs),
              [&] { ati->mutable_drop_index()->set_value(fc.tableGetRandomIndex(rg.nextInFullRange(), dname_idx, tname_idx)); }},
+            {4 * static_cast<uint32_t>(no_oracle && no_peer && has_enum_col),
+             [&]
+             {
+                 std::vector<String> enum_keys;
+                 for (const auto & [key, val] : t.cols)
+                 {
+                     if (getColumnEnumType(val.tp.get()))
+                         enum_keys.emplace_back(key);
+                 }
+                 const String & ekey = rg.pickRandomly(enum_keys);
+                 /// Match the column's width so numbers land in range more often (not value tracking).
+                 const bool bits16 = getColumnEnumType(t.cols.at(ekey).tp.get())->size == 16;
+                 AddEnumValues * aev = ati->mutable_add_enum_values();
+
+                 aev->mutable_col()->mutable_col()->set_column(ekey);
+                 setRandomEnumValues(rg, bits16, aev->mutable_new_values());
+             }},
             /// Column properties/settings
             {2,
              [&]

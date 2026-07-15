@@ -36,6 +36,11 @@ from integration.helpers.client import Client
 # this literal, so it cannot collide with a real value.
 _NULL_SENTINEL = "<NULL>"
 
+# ClickHouse unsigned and 128/256-bit integers have no Spark equivalent: they are clamped
+# to BIGINT/DECIMAL on the lake side, so out-of-range values wrap and the engines print
+# different strings for the same stored bytes. Matched anywhere in the type (Array, Nullable...).
+_LOSSY_CH_INT_RE = re.compile(r"\b(?:UInt(?:64|128|256)|Int128|Int256)\b")
+
 
 class SparkAndClickHouseCheck:
 
@@ -166,10 +171,27 @@ class SparkAndClickHouseCheck:
                 )
                 return False
 
+            # Big-int CH types (UInt64/128/256, Int128/256) map to Spark Long or an under-precision
+            # Decimal, so they are not losslessly representable in the lake. Exclude only those
+            # columns from the hash and keep comparing the rest; falling back to a count-only check
+            # for the whole table would let a divergence in any other column slip through.
+            uncomparable = [
+                v
+                for v in table.columns.values()
+                if self._check_type_valid_for_comparison(v.spark_type)
+                and _LOSSY_CH_INT_RE.search(v.clickhouse_type or "")
+            ]
+            if uncomparable:
+                self.logger.info(
+                    f"Excluding column(s) {','.join(c.column_name for c in uncomparable)} from the "
+                    f"value comparison for {table.get_clickhouse_path()}: not losslessly representable in the lake"
+                )
+
             order_by_cols = [
                 v
                 for v in table.columns.values()
                 if self._check_type_valid_for_comparison(v.spark_type)
+                and not _LOSSY_CH_INT_RE.search(v.clickhouse_type or "")
             ]
             if len(order_by_cols) == 0:
                 self.logger.info(
