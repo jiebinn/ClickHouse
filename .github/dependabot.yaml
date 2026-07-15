@@ -7,7 +7,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -17,7 +17,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -27,7 +27,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -37,7 +37,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -48,7 +48,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -58,7 +58,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -68,7 +68,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -78,7 +78,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -89,7 +89,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -99,7 +99,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -109,7 +109,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -119,7 +119,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -132,7 +132,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
@@ -142,7 +142,7 @@ updates:
     schedule:
       interval: "monthly"
     cooldown:
-      default-days: 7
+      default-days: 90
     open-pull-requests-limit: 0
     ignore:
       - dependency-name: "*"
