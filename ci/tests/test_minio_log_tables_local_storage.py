@@ -29,6 +29,14 @@ public repo (where `default` is local) and the private/cloud repo (where
 `default` is object storage). This test guards against a future edit dropping
 that pin, or reverting to `storage_policy = 'default'`, and silently putting the
 tables back on S3.
+
+Lifecycle: those disk paths live OUTSIDE the per-run server data directory
+(run_path*) that ClickHouseProc.start wipes, so a restart destroys the tables'
+metadata but not their data. create_minio_log_tables therefore has to reset the
+disk directories itself before re-creating the tables - otherwise every
+bugfix-validation binary swap leaks the previous incarnation's parts (~1.5 GB of
+audit logs on sanitizer s3 runs). This test also guards that reset step and that
+it covers exactly the pinned disk paths.
 """
 
 import re
@@ -70,3 +78,34 @@ def test_minio_log_tables_are_pinned_to_local_storage():
             "/var/lib/clickhouse/disks/ so its dump is not read back from S3 "
             f"(and not left on the cloud `default` policy in private); got: {sql}"
         )
+
+
+def test_minio_log_table_disks_are_reset_before_create():
+    src = _SRC.read_text()
+    pinned_paths = {
+        m.replace("\\", "")
+        for m in re.findall(
+            r"path = \\?'(/var/lib/clickhouse/disks/[^'\\]+)", src
+        )
+    }
+    assert len(pinned_paths) == 2, (
+        f"expected 2 pinned minio log disk paths, found: {sorted(pinned_paths)}"
+    )
+    # The pinned paths are outside the run_path* directory that start() wipes,
+    # so stale data survives every server restart unless create_minio_log_tables
+    # removes it before re-creating the tables. Require an `rm -rf` covering
+    # exactly the pinned paths.
+    rm_commands = [
+        line for line in src.splitlines() if re.search(r'"rm -rf /var/lib', line)
+    ]
+    assert len(rm_commands) == 1, (
+        "expected exactly one reset step removing the minio log disk "
+        f"directories, found: {rm_commands}"
+    )
+    removed_paths = set(
+        re.findall(r"(/var/lib/clickhouse/disks/[^ \"]+)", rm_commands[0])
+    )
+    assert removed_paths == pinned_paths, (
+        "the reset step must remove exactly the pinned minio log disk paths; "
+        f"removes {sorted(removed_paths)}, pinned {sorted(pinned_paths)}"
+    )

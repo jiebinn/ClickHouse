@@ -582,6 +582,18 @@ profiles:
         # correct in both. Each table gets its own path so it gets its own disk.
         setup_steps = [
             (
+                # start() wipes only run_path*, so each restart destroys these
+                # tables' metadata while their data - pinned below to disks
+                # outside run_path* - would survive it. Both callers run right
+                # after a fresh start() (initial setup and each
+                # bugfix-validation binary swap), so no live table references
+                # the directories; wipe them so a dead incarnation's parts
+                # (~1.5 GB of audit logs on sanitizer s3 runs) are not leaked
+                # on every swap or carried over from a previous run.
+                "reset minio log table disks",
+                "rm -rf /var/lib/clickhouse/disks/minio_audit_logs/ /var/lib/clickhouse/disks/minio_server_logs/",
+            ),
+            (
                 "create system.minio_audit_logs table",
                 'clickhouse-client --enable_json_type=1 --query "CREATE TABLE system.minio_audit_logs (log JSON(time DateTime64(9))) ENGINE = MergeTree ORDER BY tuple() SETTINGS disk = disk(type = \'local\', path = \'/var/lib/clickhouse/disks/minio_audit_logs/\')"',
             ),
