@@ -78,6 +78,26 @@ SELECT position(x, 'A') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', 
 -- Enum16 out-of-range code (value 5000, little-endian bytes 136, 19).
 SELECT position(x, 'A') FROM format(RowBinary, 'x Enum16(''a'' = 1, ''A'' = 2)', char(136, 19, 136, 19, 136, 19)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
 
+-- When a query has an undefined stored code AND an invalid needle or ESCAPE argument, the undefined
+-- code must be reported first, matching the non-optimized path, where the eager cast of the Enum
+-- column to String precedes any needle validation.
+SELECT 'Undefined enum codes reported before needle validation';
+-- `hasToken` rejects needles with separators (`BAD_ARGUMENTS`), but the undefined code wins.
+SELECT hasToken(x, ' ') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- Same for the Null execution error policy.
+SELECT hasTokenOrNull(x, ' ') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- An invalid ESCAPE argument is validated during query analysis (over an empty block, before any
+-- data is read), so it wins over the undefined code on the non-optimized path, and must keep
+-- winning on the optimized path.
+SELECT x LIKE '%A%' ESCAPE '!!' FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError BAD_ARGUMENTS }
+-- With a valid ESCAPE argument, the undefined code is reported.
+SELECT x LIKE '%A%' ESCAPE '!' FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2)', char(5, 5, 5, 5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- The same ordering holds on the non-transform path (fewer rows than distinct enum names).
+SELECT hasToken(x, ' ') FROM format(RowBinary, 'x Enum8(''a'' = 1, ''A'' = 2, ''b'' = 3)', char(5, 5)); -- { serverError UNKNOWN_ELEMENT_OF_ENUM }
+-- With only valid stored codes, the needle validation errors still fire.
+SELECT hasToken(c, ' ') FROM t_es8; -- { serverError BAD_ARGUMENTS }
+SELECT c LIKE '%A%' ESCAPE '!!' FROM t_es8; -- { serverError BAD_ARGUMENTS }
+
 DROP TABLE t_es8;
 DROP TABLE t_es16;
 DROP TABLE t_es8_few;

@@ -222,7 +222,7 @@ public:
     /// a `String` column holding the distinct enum names (in numeric-value order) and a plain
     /// array `value_to_index`, indexed by `enum_value - min_value`, that maps each enum value to
     /// the row of its name in the deduplicated column. `min_value` receives the smallest enum value.
-    /// Slots for undefined codes are filled with `enum_undefined_index` so they can be rejected later.
+    /// Slots for undefined codes are filled with `enum_undefined_index` so the caller can reject them.
     /// A plain array is used instead of a hash map because `Enum` values are at most `Int16`.
     template <typename EnumType>
     static ColumnPtr buildEnumHaystackDictionary(
@@ -253,10 +253,81 @@ public:
         ColumnPtr column_haystack = haystack_argument.column;
         const ColumnPtr & column_needle = (argument_order == ArgumentOrder::HaystackNeedle) ? arguments[1].column : arguments[0].column;
 
-        /// `Enum` haystacks are handled below, once the needle and start position are known,
-        /// so the search can be run over the distinct enum names only (see issue #73114).
-
         ColumnPtr column_start_pos = nullptr;
+        if constexpr (!ImplIsLike<Impl>::value)
+        {
+            if (arguments.size() >= 3)
+                column_start_pos = arguments[2].column;
+        }
+
+        /// Optimization for `Enum` haystacks (https://github.com/ClickHouse/ClickHouse/issues/73114):
+        /// when the needle and the start position are the same for every row, run the search only over
+        /// the distinct enum names and map the results back per row through a plain array indexed by the
+        /// enum value, instead of materializing and searching the whole column row by row.
+        /// This block sits at the top of the function, where the non-optimized path calls
+        /// `castColumn(..., String)`, so that undefined stored enum codes are reported eagerly, before
+        /// any needle validation (ESCAPE arguments, token separators, ...) - preserving the exception
+        /// ordering of the non-optimized path when a query has several errors at once.
+        const size_t origin_input_rows_count = input_rows_count;
+        bool enum_needs_transform = false;
+        Int64 enum_min_value = 0;
+        PaddedPODArray<UInt32> enum_value_to_index;
+        ColumnPtr enum_source_column;
+
+        if (isEnum(haystack_argument.type))
+        {
+            /// The ESCAPE rewrite below preserves the constness of the needle,
+            /// so the decision can be made on the original needle column.
+            const bool needle_is_const = isColumnConst(*column_needle);
+            const bool start_pos_is_const = !column_start_pos || isColumnConst(*column_start_pos);
+
+            if (needle_is_const && start_pos_is_const && !isColumnConst(*column_haystack))
+            {
+                const auto try_transform = [&](const auto & enum_type, const auto & enum_data)
+                {
+                    ColumnPtr distinct_names = buildEnumHaystackDictionary(enum_type, enum_value_to_index, enum_min_value);
+
+                    /// Only worth it when there are more rows than distinct enum names.
+                    if (column_haystack->size() <= distinct_names->size())
+                        return;
+
+                    /// Validate the stored codes eagerly, exactly where `castColumn(..., String)` would
+                    /// have validated them (undefined codes can arrive through binary deserialization,
+                    /// see `enum_undefined_index`).
+                    const Int64 enum_max_shifted = static_cast<Int64>(enum_value_to_index.size()) - 1;
+                    for (size_t i = 0; i < enum_data.size(); ++i)
+                    {
+                        const Int64 shifted = static_cast<Int64>(enum_data[i]) - enum_min_value;
+                        if (shifted < 0 || shifted > enum_max_shifted
+                            || enum_value_to_index[static_cast<size_t>(shifted)] == enum_undefined_index)
+                        {
+                            /// Throws `UNKNOWN_ELEMENT_OF_ENUM`, matching the `castColumn` behavior.
+                            enum_type.getNameForValue(enum_data[i]);
+                        }
+                    }
+
+                    enum_source_column = column_haystack;
+                    column_haystack = std::move(distinct_names);
+                    input_rows_count = column_haystack->size();
+                    enum_needs_transform = true;
+                };
+
+                if (const auto * enum8 = typeid_cast<const DataTypeEnum8 *>(haystack_argument.type.get()))
+                {
+                    if (const auto * col_enum8 = checkAndGetColumn<ColumnVector<Int8>>(column_haystack.get()))
+                        try_transform(*enum8, col_enum8->getData());
+                }
+                else if (const auto * enum16 = typeid_cast<const DataTypeEnum16 *>(haystack_argument.type.get()))
+                {
+                    if (const auto * col_enum16 = checkAndGetColumn<ColumnVector<Int16>>(column_haystack.get()))
+                        try_transform(*enum16, col_enum16->getData());
+                }
+            }
+
+            if (!enum_needs_transform)
+                column_haystack = castColumn(haystack_argument, std::make_shared<DataTypeString>());
+        }
+
         ColumnPtr column_needle_rewritten;
 
         if constexpr (ImplIsLike<Impl>::value)
@@ -300,50 +371,8 @@ public:
                 }
             }
         }
-        else
-        {
-            if (arguments.size() >= 3)
-                column_start_pos = arguments[2].column;
-        }
 
         const ColumnPtr & effective_needle = column_needle_rewritten ? column_needle_rewritten : column_needle;
-
-        /// Optimization for `Enum` haystacks (https://github.com/ClickHouse/ClickHouse/issues/73114):
-        /// when the needle and the start position are the same for every row, run the search only over
-        /// the distinct enum names and map the results back per row through a plain array indexed by the
-        /// enum value, instead of materializing and searching the whole column row by row.
-        const size_t origin_input_rows_count = input_rows_count;
-        bool enum_needs_transform = false;
-        Int64 enum_min_value = 0;
-        PaddedPODArray<UInt32> enum_value_to_index;
-        ColumnPtr enum_source_column;
-
-        if (isEnum(haystack_argument.type))
-        {
-            const bool needle_is_const = isColumnConst(*effective_needle);
-            const bool start_pos_is_const = !column_start_pos || isColumnConst(*column_start_pos);
-
-            if (needle_is_const && start_pos_is_const && !isColumnConst(*column_haystack))
-            {
-                ColumnPtr distinct_names;
-                if (const auto * enum8 = typeid_cast<const DataTypeEnum8 *>(haystack_argument.type.get()))
-                    distinct_names = buildEnumHaystackDictionary(*enum8, enum_value_to_index, enum_min_value);
-                else if (const auto * enum16 = typeid_cast<const DataTypeEnum16 *>(haystack_argument.type.get()))
-                    distinct_names = buildEnumHaystackDictionary(*enum16, enum_value_to_index, enum_min_value);
-
-                /// Only worth it when there are more rows than distinct enum names.
-                if (distinct_names && column_haystack->size() > distinct_names->size())
-                {
-                    enum_source_column = column_haystack;
-                    column_haystack = distinct_names;
-                    input_rows_count = column_haystack->size();
-                    enum_needs_transform = true;
-                }
-            }
-
-            if (!enum_needs_transform)
-                column_haystack = castColumn(haystack_argument, std::make_shared<DataTypeString>());
-        }
 
         const ColumnConst * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*effective_needle);
@@ -472,21 +501,13 @@ public:
             if constexpr (execution_error_policy == ExecutionErrorPolicy::Null)
                 final_null_map = ColumnUInt8::create(origin_input_rows_count);
 
-            /// `enum_type` is only used to reproduce the `UNKNOWN_ELEMENT_OF_ENUM` exception that the
-            /// `castColumn(..., String)` path raises for undefined stored codes (see `enum_undefined_index`).
-            const auto expand = [&](const auto & enum_data, const auto & enum_type)
+            /// All stored codes were validated eagerly when the dictionary was built,
+            /// so plain indexing is safe here.
+            const auto expand = [&](const auto & enum_data)
             {
-                const Int64 enum_max_shifted = static_cast<Int64>(enum_value_to_index.size()) - 1;
                 for (size_t i = 0; i < origin_input_rows_count; ++i)
                 {
-                    const auto value = enum_data[i];
-                    const Int64 shifted = static_cast<Int64>(value) - enum_min_value;
-                    UInt32 idx = enum_undefined_index;
-                    if (shifted >= 0 && shifted <= enum_max_shifted)
-                        idx = enum_value_to_index[static_cast<size_t>(shifted)];
-                    if (idx == enum_undefined_index)
-                        /// Throws `UNKNOWN_ELEMENT_OF_ENUM`, matching the previous `castColumn` behavior.
-                        enum_type.getNameForValue(value);
+                    const UInt32 idx = enum_value_to_index[static_cast<size_t>(static_cast<Int64>(enum_data[i]) - enum_min_value)];
                     final_vec_res[i] = vec_res[idx];
                     if constexpr (execution_error_policy == ExecutionErrorPolicy::Null)
                         final_null_map->getData()[i] = null_map->getData()[idx];
@@ -494,14 +515,9 @@ public:
             };
 
             if (const auto * col_enum8 = typeid_cast<const ColumnVector<Int8> *>(enum_source_column.get()))
-                expand(col_enum8->getData(), assert_cast<const DataTypeEnum8 &>(*haystack_argument.type));
-            else if (const auto * col_enum16 = typeid_cast<const ColumnVector<Int16> *>(enum_source_column.get()))
-                expand(col_enum16->getData(), assert_cast<const DataTypeEnum16 &>(*haystack_argument.type));
+                expand(col_enum8->getData());
             else
-                throw Exception(
-                    ErrorCodes::ILLEGAL_COLUMN,
-                    "Illegal column {} of the Enum haystack argument of function {}",
-                    enum_source_column->getName(), getName());
+                expand(assert_cast<const ColumnVector<Int16> &>(*enum_source_column).getData());
 
             col_res = std::move(final_res);
             if constexpr (execution_error_policy == ExecutionErrorPolicy::Null)
