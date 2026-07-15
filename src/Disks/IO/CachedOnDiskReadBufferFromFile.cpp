@@ -1789,7 +1789,18 @@ size_t CachedOnDiskReadBufferFromFile::readBigAt(
 
         if (current_state)
         {
-            updateReadStateIfNeeded(file_segment, offset, current_state, current_info, object_size, log);
+            /// Unlike the `nextImpl` path, which completes the downloaded part and releases
+            /// downloader ownership after every step, `readBigAt` stays the downloader until the
+            /// whole call completes. So after a partial read of a segment (e.g. the remote object
+            /// turned out to be shorter than expected) this frame is still the segment's downloader,
+            /// and re-electing a downloader through `updateReadStateIfNeeded` would be a logical
+            /// error: `prepareReadFromFileSegmentState` may only be called by a non-downloader (on
+            /// a DOWNLOADING segment it would wait for the downloader -- ourselves -- to make
+            /// progress). The current state is intact and positioned at the current download
+            /// offset, so continue reading with it: the next `readFromFileSegment` either reads
+            /// further or, if the source is exhausted, reports the truncation.
+            if (!file_segment.isDownloader())
+                updateReadStateIfNeeded(file_segment, offset, current_state, current_info, object_size, log);
         }
         else
         {
