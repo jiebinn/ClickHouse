@@ -854,6 +854,13 @@ void StatementGenerator::generateFuncCall(RandomGenerator & rg, const bool allow
             }
         }
 
+        /// -Tuple must be applied before any combinator that appends a scalar argument: only
+        /// <base>TupleIf is supported (not <base>IfTuple), and -Tuple wraps every existing
+        /// argument in tuple(...), which would corrupt an already-appended condition/key.
+        constexpr uint32_t scalar_tail_combinators
+            = (1u << static_cast<uint32_t>(SQLFuncCall_AggregateCombinator::SQLFuncCall_AggregateCombinator_If))
+            | (1u << static_cast<uint32_t>(SQLFuncCall_AggregateCombinator::SQLFuncCall_AggregateCombinator_ArgMin))
+            | (1u << static_cast<uint32_t>(SQLFuncCall_AggregateCombinator::SQLFuncCall_AggregateCombinator_ArgMax));
         uint32_t used_comb_mask = 0;
         for (uint32_t i = 0; i < ncombinators; i++)
         {
@@ -899,7 +906,9 @@ void StatementGenerator::generateFuncCall(RandomGenerator & rg, const bool allow
                 case SQLFuncCall_AggregateCombinator::SQLFuncCall_AggregateCombinator_Tuple:
                     /// -Tuple needs at least one argument (each must be a Tuple of the same size).
                     /// A zero-arg base aggregate like count would emit an invalid countTuple(), so skip it.
-                    if (func_call->args_size() == 0)
+                    /// It must also come before If/ArgMin/ArgMax: only <base>TupleIf is supported, not
+                    /// <base>IfTuple, and wrapping their scalar tail would emit e.g. sumIfTuple(tuple(x), tuple(cond)).
+                    if (func_call->args_size() == 0 || (used_comb_mask & scalar_tail_combinators))
                     {
                         continue;
                     }
