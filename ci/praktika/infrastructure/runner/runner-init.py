@@ -602,6 +602,7 @@ brew install \
     gh \
     jq \
     pigz \
+    pv \
     ripgrep \
     zstd \
     wget \
