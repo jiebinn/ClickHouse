@@ -835,10 +835,6 @@ private:
         LOG_TRACE(log, "Unloading {} '{}'", type_name, name);
         info.object = nullptr;
         info.exception = nullptr;
-        info.state_id = 0;
-        info.loading_id = 0;
-        info.next_update_time = TimePoint::max();
-        info.loading_end_time = TimePoint();
     }
 
     bool unload(Info * info)
