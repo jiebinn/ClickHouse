@@ -2745,7 +2745,7 @@ bool TCPHandler::receiveQueryPlan(QueryState & state)
     /// coordinator callbacks). Only consume the bytes off the buffer, without building a runnable plan.
     if (state.skipping_data || unexpected_packet)
     {
-        QueryPlan::deserialize(*in, context, getBinaryTypeDecodingComplexityLimit(context), /*skip=*/true);
+        QueryPlan::deserialize(*in, context, getBinaryTypeDecodingComplexityLimit(context), /*skip_data=*/true);
 
         if (!state.skipping_data && unexpected_packet)
             throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT, "Unexpected packet QueryPlan received from client");
