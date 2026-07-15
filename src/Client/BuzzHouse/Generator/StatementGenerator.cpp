@@ -2478,7 +2478,7 @@ void StatementGenerator::generateAttach(RandomGenerator & rg, Attach * att)
     {
         att->set_as_replicated(rg.nextBool());
     }
-    if (rg.nextSmallNumber() < 3)
+    if (rg.nextMediumNumber() < 6)
     {
         generateSettingValues(rg, formatSettings, att->mutable_setting_values());
     }
@@ -2533,7 +2533,7 @@ void StatementGenerator::generateDetach(RandomGenerator & rg, Detach * det)
     setClusterClause(rg, cluster, det->mutable_cluster());
     det->set_permanently(det->sobject() != SQLObject::DATABASE && rg.nextSmallNumber() < 4);
     det->set_sync(rg.nextSmallNumber() < 4);
-    if (rg.nextSmallNumber() < 3)
+    if (rg.nextMediumNumber() < 6)
     {
         generateSettingValues(rg, formatSettings, det->mutable_setting_values());
     }
