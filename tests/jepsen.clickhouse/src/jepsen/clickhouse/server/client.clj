@@ -15,6 +15,11 @@
    :port 8123
    :connectTimeout 30
    :socketTimeout 30
+   ;; Disable server-response compression. The stale clickhouse-jdbc 0.3.2
+   ;; driver otherwise expects an LZ4-compressed HTTP response (magic byte
+   ;; 0x82) from the much newer server and fails with "Magic is not correct"
+   ;; before the query result can be read.
+   :compress false
    :jdbcCompliant false})
 
 (defn open-connection
