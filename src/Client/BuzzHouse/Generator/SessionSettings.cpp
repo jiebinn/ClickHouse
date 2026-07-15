@@ -129,6 +129,21 @@ static String formatCodecChoices(RandomGenerator & rg, const DB::Strings & choic
             res += rg.pickRandomly(alp_variants);
             res += ")";
         }
+        else if (choices[i] == "SZ3" && rg.nextBool())
+        {
+            /// Lossy float-only codec: SZ3('<algorithm>', '<error_bound_mode>', <error_value>).
+            /// All three arguments are required together; the value must be finite and positive.
+            static const DB::Strings sz3_algorithms = {"ALGO_LORENZO_REG", "ALGO_INTERP_LORENZO", "ALGO_INTERP"};
+            static const DB::Strings sz3_error_modes = {"ABS", "REL", "PSNR", "ABS_AND_REL"};
+            static const DB::Strings sz3_error_values = {"0.0001", "0.001", "0.01", "0.1", "1"};
+            res += "('";
+            res += rg.pickRandomly(sz3_algorithms);
+            res += "', '";
+            res += rg.pickRandomly(sz3_error_modes);
+            res += "', ";
+            res += rg.pickRandomly(sz3_error_values);
+            res += ")";
+        }
     }
     return res;
 }
@@ -215,7 +230,8 @@ String generateNextCodecStringForType(RandomGenerator & rg, const SQLType * tp)
             if (static_cast<const FloatType *>(leaf)->size >= 32)
             {
                 /// Gorilla, FPC, ALP support Float32 and Float64 but not BFloat16.
-                pool.insert(pool.end(), {"Gorilla", "FPC", "ALP"});
+                /// SZ3 is lossy and Float32/Float64-only (rejected on Map keys and untyped codec settings).
+                pool.insert(pool.end(), {"Gorilla", "FPC", "ALP", "SZ3"});
             }
             break;
         case SQLTypeClass::DATE: pool.insert(pool.end(), {"Delta", "DoubleDelta", "T64"}); break;

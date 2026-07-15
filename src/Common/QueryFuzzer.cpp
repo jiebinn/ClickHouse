@@ -2025,7 +2025,8 @@ void QueryFuzzer::fuzzCodecFunction(ASTFunction & codec_fn)
            "GCD",
            "Gorilla",
            "FPC",
-           "ALP"};
+           "ALP",
+           "SZ3"};
 
     const String chosen = pickRandomly(fuzz_rand, pool);
     if (chosen == "ZSTD" && fuzz_rand() % 2 == 0)
@@ -2063,6 +2064,19 @@ void QueryFuzzer::fuzzCodecFunction(ASTFunction & codec_fn)
         static const char * alp_variants[] = {"AUTO", "STD", "RD"};
         codec_fn.arguments->children.push_back(
             makeASTFunction("ALP", make_intrusive<ASTIdentifier>(String(alp_variants[fuzz_rand() % std::size(alp_variants)]))));
+    }
+    else if (chosen == "SZ3" && fuzz_rand() % 2 == 0)
+    {
+        /// Lossy float-only codec: SZ3('<algorithm>', '<error_bound_mode>', <error_value>).
+        /// All three arguments are required together; the value must be finite and positive.
+        static const char * sz3_algorithms[] = {"ALGO_LORENZO_REG", "ALGO_INTERP_LORENZO", "ALGO_INTERP"};
+        static const char * sz3_error_modes[] = {"ABS", "REL", "PSNR", "ABS_AND_REL"};
+        static const Float64 sz3_error_values[] = {0.0001, 0.001, 0.01, 0.1, 1.0};
+        codec_fn.arguments->children.push_back(makeASTFunction(
+            "SZ3",
+            make_intrusive<ASTLiteral>(String(sz3_algorithms[fuzz_rand() % std::size(sz3_algorithms)])),
+            make_intrusive<ASTLiteral>(String(sz3_error_modes[fuzz_rand() % std::size(sz3_error_modes)])),
+            make_intrusive<ASTLiteral>(sz3_error_values[fuzz_rand() % std::size(sz3_error_values)])));
     }
     else
         codec_fn.arguments->children.push_back(makeASTFunction(chosen));
