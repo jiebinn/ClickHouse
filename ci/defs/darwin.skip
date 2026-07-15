@@ -44,7 +44,6 @@
 02483_elapsed_time
 02932_refreshable_materialized_views_2
 02933_replicated_database_forbid_create_as_select
-02995_new_settings_history
 03100_lwu_40_cleanup_race
 
 # Custom-disk static-storage behavior differs (TABLE_IS_PERMANENTLY_READ_ONLY). Worth a look.
