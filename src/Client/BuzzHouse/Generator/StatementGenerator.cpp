@@ -994,21 +994,40 @@ void StatementGenerator::generateNextOptimizeTable(RandomGenerator & rg, Optimiz
 
 void StatementGenerator::generateNextCheckTable(RandomGenerator & rg, CheckTable * ct)
 {
-    if (systemTables.empty() || rg.nextMediumNumber() < 91)
-    {
-        const SQLTable & t = rg.pickRandomly(filterCollection<SQLTable>(attached_tables));
+    SQLObjectName * cot = ct->mutable_object();
+    const uint32_t check_table = 10 * static_cast<uint32_t>(collectionHas<SQLTable>(attached_tables));
+    const uint32_t check_system_table = 1 * static_cast<uint32_t>(!systemTables.empty());
+    const uint32_t check_database = 2 * static_cast<uint32_t>(collectionHas<std::shared_ptr<SQLDatabase>>(attached_databases));
 
-        t.setName(ct->mutable_est(), false);
-        if (rg.nextBool())
-        {
-            generateNextTablePartition(rg, 1, rg.nextSmallNumber() < 3, false, t, ct->mutable_single_partition()->mutable_partition());
-        }
-    }
-    else
-    {
-        /// Check system table
-        rg.pickRandomly(systemTables).setName(ct->mutable_est());
-    }
+    rg.pickWeighted(
+        {{check_table,
+          [&]
+          {
+              const SQLTable & t = rg.pickRandomly(filterCollection<SQLTable>(attached_tables));
+
+              ct->set_sobject(SQLObject::TABLE);
+              t.setName(cot->mutable_est(), false);
+              if (rg.nextBool())
+              {
+                  generateNextTablePartition(
+                      rg, 1, rg.nextSmallNumber() < 3, false, t, ct->mutable_single_partition()->mutable_partition());
+              }
+          }},
+         {check_system_table,
+          [&]
+          {
+              /// Check system table
+              ct->set_sobject(SQLObject::TABLE);
+              rg.pickRandomly(systemTables).setName(cot->mutable_est());
+          }},
+         {check_database,
+          [&]
+          {
+              const std::shared_ptr<SQLDatabase> & d = rg.pickRandomly(filterCollection<std::shared_ptr<SQLDatabase>>(attached_databases));
+
+              ct->set_sobject(SQLObject::DATABASE);
+              d->setName(cot->mutable_database());
+          }}});
     if (rg.nextSmallNumber() < 3)
     {
         SettingValues * vals = ct->mutable_setting_values();
@@ -3353,7 +3372,7 @@ void StatementGenerator::generateNextQuery(RandomGenerator & rg, const bool in_p
     SQLMask[static_cast<size_t>(SQLOp::LightDelete)] = has_mergeable_mt;
     SQLMask[static_cast<size_t>(SQLOp::Truncate)] = has_databases || has_tables;
     SQLMask[static_cast<size_t>(SQLOp::OptimizeTable)] = has_tables;
-    SQLMask[static_cast<size_t>(SQLOp::CheckTable)] = has_tables;
+    SQLMask[static_cast<size_t>(SQLOp::CheckTable)] = has_databases || has_tables;
     SQLMask[static_cast<size_t>(SQLOp::DescTable)] = !in_parallel;
     SQLMask[static_cast<size_t>(SQLOp::Exchange)] = this->fc.enable_renames && !in_parallel
         && (collectionCount<SQLTable>(exchange_table_lambda) > 1 || collectionCount<SQLView>(attached_views) > 1

@@ -33,6 +33,7 @@
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTBackupQuery.h>
+#include <Parsers/ASTCheckDatabaseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTColumnsMatcher.h>
@@ -7428,11 +7429,23 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
     }
     else if (auto * check_table = typeid_cast<ASTCheckTableQuery *>(ast.get()))
     {
-        if (!check_table->part_name.empty() && fuzz_rand() % 10 == 0)
-            check_table->part_name.clear();
-        if (check_table->partition)
-            fuzz(check_table->partition);
-        fuzz(check_table->children);
+        /// Occasionally rewrite CHECK TABLE db.t into CHECK DATABASE db.
+        if (check_table->database && fuzz_rand() % 20 == 0)
+        {
+            auto check_db = make_intrusive<ASTCheckDatabaseQuery>();
+            check_db->database = check_table->database->clone();
+            check_db->children.push_back(check_db->database);
+            fuzz(check_db->children);
+            ast = check_db;
+        }
+        else
+        {
+            if (!check_table->part_name.empty() && fuzz_rand() % 10 == 0)
+                check_table->part_name.clear();
+            if (check_table->partition)
+                fuzz(check_table->partition);
+            fuzz(check_table->children);
+        }
     }
     else
     {

@@ -3817,8 +3817,10 @@ CONV_FN(Truncate, trunc)
 
 CONV_FN(CheckTable, ct)
 {
-    ret += "CHECK TABLE ";
-    ExprSchemaTableToString(ret, ct.est());
+    ret += "CHECK ";
+    ret += SQLObjectToString(ct.sobject());
+    ret += " ";
+    SQLObjectNameToString(ret, ct.object());
     if (ct.has_single_partition())
     {
         ret += " ";

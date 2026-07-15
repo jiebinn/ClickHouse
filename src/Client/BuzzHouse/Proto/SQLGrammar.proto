@@ -1879,10 +1879,11 @@ message TopSelect {
 }
 
 message CheckTable {
-    required ExprSchemaTable est = 1;
-    optional SinglePartitionExpr single_partition = 2;
-    optional SettingValues setting_values = 3;
-    optional string format = 4;
+    required SQLObject sobject = 1;
+    required SQLObjectName object = 2;
+    optional SinglePartitionExpr single_partition = 3;
+    optional SettingValues setting_values = 4;
+    optional string format = 5;
 }
 
 message DescribeStatement {
