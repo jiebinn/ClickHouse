@@ -100,6 +100,9 @@ public:
         FunctionArgumentDescriptors mandatory_args{
             {"text", static_cast<FunctionArgumentDescriptor::TypeValidator>(&FunctionBaseAI::isStringOrNullableString), nullptr, "String or Nullable(String)"},
         };
+        /// The map is functionally required (it must carry `model`), but it stays optional at the arity
+        /// level so a missing map yields the specific "model must be passed" / missing-credentials error
+        /// from `resolveAIParams` rather than a generic arity mismatch.
         FunctionArgumentDescriptors optional_args{
             {"params", static_cast<FunctionArgumentDescriptor::TypeValidator>(&FunctionBaseAI::isStringToStringMap), &isColumnConst, "const Map(String, String)"},
         };
@@ -114,7 +117,8 @@ public:
     {
         return {
             {"credentials", AIParamKind::String, std::nullopt},
-            {"model", AIParamKind::String, std::nullopt, /*inherit_from_collection=*/ true},
+            /// `model` is required and must be passed in the parameter map; it is not read from the named collection.
+            {"model", AIParamKind::String, std::nullopt},
             {"dimensions", AIParamKind::UInt, Field(UInt64(0))},
         };
     }
@@ -306,24 +310,27 @@ Within a single block of rows, inputs are grouped into batches of up to
 [`ai_function_embedding_max_batch_size`](/operations/settings/settings#ai_function_embedding_max_batch_size)
 entries per HTTP request to reduce per-call overhead.
 
-Credentials (a named collection specifying the provider, model, endpoint, and optionally an API key)
-are taken from the `credentials` key of the optional parameter map, or from the
+Credentials (a named collection specifying the provider, endpoint, and optionally an API key)
+are taken from the `credentials` key of the parameter map, or from the
 `ai_function_embedding_default_credentials` setting when the map omits it. Note that `aiEmbed` uses a
-separate default-credentials setting from the text functions, since an embeddings endpoint and model
-differ from a chat one.
+separate default-credentials setting from the text functions, since an embeddings endpoint differs
+from a chat one.
+
+The `model` parameter is required and must be passed in the parameter map. Unlike the text functions,
+`aiEmbed` does not read `model` from the named collection.
 
 The optional `dimensions` parameter, when supported by the model (e.g. OpenAI's `text-embedding-3-*`),
 requests a vector of the given size; otherwise the model's native size is returned.
 )",
-        .syntax = "aiEmbed(text[, params])",
+        .syntax = "aiEmbed(text, params)",
         .arguments
         = {{"text", "Text to embed.", {"String"}},
-           {"params", "Optional constant `Map(String, String)` of parameters. Function-specific keys: `dimensions` (target dimensionality of the output vector; `0` or omitted means the model's native size). The common parameters `credentials` and `model` also apply (see [AI Functions](/sql-reference/functions/ai-functions)).", {"Map(String, String)"}}},
+           {"params", "Constant `Map(String, String)` of parameters. Required key: `model` (embedding model name). Function-specific optional key: `dimensions` (target dimensionality of the output vector; `0` or omitted means the model's native size). The common parameter `credentials` also applies (see [AI Functions](/sql-reference/functions/ai-functions)).", {"Map(String, String)"}}},
         .returned_value = {"The embedding vector, or an empty array if the input is NULL or empty, the request failed and `ai_function_throw_on_error` is disabled, or a quota was exceeded with `ai_function_throw_on_quota_exceeded` disabled.", {"Array(Float32)"}},
         .examples
-        = {{"Embed a single string (map parameter can be omitted if the `ai_function_embedding_default_credentials` setting is set)", "SELECT aiEmbed('Hello world', map('credentials', 'ai_embedding_credentials'))", ""},
-           {"With explicit dimensions", "SELECT aiEmbed('Hello world', map('credentials', 'ai_embedding_credentials', 'dimensions', '256'))", ""},
-           {"Embed a column of texts", "SELECT aiEmbed(title, map('credentials', 'ai_embedding_credentials', 'dimensions', '256')) FROM articles LIMIT 10", ""}},
+        = {{"Embed a single string (`credentials` can be omitted if the `ai_function_embedding_default_credentials` setting is set)", "SELECT aiEmbed('Hello world', map('credentials', 'ai_embedding_credentials', 'model', 'text-embedding-3-small'))", ""},
+           {"With explicit dimensions", "SELECT aiEmbed('Hello world', map('credentials', 'ai_embedding_credentials', 'model', 'text-embedding-3-small', 'dimensions', '256'))", ""},
+           {"Embed a column of texts", "SELECT aiEmbed(title, map('credentials', 'ai_embedding_credentials', 'model', 'text-embedding-3-small', 'dimensions', '256')) FROM articles LIMIT 10", ""}},
         .introduced_in = {26, 6},
         .category = FunctionDocumentation::Category::AI});
 }

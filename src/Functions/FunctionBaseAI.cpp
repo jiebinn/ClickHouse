@@ -271,9 +271,12 @@ FunctionBaseAI::AIParams FunctionBaseAI::resolveAIParams(
             params.values.emplace(String(p.name), readAIParamFromCollection(p.kind, collection, p.name));
         else if (p.default_value)
             params.values.emplace(String(p.name), *p.default_value);
-        else
+        else if (p.inherit_from_collection)
             throw Exception(ErrorCodes::BAD_ARGUMENTS,
                 "AI named collection '{}' must have '{}', or it must be passed in the parameter map", credentials, p.name);
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "AI function parameter '{}' must be passed in the parameter map", p.name);
     }
 
     return params;

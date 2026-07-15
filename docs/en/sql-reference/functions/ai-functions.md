@@ -33,10 +33,10 @@ CREATE NAMED COLLECTION ai_text_credentials AS
     model = 'gpt-4o-mini',
     api_key = 'sk-...';
 
+-- `aiEmbed` does not read `model` from the named collection; pass it in the parameter map instead.
 CREATE NAMED COLLECTION ai_embedding_credentials AS
     provider = 'openai',
     endpoint = 'https://api.openai.com/v1/embeddings',
-    model = 'text-embedding-3-small',
     api_key = 'sk-...';
 ```
 
@@ -46,7 +46,7 @@ CREATE NAMED COLLECTION ai_embedding_credentials AS
 |-----------|------|---------|-------------|
 | `provider` | String | — | Model provider. Supported: `'openai'`, `'anthropic'`. See note below. |
 | `endpoint` | String | — | API endpoint URL. |
-| `model` | String | — | Model name (e.g. `'gpt-4o-mini'`, `'text-embedding-3-small'`). |
+| `model` | String | — | Model name (e.g. `'gpt-4o-mini'`). Used by the text functions; `aiEmbed` ignores it and requires `model` in the parameter map. |
 | `api_key` | String | — | Authentication key for the provider. Optional: when omitted, the auth header is not sent, which allows targeting OpenAI-compatible servers that do not require authentication. |
 | `max_tokens` | UInt64 | `1024` | Maximum number of output tokens per API call. |
 | `api_version` | String | — | API version string. Used by Anthropic (`'2023-06-01'`). |
@@ -78,14 +78,14 @@ SELECT aiGenerate('Bonjour', map('credentials', 'other_credentials'));
 
 ### Parameter map {#parameter-map}
 
-Each function accepts an optional trailing `Map(String, String)` of parameters. All values are strings (quote numbers, e.g. `'0.2'`). Unknown keys are rejected. A key that is present overrides the corresponding named-collection value; a key that is absent falls back to the named collection (for `model`/`max_tokens`) or the built-in default.
+Each function accepts an optional trailing `Map(String, String)` of parameters. All values are strings (quote numbers, e.g. `'0.2'`). Unknown keys are rejected. A key that is present overrides the corresponding named-collection value; a key that is absent falls back to the named collection (for `model`/`max_tokens`) or the built-in default. The exception is `aiEmbed`, whose `model` must be passed in the parameter map and is never read from the named collection.
 
 The following parameters are common to all the AI functions:
 
 | Key | Description |
 |-----|-------------|
 | `credentials` | Named collection to use (see above). |
-| `model` | Overrides the collection's `model`. |
+| `model` | Overrides the collection's `model` for the text functions. For `aiEmbed` it is required and read only from the parameter map. |
 
 Individual functions accept additional, function-specific parameters (such as `max_tokens`, `temperature`, `system_prompt`, `instructions`, and `dimensions`). See each function's reference below for the parameters it accepts and their defaults.
 
