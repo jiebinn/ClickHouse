@@ -2,7 +2,6 @@
 #include "config.h"
 
 #if USE_SIMDUTF
-#    include <base/MemorySanitizer.h>
 #    include <Columns/ColumnFixedString.h>
 #    include <Columns/ColumnString.h>
 #    include <DataTypes/DataTypeString.h>
@@ -43,13 +42,7 @@ struct Base64EncodeTraits
     {
         /// simdutf emits the base64url alphabet ('-' and '_') without padding for the URL variant directly.
         constexpr auto options = (variant == Base64Variant::URL) ? simdutf::base64_url : simdutf::base64_default;
-        const size_t outlen = simdutf::binary_to_base64(src.data(), src.size(), reinterpret_cast<char *>(dst), options);
-
-        /// simdutf may use AVX-512 with some shuffle operations.
-        /// Memory sanitizer doesn't understand if there was uninitialized memory in SIMD register but it was not used in the result of shuffle.
-        __msan_unpoison(dst, outlen);
-
-        return outlen;
+        return simdutf::binary_to_base64(src.data(), src.size(), reinterpret_cast<char *>(dst), options);
     }
 };
 
@@ -129,7 +122,6 @@ struct Base64DecodeTraits
                 return std::nullopt;
         }
 
-        __msan_unpoison(dst, res.count);
         return res.count;
     }
 };
