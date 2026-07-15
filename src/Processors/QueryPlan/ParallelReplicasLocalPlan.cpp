@@ -299,11 +299,31 @@ std::pair<QueryPlanPtr, bool> createLocalPlanForParallelReplicas(
     return {std::move(query_plan), true};
 }
 
+/// Collect every ReadFromMergeTree in a shipped fragment. Unlike findReadingSteps, this descends into a
+/// UnionStep even when it is the fragment root: in a fragment a root UNION is a view expansion whose
+/// branches must all be coordinated. This matches how the remote fragment marks its reads
+/// (ConvertToDistributedVisitor::buildPlanFragment); otherwise a non-aggregating `SELECT * FROM view`
+/// leaves later union branches as plain local reads whose rows are also returned by the remote fragment.
+static void collectReadFromMergeTreeSteps(QueryPlan::Node * node, std::vector<QueryPlan::Node *> & result)
+{
+    if (!node)
+        return;
+
+    if (typeid_cast<ReadFromMergeTree *>(node->step.get()))
+    {
+        result.push_back(node);
+        return;
+    }
+
+    for (auto * child : node->children)
+        collectReadFromMergeTreeSteps(child, result);
+}
+
 QueryPlanPtr createLocalPlanFragmentForParallelReplicas(
     ContextPtr context, QueryPlanPtr plan_fragment, ParallelReplicasReadingCoordinatorPtr coordinator, size_t replica_number)
 {
-    const bool allow_view_over_mergetree = context->getSettingsRef()[Setting::parallel_replicas_allow_view_over_mergetree];
-    auto reading_nodes = findReadingSteps(plan_fragment->getRootNode(), allow_view_over_mergetree);
+    std::vector<QueryPlan::Node *> reading_nodes;
+    collectReadFromMergeTreeSteps(plan_fragment->getRootNode(), reading_nodes);
     if (reading_nodes.empty())
     {
         /// it can happen if merge tree table is empty — it'll be replaced with ReadFromPreparedSource
