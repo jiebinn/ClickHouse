@@ -5223,6 +5223,11 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                     {
                         auto applyCombinator = [&](const String & c)
                         {
+                            /// -Tuple requires at least one argument, each a Tuple of the same size.
+                            /// A zero-arg base aggregate like count() would become an invalid
+                            /// countTuple(), so skip -Tuple entirely when there are no arguments.
+                            if (c == "Tuple" && (!fn->arguments || fn->arguments->children.empty()))
+                                return;
                             fn->name += c;
                             if (fn->arguments)
                             {
@@ -5238,19 +5243,12 @@ void QueryFuzzer::fuzz(ASTPtr & ast)
                                     if (ASTPtr key = getRandomColumnLike())
                                         fn->arguments->children.push_back(std::move(key));
                                 }
-                                /// When adding Tuple: the combinator requires every argument to be a Tuple
+                                /// When adding Tuple: every argument must be a Tuple of the same size,
+                                /// so wrap each in a 1-element tuple to keep the call valid.
                                 else if (c == "Tuple")
                                 {
                                     for (auto & arg : fn->arguments->children)
-                                    {
-                                        if (fuzz_rand() % 4 == 0)
-                                        {
-                                            if (ASTPtr r = getRandomColumnLike())
-                                                arg = std::move(r);
-                                        }
-                                        else
-                                            arg = makeASTFunction("tuple", arg);
-                                    }
+                                        arg = makeASTFunction("tuple", arg);
                                 }
                             }
                         };
