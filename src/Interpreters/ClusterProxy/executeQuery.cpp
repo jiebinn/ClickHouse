@@ -1003,10 +1003,10 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
 
         auto plan_fragment_clone = std::make_unique<QueryPlan>(plan_fragment->clone());
         auto local_plan
-            = createLocalPlanFragmentForParallelReplicas(context, std::move(plan_fragment_clone), coordinator, local_replica_index);
+            = createLocalPlanFragmentForParallelReplicas(new_context, std::move(plan_fragment_clone), coordinator, local_replica_index);
 
         auto remote_plan = createRemotePlanFragmentForParallelReplicas(
-            context, std::move(plan_fragment), coordinator, cluster, connection_pools, local_replica_index);
+            new_context, std::move(plan_fragment), coordinator, cluster, connection_pools, local_replica_index);
 
         SharedHeaders input_headers;
         input_headers.reserve(2);
@@ -1025,7 +1025,7 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
     else
     {
         return createRemotePlanFragmentForParallelReplicas(
-            context, std::move(plan_fragment), coordinator, cluster, connection_pools, std::nullopt);
+            new_context, std::move(plan_fragment), coordinator, cluster, connection_pools, std::nullopt);
     }
 }
 
