@@ -6,6 +6,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/IStorage.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/Exception.h>
 #include <Common/NamePrompter.h>
 #include <Common/quoteString.h>
 #include <Common/AsyncLoader.h>
@@ -67,14 +68,26 @@ ASTPtr IDatabase::getCreateTableQuery(const String & name, ContextPtr context) c
             || e.code() == ErrorCodes::CANNOT_GET_CREATE_DICTIONARY_QUERY;
 
         /// Double-check the table is really absent, so we do not attach a misleading hint when the
-        /// error was raised for a different reason. Hints are computed here, outside of any database
-        /// lock held by `getCreateTableQueryImpl`, to avoid a deadlock.
-        if (table_is_missing && !isTableExist(name, context))
+        /// error was raised for a different reason (e.g. `DatabaseMySQL` and
+        /// `DatabaseMaterializedPostgreSQL` also report `CANNOT_GET_CREATE_TABLE_QUERY` for a
+        /// transient failure to fetch metadata from the remote database). Hints are computed here,
+        /// outside of any database lock held by `getCreateTableQueryImpl`, to avoid a deadlock.
+        /// `isTableExist` can itself throw for the same remote engines (it re-fetches metadata);
+        /// in that case we cannot confirm absence, so give up on the hint and preserve the original
+        /// exception instead of letting the new one replace it.
+        try
         {
-            TableNameHints hints(this->shared_from_this(), context);
-            auto hint = hints.getHintForTable(name);
-            if (!hint.first.empty())
-                e.addMessage("Maybe you meant {}.{}?", backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+            if (table_is_missing && !isTableExist(name, context))
+            {
+                TableNameHints hints(this->shared_from_this(), context);
+                auto hint = hints.getHintForTable(name);
+                if (!hint.first.empty())
+                    e.addMessage("Maybe you meant {}.{}?", backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "Failed to check whether the table exists while computing a hint for a missing table");
         }
         throw;
     }

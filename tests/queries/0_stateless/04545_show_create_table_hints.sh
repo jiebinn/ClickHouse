@@ -37,6 +37,20 @@ ${CLICKHOUSE_CLIENT} -q "SHOW CREATE TABLE ${DB}_mem.mem_targe" 2>&1 \
     | grep -oF -m1 "Maybe you meant ${DB}_mem.mem_target?" | sed "s/${DB}/{db}/g"
 ${CLICKHOUSE_CLIENT} -q "DROP DATABASE ${DB}_mem"
 
+# `Dictionary`-engine database: it exposes every loaded dictionary as a virtual table, and
+# reports a missing one with `CANNOT_GET_CREATE_DICTIONARY_QUERY` (yet another error code),
+# which must carry the hint too. The dictionary's owning database has to be `Ordinary` (not the
+# default `Atomic`) so the virtual table is named `<source_database>.<dictionary_name>` - with
+# `Atomic` it is named after the dictionary's UUID instead, which is not suitable for this test.
+${CLICKHOUSE_CLIENT} -q "SET allow_deprecated_database_ordinary=1; CREATE DATABASE ${DB}_ord ENGINE = Ordinary"
+${CLICKHOUSE_CLIENT} -q "CREATE TABLE ${DB}_ord.dict_source (key UInt64, val UInt64) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} -q "CREATE DICTIONARY ${DB}_ord.dict_target (key UInt64 DEFAULT 0, val UInt64 DEFAULT 0) PRIMARY KEY key SOURCE(CLICKHOUSE(TABLE 'dict_source' DB '${DB}_ord')) LIFETIME(MIN 0 MAX 0) LAYOUT(FLAT())"
+${CLICKHOUSE_CLIENT} -q "CREATE DATABASE ${DB}_dictdb ENGINE = Dictionary"
+${CLICKHOUSE_CLIENT} -q "SHOW CREATE TABLE ${DB}_dictdb.\`${DB}_ord.dict_targe\`" 2>&1 \
+    | grep -oF -m1 "Maybe you meant ${DB}_dictdb.\`${DB}_ord.dict_target\`?" | sed "s/${DB}/{db}/g"
+${CLICKHOUSE_CLIENT} -q "DROP DATABASE ${DB}_dictdb"
+${CLICKHOUSE_CLIENT} -q "DROP DATABASE ${DB}_ord"
+
 # When no similarly-named table exists, there must be no hint (0 matching lines).
 ${CLICKHOUSE_CLIENT} -q "SHOW CREATE TABLE ${DB}.nothing_is_close_to_this_xyz" 2>&1 \
     | grep -c -F "Maybe you meant" || true
