@@ -888,6 +888,15 @@ void processAndOptimizeTextIndexFunctions(const Stack & stack, QueryPlan::Nodes 
     if (text_index_read_infos.empty())
         return;
 
+    /// The same reading step can be visited by this pass more than once, e.g. when an identical
+    /// text-index predicate in both PREWHERE and WHERE is walked through a Merge -> Distributed ->
+    /// MergeTree plan whose inner plan is optimized again while building the pipeline. The pass has
+    /// already rewritten the PREWHERE/WHERE DAGs and created the index read tasks on the first visit,
+    /// so re-running it would double-register the synthetic `__text_index_..._has_<hash>` read column.
+    /// Non-empty index read tasks mean the optimization already ran for this step; nothing to do.
+    if (!read_from_merge_tree_step->getIndexReadTasks().empty())
+        return;
+
     bool optimized = false;
     if (auto prewhere_info = read_from_merge_tree_step->getPrewhereInfo())
         optimized = processAndOptimizeTextIndexFunctionsInPrewhere(*read_from_merge_tree_step, prewhere_info, text_index_read_infos, direct_read_from_text_index);
