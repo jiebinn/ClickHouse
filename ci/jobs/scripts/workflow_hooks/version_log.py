@@ -14,6 +14,14 @@ def _add_build_to_version_history():
     )
     commit_parents = Shell.get_output("git log --format=%P -n 1").split(" ")
     version = CHVersion.get_current_version(no_strict=True)
+    if info.pr_number != 0:
+        # Pin the tweak in PRs. `HEAD` is the ephemeral merge commit, whose
+        # first-parent commit count diverges across close/reopen and re-runs of
+        # the same PR as `master` advances. Artifacts are keyed by the head SHA,
+        # so an unpinned tweak would store diverging version strings -- here and
+        # in the packages built from the pipeline kv data -- under one artifact
+        # prefix. The tweak is meaningless in a PR anyway.
+        version = version.with_tweak(1)
     data = {
         "check_start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "pull_request_number": info.pr_number,

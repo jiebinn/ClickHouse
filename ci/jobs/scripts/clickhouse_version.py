@@ -236,6 +236,10 @@ class CHVersion:
         self.version_type = version_type
         return self._refresh()
 
+    def with_tweak(self, tweak: int) -> "CHVersion":
+        self.tweak = int(tweak)
+        return self._refresh()
+
     def get_stable_release_type(self) -> str:
         return VersionType.LTS if self.minor % 5 == 3 else VersionType.STABLE
 
