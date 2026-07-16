@@ -33,14 +33,14 @@ CREATE TABLE training_data (class_id UInt32, ngram String, count UInt64)
 ENGINE = MergeTree ORDER BY (class_id, ngram);
 ```
 
-**2. Insert training data** — single words (unigrams) and how often each occurs in the positive (`0`) and negative (`1`) class:
+**2. Insert training data** — single words (unigrams) and how often each occurs in the positive (`1`) and negative (`0`) class:
 
 ```sql
 INSERT INTO training_data VALUES
-    (0,'good',10),(0,'great',8),(0,'excellent',6),(0,'love',7),(0,'happy',5),
-    (0,'amazing',4),(0,'wonderful',3),(0,'best',3),(0,'fantastic',2),(0,'nice',4),
-    (1,'bad',10),(1,'terrible',8),(1,'awful',6),(1,'hate',7),(1,'worst',5),
-    (1,'horrible',4),(1,'poor',3),(1,'disappointing',3),(1,'ugly',2),(1,'sad',4);
+    (1,'good',10),(1,'great',8),(1,'excellent',6),(1,'love',7),(1,'happy',5),
+    (1,'amazing',4),(1,'wonderful',3),(1,'best',3),(1,'fantastic',2),(1,'nice',4),
+    (0,'bad',10),(0,'terrible',8),(0,'awful',6),(0,'hate',7),(0,'worst',5),
+    (0,'horrible',4),(0,'poor',3),(0,'disappointing',3),(0,'ugly',2),(0,'sad',4);
 ```
 
 **3. Create the dictionary** with the `NAIVE_BAYES` layout:
@@ -63,11 +63,11 @@ SELECT naiveBayesClassifier('sentiment', 'this is great') as predicted_class;
 
 ```response
    ┌─predicted_class─┐
-1. │               0 │
+1. │               1 │
    └─────────────────┘
 ```
 
-`0` maps to the positive class, based on the training data we inserted in step 2.
+`1` maps to the positive class, based on the training data we inserted in step 2.
 
 ```sql
 SELECT naiveBayesClassifier('sentiment', 'this is terrible') as predicted_class;
@@ -75,11 +75,11 @@ SELECT naiveBayesClassifier('sentiment', 'this is terrible') as predicted_class;
 
 ```response
    ┌─predicted_class─┐
-1. │               1 │
+1. │               0 │
    └─────────────────┘
 ```
 
-Likewise, `1` maps to the negative class.
+Likewise, `0` maps to the negative class.
 
 The same result via `dictGet`:
 
@@ -89,7 +89,7 @@ SELECT dictGet('sentiment', 'class_id', 'this is great') as predicted_class;
 
 ```response
    ┌─predicted_class─┐
-1. │               0 │
+1. │               1 │
    └─────────────────┘
 ```
 
@@ -102,13 +102,13 @@ SELECT naiveBayesClassifierWithProb('sentiment', 'amazing food but terrible serv
 ```response
    ┌─predicted_id_with_prob─────────────┐
 1. │ {                                 ↴│
-   │↳  "class_id": 1,                  ↴│
+   │↳  "class_id": 0,                  ↴│
    │↳  "probability": 0.642857145060626↴│
    │↳}                                  │
    └────────────────────────────────────┘
 ```
 
-The prediction is class `1` (negative) at probability `0.64`.
+The prediction is class `0` (negative) at probability `0.64`.
 
 ```sql
 SELECT naiveBayesClassifierWithAllProbs('sentiment', 'amazing food but terrible service') as all_predicted_ids_with_probs;
@@ -117,10 +117,10 @@ SELECT naiveBayesClassifierWithAllProbs('sentiment', 'amazing food but terrible 
 ```response
    ┌─all_predicted_ids_with_probs─────────┐
 1. │ [{                                  ↴│
-   │↳  "class_id": 1,                    ↴│
+   │↳  "class_id": 0,                    ↴│
    │↳  "probability": 0.642857145060626  ↴│
    │↳},{                                 ↴│
-   │↳  "class_id": 0,                    ↴│
+   │↳  "class_id": 1,                    ↴│
    │↳  "probability": 0.35714285493937414↴│
    │↳}]                                   │
    └──────────────────────────────────────┘
@@ -159,7 +159,7 @@ The source table holds **pre-aggregated** counts: one row per `(n-gram, class)` 
 **Updating the model.** Because the model is a dictionary backed by a table, retrain by updating the table and reloading:
 
 ```sql
-INSERT INTO training_data VALUES (0, 'awesome', 5);
+INSERT INTO training_data VALUES (1, 'awesome', 5);
 SYSTEM RELOAD DICTIONARY sentiment;
 ```
 
@@ -329,11 +329,11 @@ Given a table of `(class_id, text)` rows, build the `(ngram, class_id, count)` s
 ```sql
 CREATE TABLE docs (class_id UInt32, text String) ENGINE = MergeTree ORDER BY tuple();
 INSERT INTO docs VALUES
-    (0, 'The food was amazing and the service was great'),
-    (1, 'The service was terrible and the food was awful'),
-    (0, 'I loved this cozy little place and the friendly staff'),
-    (1, 'I hated the bad weather and the long wait'),
-    (0, 'Best dinner we have had here, everything was delicious');
+    (1, 'The food was amazing and the service was great'),
+    (0, 'The service was terrible and the food was awful'),
+    (1, 'I loved this cozy little place and the friendly staff'),
+    (0, 'I hated the bad weather and the long wait'),
+    (1, 'Best dinner we have had here, everything was delicious');
 
 CREATE TABLE training_data (ngram String, class_id UInt32, count UInt64)
 ENGINE = MergeTree ORDER BY (class_id, ngram);
@@ -351,11 +351,11 @@ SELECT * FROM training_data ORDER BY ngram LIMIT 5;
 
 ```response
    ┌─ngram─┬─class_id─┬─count─┐
-1. │ Best  │        0 │     1 │
+1. │ Best  │        1 │     1 │
 2. │ I     │        1 │     1 │
 3. │ I     │        0 │     1 │
-4. │ The   │        1 │     1 │
-5. │ The   │        0 │     1 │
+4. │ The   │        0 │     1 │
+5. │ The   │        1 │     1 │
    └───────┴──────────┴───────┘
 ```
 
@@ -371,7 +371,7 @@ FROM (SELECT class_id, count() / sum(count()) OVER () AS frac FROM docs GROUP BY
 
 ```response
    ┌─priors────────────┐
-1. │ [(0,0.6),(1,0.4)] │
+1. │ [(0,0.4),(1,0.6)] │
    └───────────────────┘
 ```
 :::
@@ -382,7 +382,7 @@ Then, create the dictionary from `training_data`, passing the explicit prior com
 CREATE DICTIONARY review_sentiment (ngram String, class_id UInt32, count UInt64)
 PRIMARY KEY ngram
 SOURCE(CLICKHOUSE(TABLE 'training_data'))
-LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.6), (1, 0.4)]))
+LAYOUT(NAIVE_BAYES(class_attribute 'class_id' n 1 mode 'token' priors_mode 'explicit' priors [(0, 0.4), (1, 0.6)]))
 LIFETIME(0);
 ```
 
@@ -394,11 +394,11 @@ SELECT
 
 ```response
    ┌─positive_review─┬─negative_review─┐
-1. │               0 │               1 │
+1. │               1 │               0 │
    └─────────────────┴─────────────────┘
 ```
 
-Class `0` is positive and `1` is negative, so both reviews are classified correctly.
+Class `1` is positive and `0` is negative, so both reviews are classified correctly.
 
 ## More examples {#more-examples}
 
