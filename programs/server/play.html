@@ -4393,7 +4393,12 @@ function renderColumns(columns_elem, data, database, table_name_str) {
         button.addEventListener('focus', () => positionColumnBalloon(column));
 
         column.appendChild(button);
-        column.addEventListener('click', e => setQueryOrRun(e, `SELECT ${quoteIdentifier(col.name)} FROM ${quoteIdentifier(database)}.${quoteIdentifier(table_name_str)} LIMIT 100`));
+        /// Activate the column row through the same helper as table rows and their addenda, so a
+        /// column shares the full click-like contract: a middle click (`auxclick`) opens the
+        /// generated `SELECT` in a new Web UI tab (with autoscroll and the X11 PRIMARY paste
+        /// suppressed), and Shift/new-tab-modifier clicks open a new tab too, instead of the row
+        /// silently losing those gestures because it only listened for a plain `click`.
+        onTableActivate(column, e => setQueryOrRun(e, `SELECT ${quoteIdentifier(col.name)} FROM ${quoteIdentifier(database)}.${quoteIdentifier(table_name_str)} LIMIT 100`));
         columns_elem.appendChild(column);
     }
 }
@@ -4484,8 +4489,8 @@ let current_selection_num = 0;
 /// paste guard are verified by hand. The committed manual matrix below is the behavior
 /// contract; re-run it when touching `set_query_or_run`, `openQueryInNewTab`/`activateTab`,
 /// or the `suppress_middleclick_paste` guard. Every case applies to a databases-panel table
-/// row and its bytes/rows/engine addenda alike, since they all route through the same
-/// `set_query_or_run` (below):
+/// row, its bytes/rows/engine addenda, and the column rows of an expanded table alike, since
+/// they all route through the same `set_query_or_run` (below):
 ///
 ///   1. Plain left click on a not-yet-loaded query -> replaces the current tab's query
 ///      (`query_area.value = value`); no new tab is created.
