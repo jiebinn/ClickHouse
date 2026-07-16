@@ -1429,8 +1429,12 @@ public:
                 /// Number of months since DATE_LUT_MIN_YEAR-01, rounded down to a multiple of `months`.
                 const Values values = outOfRangeValues(d);
                 const Int64 rel = (static_cast<Int64>(values.year) - DATE_LUT_MIN_YEAR) * 12 + (values.month - 1);
-                const Int64 div = static_cast<Int64>(months);
-                const Int64 rounded = (rel >= 0 ? rel / div : -((-rel + div - 1) / div)) * div;
+                /// `months` is only validated to be positive, so it may exceed the Int64 range; saturate to
+                /// keep the divisor positive. roundDownToMultiple then rounds down without the `-rel + div`
+                /// overflow that a hand-rolled ceiling division has for an extreme interval count.
+                const Int64 div = months > static_cast<UInt64>(std::numeric_limits<Int64>::max())
+                    ? std::numeric_limits<Int64>::max() : static_cast<Int64>(months);
+                const Int64 rounded = roundDownToMultiple(rel, div);
                 const Int64 absolute_month = static_cast<Int64>(DATE_LUT_MIN_YEAR) * 12 + rounded;
                 /// Floor-divide so the month stays in [1, 12] for a negative absolute month (the year is saturated
                 /// in makeDayNumOutOfRange); a plain `% 12` would be negative and wrap when cast to UInt8.
@@ -1453,16 +1457,22 @@ public:
     {
         if (weeks == 1)
             return toFirstDayNumOfWeek(d);
-        UInt64 days = weeks * 7;
+        /// `weeks` is only validated to be positive, so `weeks * 7` can wrap; saturate to a positive Int64
+        /// divisor. The rounding result for such a meaningless interval count is discarded anyway.
+        UInt64 product = 0;
+        if (unlikely(__builtin_mul_overflow(weeks, static_cast<UInt64>(7), &product)
+                     || product > static_cast<UInt64>(std::numeric_limits<Int64>::max())))
+            product = static_cast<UInt64>(std::numeric_limits<Int64>::max());
         // January 1st 1970 was Thursday so we need this 4-days offset to make weeks start on Monday.
         if constexpr (std::is_same_v<Date, DayNum>)
-            return DayNum(static_cast<UInt16>(4 + (d - 4) / days * days));
+            return DayNum(static_cast<UInt16>(4 + (d - 4) / product * product));
         else
         {
             /// Floor towards -inf so a pre-1970 day number rounds to the start of its interval, not forward in time.
-            const Int64 idays = static_cast<Int64>(days);
+            /// roundDownToMultiple avoids the `shifted + 1 - idays` overflow for an extreme `weeks` interval count.
+            const Int64 idays = static_cast<Int64>(product);
             const Int64 shifted = static_cast<Int64>(d.toUnderType()) - 4;
-            const Int64 rounded = (shifted >= 0 ? shifted / idays : (shifted + 1 - idays) / idays) * idays;
+            const Int64 rounded = roundDownToMultiple(shifted, idays);
             return ExtendedDayNum(static_cast<Int32>(4 + rounded));
         }
     }
@@ -1474,21 +1484,26 @@ public:
         if (days == 1)
             return toDate(d);
 
+        /// `days` is only validated to be positive, so it may exceed the Int64 range; saturate to keep the
+        /// divisor positive. The rounding result for such a meaningless interval count is discarded anyway.
+        const Int64 idays = days > static_cast<UInt64>(std::numeric_limits<Int64>::max())
+            ? std::numeric_limits<Int64>::max() : static_cast<Int64>(days);
+
         if constexpr (std::is_same_v<Date, ExtendedDayNum>)
             if (unlikely(isOutOfLUTRange(d)))
             {
                 /// Floor division towards -inf: truncating division would round a pre-epoch day number
                 /// towards zero, i.e. forward in time, past the start of the interval.
+                /// roundDownToMultiple avoids the `day_num + 1 - idays` overflow for an extreme `days` interval count.
                 const Int64 day_num = static_cast<Int64>(d.toUnderType());
-                const Int64 idays = static_cast<Int64>(days);
-                const Int64 rounded_day_num = day_num >= 0 ? day_num / idays * idays : (day_num + 1 - idays) / idays * idays;
+                const Int64 rounded_day_num = roundDownToMultiple(day_num, idays);
                 return dateOfDayIndex(rounded_day_num + daynum_offset_epoch);
             }
 
         if constexpr (std::is_same_v<Date, DayNum>)
-            return lut_saturated[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / days * days)))].date;
+            return lut_saturated[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / idays * idays)))].date;
         else
-            return lut[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / days * days)))].date;
+            return lut[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / idays * idays)))].date;
     }
 
     template <typename DateOrTime>
