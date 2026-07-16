@@ -36,7 +36,6 @@ public:
     std::string file;       /// File with data or '-' if stdin
     std::string name;       /// The name of the table
     std::string format;     /// Name of the data storage format
-    bool scalar = false;    /// Send as Scalar
 
     /// Description of the table structure: (column name, data type name)
     VectorWithMemoryTracking<std::pair<std::string, std::string>> structure;
@@ -51,6 +50,7 @@ public:
 
     /// Get the table data - a pair (a stream with the contents of the table, the name of the table)
     ExternalTableDataPtr getData(ContextPtr context);
+    Block getScalar(ContextPtr context);
 
 protected:
     /// Clear all accumulated information

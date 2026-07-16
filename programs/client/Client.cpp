@@ -888,8 +888,9 @@ void Client::processOptions(
 
         try
         {
-            external_tables.emplace_back(external_options);
-            if (external_tables.back().file == "-")
+            auto & external_data = external_options.contains("scalar") ? external_scalars : external_tables;
+            external_data.emplace_back(external_options);
+            if (external_data.back().file == "-")
                 ++number_of_external_tables_with_stdin_source;
             if (number_of_external_tables_with_stdin_source > 1)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Two or more external tables has stdin (-) set as --file field");

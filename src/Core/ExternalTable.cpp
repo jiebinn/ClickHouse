@@ -42,7 +42,6 @@ namespace Setting
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
-    extern const int INCORRECT_RESULT_OF_SCALAR_SUBQUERY;
 }
 
 static Block materializeScalar(InputFormatPtr input)
@@ -54,12 +53,12 @@ static Block materializeScalar(InputFormatPtr input)
     Block block;
     while (block.rows() == 0 && executor.pull(block)) {}
     if (block.rows() != 1)
-        throw Exception(ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY, "Scalar subquery returned more than one row");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Scalar input returned {} rows", block.rows());
 
     Block tmp_block;
     while (tmp_block.rows() == 0 && executor.pull(tmp_block)) {}
     if (tmp_block.rows() > 0)
-        throw Exception(ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY, "Scalar subquery returned more than one block");
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Scalar input returned more than one block");
 
     if (block.columns() == 1)
         return block;
@@ -80,18 +79,17 @@ ExternalTableDataPtr BaseExternalTable::getData(ContextPtr context)
     auto data = std::make_unique<ExternalTableData>();
     data->pipe = std::make_unique<QueryPipelineBuilder>();
     data->table_name = name;
-    data->scalar = scalar;
-
-    if (scalar)
-    {
-        auto block = materializeScalar(std::move(input));
-        auto source = std::make_shared<SourceFromSingleChunk>(std::make_shared<const Block>(Block{block}));
-        data->pipe->init(Pipe(source));
-    }
-    else
-        data->pipe->init(Pipe(std::move(input)));
+    data->pipe->init(Pipe(std::move(input)));
 
     return data;
+}
+
+Block BaseExternalTable::getScalar(ContextPtr context)
+{
+    initReadBuffer();
+    initSampleBlock();
+    auto input = context->getInputFormat(format, *read_buffer, sample_block, context->getSettingsRef()[Setting::max_block_size]);
+    return materializeScalar(std::move(input));
 }
 
 void BaseExternalTable::clear()
@@ -198,8 +196,6 @@ ExternalTable::ExternalTable(const boost::program_options::variables_map & exter
         format = external_options["format"].as<std::string>();
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "--format field have not been provided for external table");
-
-    scalar = external_options.contains("scalar");
 
     if (external_options.contains("structure"))
         parseStructureFromStructureField(external_options["structure"].as<std::string>());

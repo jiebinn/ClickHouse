@@ -53,7 +53,6 @@ struct ExternalTableData
     std::unique_ptr<QueryPipelineBuilder> pipe;
     std::string table_name;
     std::function<std::unique_ptr<QueryPipelineBuilder>()> creating_pipe_callback;
-    bool scalar = false;
     /// Flag if need to stop reading.
     std::atomic_bool is_cancelled = false;
 };
@@ -118,6 +117,9 @@ public:
 
     /// Send all contents of external (temporary) tables.
     virtual void sendExternalTablesData(ExternalTablesData & data) = 0;
+
+    /// Send all scalars.
+    virtual void sendScalarsData(Scalars & data) = 0;
 
     virtual void sendMergeTreeReadTaskResponse(const ParallelReadResponse & response) = 0;
 
