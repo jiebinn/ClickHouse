@@ -1,3 +1,4 @@
+#include <memory>
 #include <DataTypes/DataTypeString.h>
 #include <Processors/QueryPlan/ReadFromParallelReplicas.h>
 
@@ -74,14 +75,15 @@ namespace FailPoints
 }
 
 ReadFromParallelReplicasStep::ReadFromParallelReplicasStep(
+    std::shared_ptr<const QueryPlan> query_plan_,
     ClusterPtr cluster_,
     ParallelReplicasReadingCoordinatorPtr coordinator_,
     ContextPtr context_,
     std::vector<ConnectionPoolPtr> pools_to_use_,
     std::optional<size_t> exclude_pool_index_,
-    ConnectionPoolWithFailoverPtr connection_pool_with_failover_,
-    std::shared_ptr<const QueryPlan> query_plan_)
+    ConnectionPoolWithFailoverPtr connection_pool_with_failover_)
     : ISourceStep(query_plan_->getRootNode()->step->getOutputHeader())
+    , query_plan(std::move(query_plan_))
     , cluster(cluster_)
     , coordinator(std::move(coordinator_))
     , context(context_)
@@ -91,7 +93,6 @@ ReadFromParallelReplicasStep::ReadFromParallelReplicasStep(
     , pools_to_use(std::move(pools_to_use_))
     , exclude_pool_index(exclude_pool_index_)
     , connection_pool_with_failover(connection_pool_with_failover_)
-    , query_plan(std::move(query_plan_))
 {
     chassert(cluster->getShardCount() == 1);
 

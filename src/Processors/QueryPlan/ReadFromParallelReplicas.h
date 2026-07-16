@@ -1,14 +1,14 @@
 #pragma once
 
-#include <Processors/QueryPlan/SourceStepWithFilter.h>
-#include <Core/QueryProcessingStage.h>
 #include <Client/IConnections.h>
-#include <Common/GetPriorityForLoadBalancing.h>
-#include <Storages/IStorage_fwd.h>
-#include <Interpreters/StorageID.h>
-#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Core/QueryProcessingStage.h>
 #include <Core/UUID.h>
+#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Interpreters/StorageID.h>
 #include <Processors/QueryPlan/ISourceStep.h>
+#include <Processors/QueryPlan/SourceStepWithFilter.h>
+#include <Storages/IStorage_fwd.h>
+#include <Common/GetPriorityForLoadBalancing.h>
 
 namespace DB
 {
@@ -22,13 +22,13 @@ class ReadFromParallelReplicasStep : public ISourceStep
 {
 public:
     ReadFromParallelReplicasStep(
+        std::shared_ptr<const QueryPlan> query_plan_,
         ClusterPtr cluster_,
         ParallelReplicasReadingCoordinatorPtr coordinator_,
         ContextPtr context_,
         std::vector<ConnectionPoolPtr> pools_to_use,
         std::optional<size_t> exclude_pool_index_ = std::nullopt,
-        ConnectionPoolWithFailoverPtr connection_pool_with_failover_ = nullptr,
-        std::shared_ptr<const QueryPlan> query_plan_ = nullptr);
+        ConnectionPoolWithFailoverPtr connection_pool_with_failover_ = nullptr);
 
     String getName() const override { return "ReadFromParallelReplicas"; }
 
@@ -48,6 +48,7 @@ private:
         const SharedHeader & out_header,
         size_t parallel_marshalling_threads);
 
+    std::shared_ptr<const QueryPlan> query_plan;
     ClusterPtr cluster;
     ParallelReplicasReadingCoordinatorPtr coordinator;
     ContextPtr context;
@@ -55,7 +56,6 @@ private:
     std::vector<ConnectionPoolPtr> pools_to_use;
     std::optional<size_t> exclude_pool_index;
     ConnectionPoolWithFailoverPtr connection_pool_with_failover;
-    std::shared_ptr<const QueryPlan> query_plan;
 };
 
 }

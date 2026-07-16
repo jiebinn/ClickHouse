@@ -361,15 +361,13 @@ QueryPlanPtr createRemotePlanFragmentForParallelReplicas(
     ParallelReplicasReadingCoordinatorPtr coordinator,
     const ClusterPtr & cluster,
     const std::vector<ConnectionPoolPtr> & connection_pools,
-    std::optional<size_t> exclude_pool_index
-)
+    std::optional<size_t> exclude_pool_index)
 {
     auto read_from_remote = std::make_unique<ReadFromParallelReplicasStep>(
-        cluster, coordinator, context, connection_pools, exclude_pool_index, cluster->getShardsInfo().at(0).pool, std::move(plan_fragment));
+        std::move(plan_fragment), cluster, coordinator, context, connection_pools, exclude_pool_index, cluster->getShardsInfo().at(0).pool);
 
     auto query_plan = std::make_unique<QueryPlan>();
     query_plan->addStep(std::move(read_from_remote));
     return query_plan;
 }
-
 }
