@@ -2,7 +2,7 @@
     <startup_scripts>
         <drop_dictionary>
             <query>
-                DROP DICTIONARY IF EXISTS metrics;
+                DROP DICTIONARY IF EXISTS system.custom_metrics;
             </query>
         </drop_dictionary>
         <create_dictionary>
