@@ -177,6 +177,22 @@ function setup_logs_replication()
 
 function stop_logs_replication()
 {
+    # The `_sender` tables are `Distributed` engine with `flush_on_detach=0`
+    # (set so a slow/unreachable remote cluster can't hang server shutdown),
+    # and inserts into them via the `_watcher` materialized views are batched
+    # and sent to the remote cluster in the background. Without an explicit
+    # `SYSTEM FLUSH DISTRIBUTED` here, whatever is still queued locally - e.g.
+    # the just-flushed rows from the caller's preceding `SYSTEM FLUSH LOGS` -
+    # is silently discarded when the table below is dropped. Bound it with the
+    # same `timeout` pattern as the drop step so an unreachable cluster cannot
+    # block teardown indefinitely.
+    echo "Flush pending log records to the remote cluster"
+    ( clickhouse-client --query "select database||'.'||table from system.tables where database = 'system' and table like '%_sender'" | {
+        tee /dev/stderr
+    } | {
+        timeout --verbose --preserve-status --signal TERM --kill-after 1m 5m xargs -n1 -P10 -r -i clickhouse-client --query "SYSTEM FLUSH DISTRIBUTED {}"
+    } ) || echo "WARNING: failed to flush pending log records, some rows may be lost"
+
     echo "Detach all logs replication"
     clickhouse-client --query "select database||'.'||table from system.tables where database = 'system' and (table like '%_sender' or table like '%_watcher')" | {
         tee /dev/stderr
