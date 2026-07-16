@@ -17,10 +17,13 @@ binary_build_job = Job.Config.get_job(
 
 # TODO: add alert on workflow failure
 
+# NOTE: event temporarily PULL_REQUEST for one final on-PR validation of the
+# merge-target config (keeper + server serialized via run_after). Revert to
+# Workflow.Event.SCHEDULE + branches=[BASE_BRANCH] before merging.
 workflow = Workflow.Config(
     name="NightlyJepsen",
-    event=Workflow.Event.SCHEDULE,
-    branches=[BASE_BRANCH],
+    event=Workflow.Event.PULL_REQUEST,
+    base_branches=[BASE_BRANCH],
     jobs=[
         binary_build_job,
         JobConfigs.jepsen_keeper,
@@ -38,7 +41,7 @@ workflow = Workflow.Config(
     enable_cache=True,
     enable_report=True,
     enable_cidb=True,
-    cron_schedules=["13 4 * * *"],
+    # cron_schedules=["13 4 * * *"],  # temporarily disabled for final PR validation; restore before merge
     pre_hooks=["python3 ./ci/jobs/scripts/workflow_hooks/store_data.py"],
 )
 
