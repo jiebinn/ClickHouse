@@ -172,3 +172,25 @@ def test_s3_queue_extra_credentials_backup(started_cluster):
     assert "Could not list objects in bucket" in node.query_and_get_error(
         f"SELECT * FROM {table_name}"
     )
+
+    # The error above alone cannot prove the restored table kept the
+    # extra_credentials clause: the base environment credentials (aws/aws123)
+    # are equally invalid for MinIO, so a restored table that silently dropped
+    # the clause would fail with the same error. Pin the round trip explicitly.
+    assert (
+        "extra_credentials(\\'role_arn\\' = \\'arn::role\\', \\'role_session_name\\' = \\'miniorole\\')"
+        in node.query(f"SHOW CREATE TABLE {table_name}")
+    )
+
+    # And prove the restored clause is effective: once the STS mock grants
+    # 'miniorole' again, the restored table becomes readable — impossible with
+    # the base environment credentials. The server must be restarted for that:
+    # the assume-role provider inside the table's S3 client caches the
+    # wrong-key credentials it fetched above until their (1 hour) expiration,
+    # regardless of s3_credentials_cache.xml disabling the provider cache.
+    started_cluster.instances["sts.amazonaws.com"].stop()
+    started_cluster.instances["sts.amazonaws.com"].start()
+    run_s3_mocks(started_cluster)
+    node.restart_clickhouse()
+
+    assert 10 == int(node.query(f"SELECT count() FROM {table_name}"))
