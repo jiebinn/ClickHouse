@@ -1159,12 +1159,12 @@ SELECT
     {
         "Array to String example",
         R"(
-SELECT hex(reinterpretAsString([toUInt16(0x0102), toUInt16(0x0304)]::Array(UInt16))) AS array_of_UInt16_to_string
+SELECT hex(reinterpretAsString([toUInt8(1), toUInt8(2), toUInt8(255)]::Array(UInt8))) AS array_of_UInt8_to_string
         )",
         R"(
-┌─array_of_UInt16_to_string─┐
-│ 02010403                  │
-└───────────────────────────┘
+┌─array_of_UInt8_to_string─┐
+│ 0102FF                   │
+└──────────────────────────┘
         )"
     }
     };
@@ -1241,12 +1241,12 @@ SELECT reinterpret(x'3108b4403108d4403108b4403108d440', 'Array(Float32)') AS str
     {
         "Array to String example",
         R"(
-SELECT hex(reinterpret([toUInt16(0x0102), toUInt16(0x0304)]::Array(UInt16), 'String')) AS array_of_UInt16_to_string
+SELECT hex(reinterpret([toUInt8(1), toUInt8(2), toUInt8(255)]::Array(UInt8), 'String')) AS array_of_UInt8_to_string
         )",
         R"(
-┌─array_of_UInt16_to_string─┐
-│ 02010403                  │
-└───────────────────────────┘
+┌─array_of_UInt8_to_string─┐
+│ 0102FF                   │
+└──────────────────────────┘
         )"
     }
     };

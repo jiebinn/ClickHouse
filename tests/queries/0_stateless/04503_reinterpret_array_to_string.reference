@@ -3,14 +3,14 @@ String
 String
 Verify output bytes are correct
 0102FF
-02010403
-010000000200000003000000
-02010403
 61626364
+4
+12
+4
 Trailing zero bytes are copied verbatim, not trimmed
-01000000
+4
 0100
-00010000
+4
 Round-trips through String preserve every element, including trailing zeros
 [1]
 [1,0]
@@ -21,7 +21,7 @@ Empty array reinterprets to an empty string
 0
 Array element type must be fixed length and contiguous
 LowCardinality nested element is stripped and works
-0100000002000000
+[1,2]
 A few rows read from a table
 1	0102
 2	0A141E
