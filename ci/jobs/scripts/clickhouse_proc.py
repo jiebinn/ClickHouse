@@ -2,6 +2,7 @@ import glob
 import json as json_module
 import os
 import platform
+import shutil
 import signal
 import subprocess
 import sys
@@ -571,6 +572,33 @@ profiles:
 
         return res
 
+    _MINIO_LOG_DISK_PATHS = (
+        "/var/lib/clickhouse/disks/minio_audit_logs/",
+        "/var/lib/clickhouse/disks/minio_server_logs/",
+    )
+
+    @staticmethod
+    def _reset_minio_log_disk_dirs():
+        """Remove the minio log tables' pinned disk directories before re-creating them.
+
+        These live outside run_path* (see create_minio_log_tables), so they can
+        survive across restarts; a stale or planted symlink at either path must
+        not be followed - `rm -rf .../` would recurse into whatever it points at.
+        Only a verified real directory (or nothing) is removed.
+        """
+        for path in ClickHouseProc._MINIO_LOG_DISK_PATHS:
+            p = Path(path)
+            if p.is_symlink():
+                print(f"ERROR: refusing to remove {path}: it is a symlink")
+                return False
+            try:
+                if p.exists():
+                    shutil.rmtree(p)
+            except OSError as e:
+                print(f"ERROR: failed to remove {path}: {e}")
+                return False
+        return True
+
     def create_minio_log_tables(self):
         self.minio_setup_error = None
         # Minio log setup is non-fatal (caller continues when this returns
@@ -605,7 +633,7 @@ profiles:
                 # (~1.5 GB of audit logs on sanitizer s3 runs) are not leaked
                 # on every swap or carried over from a previous run.
                 "reset minio log table disks",
-                "rm -rf /var/lib/clickhouse/disks/minio_audit_logs/ /var/lib/clickhouse/disks/minio_server_logs/",
+                self._reset_minio_log_disk_dirs,
             ),
             (
                 "create system.minio_audit_logs table",
@@ -624,8 +652,9 @@ profiles:
                 '/mc admin config set clickminio audit_webhook:ch_audit_webhook endpoint="http://localhost:8123/?async_insert=1&wait_for_async_insert=0&async_insert_busy_timeout_min_ms=5000&async_insert_busy_timeout_max_ms=5000&async_insert_max_query_number=1000&async_insert_max_data_size=10485760&date_time_input_format=best_effort&query=INSERT%20INTO%20system.minio_audit_logs%20FORMAT%20JSONAsObject" queue_size=1000000 batch_size=500',
             ),
         ]
-        for what, command in setup_steps:
-            if not Shell.check(command, verbose=True):
+        for what, step in setup_steps:
+            ok = step() if callable(step) else Shell.check(step, verbose=True)
+            if not ok:
                 self.minio_setup_error = f"failed to {what}"
                 print(f"ERROR: Failed to {what}")
                 return False

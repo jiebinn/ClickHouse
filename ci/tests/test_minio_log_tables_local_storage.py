@@ -35,8 +35,11 @@ Lifecycle: those disk paths live OUTSIDE the per-run server data directory
 metadata but not their data. create_minio_log_tables therefore has to reset the
 disk directories itself before re-creating the tables - otherwise every
 bugfix-validation binary swap leaks the previous incarnation's parts (~1.5 GB of
-audit logs on sanitizer s3 runs). This test also guards that reset step and that
-it covers exactly the pinned disk paths.
+audit logs on sanitizer s3 runs). This test also guards that reset step, that it
+covers exactly the pinned disk paths, and that it stays symlink-safe: the paths
+live outside run_path* and can persist across jobs, so a plain `rm -rf .../`
+would follow a stale or planted symlink there and recursively delete whatever it
+points at instead of just the log tables' own directory.
 """
 
 import re
@@ -93,19 +96,24 @@ def test_minio_log_table_disks_are_reset_before_create():
     )
     # The pinned paths are outside the run_path* directory that start() wipes,
     # so stale data survives every server restart unless create_minio_log_tables
-    # removes it before re-creating the tables. Require an `rm -rf` covering
-    # exactly the pinned paths.
-    rm_commands = [
-        line for line in src.splitlines() if re.search(r'"rm -rf /var/lib', line)
-    ]
-    assert len(rm_commands) == 1, (
-        "expected exactly one reset step removing the minio log disk "
-        f"directories, found: {rm_commands}"
+    # removes it before re-creating the tables. A shell `rm -rf .../` would
+    # follow a stale or planted symlink at either path and recursively delete
+    # whatever it points at, so the reset must not use that form.
+    assert not re.search(r'"rm -rf /var/lib/clickhouse/disks', src), (
+        "the minio log disk reset must not shell out to `rm -rf` - a symlink "
+        "at the pinned path would turn it into a recursive delete of an "
+        "arbitrary host directory; use a symlink-safe removal instead"
     )
-    removed_paths = set(
-        re.findall(r"(/var/lib/clickhouse/disks/[^ \"]+)", rm_commands[0])
+    reset_tuple = re.search(r"_MINIO_LOG_DISK_PATHS\s*=\s*\((.*?)\)", src, re.DOTALL)
+    assert reset_tuple, "expected a _MINIO_LOG_DISK_PATHS tuple of the reset paths"
+    reset_paths = set(
+        re.findall(r"[\"'](/var/lib/clickhouse/disks/[^\"']+)[\"']", reset_tuple.group(1))
     )
-    assert removed_paths == pinned_paths, (
+    assert reset_paths == pinned_paths, (
         "the reset step must remove exactly the pinned minio log disk paths; "
-        f"removes {sorted(removed_paths)}, pinned {sorted(pinned_paths)}"
+        f"resets {sorted(reset_paths)}, pinned {sorted(pinned_paths)}"
+    )
+    assert "is_symlink()" in src, (
+        "the reset step must refuse to follow a symlink at the pinned disk "
+        "path before removing it"
     )
