@@ -3602,17 +3602,18 @@ function markBootstrapDirty(e) {
     bootstrap_dirty = true;
 }
 
-/// Set when a trusted database selection (`commitSelectedDatabase`) lands while the URL's
-/// deferred `run=1` auto-run is still pending, cancelling it: the selection has just rewritten
-/// the current history entry WITHOUT `run=1` (the bootstrap tab has no result yet, so
-/// `tabReflectsRun` is false), so the live URL no longer requests an auto-run — executing the
-/// deferred `postAll` anyway would run the shared query against the just-clicked database, one
-/// the link never specified. `bootstrap_dirty` cannot carry this signal: a panel click is not a
-/// workspace edit (the saved tabs must still be restored and reconciled as usual), and the
-/// pending window extends past `bootstrap_settled` (`reconcileStartup` keeps awaiting — tab
-/// activation, parameter reconciliation — after settling, and `markBootstrapDirty` ignores
-/// events from then on). The query itself is untouched: it stays in the editor, targeting the
-/// fresh selection, and the user can still run it explicitly.
+/// Set when a trusted database selection (`commitSelectedDatabase`) or a semantic connection
+/// edit (`resetConnectionScopedState`) lands while the URL's deferred `run=1` auto-run is still
+/// pending, cancelling it: either one has just rewritten the current history entry WITHOUT
+/// `run=1` (the bootstrap tab has no result yet, so `tabReflectsRun` is false), so the live URL
+/// no longer requests an auto-run — executing the deferred `postAll` anyway would run the shared
+/// query against a database or server/user the link never specified. `bootstrap_dirty` cannot
+/// carry this signal: neither a panel click nor a connection-field edit is a workspace edit (the
+/// saved tabs must still be restored and reconciled as usual), and the pending window extends
+/// past `bootstrap_settled` (`reconcileStartup` keeps awaiting — tab activation, parameter
+/// reconciliation — after settling, and `markBootstrapDirty` ignores events from then on). The
+/// query itself is untouched: it stays in the editor, targeting the fresh selection/connection,
+/// and the user can still run it explicitly.
 let deferred_run_cancelled = false;
 
 /// Start of the last query
@@ -7944,6 +7945,13 @@ function resetConnectionScopedState() {
     if (cleared_selection || connection_diverged) {
         captureActiveTab();
         refreshCurrentHistoryEntry(getActiveTab());
+        /// Same cancellation as `commitSelectedDatabase`: the restamp just above dropped `run=1`
+        /// from the current entry (the bootstrap tab has no result yet), so the URL's deferred
+        /// `run=1` auto-run (see `reconcileStartup`) no longer matches what the live entry
+        /// requests. Left unset, this trusted connection edit would still be followed by the
+        /// deferred `postAll`, executing the shared query against the just-edited server/user
+        /// rather than the one the link specified.
+        deferred_run_cancelled = true;
     }
 }
 
