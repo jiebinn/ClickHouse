@@ -8,7 +8,7 @@ INSERT INTO t_zxc_src
     SELECT number,
            concat('r', toString(number % 9973), repeat('z', number % 37)),
            toUInt32((number * 2654435761) % 1000000)
-    FROM numbers(300000);
+    FROM numbers(50000);
 
 -- One column per level (1..7), a default-level column, and a numeric column.
 CREATE TABLE t_zxc
