@@ -50,6 +50,14 @@ SELECT toInt32(toStartOfInterval(toDate32('1969-12-31'), INTERVAL 13176245766935
     SETTINGS enable_extended_results_for_datetime_functions = 1;
 SELECT toDayOfWeek(toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK)) = 1
     SETTINGS enable_extended_results_for_datetime_functions = 1;
+-- Symmetric high bound: a positive out-of-range `ExtendedDayNum` (a `Date32` pushed past `9999-12-31` by
+-- arithmetic) must clamp to the last representable Monday `9999-12-27` (day `2932892`), not to the raw
+-- maximum day `9999-12-31` (a Friday, off the lattice). Before the fix the high clamp used `max_daynum`
+-- directly and returned `9999-12-31`, breaking the `4 + 7 * n` invariant.
+SELECT toInt32(toStartOfInterval(toDate32('2299-12-31') + INTERVAL 100000000 DAY, INTERVAL 2 WEEK)) = 2932892
+    SETTINGS enable_extended_results_for_datetime_functions = 1;
+SELECT toDayOfWeek(toStartOfInterval(toDate32('2299-12-31') + INTERVAL 100000000 DAY, INTERVAL 2 WEEK)) = 1
+    SETTINGS enable_extended_results_for_datetime_functions = 1;
 
 -- A pre-epoch `Date32` value on the in-LUT `DAY` path must floor to the start of its interval, not round
 -- toward zero (forward in time). `1969-12-22 .. 1969-12-31` are day numbers `-10 .. -1`, so a 10-day
