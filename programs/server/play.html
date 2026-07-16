@@ -4606,6 +4606,7 @@ async function loadTables(server_address, user, password, database, container, s
         /// Clicking the icon (to the left of the name) toggles the list of columns of this
         /// table, instead of running the default `SELECT *`. Stop the event so it neither
         /// bubbles to the row's click handler nor triggers a hover balloon reposition.
+        const toggle_columns = () => toggleColumns(table, table_icon, database, elem.table, server_address, user, password);
         table_icon.addEventListener('click', e => {
             if (isMac && e.ctrlKey && e.button !== 1) {
                 /// On macOS `Ctrl+Click` is the secondary (context-menu) click, same as the
@@ -4614,8 +4615,23 @@ async function loadTables(server_address, user, password, database, container, s
                 return;
             }
             e.stopPropagation();
-            toggleColumns(table, table_icon, database, elem.table, server_address, user, password);
+            toggle_columns();
         });
+        /// A middle click fires `auxclick`, not `click`, so the handler above never sees it.
+        /// Without consuming it here, the middle-click `auxclick` would bubble to the row's
+        /// `onTableActivate` and open `SELECT *` in a new tab - a completely different action
+        /// from this icon's `Show columns` purpose. Toggle the column list for a middle click
+        /// too (a middle click is a genuine gesture even with Ctrl held, so there is no macOS
+        /// guard here), and cancel the middle-button defaults at the icon - the X11 PRIMARY
+        /// paste on `auxclick` and the autoscroll on `mousedown` - so the disclosure control
+        /// behaves consistently for every click type.
+        table_icon.addEventListener('auxclick', e => {
+            if (e.button !== 1) return;
+            e.preventDefault();
+            e.stopPropagation();
+            toggle_columns();
+        });
+        table_icon.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
 
         if (max_total_bytes && +elem.total_bytes) {
             const percent = Number(100 * +elem.total_bytes / max_total_bytes).toFixed(2);
