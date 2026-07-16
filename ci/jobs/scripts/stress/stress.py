@@ -178,14 +178,25 @@ def get_options(i: int, upgrade_check: bool, encrypted_storage: bool) -> str:
             client_options.append("join_algorithm='auto'")
             client_options.append("max_rows_in_join=1000")
 
-    # Enable the query cache only rarely: it is set as a client option for the
-    # whole run, so with a high probability it collides with the many tests that
-    # use a non-throw `*_overflow_mode`, which `use_query_cache` forbids
-    # (QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE), turning into stress noise.
+    # Enable the query cache only rarely, and when we do, force every overflow
+    # mode to 'throw'. use_query_cache is set as a client option for the whole
+    # run and is incompatible with a non-throw `*_overflow_mode`
+    # (QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE), so the many tests that
+    # touch overflow modes would otherwise turn it into stress noise.
     if i > 0 and random.random() < 1 / 50:
         client_options.append("use_query_cache=1")
         client_options.append("query_cache_nondeterministic_function_handling='ignore'")
         client_options.append("query_cache_system_table_handling='ignore'")
+        client_options.append("read_overflow_mode='throw'")
+        client_options.append("read_overflow_mode_leaf='throw'")
+        client_options.append("group_by_overflow_mode='throw'")
+        client_options.append("sort_overflow_mode='throw'")
+        client_options.append("result_overflow_mode='throw'")
+        client_options.append("timeout_overflow_mode='throw'")
+        client_options.append("set_overflow_mode='throw'")
+        client_options.append("join_overflow_mode='throw'")
+        client_options.append("transfer_overflow_mode='throw'")
+        client_options.append("distinct_overflow_mode='throw'")
 
     if i % 5 == 1:
         client_options.append("memory_tracker_fault_probability=0.001")
