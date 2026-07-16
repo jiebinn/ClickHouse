@@ -1478,13 +1478,17 @@ public:
         // Clamp the reconstructed day number back into the representable range. For an extreme `weeks` count
         // the floored boundary is far below any representable day, so it must saturate to the earliest one
         // (not wrap through the narrow cast, which would round forward past the start of the interval).
+        // Week boundaries lie on the `4 + 7 * n` (Monday) lattice, so the low clamp bound must itself be a
+        // representable start-of-week, not the raw minimum day number (0000-01-01 is a Saturday). Snap the
+        // minimum up to the first Monday >= the minimum representable day.
         if constexpr (std::is_same_v<Date, DayNum>)
             return DayNum(static_cast<UInt16>(std::clamp<Int64>(day, 0, DATE_LUT_MAX_DAY_NUM)));
         else
         {
             const Int64 min_daynum = min_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
             const Int64 max_daynum = max_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
-            return ExtendedDayNum(static_cast<Int32>(std::clamp(day, min_daynum, max_daynum)));
+            const Int64 lattice_min = min_daynum + ((4 - min_daynum) % 7 + 7) % 7;
+            return ExtendedDayNum(static_cast<Int32>(std::clamp(day, lattice_min, max_daynum)));
         }
     }
 

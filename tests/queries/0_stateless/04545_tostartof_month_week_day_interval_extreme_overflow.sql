@@ -40,7 +40,16 @@ SELECT toStartOfInterval(toDate('2021-06-22'), INTERVAL 6148914691236517206 QUAR
 SELECT toStartOfInterval(toDate('1970-01-01'), INTERVAL 1317624576693539402 WEEK) <= toDate('1970-01-01');
 -- `ExtendedDayNum` branch (Date32 input): before the fix `toDate32('1969-12-31')` rounded forward to
 -- `1970-01-06`; with the reconstructed day clamped into range it floors to the earliest representable boundary.
-SELECT toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK) = toDate('1973-09-30');
+SELECT toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK) = toDate('1973-10-02');
+-- The default overload above narrows the `ExtendedDayNum` result through `Date`, which masks the actual
+-- boundary. With `enable_extended_results_for_datetime_functions = 1` the `Date32` boundary is observable
+-- directly: week boundaries live on the `4 + 7 * n` (Monday) lattice, so the earliest representable one is
+-- `0000-01-03` (`0000-01-01` is a Saturday). Before the fix the clamp snapped to `0000-01-01`, off the
+-- lattice; it must floor to the first representable Monday and land exactly on a week boundary.
+SELECT toInt32(toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK)) = -719526
+    SETTINGS enable_extended_results_for_datetime_functions = 1;
+SELECT toDayOfWeek(toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK)) = 1
+    SETTINGS enable_extended_results_for_datetime_functions = 1;
 
 -- A pre-epoch `Date32` value on the in-LUT `DAY` path must floor to the start of its interval, not round
 -- toward zero (forward in time). `1969-12-22 .. 1969-12-31` are day numbers `-10 .. -1`, so a 10-day
