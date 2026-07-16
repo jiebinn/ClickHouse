@@ -190,7 +190,6 @@ struct CodePointPolicy
 };
 
 /// Each token is a whitespace-delimited word.
-///
 struct TokenPolicy
 {
     /// Removes redundant whitespace and appends tokens to `tokens`.
