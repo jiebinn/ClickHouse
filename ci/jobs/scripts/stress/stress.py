@@ -178,7 +178,11 @@ def get_options(i: int, upgrade_check: bool, encrypted_storage: bool) -> str:
             client_options.append("join_algorithm='auto'")
             client_options.append("max_rows_in_join=1000")
 
-    if i > 0 and random.random() < 1 / 3:
+    # Enable the query cache only rarely: it is set as a client option for the
+    # whole run, so with a high probability it collides with the many tests that
+    # use a non-throw `*_overflow_mode`, which `use_query_cache` forbids
+    # (QUERY_CACHE_USED_WITH_NON_THROW_OVERFLOW_MODE), turning into stress noise.
+    if i > 0 and random.random() < 1 / 50:
         client_options.append("use_query_cache=1")
         client_options.append("query_cache_nondeterministic_function_handling='ignore'")
         client_options.append("query_cache_system_table_handling='ignore'")
