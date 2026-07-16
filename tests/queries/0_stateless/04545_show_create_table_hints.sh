@@ -42,7 +42,9 @@ ${CLICKHOUSE_CLIENT} -q "DROP DATABASE ${DB}_mem"
 # which must carry the hint too. The dictionary's owning database has to be `Ordinary` (not the
 # default `Atomic`) so the virtual table is named `<source_database>.<dictionary_name>` - with
 # `Atomic` it is named after the dictionary's UUID instead, which is not suitable for this test.
-${CLICKHOUSE_CLIENT} -q "SET allow_deprecated_database_ordinary=1; CREATE DATABASE ${DB}_ord ENGINE = Ordinary"
+# `--send_logs_level=fatal` keeps the `Ordinary` engine deprecation warning (emitted once per
+# server lifetime, on the first CREATE of an `Ordinary` database) out of the test's stderr.
+${CLICKHOUSE_CLIENT} --send_logs_level=fatal --allow_deprecated_database_ordinary=1 -q "CREATE DATABASE ${DB}_ord ENGINE = Ordinary"
 ${CLICKHOUSE_CLIENT} -q "CREATE TABLE ${DB}_ord.dict_source (key UInt64, val UInt64) ENGINE = Memory"
 ${CLICKHOUSE_CLIENT} -q "CREATE DICTIONARY ${DB}_ord.dict_target (key UInt64 DEFAULT 0, val UInt64 DEFAULT 0) PRIMARY KEY key SOURCE(CLICKHOUSE(TABLE 'dict_source' DB '${DB}_ord')) LIFETIME(MIN 0 MAX 0) LAYOUT(FLAT())"
 ${CLICKHOUSE_CLIENT} -q "CREATE DATABASE ${DB}_dictdb ENGINE = Dictionary"
