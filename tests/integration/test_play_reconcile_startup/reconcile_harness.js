@@ -471,7 +471,8 @@ async function runScenario(js, config) {
         'JSON.stringify({ tabs: tabs.map(t => ({ id: t.id, title: t.title, query: t.query, ran: !!(t.result && t.result.ran) })), activeTabId })',
         sandbox);
     const persisted = [...stores.get('tabs').data.values()];
-    return { live: JSON.parse(live), persisted, sandbox };
+    const persistedMeta = stores.get('meta').data.get('state') || null;
+    return { live: JSON.parse(live), persisted, persistedMeta, sandbox };
 }
 
 /// ----- Assertions ----------------------------------------------------------------------------
@@ -787,6 +788,36 @@ async function main() {
         check('dirty-startup-allblank-edit-survives', 'the live edit is what gets persisted, not a blank tab',
             r.persisted.some(p => p.query === 'SELECT 999') && !r.persisted.some(p => (p.query || '').trim() === ''),
             r.persisted.map(p => ({ id: p.id, query: p.query })));
+
+        /// Guard (the same dirty all-blank stale echo, second reload): keeping the live workspace
+        /// is not enough — the current entry/URL still belonged to the DROPPED blank tab
+        /// (`?tab=Scratch`, `history.state.tabId === 't7'`), while what got persisted is the live
+        /// tab under its own id/title. Reconciliation must re-own that entry for the live tab:
+        /// otherwise the next reload finds nothing to prune (the live tab holds a real query), so
+        /// `stale_blank_reload` no longer recognizes the leftover `?tab=`/`history.state` as stale,
+        /// the named-URL path treats them as authoritative, and a fresh blank `Scratch` is
+        /// recreated (and re-persisted) alongside the live tab.
+        const live_tab = r.live.tabs[0];
+        check('dirty-startup-allblank-entry-reowned', 'the current entry is re-owned by the live tab',
+            r.sandbox.history.state && r.sandbox.history.state.tabId === live_tab.id,
+            r.sandbox.history.state);
+        check('dirty-startup-allblank-entry-reowned', 'the URL names the live tab, not the dropped blank one',
+            new URL(r.sandbox.location.href).searchParams.get('tab') === live_tab.title,
+            r.sandbox.location.href);
+        /// Reload the workspace exactly as the browser would: same URL and `history.state` the
+        /// first load left behind, seeded from what it persisted.
+        const r2 = await runScenario(js, {
+            href: r.sandbox.location.href,
+            historyState: r.sandbox.history.state,
+            seedTabs: r.persisted,
+            seedMeta: r.persistedMeta,
+        });
+        check('dirty-startup-allblank-entry-reowned', 'the second reload does not recreate a blank tab under the dropped name',
+            r2.live.tabs.length === 1 && r2.live.tabs[0].query === 'SELECT 999',
+            r2.live);
+        check('dirty-startup-allblank-entry-reowned', 'the second reload persists no blank tab',
+            r2.persisted.length === 1 && !r2.persisted.some(p => (p.query || '').trim() === ''),
+            r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
     }
 
     if (failures) {

@@ -8684,25 +8684,49 @@ async function reconcileStartup() {
         /// In that case the live tab is NEWER than the stale echo, exactly as for the merge branch
         /// above: `query_area.value = ''` below would silently wipe the live edit (and the
         /// dispatched 'input' event would fold that blank text into the tab, discarding it for good
-        /// before the trailing `scheduleSave` persists it), and clearing `history.state` to null
-        /// would discard an entry `refreshCurrentHistoryEntry` may have already written for it. Skip
-        /// the cleanup entirely and keep the live workspace, exactly as the dirty-startup merge above
-        /// does; the tail of this function already skips URL-param reconciliation and auto-run for a
-        /// dirty startup, so nothing below re-applies the stale URL over the live edit.
-        if (url_tab_name && !bootstrap_dirty) {
-            const cleaned_url = new URL(location.href);
-            cleaned_url.searchParams.delete('tab');
-            /// Drop the stale `run=1` too (`run_immediately` was likewise cleared above): it was the
-            /// pruned blank tab's directive, and leaving it in the persisted URL would auto-run the
-            /// fresh bootstrap tab on the next reload (the no-hash case takes the synchronous
-            /// bottom-of-script `postAll`, so this replaceState is what stops it recurring).
-            cleaned_url.searchParams.delete('run');
-            if (stale_blank_reload_bare) {
-                cleaned_url.hash = '';
-                query_area.value = '';
-                query_area.dispatchEvent(new Event('input'));
+        /// before the trailing `scheduleSave` persists it). Keep the live workspace, exactly as the
+        /// dirty-startup merge above does; the tail of this function already skips URL-param
+        /// reconciliation and auto-run for a dirty startup, so nothing below re-applies the stale
+        /// URL over the live edit. But merely skipping the cleanup is not enough: the current
+        /// entry/URL still belong to the DROPPED blank tab — the live edit could not claim them,
+        /// because `refreshCurrentHistoryEntry` bails on another tab's entry — while what gets
+        /// persisted is the live tab under its own id/title. On the NEXT reload nothing is pruned
+        /// (the live tab holds a real query), so `stale_blank_reload` no longer recognizes the
+        /// leftover `?tab=`/`history.state` as stale, the named-URL path treats them as
+        /// authoritative, and a fresh blank tab under the dropped name is recreated alongside the
+        /// persisted live one. So re-own the entry for the live active tab instead: drop the
+        /// foreign state first (unless the ids happen to coincide — a pruned legacy `t1` record vs.
+        /// the `t1` bootstrap tab — where the entry is already the live tab's to replace), then
+        /// seed it exactly as a first trusted edit on a first-ever visit would, via the same
+        /// `refreshCurrentHistoryEntry` — which rebuilds the URL, `history.state` and
+        /// `lastSavedQuery` wholesale from the live tab, dropping the stale `?tab=`, `run=1` and
+        /// hash along the way (`run_immediately` was already cleared above, so the rebuilt URL
+        /// cannot re-stamp `run=1` either).
+        if (url_tab_name) {
+            if (bootstrap_dirty) {
+                const live = getActiveTab();
+                if (live) {
+                    if (history.state && history.state.tabId !== live.id) {
+                        history.replaceState(null, document.title, location.href);
+                    }
+                    refreshCurrentHistoryEntry(live);
+                }
+            } else {
+                const cleaned_url = new URL(location.href);
+                cleaned_url.searchParams.delete('tab');
+                /// Drop the stale `run=1` too (`run_immediately` was likewise cleared above): it was
+                /// the pruned blank tab's directive, and leaving it in the persisted URL would
+                /// auto-run the fresh bootstrap tab on the next reload (the no-hash case takes the
+                /// synchronous bottom-of-script `postAll`, so this replaceState is what stops it
+                /// recurring).
+                cleaned_url.searchParams.delete('run');
+                if (stale_blank_reload_bare) {
+                    cleaned_url.hash = '';
+                    query_area.value = '';
+                    query_area.dispatchEvent(new Event('input'));
+                }
+                history.replaceState(null, document.title, cleaned_url.href);
             }
-            history.replaceState(null, document.title, cleaned_url.href);
         }
         renderTabBar();
     }
