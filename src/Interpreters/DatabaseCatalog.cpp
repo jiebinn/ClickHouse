@@ -2412,12 +2412,25 @@ VectorWithMemoryTracking<String> TableNameHints::getAllRegisteredNames() const
     if (context)
     {
         const auto access = context->getAccess();
-        const bool need_to_check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES, database->getDatabaseName());
+        const String & database_name = database->getDatabaseName();
+        const bool need_to_check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES, database_name);
         if (need_to_check_access_for_tables)
         {
             std::erase_if(names, [&](const String & name)
             {
-                return !access->isGranted(AccessType::SHOW_TABLES, database->getDatabaseName(), name);
+                if (access->isGranted(AccessType::SHOW_TABLES, database_name, name))
+                    return false;
+                /// `SHOW CREATE DICTIONARY` is authorized with `SHOW_DICTIONARIES`, which does not imply
+                /// `SHOW_TABLES`, so a dictionary must be visible to the hints with that grant alone.
+                /// The grant by itself does not tell tables and dictionaries apart, so also make sure the
+                /// object is really a dictionary - otherwise a dictionary-only grant would leak the names
+                /// of similarly-named tables.
+                if (access->isGranted(AccessType::SHOW_DICTIONARIES, database_name, name))
+                {
+                    auto table = database->tryGetTable(name, context);
+                    return !(table && table->isDictionary());
+                }
+                return true;
             });
         }
     }
