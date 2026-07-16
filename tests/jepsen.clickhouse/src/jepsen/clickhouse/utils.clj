@@ -203,26 +203,33 @@
        ;; degraded and racing teardown can delete these dirs between the
        ;; `exists?` check and `tar` (TOCTOU). A failed collection must not crash
        ;; the run after the verdict is already computed - warn and continue.
-       (when (cu/exists? coordination-data-dir)
-         (info node "Coordination files exists, going to compress")
-         (try
-           (c/cd data-dir
-                 (c/exec :tar :czf "coordination.tar.gz" "coordination"))
-           (catch Exception e
-             (warn "Failed to compress coordination files on node" node "-" (.getMessage e)))))
-       (if (cu/exists? (str logs-dir))
-         (do
-           (info node "Logs exist, going to compress")
-           (try
-             (c/cd root-folder
-                   (c/exec :tar :czf "logs.tar.gz" "logs"))
-             (catch Exception e
-               (warn "Failed to compress logs on node" node "-" (.getMessage e)))))
-         (info node "Logs are missing")))
-      ;; Return only artifacts that were actually produced, so the downloader
-      ;; does not fail on a compression that was skipped above.
-      (->> [(str root-folder "/logs.tar.gz")
-            (str data-dir "/coordination.tar.gz")
-            (str logs-dir "/gdb.log")]
-           (filter cu/exists?)
-           (vec)))))
+       ;; Return only archives this invocation actually produced: `logs.tar.gz`
+       ;; lives at root-folder and is not removed by teardown, so on a reused
+       ;; node a stale archive from a previous run must not be attached in place
+       ;; of a skipped compression.
+       (let [coordination-ok
+             (when (cu/exists? coordination-data-dir)
+               (info node "Coordination files exists, going to compress")
+               (try
+                 (c/cd data-dir
+                       (c/exec :tar :czf "coordination.tar.gz" "coordination"))
+                 true
+                 (catch Exception e
+                   (warn "Failed to compress coordination files on node" node "-" (.getMessage e))
+                   false)))
+             logs-ok
+             (if (cu/exists? (str logs-dir))
+               (do
+                 (info node "Logs exist, going to compress")
+                 (try
+                   (c/cd root-folder
+                         (c/exec :tar :czf "logs.tar.gz" "logs"))
+                   true
+                   (catch Exception e
+                     (warn "Failed to compress logs on node" node "-" (.getMessage e))
+                     false)))
+               (do (info node "Logs are missing") false))]
+         (cond-> []
+           logs-ok (conj (str root-folder "/logs.tar.gz"))
+           coordination-ok (conj (str data-dir "/coordination.tar.gz"))
+           (cu/exists? (str logs-dir "/gdb.log")) (conj (str logs-dir "/gdb.log"))))))))
