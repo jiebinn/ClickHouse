@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import uuid
 
 import pyspark
@@ -421,10 +422,16 @@ def iceberg_local_interop_dir(node):
     independent harness runs on the same host, whose xdist workers both get e.g. "gw0",
     do not share one path and clobber each other's host symlink. conftest and the tests
     both call this, so they compute the same path within one worker process.
+
+    run_id comes from `pytest --run-id` and is later interpolated unescaped into SQL
+    (path = '...') and `bash -c` strings, so it is reduced to a safe path token
+    (non-alphanumerics -> _) before use: this stops values like `foo'bar` from breaking
+    SQL and `../../foo` from normalizing the host path out of the per-run namespace.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "master")
     run_id = os.environ.get("INTEGRATION_TESTS_RUN_ID", "")
-    suffix = f"_{run_id}" if run_id else ""
+    safe_run_id = re.sub(r"[^A-Za-z0-9_]", "_", run_id)
+    suffix = f"_{safe_run_id}" if safe_run_id else ""
     return f"/var/lib/clickhouse/user_files/iceberg_{worker}{suffix}_{node}"
 
 
