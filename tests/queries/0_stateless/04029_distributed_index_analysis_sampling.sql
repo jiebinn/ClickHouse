@@ -1,20 +1,22 @@
 -- Tags: no-random-settings, no-random-merge-tree-settings
 
--- Verify that the SAMPLE clause and a WHERE predicate are both passed to remote
--- replicas during distributed index analysis, so index analysis on the replicas
--- sees the AND-combination of both filters. DistributedIndexAnalyzer combines the
--- WHERE filter_ast and the sampling_filter via makeASTForLogicalAnd; without a
+-- Verify that during distributed index analysis a WHERE predicate and the SAMPLE
+-- clause are combined (filter_ast AND sampling_filter) and forwarded together to the
+-- replicas, exercising the makeASTForLogicalAnd branch in DistributedIndexAnalyzer
+-- (src/Interpreters/ClusterProxy/distributedIndexAnalysis.cpp:267-268). Without a
 -- WHERE the else-if branch just forwards the sampling_filter.
-SET explain_query_plan_default = 'legacy';
-
+--
+-- The regression guard reads the query the coordinator actually sends to the
+-- replicas from system.query_log (the mergeTreeAnalyzeIndexesUUID(...) call). That
+-- text is a formatted filter AST, so it is independent of build type and part
+-- layout, unlike an initiator-side EXPLAIN plan.
 SET send_logs_level = 'error';
 
 DROP TABLE IF EXISTS t_dia_sampling;
 
--- A minmax skip index on `value` makes the WHERE predicate participate in index
--- analysis, so the combined filter reaching the replicas is observable in the plan
--- by the index Name / Condition rather than by granule counts (which depend on the
--- part layout of `value` under ORDER BY intHash32(key) and are not build-stable).
+-- The minmax skip index on `value` makes the WHERE predicate index-usable, so
+-- getFilterAST keeps it and it becomes part of the filter forwarded to the replicas.
+-- Without an index on `value`, the WHERE column is not index-usable and is dropped.
 CREATE TABLE t_dia_sampling (key UInt64, value UInt64, INDEX idx_value value TYPE minmax GRANULARITY 1)
 ENGINE = MergeTree ORDER BY intHash32(key) SAMPLE BY intHash32(key)
 SETTINGS index_granularity = 256,
@@ -32,40 +34,35 @@ SET max_parallel_replicas = 2;
 SET use_query_condition_cache = 0;
 SET allow_experimental_parallel_reading_from_replicas = 0;
 SET allow_experimental_analyzer = 1;
+-- Force distributed index analysis to fire on a plain (non-shared) MergeTree so the
+-- combine branch is actually reached regardless of the default storage policy.
+SET distributed_index_analysis_for_non_shared_merge_tree = 1;
 
 -- Results must be identical with and without distributed index analysis.
 SELECT count() FROM t_dia_sampling SAMPLE 0.1 SETTINGS distributed_index_analysis = 0;
 SELECT count() FROM t_dia_sampling SAMPLE 0.1 SETTINGS distributed_index_analysis = 1;
 
--- SAMPLE + WHERE: exercises the AND-combination branch (filter_ast && sampling_filter).
+-- SAMPLE + WHERE exercises the AND-combination branch (filter_ast && sampling_filter).
 SELECT count() FROM t_dia_sampling SAMPLE 0.1 WHERE value < 50000 SETTINGS distributed_index_analysis = 0;
 SELECT count() FROM t_dia_sampling SAMPLE 0.1 WHERE value < 50000 SETTINGS distributed_index_analysis = 1;
 
--- The combined filter must reach index analysis under distributed_index_analysis = 1.
--- Both parts must be observable in the SAMPLE + WHERE plan:
---   * the bounded sampling condition on the primary key intHash32(key) (from sampling_filter), and
---   * the idx_value skip index condition on `value` (from filter_ast).
--- If the combined filter dropped the WHERE part, idx_value would be absent; if it
--- dropped the sampling part, the primary-key condition would be unbounded (`true`).
--- We assert on the presence of the specific Name / Condition strings, not on granule
--- counts, so the check is independent of the part layout of `value`.
-SELECT
-    countIf(explain ILIKE '%Name: idx_value%') > 0 AS where_filter_reaches_analysis,
-    countIf(explain ILIKE '%intHash32(key) in (-Inf,%') > 0 AS sampling_filter_reaches_analysis
-FROM (
-    EXPLAIN indexes = 1
-    SELECT * FROM t_dia_sampling SAMPLE 0.1 WHERE value < 50000
-    SETTINGS distributed_index_analysis = 1
-);
+SYSTEM FLUSH LOGS query_log;
 
--- Contrast: with SAMPLE alone (no WHERE) the skip index on `value` must NOT appear,
--- confirming that it is the WHERE filter_ast, combined with the sampling_filter, that
--- brings idx_value into analysis.
-SELECT countIf(explain ILIKE '%Name: idx_value%') AS sample_only_uses_value_index
-FROM (
-    EXPLAIN indexes = 1
-    SELECT * FROM t_dia_sampling SAMPLE 0.1
-    SETTINGS distributed_index_analysis = 1
-);
+-- Inspect the filter forwarded to the replicas by distributed index analysis, scoped
+-- to this table's UUID so other tests do not interfere. The forwarded filter is the
+-- second argument of mergeTreeAnalyzeIndexesUUID(...):
+--   * SAMPLE + WHERE -> carries BOTH the WHERE predicate less(value, ...) and the
+--     sampling predicate less(intHash32(key), ...): the AND-combine forwarded both.
+--   * SAMPLE only    -> carries less(intHash32(key), ...) but NOT less(value, ...).
+WITH (SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = 't_dia_sampling') AS tuuid
+SELECT
+    countIf(query ILIKE '%less(value,%' AND query ILIKE '%intHash32(key)%') > 0 AS combined_filter_forwarded,
+    countIf(query NOT ILIKE '%less(value,%' AND query ILIKE '%intHash32(key)%') > 0 AS sampling_only_forwarded
+FROM system.query_log
+WHERE is_initial_query = 0
+  AND type = 'QueryFinish'
+  AND query ILIKE '%mergeTreeAnalyzeIndexesUUID%'
+  AND query ILIKE concat('%', tuuid, '%')
+  AND event_date >= today() - 1;
 
 DROP TABLE t_dia_sampling;
