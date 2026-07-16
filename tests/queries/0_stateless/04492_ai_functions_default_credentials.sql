@@ -35,7 +35,7 @@ SET ai_function_embedding_default_credentials = '';
 SELECT '-- No defaults: text function fails';
 SELECT aiGenerate('hi'); -- { serverError BAD_ARGUMENTS }
 SELECT '-- No defaults: aiEmbed fails';
-SELECT aiEmbed('hi'); -- { serverError BAD_ARGUMENTS }
+SELECT aiEmbed('hi', 'embed-model'); -- { serverError BAD_ARGUMENTS }
 
 -- Set only the text default. aiGenerate resolves; aiEmbed still has no default.
 SET ai_function_text_default_credentials = 'ai_text_nc';
@@ -44,15 +44,15 @@ SELECT '-- Text default set: aiGenerate resolves via default';
 SELECT count() FROM (SELECT aiGenerate(x) AS r FROM tab);
 
 SELECT '-- Text default does not leak into aiEmbed';
-SELECT aiEmbed('hi'); -- { serverError BAD_ARGUMENTS }
+SELECT aiEmbed('hi', 'embed-model'); -- { serverError BAD_ARGUMENTS }
 
 -- Set only the embedding default (clear the text one). aiEmbed resolves; text fails.
 SET ai_function_text_default_credentials = '';
 SET ai_function_embedding_default_credentials = 'ai_embed_nc';
 
--- aiEmbed requires `model` in the parameter map; credentials still come from the default setting.
+-- aiEmbed requires `model` as a positional argument; credentials still come from the default setting.
 SELECT '-- Embedding default set: aiEmbed resolves via default';
-SELECT count() FROM (SELECT aiEmbed(x, map('model', 'embed-model')) AS r FROM tab);
+SELECT count() FROM (SELECT aiEmbed(x, 'embed-model') AS r FROM tab);
 
 SELECT '-- Embedding default does not leak into text functions';
 SELECT aiGenerate('hi'); -- { serverError BAD_ARGUMENTS }

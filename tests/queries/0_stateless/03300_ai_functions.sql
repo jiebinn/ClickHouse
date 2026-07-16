@@ -191,7 +191,7 @@ SELECT aiGenerate('hi', map('credentials', 'ai_bad_provider')); -- { serverError
 
 SELECT '-- Unknown provider name on empty input';
 SELECT aiGenerate(x, map('credentials', 'ai_bad_provider')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
-SELECT aiEmbed(x, map('credentials', 'ai_bad_provider', 'model', 'test-model')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
+SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_bad_provider')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
 
 DROP NAMED COLLECTION ai_bad_provider;
 
@@ -210,8 +210,8 @@ SELECT '-- Anthropic provider resolves';
 SELECT count() FROM (SELECT aiGenerate(x, map('credentials', 'ai_anthropic')) AS result FROM tab);
 
 SELECT '-- aiEmbed rejects anthropic provider';
-SELECT aiEmbed('hi', map('credentials', 'ai_anthropic', 'model', 'claude-test')); -- { serverError NOT_IMPLEMENTED }
-SELECT aiEmbed(x, map('credentials', 'ai_anthropic', 'model', 'claude-test')) FROM (SELECT '' AS x WHERE 0); -- { serverError NOT_IMPLEMENTED }
+SELECT aiEmbed('hi', 'claude-test', map('credentials', 'ai_anthropic')); -- { serverError NOT_IMPLEMENTED }
+SELECT aiEmbed(x, 'claude-test', map('credentials', 'ai_anthropic')) FROM (SELECT '' AS x WHERE 0); -- { serverError NOT_IMPLEMENTED }
 
 DROP NAMED COLLECTION ai_anthropic;
 
@@ -417,26 +417,36 @@ SELECT '-- aiEmbed: too few arguments';
 SELECT aiEmbed(); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 
 SELECT '-- aiEmbed: too many arguments';
-SELECT aiEmbed('x', map('dimensions', '256'), 'extra'); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
+SELECT aiEmbed('x', 'test-model', map('dimensions', '256'), 'extra'); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 
 SELECT '-- aiEmbed: non-constant parameter map';
-SELECT aiEmbed(x, map('dimensions', toString(number))) FROM (SELECT x, 0 AS number FROM tab); -- { serverError ILLEGAL_COLUMN }
+SELECT aiEmbed(x, 'test-model', map('dimensions', toString(number))) FROM (SELECT x, 0 AS number FROM tab); -- { serverError ILLEGAL_COLUMN }
 
 SELECT '-- aiEmbed: wrong type for parameter argument (not a map)';
+SELECT aiEmbed(x, 'test-model', 256) FROM tab; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
+
+SELECT '-- aiEmbed: wrong type for model argument (not a string)';
 SELECT aiEmbed(x, 256) FROM tab; -- { serverError ILLEGAL_TYPE_OF_ARGUMENT }
 
--- Unlike the text functions, aiEmbed requires `model` in the parameter map and never reads it
--- from the named collection (ai_credentials has a `model`, but it is ignored here).
-SELECT '-- aiEmbed: model is required in the parameter map';
-SELECT aiEmbed('hi', map('credentials', 'ai_credentials')); -- { serverError BAD_ARGUMENTS }
+SELECT '-- aiEmbed: non-constant model argument';
+SELECT aiEmbed(x, x) FROM tab; -- { serverError ILLEGAL_COLUMN }
 
-SELECT '-- aiEmbed: model supplied via the parameter map resolves';
-SELECT count() FROM (SELECT aiEmbed(x, map('credentials', 'ai_credentials', 'model', 'test-model')) AS result FROM tab);
+-- `model` is a required positional argument for aiEmbed (unlike the text functions, which read it
+-- from the parameter map or the named collection).
+SELECT '-- aiEmbed: model is a required positional argument';
+SELECT aiEmbed('hi'); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
+
+-- `model` in the parameter map is rejected: it is not a known map key for aiEmbed.
+SELECT '-- aiEmbed: model in the parameter map is rejected';
+SELECT aiEmbed('hi', 'test-model', map('credentials', 'ai_credentials', 'model', 'other-model')); -- { serverError BAD_ARGUMENTS }
+
+SELECT '-- aiEmbed: model supplied as a positional argument resolves';
+SELECT count() FROM (SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_credentials')) AS result FROM tab);
 
 SELECT '-- aiEmbed: return type';
 DROP TABLE IF EXISTS _03300_ret_embed;
 CREATE TABLE _03300_ret_embed ENGINE = Memory AS
-    SELECT aiEmbed(x, map('model', 'test-model')) AS result FROM tab;
+    SELECT aiEmbed(x, 'test-model') AS result FROM tab;
 SELECT name, type FROM system.columns
     WHERE database = currentDatabase() AND table = '_03300_ret_embed';
 DROP TABLE IF EXISTS _03300_ret_embed;
@@ -444,24 +454,24 @@ DROP TABLE IF EXISTS _03300_ret_embed;
 SELECT '-- aiEmbed: return type with dimensions';
 DROP TABLE IF EXISTS _03300_ret_embed_dim;
 CREATE TABLE _03300_ret_embed_dim ENGINE = Memory AS
-    SELECT aiEmbed(x, map('model', 'test-model', 'dimensions', '256')) AS result FROM tab;
+    SELECT aiEmbed(x, 'test-model', map('dimensions', '256')) AS result FROM tab;
 SELECT name, type FROM system.columns
     WHERE database = currentDatabase() AND table = '_03300_ret_embed_dim';
 DROP TABLE IF EXISTS _03300_ret_embed_dim;
 
 SELECT '-- aiEmbed: empty input executes';
-SELECT count() FROM (SELECT aiEmbed(x, map('model', 'test-model')) AS result FROM tab);
+SELECT count() FROM (SELECT aiEmbed(x, 'test-model') AS result FROM tab);
 
 SELECT '-- aiEmbed: empty input with dimensions';
-SELECT count() FROM (SELECT aiEmbed(x, map('model', 'test-model', 'dimensions', '128')) AS result FROM tab);
+SELECT count() FROM (SELECT aiEmbed(x, 'test-model', map('dimensions', '128')) AS result FROM tab);
 
 -- `dimensions` is a row-independent constant, so an out-of-range value must fail
 -- the query even when the source has zero rows.
 SELECT '-- aiEmbed: out-of-range dimensions on empty input';
-SELECT aiEmbed(x, map('model', 'test-model', 'dimensions', '18446744073709551615')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
+SELECT aiEmbed(x, 'test-model', map('dimensions', '18446744073709551615')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
 
 SELECT '-- aiEmbed: nonexistent named collection';
-SELECT aiEmbed('hello', map('credentials', 'nonexistent_collection_xyz')); -- { serverError NAMED_COLLECTION_DOESNT_EXIST }
+SELECT aiEmbed('hello', 'test-model', map('credentials', 'nonexistent_collection_xyz')); -- { serverError NAMED_COLLECTION_DOESNT_EXIST }
 
 SELECT '-- aiEmbed: batch size setting default';
 SELECT default FROM system.settings WHERE name = 'ai_function_embedding_max_batch_size';
@@ -475,7 +485,7 @@ DROP TABLE IF EXISTS _03300_embed_null_out;
 CREATE TABLE _03300_embed_null_in (x Nullable(String)) ENGINE = Memory;
 INSERT INTO _03300_embed_null_in VALUES (NULL);
 CREATE TABLE _03300_embed_null_out ENGINE = Memory AS
-    SELECT aiEmbed(x, map('model', 'test-model')) AS result FROM _03300_embed_null_in;
+    SELECT aiEmbed(x, 'test-model') AS result FROM _03300_embed_null_in;
 SELECT name, type FROM system.columns
     WHERE database = currentDatabase() AND table = '_03300_embed_null_out';
 
@@ -500,7 +510,7 @@ CREATE TABLE _03300_embed_default
 (
     id UInt32,
     doc String,
-    vector Array(Float32) DEFAULT aiEmbed(doc, map('model', 'test-model'))
+    vector Array(Float32) DEFAULT aiEmbed(doc, 'test-model')
 ) ENGINE = MergeTree ORDER BY id;
 INSERT INTO _03300_embed_default (id, doc) VALUES (1, 'hello world');
 SELECT id, length(vector) FROM _03300_embed_default;
