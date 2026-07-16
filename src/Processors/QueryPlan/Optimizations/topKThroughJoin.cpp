@@ -83,6 +83,36 @@ bool joinMayHaveDelayedBlocks(const IQueryPlanStep & step)
     return true;
 }
 
+/// Return `true` when the eventual physical join might not emit left rows in their
+/// original stream order, mirroring `IJoin::preservesLeftBlockOrder()`. When that is
+/// possible, `optimizeReadInOrder`'s second-pass traversal rejects the join
+/// (`join_ptr->preservesLeftBlockOrder()` in `findReadingStep`), so deferring to it
+/// would silently disable both `topKThroughJoin` and the second pass.
+///
+/// For a physical `JoinStep` we read `preservesLeftBlockOrder()` directly. For
+/// `JoinStepLogical` the algorithm is chosen later from `JoinSettings::join_algorithms`,
+/// so we conservatively treat the join as reordering when the configured settings allow
+/// `PARTIAL_MERGE` / `PREFER_PARTIAL_MERGE`, which build a `PartialMergeJoin` (re-sorts
+/// left blocks by the join key). `GRACE_HASH` / `AUTO` are already covered by
+/// `joinMayHaveDelayedBlocks`. See issues #110662 and #109216.
+bool joinMayNotPreserveLeftBlockOrder(const IQueryPlanStep & step)
+{
+    if (const auto * physical = typeid_cast<const JoinStep *>(&step))
+    {
+        const auto & join_ptr = physical->getJoin();
+        return !join_ptr || !join_ptr->preservesLeftBlockOrder();
+    }
+    if (const auto * logical = typeid_cast<const JoinStepLogical *>(&step))
+    {
+        return std::ranges::any_of(logical->getJoinSettings().join_algorithms, [](JoinAlgorithm a)
+        {
+            return a == JoinAlgorithm::PARTIAL_MERGE || a == JoinAlgorithm::PREFER_PARTIAL_MERGE;
+        });
+    }
+    /// Unknown step kind - be conservative.
+    return true;
+}
+
 /// Walk down a single-child chain looking for a `ReadFromMergeTree` step. We use this
 /// to defer to `optimizeReadInOrder`'s through-join pass when the preserved input can
 /// stream rows in sort-key order from MergeTree's primary key. Inserting our explicit
@@ -326,13 +356,21 @@ size_t tryTopKThroughJoin(QueryPlan::Node * parent_node, QueryPlan::Nodes & node
     /// optimizations whenever the planner picks one - which is the steady state today,
     /// because `max_bytes_ratio_before_external_join` defaults to `0.5` and wraps every
     /// hash join in `SpillingHashJoin`.
+    ///
+    /// Finally, the eventual physical join must preserve the left stream's order.
+    /// `optimizeReadInOrder`'s traversal also rejects reordering joins
+    /// (`join->preservesLeftBlockOrder()` in `findReadingStep`), so deferring when the
+    /// planner may pick `partial_merge` / `prefer_partial_merge` (a `PartialMergeJoin`,
+    /// which re-sorts left blocks by the join key) would silently disable both
+    /// optimizations. See issues #110662 and #109216.
     const bool second_pass_can_apply
         = settings.read_in_order
         && settings.read_in_order_through_join
         && settings.join_swap_table.has_value() && !settings.join_swap_table.value()
         && join_kind == JoinKind::Left
         && (join_strictness == JoinStrictness::All || join_strictness == JoinStrictness::Any)
-        && !joinMayHaveDelayedBlocks(*join_node->step);
+        && !joinMayHaveDelayedBlocks(*join_node->step)
+        && !joinMayNotPreserveLeftBlockOrder(*join_node->step);
     if (second_pass_can_apply)
     {
         if (const auto * reading = findMergeTreeRead(preserved_input_node))
