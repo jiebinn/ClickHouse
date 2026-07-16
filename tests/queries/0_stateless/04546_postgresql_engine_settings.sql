@@ -1,6 +1,10 @@
--- Tags: no-fasttest
+-- Tags: no-fasttest, no-parallel, no-replicated-database
 -- Tag justification:
 --   no-fasttest: depends on libpqxx (the PostgreSQL table engine), which is not built in fast test.
+--   no-parallel: creates and drops global named collections; the flaky check runs the same test
+--                concurrently, and parallel repetitions collide on them (the first finishing run
+--                drops the collection while others still use it).
+--   no-replicated-database: named collections are server-global, not database-scoped.
 --
 -- The PostgreSQL table engine does not connect at CREATE time when the columns are given explicitly and
 -- the connection pool is created lazily, so an unreachable host is fine here: nothing is ever connected.
