@@ -19,6 +19,13 @@ public:
 
     UInt32 getMaxCompressedDataSize(UInt32 uncompressed_size) const override;
 
+    /// zxc decodes literals with 32-byte SIMD "wild" loads that can read up to
+    /// ZXC_PAD_SIZE (32) bytes past the end of the compressed input. Reserve slack
+    /// at the end of the (de)compression buffers so these over-reads stay inside
+    /// allocated, initialized memory instead of reading the uninitialized tail
+    /// (which trips MemorySanitizer). This is the same mechanism `LZ4` uses.
+    UInt32 getAdditionalSizeAtTheEndOfBuffer() const override { return 64; }
+
     void updateHash(SipHash & hash) const override;
 
 protected:
