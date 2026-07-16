@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/ReplicatedMergeTreePartHeader.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Core/BackgroundSchedulePool.h>
+#include <Common/FailPoint.h>
 #include <Common/ThreadFuzzer.h>
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <Interpreters/Context.h>
@@ -18,6 +19,11 @@ namespace ProfileEvents
 
 namespace DB
 {
+
+namespace FailPoints
+{
+    extern const char rmt_cancel_removed_parts_check_pause_in_gap[];
+}
 
 namespace MergeTreeSetting
 {
@@ -90,6 +96,13 @@ BackgroundSchedulePoolPausableTask::PauseHolderPtr ReplicatedMergeTreePartCheckT
 
 void ReplicatedMergeTreePartCheckThread::cancelRemovedPartsCheck(const MergeTreePartInfo & drop_range_info)
 {
+    /// Two concurrent calls with overlapping drop ranges would race: the first snapshots the
+    /// parts to remove, drops parts_mutex to remove them from ZooKeeper, and meanwhile the second
+    /// erases the same parts from parts_queue. When the first re-locks it finds fewer parts than it
+    /// snapshotted and throws the "Unexpected number of parts to remove from parts_queue" logical
+    /// error. Serialize the whole function so the two parts_mutex sections are atomic w.r.t. it.
+    std::lock_guard cancel_lock(cancel_removed_parts_mutex);
+
     Strings parts_to_remove;
     {
         std::lock_guard lock(parts_mutex);
@@ -100,6 +113,10 @@ void ReplicatedMergeTreePartCheckThread::cancelRemovedPartsCheck(const MergeTree
 
     /// We have to remove parts that were not removed by removePartAndEnqueueFetch
     LOG_INFO(log, "Removing broken parts from ZooKeeper: {}", fmt::join(parts_to_remove, ", "));
+
+    /// Used only by tests to deterministically hit the non-atomic gap between the two parts_mutex sections.
+    FailPointInjection::pauseFailPoint(FailPoints::rmt_cancel_removed_parts_check_pause_in_gap);
+
     storage.removePartsFromZooKeeperWithRetries(parts_to_remove);   /// May throw
 
     /// Now we can remove parts from the check queue.

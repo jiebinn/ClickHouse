@@ -109,6 +109,11 @@ private:
     StringSet parts_set;
     PartsToCheckQueue parts_queue;
 
+    /// Serializes cancelRemovedPartsCheck against itself. That function drops parts_mutex
+    /// while removing parts from ZooKeeper, so two concurrent calls with overlapping drop
+    /// ranges could interleave their two parts_mutex sections and break the recheck invariant.
+    std::mutex cancel_removed_parts_mutex;
+
     std::mutex start_stop_mutex;
     std::atomic<bool> need_stop { false };
 
