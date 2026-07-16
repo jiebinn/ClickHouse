@@ -58,7 +58,16 @@ endmacro()
 # CPU the ClickHouse binary runs on supports it.
 zxc_add_variant(_default)
 
-if (ARCH_AMD64)
+if (OS_DARWIN AND ARCH_AMD64)
+    # zxc's x86-64 runtime dispatch calls `__builtin_cpu_init` /
+    # `__builtin_cpu_supports`, which reference compiler-rt's `__cpu_model`. That
+    # symbol is not linked into ClickHouse's macOS cross-build, so linking fails
+    # with "undefined ___cpu_model". macOS builds are for local development only,
+    # so restrict zxc to its portable scalar core there: `ZXC_DISABLE_SIMD` forces
+    # the dispatcher to the `_default` variant and drops the `__builtin_cpu_*`
+    # calls, and we skip building the now-unused per-ISA variant objects.
+    set(ZXC_FORCE_SCALAR TRUE)
+elseif (ARCH_AMD64)
     # SSE2/AVX2 flags are redundant with the x86-64-v3 baseline but harmless;
     # AVX512 is NOT in the baseline, so those flags are required for that variant
     # (only ever entered at runtime on AVX-512 capable CPUs).
@@ -72,6 +81,10 @@ elseif (ARCH_AARCH64)
 endif ()
 
 add_library(_zxc ${ZXC_CORE_SOURCES} ${ZXC_VARIANT_OBJECTS})
+
+if (ZXC_FORCE_SCALAR)
+    target_compile_definitions(_zxc PRIVATE ZXC_DISABLE_SIMD)
+endif ()
 
 target_compile_definitions(_zxc PUBLIC ZXC_STATIC_DEFINE)
 target_include_directories(_zxc PRIVATE ${ZXC_INCLUDE_DIRS})
