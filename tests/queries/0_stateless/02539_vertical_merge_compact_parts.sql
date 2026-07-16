@@ -1,10 +1,3 @@
--- Tags: no-shared-merge-tree
--- no-shared-merge-tree: the test checks local vertical-merge mechanics (compact
--- to wide) by parsing MergeTree part names from system.part_log
--- (name_parts[2]::UInt64). With SharedMergeTree, part_log for this table can
--- contain extra entries whose part_name is a filesystem path, so the cast
--- throws CANNOT_PARSE_TEXT.
-
 DROP TABLE IF EXISTS t_compact_vertical_merge;
 
 CREATE TABLE t_compact_vertical_merge (id UInt64, s LowCardinality(String), arr Array(UInt64))
@@ -25,8 +18,8 @@ OPTIMIZE TABLE t_compact_vertical_merge FINAL;
 SYSTEM FLUSH LOGS part_log;
 
 WITH splitByChar('_', part_name) AS name_parts,
-    name_parts[2]::UInt64 AS min_block,
-    name_parts[3]::UInt64 AS max_block
+    toUInt64OrNull(name_parts[2]) AS min_block,
+    toUInt64OrNull(name_parts[3]) AS max_block
 SELECT min_block, max_block, event_type, merge_algorithm, part_type FROM system.part_log
 WHERE event_date >= yesterday() AND event_time >= now() - 600 AND
     database = currentDatabase() AND
@@ -40,8 +33,8 @@ OPTIMIZE TABLE t_compact_vertical_merge FINAL;
 SYSTEM FLUSH LOGS part_log;
 
 WITH splitByChar('_', part_name) AS name_parts,
-    name_parts[2]::UInt64 AS min_block,
-    name_parts[3]::UInt64 AS max_block
+    toUInt64OrNull(name_parts[2]) AS min_block,
+    toUInt64OrNull(name_parts[3]) AS max_block
 SELECT min_block, max_block, event_type, merge_algorithm, part_type FROM system.part_log
 WHERE event_date >= yesterday() AND event_time >= now() - 600 AND
     database = currentDatabase() AND
