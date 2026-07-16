@@ -4607,6 +4607,12 @@ async function loadTables(server_address, user, password, database, container, s
         /// table, instead of running the default `SELECT *`. Stop the event so it neither
         /// bubbles to the row's click handler nor triggers a hover balloon reposition.
         table_icon.addEventListener('click', e => {
+            if (isMac && e.ctrlKey && e.button !== 1) {
+                /// On macOS `Ctrl+Click` is the secondary (context-menu) click, same as the
+                /// guard in `setQueryOrRun`; leave it entirely to the browser instead of
+                /// toggling the column list, so the native context menu still appears.
+                return;
+            }
             e.stopPropagation();
             toggleColumns(table, table_icon, database, elem.table, server_address, user, password);
         });
