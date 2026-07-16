@@ -39,6 +39,7 @@ namespace MergeTreeSetting
 namespace FailPoints
 {
     extern const char rmt_mutate_task_pause_in_prepare[];
+    extern const char rmt_mutate_task_pause_after_zero_copy_lock[];
 }
 
 MutateFromLogEntryTask::~MutateFromLogEntryTask()
@@ -228,6 +229,10 @@ ReplicatedMergeMutateTaskBase::PrepareResult MutateFromLogEntryTask::prepare()
             }
 
             LOG_DEBUG(log, "Zero copy lock taken, will mutate part {}", entry.new_part_name);
+
+            /// Pause here with the zero-copy exclusive lock held, so a test can tear the task
+            /// down (e.g. via DROP TABLE) while ~ZooKeeperLock still has to release the lock.
+            FailPointInjection::pauseFailPoint(FailPoints::rmt_mutate_task_pause_after_zero_copy_lock);
         }
     }
 
