@@ -24,6 +24,7 @@ namespace ErrorCodes
     extern const int CANNOT_BACKUP_TABLE;
     extern const int CANNOT_RESTORE_TABLE;
     extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+    extern const int CANNOT_GET_CREATE_DICTIONARY_QUERY;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_TABLE;
@@ -48,6 +49,35 @@ StoragePtr IDatabase::getTable(const String & name, ContextPtr context) const
         backQuoteIfNeed(name),
         backQuoteIfNeed(hint.first),
         backQuoteIfNeed(hint.second));
+}
+
+ASTPtr IDatabase::getCreateTableQuery(const String & name, ContextPtr context) const
+{
+    try
+    {
+        return getCreateTableQueryImpl(name, context, /*throw_on_error=*/ true);
+    }
+    catch (Exception & e)
+    {
+        /// When the table does not exist, augment the error with a "Maybe you meant ...?" hint,
+        /// like the one shown for `SELECT` queries. `getCreateTableQueryImpl` reports a missing
+        /// table with one of these error codes.
+        const bool table_is_missing = e.code() == ErrorCodes::UNKNOWN_TABLE
+            || e.code() == ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY
+            || e.code() == ErrorCodes::CANNOT_GET_CREATE_DICTIONARY_QUERY;
+
+        /// Double-check the table is really absent, so we do not attach a misleading hint when the
+        /// error was raised for a different reason. Hints are computed here, outside of any database
+        /// lock held by `getCreateTableQueryImpl`, to avoid a deadlock.
+        if (table_is_missing && !isTableExist(name, context))
+        {
+            TableNameHints hints(this->shared_from_this(), context);
+            auto hint = hints.getHintForTable(name);
+            if (!hint.first.empty())
+                e.addMessage("Maybe you meant {}.{}?", backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+        }
+        throw;
+    }
 }
 
 IDatabase::IDatabase(String database_name_) : database_name(std::move(database_name_))
