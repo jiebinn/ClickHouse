@@ -194,8 +194,32 @@ TEST(TerminalMarkdownRenderer, MintlifyCardKeepsTitleAndContent)
 
 TEST(TerminalMarkdownRenderer, SelfClosingComponentIsDropped)
 {
-    /// A self-closing component on its own line, e.g. an imported website snippet: nothing to render.
+    /// A self-closing component with no matching `import` is unknown, so it is simply dropped (see
+    /// `KnownSnippetImportIsResolvedToContent` for a resolved documentation snippet import).
     EXPECT_EQ(plainRenderer().render("Before.\n\n<WhenToUseJson />\n\nAfter."), "Before.\n\nAfter.\n");
+}
+
+TEST(TerminalMarkdownRenderer, KnownSnippetImportIsResolvedToContent)
+{
+    /// A self-closing tag whose `import` resolves to a known documentation snippet (see `DOC_SNIPPETS`
+    /// in TerminalMarkdownRenderer.cpp) is replaced by the snippet's actual content instead of being
+    /// dropped, so a converted page does not lose a whole settings table on this help surface.
+    const String out = plainRenderer(120).render(
+        "import PrettyFormatSettings from '/snippets/common-pretty-format-settings.mdx';\n\n"
+        "Before.\n\n<PrettyFormatSettings/>\n\nAfter.");
+    EXPECT_EQ(out.find("PrettyFormatSettings"), String::npos);
+    EXPECT_NE(out.find("output_format_pretty_max_rows"), String::npos);
+    EXPECT_TRUE(out.starts_with("Before.\n\n"));
+    EXPECT_TRUE(out.ends_with("After.\n"));
+}
+
+TEST(TerminalMarkdownRenderer, KnownSnippetImportResolvesRegardlessOfLocalAlias)
+{
+    /// The snippet is matched by its imported path, not by the local binding name: `Avro` and
+    /// `AvroConfluent` import the same `data-types-matching.mdx` snippet under different local names.
+    const String out = plainRenderer(200).render(
+        "import DataTypesMatching from '/snippets/data-types-matching.mdx';\n\n<DataTypesMatching/>");
+    EXPECT_NE(out.find("Apache Avro format"), String::npos);
 }
 
 TEST(TerminalMarkdownRenderer, UnknownOpenTagRendersLiterally)
