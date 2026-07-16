@@ -336,12 +336,20 @@ rm -f "$FOUND" "$UNEXPECTED"
 END=$(( $(date +%s) + DURATION ))
 
 # Keep the /uuid children list volatile so a stale-snapshot watch refresh is
-# almost always in flight.
+# almost always in flight. The churn is part of the test's contract (it is
+# what widens the eviction window), so client failures here are not ignorable
+# noise: any nonzero exit fails the worker and the driver, like in `victim`.
+# No race detection is needed here: `IF NOT EXISTS`/`IF EXISTS` make the
+# statements no-ops instead of errors when the race hides the entity.
 churn() {
-    local w=$1 i=0 n
+    local w=$1
+    local i=0 n out
     while [ "$(date +%s)" -lt "$END" ] && [ ! -e "$FOUND" ]; do
         n="churn_${w}_$((i % 4))"
-        $CLIENT --multiquery -q "CREATE SETTINGS PROFILE IF NOT EXISTS $n SETTINGS max_execution_time=$((i % 50 + 1)); DROP SETTINGS PROFILE IF EXISTS $n;" >/dev/null 2>&1
+        if ! out=$($CLIENT --multiquery -q "CREATE SETTINGS PROFILE IF NOT EXISTS $n SETTINGS max_execution_time=$((i % 50 + 1)); DROP SETTINGS PROFILE IF EXISTS $n;" 2>&1); then
+            echo "$out" > "$UNEXPECTED"
+            return 1
+        fi
         i=$((i + 1))
     done
 }
