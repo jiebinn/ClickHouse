@@ -21,6 +21,34 @@ JoinOnKeyColumns::JoinOnKeyColumns(
 {
 }
 
+const UInt8 * JoinOnKeyColumns::buildRowSkipData(IColumn::Filter & buffer) const
+{
+    const UInt8 * null_map_data = null_map ? null_map->data() : nullptr;
+    const auto mask_kind = join_mask_column.getKind();
+    if (mask_kind == JoinCommon::JoinMask::Kind::AllTrue)
+        return null_map_data;
+
+    const size_t mask_size = join_mask_column.getSize();
+    chassert(!null_map || null_map->size() == mask_size);
+    if (mask_kind == JoinCommon::JoinMask::Kind::AllFalse)
+    {
+        buffer.assign(mask_size, static_cast<UInt8>(1));
+    }
+    else
+    {
+        const UInt8 * mask_data = join_mask_column.getRawDataOrNull();
+        buffer.resize(mask_size);
+        /// The mask bytes are only guaranteed to be boolean-like (0 = filtered), not 0/1.
+        if (null_map_data)
+            for (size_t i = 0; i < mask_size; ++i)
+                buffer[i] = null_map_data[i] | static_cast<UInt8>(!mask_data[i]);
+        else
+            for (size_t i = 0; i < mask_size; ++i)
+                buffer[i] = static_cast<UInt8>(!mask_data[i]);
+    }
+    return buffer.data();
+}
+
 size_t LazyOutput::buildOutput(
     size_t size_to_reserve,
     const Block & left_block,

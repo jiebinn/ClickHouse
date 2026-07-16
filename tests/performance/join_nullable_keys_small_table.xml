@@ -22,6 +22,41 @@
     <query>
         SELECT count() FROM (SELECT toNullable(number) AS k FROM numbers_mt(1e8)) AS lhs
         INNER JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs USING (k)
+        FORMAT Null
         SETTINGS max_threads=1, join_algorithm='hash'
+    </query>
+
+    <!-- Non-nullable keys with a join mask of kind `Unknown`: a left-side-only condition in the
+         ON section stays inside the JOIN as the probe-side mask column (it cannot be pushed to
+         WHERE without changing LEFT JOIN semantics). -->
+    <query>
+        SELECT * FROM numbers_mt(5e8) AS lhs
+        LEFT JOIN (SELECT number AS k FROM numbers_mt(1e3)) AS rhs ON lhs.number = rhs.k AND (lhs.number % 2 = 0)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='hash'
+    </query>
+
+    <!-- Nullable keys combined with an ON-section mask: both skip sources merged. -->
+    <query>
+        SELECT * FROM (SELECT toNullable(number) AS k FROM numbers_mt(5e8)) AS lhs
+        LEFT JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs ON lhs.k = rhs.k AND (lhs.k % 2 = 0)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='hash'
+    </query>
+
+    <!-- Multiple disjuncts (OR) with nullable keys: the multi-clause probe loop. -->
+    <query>
+        SELECT count() FROM (SELECT toNullable(number) AS k FROM numbers_mt(2e8)) AS lhs
+        LEFT JOIN (SELECT number*2 AS a, number*3 AS b FROM numbers_mt(1e3)) AS rhs ON lhs.k = rhs.a OR lhs.k = rhs.b
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='hash'
+    </query>
+
+    <!-- The same nullable shape probed through scattered blocks (index selector). -->
+    <query>
+        SELECT * FROM (SELECT toNullable(number) AS k FROM numbers_mt(5e8)) AS lhs
+        LEFT JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs USING (k)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='parallel_hash'
     </query>
 </test>

@@ -572,6 +572,13 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
     static constexpr bool flag_per_row = false; // Always false in single map case
     const auto & join_keys = added_columns.join_on_keys.at(0);
 
+    /// The skip pointer is a local so that it can stay in a register across the calls in
+    /// the loop body (see `buildRowSkipData`).
+    const UInt8 * skip_data = nullptr;
+    IColumn::Filter skip_buffer;
+    if constexpr (!fast_path)
+        skip_data = join_keys.buildRowSkipData(skip_buffer);
+
     constexpr JoinFeatures<KIND, STRICTNESS, MapsTemplate> join_features;
 
     size_t rows = ScatteredBlock::Selector::size(selector);
@@ -615,16 +622,11 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
 
         bool skip_row = false;
         if constexpr (!fast_path)
-            skip_row = join_keys.null_map && (*join_keys.null_map)[ind];
+            skip_row = skip_data && skip_data[ind];
 
         if (!skip_row)
         {
-            bool row_acceptable = true;
-            if constexpr (!fast_path)
-                row_acceptable = !join_keys.isRowFiltered(ind);
-
-            using FindResult = typename KeyGetter::FindResult;
-            auto find_result = row_acceptable ? key_getter.findKey(*map, ind, pool) : FindResult();
+            auto find_result = key_getter.findKey(*map, ind, pool);
 
             if (find_result.isFound())
             {
@@ -669,6 +671,18 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
     const Selector & selector)
 {
     static constexpr bool flag_per_row = true; // Always true in multiple maps case
+
+    /// Per-clause skip bytes, prepared once per block (see `JoinOnKeyColumns::buildRowSkipData`).
+    std::vector<const UInt8 *> skip_datas;
+    std::vector<IColumn::Filter> skip_buffers;
+    if constexpr (!fast_path)
+    {
+        const size_t num_clauses = added_columns.join_on_keys.size();
+        skip_datas.resize(num_clauses);
+        skip_buffers.resize(num_clauses);
+        for (size_t d = 0; d < num_clauses; ++d)
+            skip_datas[d] = added_columns.join_on_keys[d].buildRowSkipData(skip_buffers[d]);
+    }
 
     constexpr JoinFeatures<KIND, STRICTNESS, MapsTemplate> join_features;
 
@@ -719,19 +733,13 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
         KnownRowsHolder<flag_per_row> known_rows;
         for (size_t onexpr_idx = 0; onexpr_idx < added_columns.join_on_keys.size(); ++onexpr_idx)
         {
-            const auto & join_keys = added_columns.join_on_keys[onexpr_idx];
             bool skip_row = false;
             if constexpr (!fast_path)
-                skip_row = join_keys.null_map && (*join_keys.null_map)[ind];
+                skip_row = skip_datas[onexpr_idx] && skip_datas[onexpr_idx][ind];
 
             if (!skip_row)
             {
-                bool row_acceptable = true;
-                if constexpr (!fast_path)
-                    row_acceptable = !join_keys.isRowFiltered(ind);
-
-                using FindResult = typename KeyGetter::FindResult;
-                auto find_result = row_acceptable ? key_getter_vector[onexpr_idx].findKey(*(mapv[onexpr_idx]), ind, pool) : FindResult();
+                auto find_result = key_getter_vector[onexpr_idx].findKey(*(mapv[onexpr_idx]), ind, pool);
 
                 if (find_result.isFound())
                 {
