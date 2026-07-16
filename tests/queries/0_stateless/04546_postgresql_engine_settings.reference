@@ -7,3 +7,7 @@ CREATE TABLE default.t_pg_settings\n(\n    `x` Int32\n)\nENGINE = PostgreSQL(\'1
 --- engine settings and query settings can be mixed ---
 CREATE TABLE default.t_pg_settings\n(\n    `x` Int32\n)\nENGINE = PostgreSQL(\'127.0.0.1:5432\', \'db\', \'tbl\', \'user\', \'[HIDDEN]\')\nSETTINGS postgresql_connection_pool_size = 3
 --- the postgresql table function validates its settings too ---
+--- named collection option is accepted ---
+CREATE TABLE default.t_pg_settings\n(\n    `x` Int32\n)\nENGINE = PostgreSQL(pg_settings_nc, postgresql_connection_pool_size = 50)
+--- unknown named collection option is rejected ---
+--- zero pool size is rejected when passed through a named collection ---

@@ -115,7 +115,7 @@ void TableFunctionPostgreSQL::parseArguments(const ASTPtr & ast_function, Contex
         }
     }
 
-    configuration.emplace(StoragePostgreSQL::getConfiguration(args, context));
+    configuration.emplace(StoragePostgreSQL::getConfiguration(args, context, postgresql_settings));
 
     if (!postgresql_settings[PostgreSQLSetting::postgresql_connection_pool_size])
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "postgresql_connection_pool_size cannot be zero.");

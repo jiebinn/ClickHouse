@@ -7,6 +7,7 @@
 #include <Parsers/ASTSetQuery.h>
 #include <Storages/PostgreSQL/PostgreSQLSettings.h>
 #include <Common/Exception.h>
+#include <Common/NamedCollections/NamedCollections.h>
 
 
 namespace DB
@@ -84,6 +85,16 @@ void PostgreSQLSettings::loadFromQueryContext(const Context & context)
     (*impl)[PostgreSQLSetting::postgresql_connection_pool_retries] = settings[Setting::postgresql_connection_pool_retries];
     (*impl)[PostgreSQLSetting::postgresql_connection_pool_auto_close_connection] = settings[Setting::postgresql_connection_pool_auto_close_connection];
     (*impl)[PostgreSQLSetting::postgresql_connection_attempt_timeout] = settings[Setting::postgresql_connection_attempt_timeout];
+}
+
+void PostgreSQLSettings::loadFromNamedCollection(const NamedCollection & named_collection)
+{
+    for (const auto & setting : impl->all())
+    {
+        const auto & setting_name = setting.getName();
+        if (named_collection.has(setting_name))
+            impl->set(setting_name, named_collection.get<String>(setting_name));
+    }
 }
 
 VectorWithMemoryTracking<std::string_view> PostgreSQLSettings::getAllRegisteredNames() const

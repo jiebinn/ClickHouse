@@ -6,6 +6,7 @@
 
 #include <Storages/NamedCollectionsHelpers.h>
 #include <Storages/StoragePostgreSQL.h>
+#include <Storages/PostgreSQL/PostgreSQLSettings.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -516,9 +517,10 @@ void registerDatabasePostgreSQL(DatabaseFactory & factory)
         auto use_table_cache = false;
         StoragePostgreSQL::Configuration configuration;
 
+        PostgreSQLSettings postgresql_settings;
         if (auto named_collection = tryGetNamedCollectionWithOverrides(engine_args, args.context))
         {
-            configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, args.context, false);
+            configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, postgresql_settings, args.context, false);
             use_table_cache = named_collection->getOrDefault<UInt64>("use_table_cache", 0);
         }
         else

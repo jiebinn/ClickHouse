@@ -599,7 +599,7 @@ SinkToStoragePtr StoragePostgreSQL::write(
     return std::make_shared<PostgreSQLSink>(metadata_snapshot, pool->get(), remote_table_or_query.getTableName(), remote_table_schema, on_conflict);
 }
 
-StoragePostgreSQL::Configuration StoragePostgreSQL::processNamedCollectionResult(const NamedCollection & named_collection, ContextPtr context_, bool require_table)
+StoragePostgreSQL::Configuration StoragePostgreSQL::processNamedCollectionResult(const NamedCollection & named_collection, PostgreSQLSettings & storage_settings, ContextPtr context_, bool require_table)
 {
     StoragePostgreSQL::Configuration configuration;
     ValidateKeysMultiset<ExternalDatabaseEqualKeysSet> required_arguments = {"user", "username", "password", "database", "db"};
@@ -612,8 +612,11 @@ StoragePostgreSQL::Configuration StoragePostgreSQL::processNamedCollectionResult
             required_arguments.insert("table");
     }
 
-    validateNamedCollection<ValidateKeysMultiset<ExternalDatabaseEqualKeysSet>>(
-        named_collection, required_arguments, {"schema", "on_conflict", "addresses_expr", "host", "hostname", "port", "use_table_cache"});
+    ValidateKeysMultiset<ExternalDatabaseEqualKeysSet> optional_arguments = {"schema", "on_conflict", "addresses_expr", "host", "hostname", "port", "use_table_cache"};
+    for (const auto & name : storage_settings.getAllRegisteredNames())
+        optional_arguments.insert(name);
+
+    validateNamedCollection<ValidateKeysMultiset<ExternalDatabaseEqualKeysSet>>(named_collection, required_arguments, optional_arguments);
 
     configuration.addresses_expr = named_collection.getOrDefault<String>("addresses_expr", "");
     if (configuration.addresses_expr.empty())
@@ -642,15 +645,17 @@ StoragePostgreSQL::Configuration StoragePostgreSQL::processNamedCollectionResult
     configuration.schema = named_collection.getOrDefault<String>("schema", "");
     configuration.on_conflict = named_collection.getOrDefault<String>("on_conflict", "");
 
+    storage_settings.loadFromNamedCollection(named_collection);
+
     return configuration;
 }
 
-StoragePostgreSQL::Configuration StoragePostgreSQL::getConfiguration(ASTs engine_args, ContextPtr context, const StorageID * table_id)
+StoragePostgreSQL::Configuration StoragePostgreSQL::getConfiguration(ASTs engine_args, ContextPtr context, PostgreSQLSettings & storage_settings, const StorageID * table_id)
 {
     StoragePostgreSQL::Configuration configuration;
     if (auto named_collection = tryGetNamedCollectionWithOverrides(engine_args, context, true, nullptr, table_id))
     {
-        configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, context);
+        configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, storage_settings, context);
     }
     else
     {
@@ -708,12 +713,14 @@ void registerStoragePostgreSQL(StorageFactory & factory)
 {
     factory.registerStorage("PostgreSQL", [](const StorageFactory::Arguments & args)
     {
-        auto configuration = StoragePostgreSQL::getConfiguration(args.engine_args, args.getLocalContext(), &args.table_id);
-
         /// Seed the connection-pool parameters from the query-level `postgresql_*` settings (preserving
-        /// the historical behaviour), then let an explicit SETTINGS clause on the table override them.
+        /// the historical behaviour); a named collection may override them, and an explicit SETTINGS
+        /// clause on the table takes the final precedence.
         PostgreSQLSettings postgresql_settings;
         postgresql_settings.loadFromQueryContext(*args.getLocalContext());
+
+        auto configuration = StoragePostgreSQL::getConfiguration(args.engine_args, args.getLocalContext(), postgresql_settings, &args.table_id);
+
         if (args.storage_def)
             postgresql_settings.loadFromQuery(*args.storage_def);
 

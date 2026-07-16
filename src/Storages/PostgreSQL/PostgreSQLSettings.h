@@ -10,6 +10,7 @@ namespace DB
 class ASTStorage;
 class ASTSetQuery;
 class Context;
+class NamedCollection;
 struct PostgreSQLSettingsImpl;
 
 /// List of available types supported in PostgreSQLSettings object
@@ -37,6 +38,7 @@ struct PostgreSQLSettings
 
     void loadFromQuery(const ASTSetQuery & settings_def);
     void loadFromQuery(ASTStorage & storage_def);
+    void loadFromNamedCollection(const NamedCollection & named_collection);
 
     /// Seed the connection-pool settings from the query-level `postgresql_*` settings. This keeps the
     /// historical behaviour where the pool parameters were taken from the query context; an explicit
