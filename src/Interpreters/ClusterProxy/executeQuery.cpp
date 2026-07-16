@@ -991,9 +991,7 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
 
     auto coordinator = std::make_shared<ParallelReplicasReadingCoordinator>(max_replicas_to_use);
 
-    const auto & settings = new_context->getSettingsRef();
-    if (settings[Setting::allow_experimental_analyzer] && settings[Setting::parallel_replicas_local_plan]
-        && settings[Setting::parallel_replicas_prefer_local_replica])
+    if (canUseLocalPlanForParallelReplicas(new_context))
     {
         auto local_replica_index = findLocalReplicaIndexAndUpdatePools(connection_pools, max_replicas_to_use, cluster);
 
