@@ -26,6 +26,19 @@ SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_
 -- The same with the correlated predicate selecting nothing.
 SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_ref_clone WHERE (SELECT dt) < 256);
 
+-- Decorrelation pins the layout of its result join (JoinStepLogical::setOptimized): only the
+-- writer-on-the-build-side layout guarantees that the in-memory buffer of the common subplan is
+-- fully written before ReadFromCommonBufferSource reads it. JoinStepLogical::clone used to drop
+-- the `optimized` flag, so re-optimizing the speculatively cloned plan could swap the join sides
+-- (ANY strictness allows a swap) and schedule the buffer reader before the writers, failing with
+--   Logical error: Trying to extract chunk from ChunkBuffer before all inputs are finished.
+-- Randomized statistics make the swap deterministic for some seeds (e.g. 1, 2, 3, 6 at the time
+-- of writing); sweep a few so at least one exercises the swapped layout.
+SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_ref_clone WHERE (SELECT dt) > 256) SETTINGS query_plan_optimize_join_order_randomize = 1;
+SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_ref_clone WHERE (SELECT dt) > 256) SETTINGS query_plan_optimize_join_order_randomize = 2;
+SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_ref_clone WHERE (SELECT dt) > 256) SETTINGS query_plan_optimize_join_order_randomize = 3;
+SELECT count() FROM t_subplan_ref_clone WHERE idx IN (SELECT idx FROM t_subplan_ref_clone WHERE (SELECT dt) > 256) SETTINGS query_plan_optimize_join_order_randomize = 6;
+
 -- The trigger reported in issue #110182 (found by AST fuzzer): self-referential subqueries in
 -- PREWHERE and WHERE with a nested correlated scalar, built inplace during MergeTree part pruning.
 SELECT DISTINCT 3, count() <= -2147483648
