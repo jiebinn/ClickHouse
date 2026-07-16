@@ -2,10 +2,17 @@
 -- Tag no-parallel: Messes with internal cache
 -- Tag long: needs ~1M rows for the QCC to populate.
 --
--- TopK WHERE reads also consult the `topk_reuse_predicate_only_hash` in addition to the
--- TopK-salted hash, so a plain `SELECT ... WHERE <predicate>` run can prime entries that a
--- later `SELECT ... WHERE <predicate> ORDER BY ... LIMIT n` reuses. TopK-salted entries must
--- not be shared the other way around.
+-- A `SELECT ... WHERE <predicate> ORDER BY ... LIMIT n` query selected for TopK dynamic
+-- filtering probes the query condition cache (QCC) under the bare `<predicate>` hash in
+-- addition to its TopK-salted hash, so it reuses an entry primed by a plain
+-- `SELECT ... WHERE <predicate>`. The reverse must not happen: a plain `WHERE` query must
+-- not read a TopK-salted entry.
+--
+-- The behaviour is asserted from the read side via the `QueryConditionCacheHits` profile
+-- event (and the dropped-granule effect via `SelectedMarks` < `SelectedMarksTotal`), rather
+-- than from `count()` on `system.query_condition_cache`: the entry count cannot distinguish a
+-- genuine read-side reuse from a query that simply fails to write a new entry, so it stays
+-- green even if the `topk_reuse_predicate_only_hash` lookup is removed.
 
 SET allow_experimental_analyzer = 1;
 SET use_query_condition_cache = 1;
@@ -28,25 +35,54 @@ SETTINGS index_granularity = 64,
 
 INSERT INTO tab SELECT rand(), number, number FROM numbers(1_000_000);
 
-SELECT '--- QCC starts empty';
+SELECT '--- Forward: plain WHERE primes an entry that the TopK read reuses';
 SYSTEM CLEAR QUERY CONDITION CACHE;
-SELECT count() FROM system.query_condition_cache;
 
-SELECT '--- Plain WHERE primes the predicate-only cache entry';
-SELECT v1 FROM tab WHERE v2 = 10000 FORMAT Null;
-SELECT count() FROM system.query_condition_cache;
+-- Prime the cache with a plain WHERE. First touch of this predicate: cache miss, all granules read.
+SELECT v1 FROM tab WHERE v2 = 10000 FORMAT Null SETTINGS log_comment = '04539_fwd_prime';
+-- TopK read of the same predicate: reuses the predicate-only entry, so it hits and drops granules.
+SELECT v1 FROM tab WHERE v2 = 10000 ORDER BY v1 ASC LIMIT 5 FORMAT Null SETTINGS log_comment = '04539_fwd_topk';
 
-SELECT '--- TopK reuses the predicate-only entry on read and may add its own TopK-salted entry';
-SELECT v1 FROM tab WHERE v2 = 10000 ORDER BY v1 ASC LIMIT 5 FORMAT Null;
-SELECT count() FROM system.query_condition_cache;
+SYSTEM FLUSH LOGS query_log;
+
+-- Columns: (any QCC hit), (granules skipped). Expected: prime = 0 0, topk-reuse = 1 1.
+SELECT
+    log_comment,
+    ProfileEvents['QueryConditionCacheHits'] > 0,
+    toInt32(ProfileEvents['SelectedMarks']) < toInt32(ProfileEvents['SelectedMarksTotal'])
+FROM system.query_log
+WHERE event_date >= yesterday() AND event_time >= now() - 600
+    AND type = 'QueryFinish'
+    AND current_database = currentDatabase()
+    AND log_comment IN ('04539_fwd_prime', '04539_fwd_topk')
+ORDER BY event_time_microseconds;
 
 SELECT '--- TopK still returns the planted row';
 SELECT v1 FROM tab WHERE v2 = 10000 ORDER BY v1 ASC LIMIT 5;
 
-SELECT '--- Reverse: TopK-only entry must not poison plain WHERE';
+SELECT '--- Reverse: a TopK-salted entry must not be read by a plain WHERE';
 SYSTEM CLEAR QUERY CONDITION CACHE;
-SELECT v1 FROM tab WHERE v2 = 10000 ORDER BY v1 ASC LIMIT 5 FORMAT Null;
-SELECT count() FROM system.query_condition_cache;
+
+-- Prime the cache with a TopK query only: writes a TopK-salted entry.
+SELECT v1 FROM tab WHERE v2 = 10000 ORDER BY v1 ASC LIMIT 5 FORMAT Null SETTINGS log_comment = '04539_rev_topk';
+-- Plain WHERE must not reuse the TopK-salted entry: cache miss, all granules read.
+SELECT v1 FROM tab WHERE v2 = 10000 FORMAT Null SETTINGS log_comment = '04539_rev_plain';
+
+SYSTEM FLUSH LOGS query_log;
+
+-- Columns: (any QCC hit), (granules skipped). Expected: plain-after-topk = 0 0.
+SELECT
+    log_comment,
+    ProfileEvents['QueryConditionCacheHits'] > 0,
+    toInt32(ProfileEvents['SelectedMarks']) < toInt32(ProfileEvents['SelectedMarksTotal'])
+FROM system.query_log
+WHERE event_date >= yesterday() AND event_time >= now() - 600
+    AND type = 'QueryFinish'
+    AND current_database = currentDatabase()
+    AND log_comment = '04539_rev_plain'
+ORDER BY event_time_microseconds;
+
+SELECT '--- Plain WHERE still returns the planted row';
 SELECT v1 FROM tab WHERE v2 = 10000;
 
 DROP TABLE tab;
