@@ -4052,6 +4052,25 @@ function applySelectedDatabaseHighlight() {
     }
 }
 
+/// Canonicalize a database designation to the effective target it denotes on the live connection:
+/// an absent/empty value means "the server's default database" and is represented as `null`, and an
+/// explicit name equal to the server's current database denotes that same target — both run the
+/// query against the same database — so it collapses to `null` too. A database value can carry the
+/// explicit spelling of the current database even though `commitSelectedDatabase` never stores one:
+/// the live selection is seeded verbatim from a shared/restored `?database=` URL (at load and in
+/// `window.onpopstate`), and a run snapshot (`tab.result.database`) keeps whatever the selection was
+/// at run time — so the `run=1` divergence checks (`writeHistoryEntry`, `tabReflectsRun`) must
+/// compare BOTH sides through this canonical form, or a semantically no-op interaction (clicking the
+/// already-highlighted current row) would make `null` look different from the snapshot's explicit
+/// spelling and spuriously drop `run=1` from a still-reproducible entry.
+/// `server_current_database` is `null` until the database list has loaded for the live connection;
+/// while it is unknown an explicit value is kept rather than risking a false collapse (fail safe —
+/// two spellings then compare raw, never two different databases comparing equal).
+function effectiveDatabase(database) {
+    const value = database || null;
+    return (server_current_database !== null && value === server_current_database) ? null : value;
+}
+
 /// Commit a database selection made in the panel: record it as the default database for editor
 /// queries (`selected_database`), move the panel highlight to it, and fold it into the current
 /// browser-history entry so a reload or shared link carries the new `database=` (and drops `run=1`
@@ -4061,17 +4080,12 @@ function applySelectedDatabaseHighlight() {
 /// database, and so switching databases restamps the entry the same way a query or parameter edit
 /// does (`refreshCurrentHistoryEntry`) instead of leaving a stale `database=`/`run=1` in the URL.
 ///
-/// Selecting the server's already-current database is semantically identical to leaving the
-/// selection unset — both run against the same target — so collapse it back to `null` here. This
-/// keeps a single canonical representation for "the current database" across the whole state model:
-/// the `run=1` divergence checks in `writeHistoryEntry` and `tabReflectsRun` compare the raw
-/// `selected_database` against the producing snapshot, so without this an explicit click on the
-/// highlighted current row (with no prior selection) would be treated as a database change and
-/// spuriously drop `run=1` and rewrite history, even though the requests before and after still hit
-/// the same database. `server_current_database` is `null` until the database list has loaded for the
-/// live connection; while it is unknown we keep the explicit value rather than risk a false collapse.
+/// The selection is stored in canonical effective form (`effectiveDatabase`): selecting the
+/// server's already-current database is semantically identical to leaving the selection unset, so
+/// it collapses back to `null`, and an explicit click on the highlighted current row (with no prior
+/// selection) is not treated as a database change.
 function commitSelectedDatabase(database) {
-    selected_database = (server_current_database !== null && database === server_current_database) ? null : database;
+    selected_database = effectiveDatabase(database);
     stampSelectedDatabaseConnection();
     applySelectedDatabaseHighlight();
     captureActiveTab();
@@ -6158,11 +6172,16 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     /// connection-change invalidation (`resetConnectionScopedState`): `sameServerAddress` +
     /// `effectiveConnectionUser`, with the selected database a namespace on that pair. So a
     /// cosmetic-only URL difference (a root-path trailing slash, a default port) or a password-only
-    /// change is not a divergence, matching those gates. An unknown producing connection (a legacy
-    /// snapshot) always counts as diverged.
+    /// change is not a divergence, matching those gates, and the databases are compared in canonical
+    /// effective form (`effectiveDatabase`) so a snapshot carrying the explicit spelling of the
+    /// server's current database (a shared/restored `?database=` URL) is not a divergence from the
+    /// collapsed `null` live selection — both denote the same target. (When the snapshot ran against
+    /// a DIFFERENT server whose database name happens to match the live server's current one, the
+    /// collapse cannot mask it: the connection comparisons below still flag the divergence.) An
+    /// unknown producing connection (a legacy snapshot) always counts as diverged.
     const live_diverged = !!run_snapshot && (
            !snapshot_connection_known
-        || (selected_database || null) !== (run_snapshot.database || null)
+        || effectiveDatabase(selected_database) !== effectiveDatabase(run_snapshot.database)
         || !sameServerAddress(run_snapshot.url, url_elem.value)
         || effectiveConnectionUser(run_snapshot.url, run_snapshot.user)
             !== effectiveConnectionUser(url_elem.value, user_elem.value));
@@ -6232,13 +6251,18 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
 /// The selected database is part of "what would re-run": a `run=1` URL also carries `database=`
 /// from the live selection, so if the panel selection has moved away from the database that
 /// produced the result, re-running would hit a different database. Drop the marker in that case
-/// (comparing normalized: an absent/empty selection means the server default), so a database-only
-/// selection change never leaves a shared/reloaded `run=1` link auto-running against the wrong one.
+/// (comparing in canonical effective form — `effectiveDatabase` — so an absent/empty selection
+/// means the server default and an explicit spelling of the server's current database, as carried
+/// by a shared/restored `?database=` snapshot, denotes that same target), so a database-only
+/// selection change never leaves a shared/reloaded `run=1` link auto-running against the wrong
+/// one, while a semantically no-op click on the already-current row keeps the marker. A snapshot
+/// produced on a different SERVER is out of scope here: `writeHistoryEntry`'s `live_diverged`
+/// compares the connections and drops `run=1` regardless of what this database check says.
 function tabReflectsRun(tab) {
     return !!(tab && tab.result && tab.result.ran
         && tab.query === tab.result.query
         && JSON.stringify(tab.params || {}) === JSON.stringify(tab.result.params || {})
-        && (selected_database || null) === (tab.result.database || null));
+        && effectiveDatabase(selected_database) === effectiveDatabase(tab.result.database));
 }
 
 /// Refresh the current browser-history entry in place from the given tab's captured editor
