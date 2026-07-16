@@ -303,6 +303,7 @@ void EvictionCandidates::evict()
                 IFileCachePriority::IteratorPtr iterator;
                 if (removed_queue_entries)
                 {
+                    /// Affects only dynamic cache resize.
                     fiu_do_on(FailPoints::file_cache_dynamic_resize_fail_to_evict, {
                         throw Exception(ErrorCodes::FAULT_INJECTED, "Failed to evict file segment");
                     });
