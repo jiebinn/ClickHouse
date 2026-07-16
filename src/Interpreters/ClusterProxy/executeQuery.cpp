@@ -1024,6 +1024,8 @@ QueryPlanPtr createParallelReplicasPlan(QueryPlanPtr plan_fragment, ContextPtr c
     }
     else
     {
+        chassert(max_replicas_to_use <= connection_pools.size());
+        connection_pools.resize(max_replicas_to_use);
         return createRemotePlanFragmentForParallelReplicas(
             new_context, std::move(plan_fragment), coordinator, cluster, connection_pools, std::nullopt);
     }
