@@ -54,13 +54,21 @@ SYSTEM FLUSH LOGS query_log;
 --   * SAMPLE + WHERE -> carries BOTH the WHERE predicate less(value, ...) and the
 --     sampling predicate less(intHash32(key), ...): the AND-combine forwarded both.
 --   * SAMPLE only    -> carries less(intHash32(key), ...) but NOT less(value, ...).
-WITH (SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = 't_dia_sampling') AS tuuid
+-- The forwarded remote queries run with current_database = 'default', so they are
+-- scoped to this test via initial_query_id: their initiator queries are the ones that
+-- ran in currentDatabase(). This isolates the assertion from other tests' query_log.
+WITH
+    (SELECT toString(uuid) FROM system.tables WHERE database = currentDatabase() AND name = 't_dia_sampling') AS tuuid,
+    (SELECT groupArray(query_id) FROM system.query_log
+        WHERE current_database = currentDatabase() AND is_initial_query = 1 AND type = 'QueryFinish'
+          AND event_date >= today() - 1) AS initiators
 SELECT
     countIf(query ILIKE '%less(value,%' AND query ILIKE '%intHash32(key)%') > 0 AS combined_filter_forwarded,
     countIf(query NOT ILIKE '%less(value,%' AND query ILIKE '%intHash32(key)%') > 0 AS sampling_only_forwarded
 FROM system.query_log
 WHERE is_initial_query = 0
   AND type = 'QueryFinish'
+  AND has(initiators, initial_query_id)
   AND query ILIKE '%mergeTreeAnalyzeIndexesUUID%'
   AND query ILIKE concat('%', tuuid, '%')
   AND event_date >= today() - 1;
