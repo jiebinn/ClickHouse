@@ -435,7 +435,11 @@ def main():
             # throughput. Gated to sanitizer builds: only they carry the 0.7 cap,
             # and the non-sanitizer distributed-plan parallel jobs (e.g. amd_debug)
             # run comfortably at the default concurrency.
-            nproc = int(Utils.cpu_count() * 0.35)
+            #
+            # 0.35 still left too little margin: a run at that value hit Code 241
+            # with RSS at 43.01 GiB against the 41.84 GiB cap, ~3% over. Cut further
+            # to keep aggregate RSS comfortably under the cap instead of right at it.
+            nproc = int(Utils.cpu_count() * 0.3)
         elif is_per_test_coverage:
             cidb_cluster = CIDBCluster()
             if not info.is_local_run:
@@ -819,7 +823,16 @@ def main():
                 if not CH.prepare_stateful_data(
                     with_s3_storage=is_s3_storage,
                     is_db_replicated=is_database_replicated,
-                    build_type=build_types[0] if is_bugfix_validation else None,
+                    # `args.options` (e.g. "amd_asan_ubsan, distributed plan, parallel")
+                    # already carries the sanitizer name in the same format
+                    # `prepare_stateful_data`'s `is_sanitizer` check expects, so the
+                    # normal (non-bugfix-validation) path can reuse it directly - it
+                    # must not stay `None` here, since every sanitizer stateless run
+                    # now sets the tighter 0.7 memory ratio (see below) and needs the
+                    # reduced `MAX_INSERT_THREADS` to fit under it.
+                    build_type=(
+                        build_types[0] if is_bugfix_validation else args.options
+                    ),
                 ):
                     print(
                         "SETUP FAILURE: "
