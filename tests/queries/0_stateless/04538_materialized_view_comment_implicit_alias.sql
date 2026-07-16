@@ -86,3 +86,27 @@ SELECT comment FROM system.tables WHERE name = 'heredoc_mv_04538' AND database =
 
 DROP TABLE heredoc_mv_04538;
 DROP TABLE heredoc_src_04538;
+
+-- Regression test: same duplicate-comment check must also apply to the
+-- CREATE TABLE ... AS SELECT form (ParserCreateTableQuery), since the
+-- COMMENT-as-implicit-alias lookahead fix is global to ParserAlias and
+-- also affects table AS SELECT parsing (bot-flagged scenario).
+DROP TABLE IF EXISTS src_tbl_04538;
+CREATE TABLE src_tbl_04538 (x UInt8) ENGINE = Memory;
+
+CREATE TABLE t_dup_04538 ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_tbl_04538 COMMENT 'post-select comment'; -- { clientError SYNTAX_ERROR }
+
+-- Single comment (before AS SELECT) on a plain table should still work.
+CREATE TABLE t_single_04538 ENGINE = Memory COMMENT 'single as-select comment' AS SELECT x FROM src_tbl_04538;
+
+SELECT comment FROM system.tables WHERE name = 't_single_04538' AND database = currentDatabase();
+
+DROP TABLE t_single_04538;
+
+-- A plain CREATE TABLE (no AS SELECT at all) should be unaffected.
+CREATE TABLE t_plain_04538 (x UInt8) ENGINE = Memory COMMENT 'plain table comment';
+
+SELECT comment FROM system.tables WHERE name = 't_plain_04538' AND database = currentDatabase();
+
+DROP TABLE t_plain_04538;
+DROP TABLE src_tbl_04538;

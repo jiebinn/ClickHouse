@@ -1008,7 +1008,17 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         }
     }
 
-    if (!comment)
+    if (select)
+    {
+        auto select_comment = parseComment(pos, expected);
+        if (comment && select_comment)
+            throw Exception(
+                ErrorCodes::SYNTAX_ERROR,
+                "Comment for a table cannot be specified both before and after AS SELECT; please use only one");
+        if (!comment)
+            comment = select_comment;
+    }
+    else if (!comment)
         comment = parseComment(pos, expected);
 
     /// `AS table` and `AS table_function` are formatted before the SQL SECURITY clause position,
