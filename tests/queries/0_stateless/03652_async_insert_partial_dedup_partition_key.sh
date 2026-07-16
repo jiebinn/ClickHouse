@@ -45,7 +45,7 @@ $CLICKHOUSE_CLIENT -q "SELECT id FROM minimal ORDER BY id"
 # exactly one coalesced AsyncInsertFlush that carried all five rows AND removed a duplicate token.
 # With separate flushes each flush would have AsyncInsertRows = 1, so this returns 0 and the test
 # fails, guarding against silently un-covering finishDelayedChunk's rewrite path.
-$CLICKHOUSE_CLIENT -q "SYSTEM FLUSH LOGS"
+$CLICKHOUSE_CLIENT -q "SYSTEM FLUSH LOGS query_log"
 $CLICKHOUSE_CLIENT -q "
 SELECT 'partial_dedup_retry_fired', count()
 FROM system.query_log
