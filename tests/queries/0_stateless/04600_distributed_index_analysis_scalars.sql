@@ -1,4 +1,4 @@
--- Tags: no-random-merge-tree-settings, no-random-settings
+-- Tags: no-random-merge-tree-settings, no-random-settings, long
 -- - no-random-merge-tree-settings -- may change number of parts
 
 drop table if exists test_200_parts;
