@@ -110,3 +110,21 @@ SELECT comment FROM system.tables WHERE name = 't_plain_04538' AND database = cu
 
 DROP TABLE t_plain_04538;
 DROP TABLE src_tbl_04538;
+
+-- Regression test: the same duplicate-comment check must also cover the
+-- AS table and AS table_function() forms of CREATE TABLE, not just AS SELECT,
+-- since CREATE TABLE t COMMENT 'pre' AS base COMMENT 'post' was already
+-- falling back to the old generic trailing-token error (bot-flagged scenario).
+DROP TABLE IF EXISTS base_04538;
+CREATE TABLE base_04538 (a Int32) ENGINE = TinyLog COMMENT 'original comment';
+
+CREATE TABLE t_astable_dup_04538 COMMENT 'pre comment' AS base_04538 COMMENT 'post comment'; -- { clientError SYNTAX_ERROR }
+CREATE TABLE t_astf_dup_04538 COMMENT 'pre comment' AS numbers(5) COMMENT 'post comment'; -- { clientError SYNTAX_ERROR }
+
+-- Single comment (after AS, no pre-AS comment) on the AS table form should still work.
+CREATE TABLE t_astable_single_04538 AS base_04538 COMMENT 'single as-table comment';
+
+SELECT comment FROM system.tables WHERE name = 't_astable_single_04538' AND database = currentDatabase();
+
+DROP TABLE t_astable_single_04538;
+DROP TABLE base_04538;

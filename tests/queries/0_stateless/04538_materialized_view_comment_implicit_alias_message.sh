@@ -26,5 +26,12 @@ $CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS src_wv_04538_sh;"
 # since the COMMENT-as-implicit-alias lookahead fix is global to ParserAlias.
 $CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS src_tbl_04538_sh;" 2>/dev/null
 $CLICKHOUSE_CLIENT --query="CREATE TABLE src_tbl_04538_sh (x UInt8) ENGINE = Memory;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE t_04538_sh_dup ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_tbl_04538_sh COMMENT 'post-select comment';" 2>&1 | grep -o 'Comment for a table cannot be specified both before and after AS SELECT; please use only one'
+$CLICKHOUSE_CLIENT --query="CREATE TABLE t_04538_sh_dup ENGINE = Memory COMMENT 'pre-as comment' AS SELECT x FROM src_tbl_04538_sh COMMENT 'post-select comment';" 2>&1 | grep -o 'Comment for a table cannot be specified both before and after AS; please use only one'
 $CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS src_tbl_04538_sh;"
+
+# Same check for the AS table form (not AS SELECT), since CREATE TABLE
+# already supported a trailing comment there before this PR.
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS base_04538_sh;" 2>/dev/null
+$CLICKHOUSE_CLIENT --query="CREATE TABLE base_04538_sh (a Int32) ENGINE = TinyLog COMMENT 'original comment';"
+$CLICKHOUSE_CLIENT --query="CREATE TABLE t_astable_dup_04538_sh COMMENT 'pre comment' AS base_04538_sh COMMENT 'post comment';" 2>&1 | grep -o 'Comment for a table cannot be specified both before and after AS; please use only one'
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS base_04538_sh;"
