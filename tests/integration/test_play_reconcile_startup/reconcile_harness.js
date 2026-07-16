@@ -582,6 +582,55 @@ async function main() {
             r.live);
     }
 
+    /// Guard (fresh external collision): a genuine external bare `?tab=Scratch` link — no
+    /// `history.state` at all, so this is a fresh navigation, not a reload — must stay
+    /// authoritative even though a locally pruned blank tab happened to share that title.
+    /// `stale_blank_reload` is keyed on `history.state`, so `history.state === null` makes it
+    /// false regardless of the title collision, and a new `Scratch` tab is opened rather than
+    /// being conflated with the surviving `Report` tab.
+    {
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch',
+            historyState: null,
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: null, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7', 't8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('fresh-external-collision', 'a new Scratch tab is opened alongside the surviving Report',
+            r.live.tabs.length === 2 && r.live.tabs.some(t => t.title === 'Report')
+                && r.live.tabs.filter(t => t.title === 'Scratch').length === 1,
+            r.live);
+        check('fresh-external-collision', 'the new Scratch tab is the active one',
+            r.live.tabs.find(t => t.title === 'Scratch').id === r.live.activeTabId,
+            r.live);
+    }
+
+    /// Guard (stale reload, whitespace hash): a stale reload of a pruned blank tab can still carry
+    /// that tab's own blank text in the hash (`?tab=<pruned blank>#<base64 of whitespace>`).
+    /// Whitespace is not a real query by the same `trim()` rule the pruning uses, so
+    /// `stale_blank_reload_bare` must treat it exactly like a bare `?tab=`: fall back to the
+    /// surviving tab rather than recreating the pruned tab with its stray whitespace text.
+    {
+        const whitespace_hash = Buffer.from('   \n ', 'utf8').toString('base64');
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch#' + whitespace_hash,
+            historyState: { tabId: 't7', tabName: 'Scratch' },
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: null, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7', 't8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('stale-reload-whitespace-hash', 'the pruned blank tab is not resurrected with its stray whitespace text',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Report',
+            r.live);
+        check('stale-reload-whitespace-hash', 'no blank Scratch is re-persisted to IndexedDB',
+            !r.persisted.some(p => p.title === 'Scratch'),
+            r.persisted.map(p => p.title));
+    }
+
     /// Guard (legacy history entry): the same stale reload, but with a `history.state` written by
     /// a pre-`tabId` version of the page — it carries only `tabName` (`resolveTabForState` still
     /// supports that shape via its title fallback). `stale_blank_reload` must recognize the pruned
