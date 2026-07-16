@@ -25,6 +25,7 @@ from pyspark.sql.types import (
 from decimal import Decimal
 from pyspark.sql.window import Window
 
+from helpers.client import QueryRuntimeException
 from helpers.cluster import ClickHouseCluster
 from helpers.config_cluster import minio_access_key, minio_secret_key
 from helpers.s3_tools import (
@@ -287,7 +288,28 @@ def test_single_log_file(started_cluster, use_delta_kernel, storage_type):
         use_delta_kernel=use_delta_kernel,
     )
 
-    assert int(instance.query(f"SELECT count() FROM {TABLE_NAME}", settings={"make_distributed_plan": 1, "distributed_plan_max_rows_to_broadcast" : 0})) == 100
+    # A bare `count()` is answered by the trivial-count optimization from
+    # `DeltaLake` metadata without reading any data, so it does not exercise
+    # the `Stateless Worker` exchange at all - it would stay green even if
+    # that path regressed. Disabling the optimization does force a real
+    # `AggregatingStep` on top of the read, but `ReadFromObjectStorageStep`
+    # only implements `isSerializable` under `CLICKHOUSE_CLOUD` (see
+    # src/Processors/QueryPlan/ReadFromObjectStorageStep.h), so shipping a
+    # fragment containing it to a `Stateless Worker` is unsupported in this
+    # (OSS) build and fails outright rather than silently falling back to a
+    # single local stage. Pin that today's behaviour is a clean error, not a
+    # silent no-op, so implementing distributed `DeltaLake` reads in OSS is a
+    # deliberate, visible change to this test.
+    with pytest.raises(QueryRuntimeException, match="is not serializable for remote execution"):
+        instance.query(
+            f"SELECT count() FROM {TABLE_NAME}",
+            settings={
+                "make_distributed_plan": 1,
+                "distributed_plan_max_rows_to_broadcast": 0,
+                "optimize_trivial_count_query": 0,
+            },
+        )
+
     assert instance.query(f"SELECT * FROM {TABLE_NAME}", settings={"make_distributed_plan": 1, "distributed_plan_max_rows_to_broadcast" : 0}) == instance.query(
         inserted_data
     )
