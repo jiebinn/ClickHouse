@@ -291,9 +291,16 @@ def main():
         res = results[-1].is_ok()
 
     if res and JobStages.BUILD in stages:
+        se_check_path = Path(build_dir) / "clickhouse_se_check"
         commands = [
             "sccache --show-stats",
             "clickhouse-client --version",
+            # Verify the self-extracting bundle works: copy it so the first-run
+            # in-place decompression does not corrupt the artifact we will upload,
+            # then run --version to trigger extraction and confirm it produces output.
+            f"cp {clickhouse_se_path} {se_check_path}",
+            f"chmod +x {se_check_path}",
+            f"{se_check_path} --version",
         ]
         results.append(
             Result.from_commands_run(
