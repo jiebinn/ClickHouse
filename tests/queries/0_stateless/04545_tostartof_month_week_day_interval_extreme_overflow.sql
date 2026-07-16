@@ -11,7 +11,11 @@
 -- reconstructs a day number as `4 + rounded`; after `weeks * 7` is saturated, that boundary is far below any
 -- representable day, so both the `DayNum` and `ExtendedDayNum` branches used to round FORWARD (through a
 -- narrow cast) instead of flooring. The reconstructed day is now clamped into the representable range so an
--- extreme week count floors to the earliest representable boundary.
+-- extreme week count floors to the earliest representable boundary. Finally, the in-LUT `DAY` path for a
+-- pre-epoch `ExtendedDayNum` used truncating division (`d / idays * idays`), which rounds a negative day
+-- number toward zero (forward in time) instead of flooring; e.g. `toDate32('1969-12-31')` with a 10-day
+-- interval returned `1970-01-01` instead of the `1969-12-22` bucket. That path now goes through the same
+-- floored `roundDownToMultiple` helper.
 
 -- Normal values must still be rounded down to the start of the interval correctly.
 SELECT toStartOfInterval(toDate('2021-06-22'), INTERVAL 5 MONTH);
@@ -37,6 +41,18 @@ SELECT toStartOfInterval(toDate('1970-01-01'), INTERVAL 1317624576693539402 WEEK
 -- `ExtendedDayNum` branch (Date32 input): before the fix `toDate32('1969-12-31')` rounded forward to
 -- `1970-01-06`; with the reconstructed day clamped into range it floors to the earliest representable boundary.
 SELECT toStartOfInterval(toDate32('1969-12-31'), INTERVAL 1317624576693539402 WEEK) = toDate('1973-09-30');
+
+-- A pre-epoch `Date32` value on the in-LUT `DAY` path must floor to the start of its interval, not round
+-- toward zero (forward in time). `1969-12-22 .. 1969-12-31` are day numbers `-10 .. -1`, so a 10-day
+-- interval must map all of them to the same (`-10`) bucket; before the fix `1969-12-31` truncated to `0`
+-- (`1970-01-01`), a different bucket than `1969-12-22`. (The `DAY` result surfaces as epoch-based `DateTime`,
+-- so the floored pre-epoch boundary is not directly representable; these bucket-equality invariants verify
+-- the flooring independently of the surface value.)
+SELECT toStartOfInterval(toDate32('1969-12-31'), INTERVAL 10 DAY) = toStartOfInterval(toDate32('1969-12-22'), INTERVAL 10 DAY);
+SELECT toStartOfInterval(toDate32('1969-12-31'), INTERVAL 10 DAY) = toStartOfInterval(toDate32('1969-12-25'), INTERVAL 10 DAY);
+-- The next interval up (`1970-01-01`, day `0`) must be a distinct bucket, i.e. the pre-epoch input did not
+-- round forward into it.
+SELECT toStartOfInterval(toDate32('1970-01-01'), INTERVAL 10 DAY) != toStartOfInterval(toDate32('1969-12-31'), INTERVAL 10 DAY);
 
 -- Extreme `DateTime64` values combined with extreme interval counts reach the out-of-LUT-range rounding
 -- branch, where the addition used to overflow. The result for such out-of-range values is

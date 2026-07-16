@@ -1511,10 +1511,18 @@ public:
                 return dateOfDayIndex(rounded_day_num + daynum_offset_epoch);
             }
 
+        // Floor towards -inf so a pre-epoch in-range day rounds to the start of its interval, not forward in
+        // time. Truncating division (`d / idays * idays`) would round a negative day number towards zero.
+        // Clamp the reconstructed index into the representable range so an extreme `days` count saturates to
+        // the earliest boundary instead of wrapping through the narrow cast.
+        const Int64 rounded_day_num = roundDownToMultiple(static_cast<Int64>(d.toUnderType()), idays);
+        const Int64 min_daynum = min_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
+        const Int64 max_daynum = max_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
+        const auto index = ExtendedDayNum(static_cast<Int32>(std::clamp(rounded_day_num, min_daynum, max_daynum)));
         if constexpr (std::is_same_v<Date, DayNum>)
-            return lut_saturated[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / idays * idays)))].date;
+            return lut_saturated[toLUTIndex(index)].date;
         else
-            return lut[toLUTIndex(ExtendedDayNum(static_cast<Int32>(d / idays * idays)))].date;
+            return lut[toLUTIndex(index)].date;
     }
 
     template <typename DateOrTime>
