@@ -61,7 +61,6 @@ void validateArguments(
 
 void validateDictionaryIsNaiveBayes(const ContextPtr & context, const IFunction & func, const ColumnsWithTypeAndName & arguments)
 {
-    chassert(arguments[0].column);
     const String dictionary_name{arguments[0].column->getDataAt(0)};
 
     const auto layout_type = context->getExternalDictionariesLoader().getDictionaryLayoutType(dictionary_name, context);
