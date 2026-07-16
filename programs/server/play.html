@@ -3602,18 +3602,19 @@ function markBootstrapDirty(e) {
     bootstrap_dirty = true;
 }
 
-/// Set when a trusted database selection (`commitSelectedDatabase`) or a semantic connection
-/// edit (`resetConnectionScopedState`) lands while the URL's deferred `run=1` auto-run is still
-/// pending, cancelling it: either one has just rewritten the current history entry WITHOUT
-/// `run=1` (the bootstrap tab has no result yet, so `tabReflectsRun` is false), so the live URL
-/// no longer requests an auto-run — executing the deferred `postAll` anyway would run the shared
-/// query against a database or server/user the link never specified. `bootstrap_dirty` cannot
-/// carry this signal: neither a panel click nor a connection-field edit is a workspace edit (the
-/// saved tabs must still be restored and reconciled as usual), and the pending window extends
-/// past `bootstrap_settled` (`reconcileStartup` keeps awaiting — tab activation, parameter
-/// reconciliation — after settling, and `markBootstrapDirty` ignores events from then on). The
-/// query itself is untouched: it stays in the editor, targeting the fresh selection/connection,
-/// and the user can still run it explicitly.
+/// Set by `writeHistoryEntry` the moment it writes the current history entry WITHOUT `run=1`,
+/// cancelling the URL's deferred `run=1` auto-run if it is still pending: the live URL no longer
+/// requests an auto-run, so executing the deferred `postAll` anyway would run the shared query
+/// against a database, server/user or edited query/params the link never specified. Centralizing
+/// the cancellation in `writeHistoryEntry` (rather than at each trusted action that can end up
+/// clearing `run=1` — a database-panel click, a connection-field edit, a query/param edit, a tab
+/// switch) means no future caller needs to remember to set it. `bootstrap_dirty` cannot carry this
+/// signal: none of those actions is a workspace edit (the saved tabs must still be restored and
+/// reconciled as usual), and the pending window extends past `bootstrap_settled` (`reconcileStartup`
+/// keeps awaiting — tab activation, parameter reconciliation — after settling, and
+/// `markBootstrapDirty` ignores events from then on). The query itself is untouched: it stays in
+/// the editor, targeting the fresh selection/connection/edit, and the user can still run it
+/// explicitly.
 let deferred_run_cancelled = false;
 
 /// Start of the last query
@@ -4072,16 +4073,12 @@ function applySelectedDatabaseHighlight() {
 function commitSelectedDatabase(database) {
     selected_database = (server_current_database !== null && database === server_current_database) ? null : database;
     stampSelectedDatabaseConnection();
-    /// A selection made while the URL's `run=1` auto-run is still deferred (see
-    /// `reconcileStartup`) cancels it. The entry rewrite below drops `run=1` — no result reflects
-    /// a run yet — so the URL no longer requests the auto-run; firing the deferred `postAll`
-    /// anyway would snapshot this fresh selection and execute the shared query against a database
-    /// the link never asked for. Set unconditionally: after startup the flag is simply never read
-    /// again, and during startup even re-selecting the URL's own `database=` must cancel (the
-    /// rewrite has already dropped `run=1`, and a run the URL no longer describes must not fire).
-    deferred_run_cancelled = true;
     applySelectedDatabaseHighlight();
     captureActiveTab();
+    /// The entry rewrite below drops `run=1` while the bootstrap tab has no result yet, which
+    /// itself cancels a still-deferred startup auto-run (see `deferred_run_cancelled` and
+    /// `writeHistoryEntry`) — firing it anyway would execute the shared query against a database
+    /// the link never asked for.
     refreshCurrentHistoryEntry(getActiveTab());
 }
 
@@ -6173,6 +6170,15 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     const entry_database = use_snapshot ? run_snapshot.database : selected_database;
     const entry_server = use_snapshot ? run_snapshot.url : url_elem.value;
     const entry_user = use_snapshot ? run_snapshot.user : user_elem.value;
+    const carries_run = fromRun && !live_diverged;
+    /// This write just made the current entry stop requesting the deferred startup auto-run (see
+    /// `deferred_run_cancelled` above `reconcileStartup`): every editor-only writer that can drop
+    /// `run=1` — a query/param edit, a tab switch, a database-panel click, a connection-field edit,
+    /// and any future one — funnels through `writeHistoryEntry`, so no caller needs to remember to
+    /// cancel it individually. Setting it once the gate has already fired (e.g. from `saveHistory`,
+    /// when the deferred run itself completes) is harmless: the flag is never consulted again after
+    /// `reconcileStartup` has made its decision.
+    if (!carries_run) deferred_run_cancelled = true;
 
     const state = {
         query: tab.query,
@@ -6196,7 +6202,7 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     /// Drop `run=1` when the live connection diverged from the producing one: the displayed result
     /// was produced against a different connection, so auto-running the live target on reload would
     /// not reproduce it (and must not fire a write against the wrong server/database).
-    const history_params = buildHistoryParams(tab.params, tab.title, fromRun && !live_diverged, tab.result && tab.result.color_modes, entry_user, entry_server, entry_database);
+    const history_params = buildHistoryParams(tab.params, tab.title, carries_run, tab.result && tab.result.color_modes, entry_user, entry_server, entry_database);
     let history_url = window.location.pathname;
     if (history_params.length > 0) history_url += '?' + history_params.join('&');
     history_url += '#' + toBase64(tab.query);
@@ -7944,14 +7950,11 @@ function resetConnectionScopedState() {
                 !== effectiveConnectionUser(url_elem.value, user_elem.value));
     if (cleared_selection || connection_diverged) {
         captureActiveTab();
+        /// The restamp drops `run=1` from the current entry while the bootstrap tab has no result
+        /// yet, which itself cancels a still-deferred startup auto-run (see `deferred_run_cancelled`
+        /// and `writeHistoryEntry`) — left uncancelled, it would still execute the shared query
+        /// against the just-edited server/user rather than the one the link specified.
         refreshCurrentHistoryEntry(getActiveTab());
-        /// Same cancellation as `commitSelectedDatabase`: the restamp just above dropped `run=1`
-        /// from the current entry (the bootstrap tab has no result yet), so the URL's deferred
-        /// `run=1` auto-run (see `reconcileStartup`) no longer matches what the live entry
-        /// requests. Left unset, this trusted connection edit would still be followed by the
-        /// deferred `postAll`, executing the shared query against the just-edited server/user
-        /// rather than the one the link specified.
-        deferred_run_cancelled = true;
     }
 }
 
@@ -8947,11 +8950,11 @@ async function reconcileStartup() {
     /// Auto-run only when the URL is still authoritative. On a stale reload
     /// (`preserve_local_query`), the persisted local edit is newer than the URL and was never
     /// run by the user, so the stale `run=1` must not execute it; just sync the restored tab
-    /// into the URL instead (with the `run=1` directive already dropped above). A trusted
-    /// database selection during the startup window (`deferred_run_cancelled`) also cancels the
-    /// run: its history rewrite already dropped `run=1` from the live URL, and running anyway
-    /// would execute the shared query against the just-selected database rather than the one the
-    /// link specified.
+    /// into the URL instead (with the `run=1` directive already dropped above). Any trusted
+    /// action during the startup window that made `writeHistoryEntry` drop `run=1` from the live
+    /// entry — a database selection, a connection edit, a query/param edit, a tab switch — also
+    /// cancels the run (`deferred_run_cancelled`): running anyway would execute the shared query
+    /// against a target or edit the live URL no longer requests it for.
     if (defer_run_for_reconcile && !deferred_run_cancelled && query_area.value && !preserve_local_query && !bootstrap_dirty) {
         postAll();   /// saves history itself on completion
     } else if (activated) {
