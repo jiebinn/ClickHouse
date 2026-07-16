@@ -27,7 +27,7 @@ def start_cluster():
         cluster.shutdown()
 
 
-def test_create_dictionary_in_startup_script(start_cluster):
+def check_startup_script_succeeded():
     STATE_SUCCESS = "1"
     assert node.query(
         """
@@ -45,3 +45,15 @@ def test_create_dictionary_in_startup_script(start_cluster):
             """
         ).strip()
     ) > 0
+
+
+def test_create_dictionary_in_startup_script(start_cluster):
+    check_startup_script_succeeded()
+
+    # Startup scripts re-run on every restart, and `drop_dictionary` must
+    # target the same dictionary `create_dictionary` creates - otherwise the
+    # stale dictionary survives the drop and the second run's
+    # `CREATE DICTIONARY` fails with `DICTIONARY_ALREADY_EXISTS`, which a
+    # single-boot check can't catch.
+    node.restart_clickhouse()
+    check_startup_script_succeeded()
