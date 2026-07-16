@@ -53,20 +53,42 @@ macro(zxc_add_variant suffix)
     endforeach()
 endmacro()
 
-# The default (baseline) variant inherits ClickHouse's target flags, which are
-# already x86-64-v3 (AVX2) / armv8.2-a+simd (NEON). That is a safe minimum: every
-# CPU the ClickHouse binary runs on supports it.
-zxc_add_variant(_default)
-
 if (OS_DARWIN AND ARCH_AMD64)
     # zxc's x86-64 runtime dispatch calls `__builtin_cpu_init` /
     # `__builtin_cpu_supports`, which reference compiler-rt's `__cpu_model`. That
     # symbol is not linked into ClickHouse's macOS cross-build, so linking fails
     # with "undefined ___cpu_model". macOS builds are for local development only,
-    # so restrict zxc to its portable scalar core there: `ZXC_DISABLE_SIMD` forces
-    # the dispatcher to the `_default` variant and drops the `__builtin_cpu_*`
-    # calls, and we skip building the now-unused per-ISA variant objects.
+    # so restrict zxc to its portable scalar core there.
     set(ZXC_FORCE_SCALAR TRUE)
+elseif (SANITIZE STREQUAL "memory")
+    # clang's MemorySanitizer has no precise shadow model for the x86 byte-shuffle
+    # intrinsics (`pshufb` and friends): the shadow of the inputs is OR-ed
+    # positionally instead of being routed through the shuffle, so a poisoned lane
+    # that the shuffle discards still poisons the logical result. zxc's SIMD
+    # kernels deliberately do speculative 16/32-byte loads whose tail lanes fall
+    # into malloc'ed scratch buffers or not-yet-written output and are then
+    # discarded by such shuffles (e.g. `zxc_decode_copy_overlap_run`,
+    # `zxc_pivco_merge`), which triggers false `use-of-uninitialized-value`
+    # reports. The scalar core branches only on initialized bytes, so build only
+    # that under MSan. (AArch64 NEON `tbl` gets a precise shadow, but keep all
+    # MSan builds scalar for consistency.)
+    set(ZXC_FORCE_SCALAR TRUE)
+endif ()
+
+# The default (baseline) variant inherits ClickHouse's target flags, which are
+# already x86-64-v3 (AVX2) / armv8.2-a+simd (NEON). That is a safe minimum: every
+# CPU the ClickHouse binary runs on supports it.
+zxc_add_variant(_default)
+
+if (ZXC_FORCE_SCALAR)
+    # `ZXC_DISABLE_SIMD` strips the hand-written intrinsics from the kernels,
+    # forces the dispatcher to the `_default` variant and drops the
+    # `__builtin_cpu_*` calls; the per-ISA variant objects are not built at all.
+    # It must be defined on the `_default` kernel objects as well as on the core
+    # (which is handled below), otherwise the kernels keep their SIMD paths.
+    foreach(_tgt _zxc_compress_default _zxc_decompress_default _zxc_huffman_default)
+        target_compile_definitions(${_tgt} PRIVATE ZXC_DISABLE_SIMD)
+    endforeach()
 elseif (ARCH_AMD64)
     # SSE2/AVX2 flags are redundant with the x86-64-v3 baseline but harmless;
     # AVX512 is NOT in the baseline, so those flags are required for that variant
