@@ -168,6 +168,7 @@ def main():
         stages.insert(0, stage)
 
     clickhouse_bin_path = Path(f"{build_dir}/programs/clickhouse")
+    clickhouse_se_path = Path(f"{build_dir}/programs/self-extracting/clickhouse")
 
     for path in [
         Path(temp_dir) / "clickhouse",
@@ -295,7 +296,7 @@ def main():
         ]
         results.append(
             Result.from_commands_run(
-                name="Check and Compress binary",
+                name="Check binary",
                 command=commands,
                 workdir=build_dir_normalized,
             )
@@ -369,11 +370,9 @@ def main():
             attach_debug = True
         job_info = results[-1].info
 
+    attach_files.append(clickhouse_se_path)
     if attach_debug:
-        attach_files += [
-            clickhouse_bin_path,
-            *CH.prepare_logs(info=info, all=True),
-        ]
+        attach_files.extend(CH.prepare_logs(info=info, all=True))
 
     CH.terminate(force=True)
 
