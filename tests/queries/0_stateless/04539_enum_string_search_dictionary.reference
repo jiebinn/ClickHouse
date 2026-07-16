@@ -17,7 +17,17 @@ position non-const needle	0
 Enum8 fallback (per-row start position)
 position per-row start	0
 position const start	0
-Enum16 transform path (wide range)
+Enum16 transform path (narrow range)
+like	0
+position	0
+match	0
+countSubstrings	0
+Enum16 wide sparse range, small block (castColumn path)
+like	0
+position	0
+match	0
+countSubstrings	0
+Enum16 wide sparse range, large block (transform path)
 like	0
 position	0
 match	0

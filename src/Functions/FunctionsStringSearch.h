@@ -285,11 +285,30 @@ public:
             {
                 const auto try_transform = [&](const auto & enum_type, const auto & enum_data)
                 {
-                    ColumnPtr distinct_names = buildEnumHaystackDictionary(enum_type, enum_value_to_index, enum_min_value);
+                    const auto & values = enum_type.getValues();
 
-                    /// Only worth it when there are more rows than distinct enum names.
-                    if (column_haystack->size() <= distinct_names->size())
+                    /// `values` is sorted by numeric value, so the first and last elements give the min and max.
+                    const Int64 min_value = static_cast<Int64>(values.front().second);
+                    const Int64 max_value = static_cast<Int64>(values.back().second);
+                    /// `buildEnumHaystackDictionary` zero-fills a dense `value_to_index` array of this many slots.
+                    const size_t span = static_cast<size_t>(max_value - min_value) + 1;
+                    const size_t num_names = values.size();
+                    const size_t num_rows = column_haystack->size();
+
+                    /// The fast path searches `num_names` distinct names instead of `num_rows` rows, but it first
+                    /// pays an `O(span)` dense-array fill (`span == max_value - min_value + 1`), which can dwarf
+                    /// `num_names` for a sparse wide `Enum16` such as `Enum16('a' = -30000, 'b' = 30000)` (span
+                    /// 60001, 2 names). Take the fast path only when it actually saves work: there must be more
+                    /// rows than distinct names (otherwise fewer searches are not fewer), and the dense-array
+                    /// setup must not exceed the per-row work the `castColumn` path would do anyway
+                    /// (`span <= num_rows`). This keeps a small block over a wide sparse enum on the unchanged
+                    /// `castColumn` path instead of clearing a huge array to search a handful of rows. The
+                    /// decision is per-block, so a wide enum still takes the fast path once a block is large
+                    /// enough for the amortized search savings to cover the fill.
+                    if (num_rows <= num_names || span > num_rows)
                         return;
+
+                    ColumnPtr distinct_names = buildEnumHaystackDictionary(enum_type, enum_value_to_index, enum_min_value);
 
                     /// Validate the stored codes eagerly, exactly where `castColumn(..., String)` would
                     /// have validated them (undefined codes can arrive through binary deserialization,

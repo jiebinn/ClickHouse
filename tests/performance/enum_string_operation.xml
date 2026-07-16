@@ -29,4 +29,32 @@
     <query>SELECT hasTokenOrNull(c, 'A') FROM iso_3166_1_alpha_2 FORMAT Null SETTINGS max_threads = 1</query>
 
     <drop_query>DROP TABLE IF EXISTS iso_3166_1_alpha_2</drop_query>
+
+    <!-- Wide, sparse Enum16 (8 names spread across [-30000, 30000], span 60001). The transform path
+         zero-fills a dense array of `max_value - min_value + 1` slots, so it is only taken for a block
+         when the block has more rows than the span (`span <= rows`), otherwise the unchanged `castColumn`
+         path is used. The queries below force blocks larger than the span (`max_block_size`), so the
+         transform path is exercised: the search runs over the 8 distinct names instead of every row,
+         which must remain a speed-up even for a wide sparse enum. Small blocks (fewer rows than the
+         span) fall back to `castColumn`, i.e. the pre-optimization behavior, so they cannot regress. -->
+    <drop_query>DROP TABLE IF EXISTS enum16_wide_sparse</drop_query>
+    <create_query>
+    CREATE TABLE enum16_wide_sparse
+    (
+        `c` Enum16('' = -30000, 'a' = -1, 'A' = 0, 'AB' = 7, 'aBc' = 300, 'ABCD' = 1000, 'xAyz' = 5000, 'Foo A Bar' = 30000)
+    )
+    ENGINE = MergeTree
+    ORDER BY tuple()
+    SETTINGS index_granularity = 8192
+    </create_query>
+    <fill_query>INSERT INTO enum16_wide_sparse SELECT ['', 'a', 'A', 'AB', 'aBc', 'ABCD', 'xAyz', 'Foo A Bar'][(number % 8) + 1] FROM numbers(100000000)</fill_query>
+    <fill_query>OPTIMIZE TABLE enum16_wide_sparse FINAL</fill_query>
+
+    <query>SELECT * FROM enum16_wide_sparse WHERE c LIKE '%A%' FORMAT Null SETTINGS max_threads = 1, max_block_size = 200000</query>
+    <query>SELECT position(c, 'A') FROM enum16_wide_sparse FORMAT Null SETTINGS max_threads = 1, max_block_size = 200000</query>
+    <query>SELECT match(c, 'A') FROM enum16_wide_sparse FORMAT Null SETTINGS max_threads = 1, max_block_size = 200000</query>
+    <query>SELECT countSubstrings(c, 'A') FROM enum16_wide_sparse FORMAT Null SETTINGS max_threads = 1, max_block_size = 200000</query>
+    <query>SELECT hasToken(c, 'A') FROM enum16_wide_sparse FORMAT Null SETTINGS max_threads = 1, max_block_size = 200000</query>
+
+    <drop_query>DROP TABLE IF EXISTS enum16_wide_sparse</drop_query>
 </test>

@@ -4,7 +4,9 @@
 -- the search over the equivalent String column (toString(c)).
 
 DROP TABLE IF EXISTS t_es8;
-DROP TABLE IF EXISTS t_es16;
+DROP TABLE IF EXISTS t_es16_narrow;
+DROP TABLE IF EXISTS t_es16_wide;
+DROP TABLE IF EXISTS t_es16_wide_big;
 DROP TABLE IF EXISTS t_es8_few;
 
 -- Enum8 with names of different sizes (including empty and one with spaces) and negative/zero/positive values.
@@ -14,12 +16,33 @@ INSERT INTO t_es8
 SELECT ['', 'a', 'A', 'AB', 'aBc', 'ABCD', 'xAyz', 'Foo A Bar'][(number % 8) + 1], number % 4
 FROM numbers(1000);
 
--- Enum16 spanning a wide Int16 range (exercises the large plain lookup array).
-CREATE TABLE t_es16 (c Enum16('' = -30000, 'a' = -1, 'A' = 0, 'AB' = 7, 'aBc' = 300, 'ABCD' = 1000, 'xAyz' = 5000, 'Foo A Bar' = 30000))
+-- Enum16 with a narrow value span (values in [-4, 1000], span 1005) and many more rows than the span:
+-- the dense lookup array is small relative to the number of rows, so the transform (fast) path is taken.
+CREATE TABLE t_es16_narrow (c Enum16('' = -4, 'a' = -1, 'A' = 0, 'AB' = 7, 'aBc' = 30, 'ABCD' = 100, 'xAyz' = 500, 'Foo A Bar' = 1000))
 ENGINE = MergeTree ORDER BY tuple();
-INSERT INTO t_es16
+INSERT INTO t_es16_narrow
+SELECT ['', 'a', 'A', 'AB', 'aBc', 'ABCD', 'xAyz', 'Foo A Bar'][(number % 8) + 1]
+FROM numbers(2000);
+
+-- Enum16 spanning a wide, sparse Int16 range (values in [-30000, 30000], span 60001 for 8 names). The
+-- transform path zero-fills a dense array of `max_value - min_value + 1` slots, so it is worth taking
+-- only when a block has enough rows to amortize that fill (the span guard requires `span <= rows`).
+-- With a small block (fewer rows than the span) the optimization is skipped and the unchanged
+-- `castColumn` path is used; with a large block the transform path is taken. Either way the result
+-- must equal `toString(...)`. See the span guard in `FunctionsStringSearch.h`.
+CREATE TABLE t_es16_wide (c Enum16('' = -30000, 'a' = -1, 'A' = 0, 'AB' = 7, 'aBc' = 300, 'ABCD' = 1000, 'xAyz' = 5000, 'Foo A Bar' = 30000))
+ENGINE = MergeTree ORDER BY tuple();
+-- 1000 rows < span 60001, so every block keeps the `castColumn` path (regardless of block size).
+INSERT INTO t_es16_wide
 SELECT ['', 'a', 'A', 'AB', 'aBc', 'ABCD', 'xAyz', 'Foo A Bar'][(number % 8) + 1]
 FROM numbers(1000);
+
+CREATE TABLE t_es16_wide_big (c Enum16('' = -30000, 'a' = -1, 'A' = 0, 'AB' = 7, 'aBc' = 300, 'ABCD' = 1000, 'xAyz' = 5000, 'Foo A Bar' = 30000))
+ENGINE = MergeTree ORDER BY tuple();
+-- 100000 rows > span 60001; the queries below force a single large block so the transform path is taken.
+INSERT INTO t_es16_wide_big
+SELECT ['', 'a', 'A', 'AB', 'aBc', 'ABCD', 'xAyz', 'Foo A Bar'][(number % 8) + 1]
+FROM numbers(100000);
 
 -- Fewer rows than distinct enum names: the optimization is not applied (non-transform path).
 CREATE TABLE t_es8_few (c Enum8('' = -128, 'a' = -5, 'A' = 0, 'AB' = 1, 'aBc' = 2, 'ABCD' = 3, 'xAyz' = 100, 'Foo A Bar' = 127))
@@ -48,11 +71,25 @@ SELECT 'Enum8 fallback (per-row start position)';
 SELECT 'position per-row start', sum(position(c, 'A', s + 1) != position(toString(c), 'A', s + 1)) FROM t_es8;
 SELECT 'position const start', sum(position(c, 'A', 1) != position(toString(c), 'A', 1)) FROM t_es8;
 
-SELECT 'Enum16 transform path (wide range)';
-SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es16;
-SELECT 'position', sum(position(c, 'A') != position(toString(c), 'A')) FROM t_es16;
-SELECT 'match', sum(match(c, 'A') != match(toString(c), 'A')) FROM t_es16;
-SELECT 'countSubstrings', sum(countSubstrings(c, 'A') != countSubstrings(toString(c), 'A')) FROM t_es16;
+SELECT 'Enum16 transform path (narrow range)';
+SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es16_narrow SETTINGS max_block_size = 65536;
+SELECT 'position', sum(position(c, 'A') != position(toString(c), 'A')) FROM t_es16_narrow SETTINGS max_block_size = 65536;
+SELECT 'match', sum(match(c, 'A') != match(toString(c), 'A')) FROM t_es16_narrow SETTINGS max_block_size = 65536;
+SELECT 'countSubstrings', sum(countSubstrings(c, 'A') != countSubstrings(toString(c), 'A')) FROM t_es16_narrow SETTINGS max_block_size = 65536;
+
+-- Wide sparse Enum16, small block: the span guard keeps the `castColumn` path; result still matches.
+SELECT 'Enum16 wide sparse range, small block (castColumn path)';
+SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es16_wide;
+SELECT 'position', sum(position(c, 'A') != position(toString(c), 'A')) FROM t_es16_wide;
+SELECT 'match', sum(match(c, 'A') != match(toString(c), 'A')) FROM t_es16_wide;
+SELECT 'countSubstrings', sum(countSubstrings(c, 'A') != countSubstrings(toString(c), 'A')) FROM t_es16_wide;
+
+-- Wide sparse Enum16, large block: more rows than the span, so the transform path is taken.
+SELECT 'Enum16 wide sparse range, large block (transform path)';
+SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es16_wide_big SETTINGS max_block_size = 200000;
+SELECT 'position', sum(position(c, 'A') != position(toString(c), 'A')) FROM t_es16_wide_big SETTINGS max_block_size = 200000;
+SELECT 'match', sum(match(c, 'A') != match(toString(c), 'A')) FROM t_es16_wide_big SETTINGS max_block_size = 200000;
+SELECT 'countSubstrings', sum(countSubstrings(c, 'A') != countSubstrings(toString(c), 'A')) FROM t_es16_wide_big SETTINGS max_block_size = 200000;
 
 SELECT 'Enum8 non-transform path (few rows)';
 SELECT 'like', sum(like(c, '%A%') != like(toString(c), '%A%')) FROM t_es8_few;
@@ -99,5 +136,7 @@ SELECT hasToken(c, ' ') FROM t_es8; -- { serverError BAD_ARGUMENTS }
 SELECT c LIKE '%A%' ESCAPE '!!' FROM t_es8; -- { serverError BAD_ARGUMENTS }
 
 DROP TABLE t_es8;
-DROP TABLE t_es16;
+DROP TABLE t_es16_narrow;
+DROP TABLE t_es16_wide;
+DROP TABLE t_es16_wide_big;
 DROP TABLE t_es8_few;
