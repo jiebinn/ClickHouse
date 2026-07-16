@@ -104,7 +104,8 @@ _PIPELINE_NOTES = {
         "`DOCKER_BUILDS_AMD`."
     ),
     Labels.NO_FAST_TESTS: (
-        "Label `no-fast-tests` skips only `STYLE_CHECK` and `FAST_TEST`."
+        "Label `no-fast-tests` skips only `STYLE_CHECK` and `FAST_TEST`; merge is "
+        "still allowed because the merge queue runs those checks."
     ),
     Labels.CI_INTEGRATION_FLAKY: (
         "Label `ci-integration-test-flaky` runs the integration flaky-check jobs only."
