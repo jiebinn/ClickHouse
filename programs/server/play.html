@@ -8331,6 +8331,26 @@ const url_query = query_area.value;          /// already decoded from the hash; 
 /// query that produced nothing.
 const defer_run_for_reconcile = run_immediately;
 
+/// Restamp the current browser-history entry's `tab=` URL param (and `history.state.tabName`,
+/// when the entry belongs to `tab`) to `tab`'s current title. `reconcileStartup` renames the
+/// LIVE active tab in two places — adopting `url_tab_name` for it, or de-conflicting it with
+/// `uniqueTitle` during a dirty-startup merge — after the current entry may already carry its
+/// PRE-rename title (a live edit before reconciliation seeds the entry via
+/// `refreshCurrentHistoryEntry`). Skipping this would leave the URL/history diverged from what
+/// gets persisted: reloading, or navigating to, that stale entry would recreate a second tab
+/// under the old title alongside the one actually saved under the new one.
+function restampCurrentEntryTitle(tab) {
+    if (!tab) return;
+    const restamp_url = new URL(location.href);
+    const cur_tab_param = restamp_url.searchParams.get('tab');
+    if (cur_tab_param === null || cur_tab_param === tab.title) return;
+    restamp_url.searchParams.set('tab', tab.title);
+    const cur_state = history.state;
+    const new_state = (cur_state && cur_state.tabId === tab.id)
+        ? { ...cur_state, tabName: tab.title } : cur_state;
+    history.replaceState(new_state, document.title, restamp_url.href);
+}
+
 /// Reconcile the freshly loaded URL (query + tab name) against tabs saved in IndexedDB.
 async function reconcileStartup() {
     const loaded = await loadFromDb();
@@ -8500,18 +8520,7 @@ async function reconcileStartup() {
             /// Restamp the current entry/URL to the active live tab's new title. (Older load-window
             /// entries keep the stable live `tabId` and are restamped lazily by `onpopstate` on
             /// Back/Forward.)
-            const active_tab = getActiveTab();
-            if (active_tab) {
-                const restamp_url = new URL(location.href);
-                const cur_tab_param = restamp_url.searchParams.get('tab');
-                if (cur_tab_param !== null && cur_tab_param !== active_tab.title) {
-                    restamp_url.searchParams.set('tab', active_tab.title);
-                    const cur_state = history.state;
-                    const new_state = (cur_state && cur_state.tabId === active_tab.id)
-                        ? { ...cur_state, tabName: active_tab.title } : cur_state;
-                    history.replaceState(new_state, document.title, restamp_url.href);
-                }
-            }
+            restampCurrentEntryTitle(getActiveTab());
             renderTabBar();
             scheduleSave();
             return;   /// skip URL param reconciliation and auto-run: the user is already editing
@@ -8620,6 +8629,13 @@ async function reconcileStartup() {
         const t = getActiveTab();
         if (t) {
             t.title = url_tab_name;
+            /// A live edit before this point (`bootstrap_dirty`) may already have seeded the current
+            /// entry/URL via `refreshCurrentHistoryEntry`, with the tab's PRE-rename default title
+            /// (e.g. `Query A`). Restamp it to the just-adopted `url_tab_name`, or the entry/URL keep
+            /// naming the old title while `t` (and what gets persisted) carries the new one — a
+            /// reload of that stale entry would then recreate a second tab under the old name
+            /// alongside the one actually saved.
+            restampCurrentEntryTitle(t);
             /// Seed lastSavedQuery (= the query the URL is authoritative for) so a later reload of
             /// this same shared link is recognized as a stale reload — the URL hash equals this
             /// tab's own last-synced query — rather than a fresh external query. Without it, editing
@@ -8662,7 +8678,18 @@ async function reconcileStartup() {
         /// inputs and mirrors the empty text into the active tab's query). This matches a first-ever
         /// visit precisely, so the next reload sees a single blank tab with no `?tab=` or hash and
         /// prunes it again.
-        if (url_tab_name) {
+        ///
+        /// This cleanup assumes the bootstrap tab still holds only the pruned tab's own blank text —
+        /// true unless the user typed into it while `IndexedDB` was still opening (`bootstrap_dirty`).
+        /// In that case the live tab is NEWER than the stale echo, exactly as for the merge branch
+        /// above: `query_area.value = ''` below would silently wipe the live edit (and the
+        /// dispatched 'input' event would fold that blank text into the tab, discarding it for good
+        /// before the trailing `scheduleSave` persists it), and clearing `history.state` to null
+        /// would discard an entry `refreshCurrentHistoryEntry` may have already written for it. Skip
+        /// the cleanup entirely and keep the live workspace, exactly as the dirty-startup merge above
+        /// does; the tail of this function already skips URL-param reconciliation and auto-run for a
+        /// dirty startup, so nothing below re-applies the stale URL over the live edit.
+        if (url_tab_name && !bootstrap_dirty) {
             const cleaned_url = new URL(location.href);
             cleaned_url.searchParams.delete('tab');
             /// Drop the stale `run=1` too (`run_immediately` was likewise cleared above): it was the

@@ -723,6 +723,72 @@ async function main() {
             r.sandbox.location.href);
     }
 
+    /// Guard (dirty-startup adopt-name restamp): a fresh/shared `?tab=Scratch` link with no saved
+    /// tabs, typed into before `IndexedDB` resolves. The trusted keystroke seeds the current entry
+    /// via `refreshCurrentHistoryEntry` — `history.state` is still null at that point, so it does
+    /// NOT bail — stamping the entry/URL with the live tab's PRE-rename default title (`Query A`).
+    /// When reconciliation then adopts `url_tab_name` for that same live tab (no saved tabs to
+    /// merge with), the entry/URL must be restamped to the newly adopted title too; otherwise the
+    /// tab actually saved is `Scratch` while the current entry/URL still name `Query A`, and
+    /// reloading (or navigating to) that entry would recreate a second `Query A` tab alongside it.
+    {
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch',
+            historyState: null,
+            openDelayMs: 30,
+            duringLoad: (sandbox) => {
+                vm.runInContext(
+                    "query_area.value = 'SELECT 999';" +
+                    "query_area.dispatchEvent({ type: 'input', isTrusted: true });",
+                    sandbox);
+            },
+            seedTabs: [],
+            seedMeta: null,
+        });
+        check('dirty-startup-adopt-restamp', 'the live tab is renamed to Scratch and keeps the live edit',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Scratch' && r.live.tabs[0].query === 'SELECT 999',
+            r.live);
+        const restamped_url = new URL(r.sandbox.location.href);
+        check('dirty-startup-adopt-restamp', 'the current entry/URL is restamped to the adopted title',
+            restamped_url.searchParams.get('tab') === 'Scratch',
+            r.sandbox.location.href);
+        check('dirty-startup-adopt-restamp', 'history.state.tabName matches the adopted title',
+            r.sandbox.history.state && r.sandbox.history.state.tabName === 'Scratch',
+            r.sandbox.history.state);
+    }
+
+    /// Guard (all-blank stale reload, live edit survives): reload a URL echoing a single, now-
+    /// pruned blank saved tab (`?tab=Scratch`, `history.state` naming it), and type into the
+    /// bootstrap editor before `IndexedDB` resolves. The persisted tab's id (`t7`) does not match
+    /// the fresh bootstrap tab's id (`t1`), so `refreshCurrentHistoryEntry` bails without touching
+    /// `history.state` — `bootstrap_dirty` is the only signal that a live edit is in flight. Since
+    /// every saved tab is pruned, `savedTabs.length` is 0 and this reaches the same stale-echo
+    /// cleanup branch as the `stale-reload-whitespace-hash` guard above; that branch must not win
+    /// over a live, non-blank edit the way it does over the pruned tab's own stray blank text.
+    {
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch',
+            historyState: { tabId: 't7', tabName: 'Scratch' },
+            openDelayMs: 30,
+            duringLoad: (sandbox) => {
+                vm.runInContext(
+                    "query_area.value = 'SELECT 999';" +
+                    "query_area.dispatchEvent({ type: 'input', isTrusted: true });",
+                    sandbox);
+            },
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7'], tabSeq: 7, tabTitleSeq: 1 },
+        });
+        check('dirty-startup-allblank-edit-survives', 'the live edit survives instead of being wiped',
+            r.live.tabs.length === 1 && r.live.tabs[0].query === 'SELECT 999',
+            r.live);
+        check('dirty-startup-allblank-edit-survives', 'the live edit is what gets persisted, not a blank tab',
+            r.persisted.some(p => p.query === 'SELECT 999') && !r.persisted.some(p => (p.query || '').trim() === ''),
+            r.persisted.map(p => ({ id: p.id, query: p.query })));
+    }
+
     if (failures) {
         console.log(`${failures} check(s) FAILED`);
         process.exit(1);
