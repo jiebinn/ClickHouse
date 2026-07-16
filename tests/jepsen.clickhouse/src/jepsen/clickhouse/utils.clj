@@ -54,8 +54,9 @@
                 (cu/wget-helper! wget-opts url))))
       (info "Binary is already downloaded"))
 
-    (c/exec :rm :-rf dest-symlink)
-    (c/exec :ln :-s dest-file dest-symlink)
+    ;; Atomic, idempotent symlink: a leftover symlink from a previous run made
+    ;; the old `rm -rf` + `ln -s` fail with "File exists" and crashed setup.
+    (c/exec :ln :-sf dest-file dest-symlink)
     dest-symlink))
 
 (defn get-clickhouse-url
@@ -198,18 +199,30 @@
          ;  (collect-traces test node logs-dir))
          ;(info node "Pid files doesn't exists"))
        (kill-clickhouse! node test)
-       (if (cu/exists? coordination-data-dir)
-         (do
-           (info node "Coordination files exists, going to compress")
+       ;; Log/artifact collection is best-effort: a nemesis can leave a node
+       ;; degraded and racing teardown can delete these dirs between the
+       ;; `exists?` check and `tar` (TOCTOU). A failed collection must not crash
+       ;; the run after the verdict is already computed - warn and continue.
+       (when (cu/exists? coordination-data-dir)
+         (info node "Coordination files exists, going to compress")
+         (try
            (c/cd data-dir
-                 (c/exec :tar :czf "coordination.tar.gz" "coordination"))))
+                 (c/exec :tar :czf "coordination.tar.gz" "coordination"))
+           (catch Exception e
+             (warn "Failed to compress coordination files on node" node "-" (.getMessage e)))))
        (if (cu/exists? (str logs-dir))
          (do
            (info node "Logs exist, going to compress")
-           (c/cd root-folder
-                 (c/exec :tar :czf "logs.tar.gz" "logs"))) (info node "Logs are missing")))
-      (let [common-logs [(str root-folder "/logs.tar.gz") (str data-dir "/coordination.tar.gz")]
-            gdb-log (str logs-dir "/gdb.log")]
-        (if (cu/exists? (str logs-dir "/gdb.log"))
-          (conj common-logs gdb-log)
-          common-logs)))))
+           (try
+             (c/cd root-folder
+                   (c/exec :tar :czf "logs.tar.gz" "logs"))
+             (catch Exception e
+               (warn "Failed to compress logs on node" node "-" (.getMessage e)))))
+         (info node "Logs are missing")))
+      ;; Return only artifacts that were actually produced, so the downloader
+      ;; does not fail on a compression that was skipped above.
+      (->> [(str root-folder "/logs.tar.gz")
+            (str data-dir "/coordination.tar.gz")
+            (str logs-dir "/gdb.log")]
+           (filter cu/exists?)
+           (vec)))))
