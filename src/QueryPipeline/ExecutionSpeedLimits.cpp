@@ -92,7 +92,7 @@ void ExecutionSpeedLimits::throttle(
                     if (estimated_execution_time_seconds > max_estimated_execution_time.totalSeconds())
                         throw Exception(
                             ErrorCodes::TOO_SLOW,
-                            "Estimated query execution time ({:.5f} seconds) is too long. Maximum: {}. Estimated rows to process: {} ({} read in {:.5f} seconds).",
+                            "Estimated query execution time ({:.3f} seconds) is too long. Maximum: {}. Estimated rows to process: {} ({} read in {:.3f} seconds).",
                             estimated_execution_time_seconds,
                             max_estimated_execution_time.totalSeconds(),
                             total_rows_to_read,
