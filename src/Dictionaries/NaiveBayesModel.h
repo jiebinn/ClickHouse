@@ -394,8 +394,7 @@ inline TokenizerMode parseTokenizerMode(const String & mode)
 /// Resolves a padding token for the given mode into the bytes used to pad the input. For `byte` and `codepoint`
 /// the token is given as a number (decimal or 0x hex) and resolved to its byte / UTF-8 here, so the same value is
 /// portable (raw bytes cannot travel through XML config) and means the same thing whether it is set on a dictionary
-/// layout or passed to `naiveBayesNgrams`; `token` mode takes the literal token string. `parameter_name` (e.g.
-/// "start_token") is used only to make the error messages specific.
+/// layout or passed to `naiveBayesNgrams`; `token` mode takes the literal token string.
 inline String parsePaddingToken(const String & raw_value, TokenizerMode mode, std::string_view parameter_name)
 {
     /// Parses a bounded non-negative integer for byte/codepoint modes. from_chars is used (not parse<>) so an
