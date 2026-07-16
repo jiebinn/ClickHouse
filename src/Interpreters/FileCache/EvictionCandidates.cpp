@@ -307,12 +307,7 @@ void EvictionCandidates::evict()
                     chassert(iterator);
                 }
 
-                /// This failpoint models an eviction failure and is only meaningful for the
-                /// dynamic cache resize feature, which has a dedicated restore path for failed
-                /// candidates. Restrict it to that path (removed_queue_entries is set only by
-                /// removeQueueEntries(), called only from dynamic resize) so it cannot fire on
-                /// the ordinary reserve path, where a failed candidate is treated as an internal
-                /// invariant violation (LOGICAL_ERROR). See issue #88945.
+                /// Affects only dynamic cache resize.
                 if (removed_queue_entries)
                 {
                     fiu_do_on(FailPoints::file_cache_dynamic_resize_fail_to_evict, {
