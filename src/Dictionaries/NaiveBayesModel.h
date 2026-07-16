@@ -621,7 +621,7 @@ private:
         classes.reserve(class_totals.size());
         for (const auto & entry : class_totals)
             classes.push_back(entry.getKey());
-        std::sort(classes.begin(), classes.end());
+        ::sort(classes.begin(), classes.end());
 
         const size_t num_classes = classes.size();
 
@@ -767,7 +767,7 @@ public:
     {
         data->computeScores(input, scratch);
         softmaxInto(scratch);
-        std::sort(
+        ::sort(
             scratch.probabilities.begin(),
             scratch.probabilities.end(),
             [](const ClassProbability & a, const ClassProbability & b)
