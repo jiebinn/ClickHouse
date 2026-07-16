@@ -1,5 +1,5 @@
 3	L3	R3
-nan	Lnan	Rnan
+inf	Linf	Rinf
 -inf	L-inf	
 1	L1	
 2	L2	
@@ -7,6 +7,6 @@ nan	Lnan	Rnan
 7	L7	
 8	L8	
 9	L9	
-inf	Linf	
-nan	Lnan	Rnan
-1
+inf	Linf	Rinf
+nan	Lnan	
+0
