@@ -24,7 +24,6 @@
 #include <Databases/DatabaseFactory.h>
 #include <Storages/NamedCollectionsHelpers.h>
 #include <Storages/StoragePostgreSQL.h>
-#include <Storages/PostgreSQL/PostgreSQLSettings.h>
 #include <Storages/AlterCommands.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -607,10 +606,11 @@ void registerDatabaseMaterializedPostgreSQL(DatabaseFactory & factory)
         if (!engine->arguments)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Engine `{}` must have arguments", engine_name);
 
-        PostgreSQLSettings postgresql_settings;
         if (auto named_collection = tryGetNamedCollectionWithOverrides(engine_args, args.context))
         {
-            configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, postgresql_settings, args.context, false);
+            /// The `PostgreSQLSettings` are not passed: this engine does not use a connection pool,
+            /// so the `postgresql_*` pool settings are rejected instead of being silently ignored.
+            configuration = StoragePostgreSQL::processNamedCollectionResult(*named_collection, /*storage_settings=*/ nullptr, args.context, false);
         }
         else
         {

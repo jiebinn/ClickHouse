@@ -99,23 +99,30 @@ void TableFunctionPostgreSQL::parseArguments(const ASTPtr & ast_function, Contex
     if (!func_args.arguments)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table function 'PostgreSQL' must have arguments.");
 
-    /// Seed the connection-pool parameters from the query-level `postgresql_*` settings, then let a
-    /// trailing `SETTINGS ...` clause override them (mirrors the `mysql` table function).
+    /// The connection-pool parameters are seeded from the query-level `postgresql_*` settings
+    /// (preserving the historical behaviour); a named collection may override them, and a trailing
+    /// `SETTINGS ...` clause takes the final precedence, like on the table engine.
     PostgreSQLSettings postgresql_settings;
     postgresql_settings.loadFromQueryContext(*context);
 
     auto & args = func_args.arguments->children;
+    ASTPtr settings_ast;
     for (auto it = args.begin(); it != args.end(); ++it)
     {
-        if (const auto * settings_ast = (*it)->as<ASTSetQuery>())
+        if ((*it)->as<ASTSetQuery>())
         {
-            postgresql_settings.loadFromQuery(*settings_ast);
+            settings_ast = *it;
             args.erase(it);
             break;
         }
     }
 
-    configuration.emplace(StoragePostgreSQL::getConfiguration(args, context, postgresql_settings));
+    configuration.emplace(StoragePostgreSQL::getConfiguration(args, context, &postgresql_settings));
+
+    /// Applied after getConfiguration, so that the explicit SETTINGS clause wins over the values
+    /// stored in a named collection.
+    if (settings_ast)
+        postgresql_settings.loadFromQuery(settings_ast->as<ASTSetQuery &>());
 
     if (!postgresql_settings[PostgreSQLSetting::postgresql_connection_pool_size])
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "postgresql_connection_pool_size cannot be zero.");

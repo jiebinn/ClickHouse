@@ -36,7 +36,6 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/ReadFinalForExternalReplicaStorage.h>
 #include <Storages/StoragePostgreSQL.h>
-#include <Storages/PostgreSQL/PostgreSQLSettings.h>
 
 #include <QueryPipeline/Pipe.h>
 
@@ -637,8 +636,9 @@ void registerStorageMaterializedPostgreSQL(StorageFactory & factory)
         else
             metadata.primary_key = KeyDescription::getKeyFromAST(args.storage_def->order_by->ptr(), metadata.columns, {}, args.getContext());
 
-        PostgreSQLSettings postgresql_settings;
-        auto configuration = StoragePostgreSQL::getConfiguration(args.engine_args, args.getContext(), postgresql_settings);
+        /// The `PostgreSQLSettings` are not passed: this engine does not use a connection pool,
+        /// so the `postgresql_*` pool settings are rejected instead of being silently ignored.
+        auto configuration = StoragePostgreSQL::getConfiguration(args.engine_args, args.getContext(), /*storage_settings=*/ nullptr);
         auto connection_info = postgres::formatConnectionString(
             configuration.database,
             configuration.host,
