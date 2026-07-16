@@ -572,16 +572,21 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
     static constexpr bool flag_per_row = false; // Always false in single map case
     const auto & join_keys = added_columns.join_on_keys.at(0);
 
-    /// The skip pointer is a local so that it can stay in a register across the calls in
-    /// the loop body (see `buildRowSkipData`).
-    const UInt8 * skip_data = nullptr;
-    IColumn::Filter skip_buffer;
-    if constexpr (!fast_path)
-        skip_data = join_keys.buildRowSkipData(skip_buffer);
-
     constexpr JoinFeatures<KIND, STRICTNESS, MapsTemplate> join_features;
 
     size_t rows = ScatteredBlock::Selector::size(selector);
+
+    /// The skip pointer is a local so that it can stay in a register across the calls in
+    /// the loop body (see `JoinOnKeyColumns::buildRowSkipData`).
+    const UInt8 * skip_data = nullptr;
+    IColumn::Filter skip_buffer;
+    if constexpr (!fast_path)
+    {
+        if constexpr (std::is_same_v<std::decay_t<Selector>, ScatteredBlock::Indexes>)
+            skip_data = join_keys.buildRowSkipData(skip_buffer, selector);
+        else
+            skip_data = join_keys.buildRowSkipData(skip_buffer, selector.first, rows);
+    }
     if constexpr (need_filter)
     {
         added_columns.filter = IColumn::Filter(rows, 0);
@@ -672,7 +677,11 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
 {
     static constexpr bool flag_per_row = true; // Always true in multiple maps case
 
-    /// Per-clause skip bytes, prepared once per block (see `JoinOnKeyColumns::buildRowSkipData`).
+    constexpr JoinFeatures<KIND, STRICTNESS, MapsTemplate> join_features;
+
+    size_t rows = ScatteredBlock::Selector::size(selector);
+
+    /// Per-clause skip bytes, prepared once per call (see `JoinOnKeyColumns::buildRowSkipData`).
     std::vector<const UInt8 *> skip_datas;
     std::vector<IColumn::Filter> skip_buffers;
     if constexpr (!fast_path)
@@ -681,12 +690,13 @@ size_t HashJoinMethods<KIND, STRICTNESS, MapsTemplate>::joinRightColumns(
         skip_datas.resize(num_clauses);
         skip_buffers.resize(num_clauses);
         for (size_t d = 0; d < num_clauses; ++d)
-            skip_datas[d] = added_columns.join_on_keys[d].buildRowSkipData(skip_buffers[d]);
+        {
+            if constexpr (std::is_same_v<std::decay_t<Selector>, ScatteredBlock::Indexes>)
+                skip_datas[d] = added_columns.join_on_keys[d].buildRowSkipData(skip_buffers[d], selector);
+            else
+                skip_datas[d] = added_columns.join_on_keys[d].buildRowSkipData(skip_buffers[d], selector.first, rows);
+        }
     }
-
-    constexpr JoinFeatures<KIND, STRICTNESS, MapsTemplate> join_features;
-
-    size_t rows = ScatteredBlock::Selector::size(selector);
     if constexpr (need_filter)
     {
         added_columns.filter = IColumn::Filter(rows, 0);

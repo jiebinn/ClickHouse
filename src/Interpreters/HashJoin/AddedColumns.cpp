@@ -21,32 +21,57 @@ JoinOnKeyColumns::JoinOnKeyColumns(
 {
 }
 
-const UInt8 * JoinOnKeyColumns::buildRowSkipData(IColumn::Filter & buffer) const
+namespace
+{
+
+/// Core of JoinOnKeyColumns::buildRowSkipData; `fill_selected(set_at)` applies `set_at`
+/// to every row position the caller is going to probe.
+template <typename FillSelected>
+const UInt8 * buildRowSkipDataImpl(
+    ConstNullMapPtr null_map, const JoinCommon::JoinMask & mask, IColumn::Filter & buffer, FillSelected && fill_selected)
 {
     const UInt8 * null_map_data = null_map ? null_map->data() : nullptr;
-    const auto mask_kind = join_mask_column.getKind();
+    const auto mask_kind = mask.getKind();
     if (mask_kind == JoinCommon::JoinMask::Kind::AllTrue)
         return null_map_data;
 
-    const size_t mask_size = join_mask_column.getSize();
+    const size_t mask_size = mask.getSize();
     chassert(!null_map || null_map->size() == mask_size);
+    buffer.resize(mask_size);
     if (mask_kind == JoinCommon::JoinMask::Kind::AllFalse)
     {
-        buffer.assign(mask_size, static_cast<UInt8>(1));
+        fill_selected([&](size_t i) { buffer[i] = 1; });
     }
     else
     {
-        const UInt8 * mask_data = join_mask_column.getRawDataOrNull();
-        buffer.resize(mask_size);
+        const UInt8 * mask_data = mask.getRawDataOrNull();
         /// The mask bytes are only guaranteed to be boolean-like (0 = filtered), not 0/1.
         if (null_map_data)
-            for (size_t i = 0; i < mask_size; ++i)
-                buffer[i] = null_map_data[i] | static_cast<UInt8>(!mask_data[i]);
+            fill_selected([&](size_t i) { buffer[i] = null_map_data[i] | static_cast<UInt8>(!mask_data[i]); });
         else
-            for (size_t i = 0; i < mask_size; ++i)
-                buffer[i] = static_cast<UInt8>(!mask_data[i]);
+            fill_selected([&](size_t i) { buffer[i] = static_cast<UInt8>(!mask_data[i]); });
     }
     return buffer.data();
+}
+
+}
+
+const UInt8 * JoinOnKeyColumns::buildRowSkipData(IColumn::Filter & buffer, size_t range_begin, size_t range_size) const
+{
+    return buildRowSkipDataImpl(null_map, join_mask_column, buffer, [&](auto && set_at)
+    {
+        for (size_t i = range_begin; i < range_begin + range_size; ++i)
+            set_at(i);
+    });
+}
+
+const UInt8 * JoinOnKeyColumns::buildRowSkipData(IColumn::Filter & buffer, const ScatteredBlock::Indexes & indexes) const
+{
+    return buildRowSkipDataImpl(null_map, join_mask_column, buffer, [&](auto && set_at)
+    {
+        for (size_t i : indexes.getData())
+            set_at(i);
+    });
 }
 
 size_t LazyOutput::buildOutput(
