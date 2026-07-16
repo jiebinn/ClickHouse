@@ -73,7 +73,11 @@ INSERT INTO orders VALUES
 SELECT COUNT(*)
 FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0;
 
--- The three logical partitions of the predicate must sum back to COUNT(*) = 4.
+-- Lock in the exact ternary-logic partition, not just its sum. The predicate is FALSE
+-- for every row because the correlated EXISTS is always TRUE (ON ... OR TRUE keeps rows
+-- and the second outer join ON FALSE still preserves one side), so for each outer-join
+-- type the branches must be P = 0, NOT P = 4, P IS NULL = 0 (and still sum to COUNT(*) = 4).
+-- RIGHT OUTER JOIN.
 SELECT
 (
     SELECT COUNT(*)
@@ -81,23 +85,69 @@ SELECT
     WHERE (9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
       AND TRUE
       AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 RIGHT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) RIGHT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)
-)
-+
+) AS cnt_p,
 (
     SELECT COUNT(*)
     FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
     WHERE NOT ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
       AND TRUE
       AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 RIGHT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) RIGHT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END))
-)
-+
+) AS cnt_not_p,
 (
     SELECT COUNT(*)
     FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
     WHERE ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
       AND TRUE
       AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 RIGHT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) RIGHT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)) IS NULL
-);
+) AS cnt_p_is_null;
+
+-- LEFT OUTER JOIN.
+SELECT
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE (9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 LEFT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) LEFT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)
+) AS cnt_p,
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE NOT ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 LEFT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) LEFT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END))
+) AS cnt_not_p,
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 LEFT JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) LEFT JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)) IS NULL
+) AS cnt_p_is_null;
+
+-- FULL OUTER JOIN.
+SELECT
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE (9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 FULL JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) FULL JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)
+) AS cnt_p,
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE NOT ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 FULL JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) FULL JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END))
+) AS cnt_not_p,
+(
+    SELECT COUNT(*)
+    FROM (SELECT c.created_at c0, c.post_id c1 FROM comments c WHERE TRUE) subq_0
+    WHERE ((9.53 < CASE WHEN subq_0.c1 IS NULL THEN CASE WHEN (CASE WHEN subq_0.c1 IS NOT NULL THEN 'z' ELSE 'f' END) >= 'h' THEN 37.78 ELSE 93.53 END ELSE 100.81 END)
+      AND TRUE
+      AND (CASE WHEN EXISTS (SELECT 1 FROM comments c2 FULL JOIN orders o ON (((o.id <> o.id OR TRUE) OR subq_0.c1 IS NULL)) FULL JOIN posts p4 ON FALSE WHERE TRUE) THEN FALSE ELSE TRUE END)) IS NULL
+) AS cnt_p_is_null;
 
 DROP TABLE posts;
 DROP TABLE comments;
