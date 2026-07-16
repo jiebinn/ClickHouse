@@ -269,6 +269,7 @@ def main():
                 -DENABLE_TESTS=0 -DENABLE_UTILS=0 -DENABLE_THINLTO=0 -DENABLE_NURAFT=1 -DENABLE_SIMDJSON=1 \
                 -DENABLE_LEXER_TEST=1 \
                 -DBUILD_STRIPPED_BINARY=1 \
+                -DENABLE_CLICKHOUSE_SELF_EXTRACTING=1 \
                 -DENABLE_JEMALLOC=1 -DENABLE_LIBURING=1 -DENABLE_YAML_CPP=1 -DENABLE_RUST=1 \
                 -B {build_dir_normalized}",
                 workdir=repo_path_normalized,
@@ -370,7 +371,9 @@ def main():
             attach_debug = True
         job_info = results[-1].info
 
-    attach_files.append(clickhouse_se_path)
+    if clickhouse_se_path.is_file():
+        # do not reupload clickhouse binary for non-building jobs (e.g. darwin tests)
+        attach_files.append(clickhouse_se_path)
     if attach_debug:
         attach_files.extend(CH.prepare_logs(info=info, all=True))
 
