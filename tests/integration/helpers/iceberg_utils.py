@@ -416,11 +416,16 @@ def iceberg_local_interop_dir(node):
     is written verbatim into Iceberg metadata, so the two engines must agree on one
     string. Under the flaky check (-n 3 --dist=each) the whole module runs in several
     xdist workers at once, so the string is namespaced by PYTEST_XDIST_WORKER to keep
-    each worker's host symlink and data dir distinct. conftest and the tests both call
-    this, so they compute the same path within one worker process.
+    each worker's host symlink and data dir distinct. It is also namespaced by
+    INTEGRATION_TESTS_RUN_ID (see conftest.py / cluster.py get_instances_dir) so two
+    independent harness runs on the same host, whose xdist workers both get e.g. "gw0",
+    do not share one path and clobber each other's host symlink. conftest and the tests
+    both call this, so they compute the same path within one worker process.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "master")
-    return f"/var/lib/clickhouse/user_files/iceberg_{worker}_{node}"
+    run_id = os.environ.get("INTEGRATION_TESTS_RUN_ID", "")
+    suffix = f"_{run_id}" if run_id else ""
+    return f"/var/lib/clickhouse/user_files/iceberg_{worker}{suffix}_{node}"
 
 
 def create_iceberg_table(
