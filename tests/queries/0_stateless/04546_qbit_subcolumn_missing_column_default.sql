@@ -19,7 +19,7 @@ INSERT INTO t_qbit_subcolumn_default
 -- The parts written above do not contain the new columns physically.
 ALTER TABLE t_qbit_subcolumn_default
     ADD COLUMN qb QBit(BFloat16, 32, 32) DEFAULT CAST(v, 'Array(BFloat16)'),
-    ADD COLUMN qi QBit(Int8, 32, 32) DEFAULT arrayMap(quantizeBFloat16ToInt8, CAST(v, 'Array(BFloat16)'));
+    ADD COLUMN qi QBit(Int8, 32, 32) DEFAULT arrayMap(x -> quantizeBFloat16ToInt8(x), CAST(v, 'Array(BFloat16)'));
 
 SELECT 'before MATERIALIZE COLUMN';
 
