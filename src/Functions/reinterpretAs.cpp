@@ -1133,9 +1133,9 @@ SELECT reinterpretAsUUID(reverse(unhex('000102030405060708090a0b0c0d0e0f')))
     factory.registerFunction<FunctionReinterpretAsUUID>(documentation_reinterpretAsUUID);
 
     FunctionDocumentation::Description description_reinterpretAsString = R"(
-Reinterprets the input value as a string (assuming little endian order).
-For scalar values, null bytes at the end are ignored, for example, the function returns for UInt32 value 255 a string with a single character.
-For an `Array` of fixed-size elements, the element bytes are copied verbatim without trimming trailing zero bytes, so the result can be reinterpreted back to the original `Array` type.
+Reinterprets the input value as a string.
+For scalar values, the byte order is normalized to little endian, and null bytes at the end are ignored, for example, the function returns for UInt32 value 255 a string with a single character.
+For an `Array` of fixed-size elements, the element bytes are copied verbatim in their native in-memory order, without trimming trailing zero bytes and without normalizing to little endian, so the result can be reinterpreted back to the original `Array` type on any architecture.
     )";
     FunctionDocumentation::Syntax syntax_reinterpretAsString = "reinterpretAsString(x)";
     FunctionDocumentation::Arguments arguments_reinterpretAsString = {
