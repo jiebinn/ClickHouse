@@ -301,18 +301,16 @@ void EvictionCandidates::evict()
                 const auto segment = candidate->file_segment;
 
                 IFileCachePriority::IteratorPtr iterator;
-                if (!removed_queue_entries)
-                {
-                    iterator = segment->getQueueIterator();
-                    chassert(iterator);
-                }
-
-                /// Affects only dynamic cache resize.
                 if (removed_queue_entries)
                 {
                     fiu_do_on(FailPoints::file_cache_dynamic_resize_fail_to_evict, {
                         throw Exception(ErrorCodes::FAULT_INJECTED, "Failed to evict file segment");
                     });
+                }
+                else
+                {
+                    iterator = segment->getQueueIterator();
+                    chassert(iterator);
                 }
 
                 locked_key->removeFileSegment(
