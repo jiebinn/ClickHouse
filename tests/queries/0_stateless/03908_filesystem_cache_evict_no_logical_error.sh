@@ -20,8 +20,10 @@ QID="03908_${CLICKHOUSE_DATABASE}"
 
 $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t_03908"
 
-# A per-database unique cache name/path means the cache starts empty, so the second
-# INSERT deterministically has to evict to fit under the small max_size.
+# A per-database unique cache name/path means the cache starts empty. Write-through
+# caching (cache_on_write_operations) makes each INSERT populate the cache directly, so
+# the second INSERT deterministically has to evict to fit under the small max_size --
+# without it, cache population would depend on non-deterministic background read-caching.
 $CLICKHOUSE_CLIENT -q "
     CREATE TABLE t_03908 (c0 Int)
     ENGINE = MergeTree()
@@ -32,9 +34,10 @@ $CLICKHOUSE_CLIENT -q "
                 name = '$CACHE_NAME',
                 max_size = '25Ki',
                 path = '$CACHE_NAME/',
+                cache_on_write_operations = 1,
                 disk = 's3_disk')"
 
-$CLICKHOUSE_CLIENT -q "INSERT INTO t_03908 SELECT number FROM numbers(1399)"
+$CLICKHOUSE_CLIENT --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number FROM numbers(1399)"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM ENABLE FAILPOINT file_cache_dynamic_resize_fail_to_evict"
 # The failpoint is server-global, so disable it on every exit path (set -e). Otherwise a
@@ -44,7 +47,7 @@ trap '$CLICKHOUSE_CLIENT -q "SYSTEM DISABLE FAILPOINT file_cache_dynamic_resize_
 # This second insert forces cache eviction on the reserve path. Before the fix the
 # failpoint fired here and aborted the server with a LOGICAL_ERROR. Now the failpoint
 # is confined to dynamic resize, so eviction proceeds normally and the insert succeeds.
-$CLICKHOUSE_CLIENT --query_id "$QID" -q "INSERT INTO t_03908 SELECT number FROM numbers(1770)"
+$CLICKHOUSE_CLIENT --query_id "$QID" --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number FROM numbers(1770)"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM FLUSH LOGS query_log"
 
