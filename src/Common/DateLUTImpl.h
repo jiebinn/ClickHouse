@@ -1470,16 +1470,21 @@ public:
                      || product > static_cast<UInt64>(std::numeric_limits<Int64>::max())))
             product = static_cast<UInt64>(std::numeric_limits<Int64>::max());
         // January 1st 1970 was Thursday so we need this 4-days offset to make weeks start on Monday.
+        // Floor towards -inf so a pre-epoch day rounds to the start of its interval, not forward in time.
+        // roundDownToMultiple avoids the `shifted + 1 - idays` overflow for an extreme `weeks` interval count.
+        const Int64 idays = static_cast<Int64>(product);
+        const Int64 shifted = static_cast<Int64>(d.toUnderType()) - 4;
+        const Int64 day = 4 + roundDownToMultiple(shifted, idays);
+        // Clamp the reconstructed day number back into the representable range. For an extreme `weeks` count
+        // the floored boundary is far below any representable day, so it must saturate to the earliest one
+        // (not wrap through the narrow cast, which would round forward past the start of the interval).
         if constexpr (std::is_same_v<Date, DayNum>)
-            return DayNum(static_cast<UInt16>(4 + (d - 4) / product * product));
+            return DayNum(static_cast<UInt16>(std::clamp<Int64>(day, 0, DATE_LUT_MAX_DAY_NUM)));
         else
         {
-            /// Floor towards -inf so a pre-1970 day number rounds to the start of its interval, not forward in time.
-            /// roundDownToMultiple avoids the `shifted + 1 - idays` overflow for an extreme `weeks` interval count.
-            const Int64 idays = static_cast<Int64>(product);
-            const Int64 shifted = static_cast<Int64>(d.toUnderType()) - 4;
-            const Int64 rounded = roundDownToMultiple(shifted, idays);
-            return ExtendedDayNum(static_cast<Int32>(4 + rounded));
+            const Int64 min_daynum = min_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
+            const Int64 max_daynum = max_representable_day_index - static_cast<Int64>(daynum_offset_epoch);
+            return ExtendedDayNum(static_cast<Int32>(std::clamp(day, min_daynum, max_daynum)));
         }
     }
 
