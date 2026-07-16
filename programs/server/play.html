@@ -4368,8 +4368,9 @@ function toggleDatabases() {
     }
 }
 
-/// The logo is an <a> element so that Ctrl/Cmd/Shift+click and middle-click
-/// natively open the current page (with the query) in a new tab.
+/// The logo is an <a> element so that middle-click, Shift+click, and the platform's
+/// new-tab modifier click (Cmd+click on macOS, Ctrl+click elsewhere) natively open the
+/// current page (with the query) in a new tab.
 /// We update the href on mousedown so it always reflects the current URL.
 document.getElementById('databases-icon').addEventListener('mousedown', () => {
     document.getElementById('databases-icon').href = window.location.href;
@@ -8912,8 +8913,10 @@ document.getElementById('download-button').addEventListener('click', async funct
         else activateTerminal();
     }
 
-    /// Ctrl/Cmd/Shift+click opens the terminal in a new browser tab; let the anchor's native
-    /// behaviour handle it (middle-click does not fire a `click` event and is handled natively too).
+    /// Middle-click, Shift+click, or the platform's new-tab modifier click (Cmd+click on
+    /// macOS, Ctrl+click elsewhere) opens the terminal in a new browser tab; let the anchor's
+    /// native behaviour handle it (middle-click does not fire a `click` event and is handled
+    /// natively too).
     function wantsNewTab(e) {
         return e.ctrlKey || e.metaKey || e.shiftKey;
     }
