@@ -456,8 +456,8 @@ def main():
         workers = max(1, nproc - 1)
         print(f"Workers count set to nproc-1 for flaky check: {workers}")
     else:
-        print(f"Workers count set to optimal value: {nproc}")
-        workers = nproc
+        workers = max(1, nproc)
+        print(f"Workers count set to optimal value: {workers}")
 
     runner_options += f" --jobs {workers}"
 
