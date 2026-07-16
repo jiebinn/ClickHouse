@@ -2047,9 +2047,10 @@ def test_detach_table_with_pending_buffer(started_cluster):
         instance.query("SELECT count() FROM test_database.test_detach_healthy")
     )
     # The server must still be alive and must not have crashed. `check_tables_are_synchronized` above
-    # already gave the consumer time to run `syncTables()` after the DETACH (where the crash happened).
+    # already gave the consumer time to run `syncTables()` after the DETACH (where the crash happened);
+    # a `SIGSEGV` there would make the query below fail, since nothing in the test container respawns
+    # a crashed `clickhouse-server`.
     assert "1" == instance.query("SELECT 1").strip()
-    assert not instance.contains_in_log("Received signal")
 
     instance.query("DROP VIEW IF EXISTS poison_mv")
     pg_manager.drop_materialized_db()
