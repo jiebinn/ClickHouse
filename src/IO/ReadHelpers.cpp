@@ -72,10 +72,15 @@ static ReturnType parseUUIDImpl(std::span<const UInt8> src, UUID & uuid)
     const auto * src_ptr = src.data();
     const auto size = src.size();
 
+    /// Decode into a local UUID and copy into `uuid` only after validation passes. parseHexChecked
+    /// writes the destination as it converts, so decoding straight into `uuid` would clobber the
+    /// caller's value on an invalid input; tryParseUUID / tryReadUUIDText must leave it unchanged.
+    UUID tmp;
+
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    const std::reverse_iterator<UInt8 *> dst(reinterpret_cast<UInt8 *>(&uuid) + sizeof(UUID));
+    const std::reverse_iterator<UInt8 *> dst(reinterpret_cast<UInt8 *>(&tmp) + sizeof(UUID));
 #else
-    auto * dst = reinterpret_cast<UInt8 *>(&uuid);
+    auto * dst = reinterpret_cast<UInt8 *>(&tmp);
 #endif
     if (size == 36)
     {
@@ -121,6 +126,7 @@ static ReturnType parseUUIDImpl(std::span<const UInt8> src, UUID & uuid)
             return ReturnType(false);
     }
 
+    uuid = tmp;
     return ReturnType(true);
 }
 
