@@ -1,8 +1,5 @@
 1
---- QCC starts empty
-0
---- Same TopK plan re-runs reuse the same QCC entry
-1
-1
---- Different LIMIT writes a separate entry
-2
+--- A lazy-materialized TopK plan populates the QCC and a re-run reuses it
+04538_cold	0	0
+04538_reuse	1	1
+04538_difflimit	0	0
