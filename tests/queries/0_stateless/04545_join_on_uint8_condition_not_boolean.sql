@@ -27,7 +27,7 @@ SETTINGS join_algorithm = 'parallel_hash', join_use_nulls = 1;
 
 SELECT '-- continuation chunks: OR disjuncts, nullable keys, mask, tiny max_joined_block_size_rows';
 SELECT count(), sum(cityHash64(coalesce(l.k, 0), coalesce(r.a, 0), coalesce(r.b, 0)) % 1000)
-FROM (SELECT if(number % 7 = 0, NULL, number % 50) AS k, toUInt8(number % 3) AS cond FROM numbers(100000)) l
-LEFT JOIN (SELECT toNullable(number % 25) AS a, toNullable(number % 30) AS b FROM numbers(2000)) r
+FROM (SELECT if(number % 7 = 0, NULL, number % 50) AS k, toUInt8(number % 3) AS cond FROM numbers(5000)) l
+LEFT JOIN (SELECT toNullable(number % 25) AS a, toNullable(number % 30) AS b FROM numbers(300)) r
     ON (l.k = r.a AND l.cond) OR (l.k = r.b)
-SETTINGS join_algorithm = 'hash', join_use_nulls = 1, max_joined_block_size_rows = 1024;
+SETTINGS join_algorithm = 'hash', join_use_nulls = 1, max_joined_block_size_rows = 256;

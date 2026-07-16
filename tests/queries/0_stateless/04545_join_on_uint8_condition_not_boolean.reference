@@ -7,4 +7,4 @@
 -- parallel_hash, condition values 0/1/2
 333
 -- continuation chunks: OR disjuncts, nullable keys, mask, tiny max_joined_block_size_rows
-5362923	2723868686
+42419	21581506
