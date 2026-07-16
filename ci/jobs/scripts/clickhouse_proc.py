@@ -264,17 +264,33 @@ class ClickHouseProc:
         os.environ["THREAD_FUZZER_pthread_mutex_unlock_BEFORE_SLEEP_TIME_US_MAX"] = "10000"
         os.environ["THREAD_FUZZER_pthread_mutex_unlock_AFTER_SLEEP_TIME_US_MAX"] = "10000"
 
+    memory_ratio_config_path = (
+        "/etc/clickhouse-server/config.d/max_server_memory_usage_to_ram_ratio.xml"
+    )
+
     @staticmethod
     def set_memory_ratio(ratio):
         config = f"""<clickhouse>
     <max_server_memory_usage_to_ram_ratio>{ratio}</max_server_memory_usage_to_ram_ratio>
 </clickhouse>
 """
-        file_path = "/etc/clickhouse-server/config.d/max_server_memory_usage_to_ram_ratio.xml"
+        file_path = ClickHouseProc.memory_ratio_config_path
         with open(file_path, "w") as f:
             f.write(config)
         print(
             f"Set max_server_memory_usage_to_ram_ratio to {ratio} in {file_path}"
+        )
+
+    @staticmethod
+    def reset_memory_ratio():
+        """Remove the override written by `set_memory_ratio` so the server
+        default applies again. Needed when the same installed config tree is
+        reused to launch a non-sanitizer binary (the bugfix-validation loop
+        swaps binaries without reinstalling configs). No-op if absent."""
+        file_path = ClickHouseProc.memory_ratio_config_path
+        Path(file_path).unlink(missing_ok=True)
+        print(
+            f"Removed {file_path}; server default max_server_memory_usage_to_ram_ratio applies"
         )
 
     def create_log_export_config(self, config_dir=None):

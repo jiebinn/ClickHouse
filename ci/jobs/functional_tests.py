@@ -19,6 +19,12 @@ from ci.praktika.utils import MetaClasses, Shell, Utils
 
 temp_dir = f"{Utils.cwd()}/ci/tmp"
 
+# Substrings identifying a sanitizer build in a build type ("amd_asan_ubsan"),
+# a job parameter string ("amd_asan_ubsan, distributed plan, parallel"), or a
+# job name. Sanitizer builds get the tighter server memory cap and reduced
+# concurrency (see the `set_memory_ratio` and `nproc` logic in `main`).
+SANITIZERS = ("asan", "tsan", "msan", "ubsan")
+
 
 class JobStages(metaclass=MetaClasses.WithIter):
     INSTALL_CLICKHOUSE = "install"
@@ -420,7 +426,7 @@ def main():
         elif (
             is_distributed_plan
             and "parallel" in test_options
-            and any(san in args.options for san in ("asan", "tsan", "msan", "ubsan"))
+            and any(san in args.options for san in SANITIZERS)
         ):
             # `--distributed-plan` fans each query across local parallel replicas,
             # multiplying the server-side memory of every in-flight query. Under the
@@ -737,8 +743,15 @@ def main():
         # The heaviest configs also cut test concurrency (see the `nproc` block
         # above, e.g. azure and distributed-plan) so that the *aggregate* RSS of
         # concurrent queries stays under this cap too.
-        sanitizers = ("asan", "tsan", "msan", "ubsan")
-        if any(san in args.options for san in sanitizers):
+        #
+        # The cap must follow the binary actually being launched, not the job
+        # option string: bugfix validation passes only `BugfixValidation` in
+        # `--options` yet starts with the `build_types[0]` master-HEAD binary
+        # (always `*_asan_ubsan`), and its validation loop later swaps to the
+        # other build types, re-deriving the cap on every swap (sanitizer ->
+        # 0.7, debug -> server default; see the TEST stage below).
+        memory_cap_source = build_types[0] if is_bugfix_validation else args.options
+        if any(san in memory_cap_source for san in SANITIZERS):
             commands.append(lambda: CH.set_memory_ratio(0.7))
 
         if is_flaky_check:
@@ -1005,6 +1018,16 @@ def main():
                         strict=True,
                     )
                     CH.clean_logs()
+                    # The server memory cap must follow the binary being
+                    # launched (see the install-stage comment): sanitizer
+                    # builds get the tighter 0.7 ratio, the debug build
+                    # reverts to the server default. The config tree is not
+                    # reinstalled on a binary swap, so the override written
+                    # for the previous build type would otherwise persist.
+                    if any(san in bugfix_bt for san in SANITIZERS):
+                        CH.set_memory_ratio(0.7)
+                    else:
+                        CH.reset_memory_ratio()
                     # Fail closed if the server cannot come back up after the
                     # binary swap: running tests against a dead server would
                     # produce `Server died` FAILs that the bugfix inverter
