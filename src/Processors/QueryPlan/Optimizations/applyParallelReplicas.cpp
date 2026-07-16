@@ -18,7 +18,7 @@ namespace DB
 namespace QueryPlanOptimizations
 {
 
-constexpr bool debug_logging_enabled = true;
+constexpr bool debug_logging_enabled = false;
 
 class ApplyParallelReplicasVisitor : public QueryPlanVisitor<ApplyParallelReplicasVisitor, debug_logging_enabled>
 {

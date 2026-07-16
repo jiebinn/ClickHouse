@@ -36,7 +36,7 @@ SYSTEM DISABLE FAILPOINT slowdown_parallel_replicas_local_plan_read;
 
 -- The read is split into a local read + a remote parallel-replicas read (deterministic, no addresses).
 SELECT
-    countIf(explain LIKE '%ParallelReplicasSplitStep%') > 0 AS has_split,
+    countIf(explain LIKE '%ParallelReplicasSplit%') > 0 AS has_split,
     countIf(explain LIKE '%Union%') > 0 AS has_union,
     countIf(explain LIKE '%ReadFromParallelReplicas%') > 0 AS has_remote_read,
     countIf(explain LIKE '%ReadFromMergeTree%') > 0 AS has_local_read

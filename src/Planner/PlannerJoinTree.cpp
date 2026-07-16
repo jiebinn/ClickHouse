@@ -1844,9 +1844,9 @@ JoinTreeQueryPlan buildQueryPlanForTableExpression(QueryTreeNodePtr table_expres
                 }
 
                 /// query_plan can be empty if there is nothing to read
-                /// With parallel_replicas_exchange_plan the planner builds only the plain local plan;
-                /// parallel replicas are applied later as a plan transformation (see
-                /// ClusterProxy::applyParallelReplicasSplit), so skip the PR construction here.
+                /// With `parallel_replicas_plan_based` the planner builds only the plain local plan;
+                /// parallel replicas are applied later as a plan transformation (see QueryPlanOptimizations::applyParallelReplicas),
+                /// so skip the parallel-replicas construction here.
                 if (query_plan.isInitialized() && !select_query_options.build_logical_plan
                     && parallelReplicasEnabledForStorage(storage, query_context, settings))
                 {
