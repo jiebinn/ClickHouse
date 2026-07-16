@@ -19,16 +19,33 @@ node = cluster.add_instance(
 
 
 def start_zookeeper():
+    # `zkServer.sh start` only keeps the freshly launched JVM for one second
+    # before it checks that the process is still alive, and it reports an
+    # opaque "FAILED TO START" (exit code 1) as soon as that racy check loses.
+    # On a busy CI host the JVM can be slow to come up or transiently killed,
+    # while a healthy server becomes reachable a few seconds later. So instead
+    # of trusting the script's exit code, wait until ZooKeeper actually accepts
+    # connections on its client port, clean up any half-started JVM between
+    # attempts (a lingering one keeps the client port busy and makes every
+    # retry fail), and dump the daemon logs if it never becomes ready.
     for attempt in range(5):
-        try:
-            node.exec_in_container(
-                ["bash", "-c", "/opt/zookeeper/bin/zkServer.sh start"]
-            )
-            return
-        except Exception:
-            if attempt == 4:
-                raise
+        node.exec_in_container(
+            ["bash", "-c", "/opt/zookeeper/bin/zkServer.sh start"],
+            nothrow=True,
+        )
+
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if _zk_client_port_ready():
+                return
+            time.sleep(0.5)
+
+        if attempt < 4:
+            stop_zookeeper()
             time.sleep(3)
+
+    dump_zookeeper_logs()
+    raise Exception("ZooKeeper did not become ready after multiple attempts")
 
 
 # pgrep / pkill -f match against the full command line, which includes the
@@ -48,6 +65,41 @@ def _zk_jvm_running():
             nothrow=True,
         ).strip()
     )
+
+
+def _zk_client_port_ready():
+    # A successful TCP connection to the client port means the ZooKeeper JVM is
+    # alive and has finished loading its data — the port is opened only once the
+    # standalone server is ready to serve requests.
+    return (
+        node.exec_in_container(
+            [
+                "bash",
+                "-c",
+                "timeout 1 bash -c '</dev/tcp/localhost/2181' >/dev/null 2>&1 "
+                "&& echo ready || true",
+            ],
+            nothrow=True,
+        ).strip()
+        == "ready"
+    )
+
+
+def dump_zookeeper_logs():
+    # `zkServer.sh start` does not report why the JVM failed to start; the
+    # reason is written to the daemon output and the log4j log inside the
+    # container, so surface them to make such failures diagnosable from the CI
+    # artifacts instead of leaving only an opaque "FAILED TO START".
+    logs = node.exec_in_container(
+        [
+            "bash",
+            "-c",
+            "tail -n 100 /opt/zookeeper/logs/*.out /opt/zookeeper/logs/*.log "
+            "2>/dev/null || true",
+        ],
+        nothrow=True,
+    )
+    print("ZooKeeper daemon logs after failed start:\n" + logs)
 
 
 def stop_zookeeper():
