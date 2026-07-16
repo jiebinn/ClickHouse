@@ -20,7 +20,6 @@
 #include <Common/UnorderedSetWithMemoryTracking.h>
 #include <Common/logger_useful.h>
 
-#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <limits>
@@ -38,17 +37,6 @@ extern const int TYPE_MISMATCH;
 
 namespace
 {
-
-String trim(std::string_view s)
-{
-    size_t begin = 0;
-    size_t end = s.size();
-    while (begin < end && isWhitespaceASCII(s[begin]))
-        ++begin;
-    while (end > begin && isWhitespaceASCII(s[end - 1]))
-        --end;
-    return String(s.substr(begin, end - begin));
-}
 
 /// Reads the explicit priors from the structured `priors` layout parameter: repeated `prior` elements,
 /// each holding a `class` id and a `probability`. A DDL definition produces them from a collection
@@ -82,8 +70,8 @@ MapWithMemoryTracking<UInt32, double> parseExplicitPriors(const Poco::Util::Abst
                 ErrorCodes::BAD_ARGUMENTS,
                 "NaiveBayes dictionary: each prior must contain a 'class' id and a 'probability'");
 
-        const String class_str = trim(config.getString(prior_prefix + ".class"));
-        const String prob_str = trim(config.getString(prior_prefix + ".probability"));
+        const String class_str = trim(config.getString(prior_prefix + ".class"), isWhitespaceASCII);
+        const String prob_str = trim(config.getString(prior_prefix + ".probability"), isWhitespaceASCII);
 
         /// Parse the class id directly into UInt32 with overflow checking. parse<>/readIntText silently wraps a
         /// value past the type's range onto a different valid class, so use from_chars, which reports overflow
