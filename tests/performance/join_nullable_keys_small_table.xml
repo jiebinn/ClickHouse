@@ -59,4 +59,20 @@
         FORMAT Null
         SETTINGS max_threads=8, join_algorithm='parallel_hash'
     </query>
+
+    <!-- Masked shapes through scattered blocks: each shard merges the skip bytes over the
+         source block, which must stay cheaper than the per-row mask reads it replaces. -->
+    <query>
+        SELECT * FROM numbers_mt(5e8) AS lhs
+        LEFT JOIN (SELECT number AS k FROM numbers_mt(1e3)) AS rhs ON lhs.number = rhs.k AND (lhs.number % 2 = 0)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='parallel_hash'
+    </query>
+
+    <query>
+        SELECT * FROM (SELECT toNullable(number) AS k FROM numbers_mt(5e8)) AS lhs
+        LEFT JOIN (SELECT toNullable(number) AS k FROM numbers_mt(1e3)) AS rhs ON lhs.k = rhs.k AND (lhs.k % 2 = 0)
+        FORMAT Null
+        SETTINGS max_threads=8, join_algorithm='parallel_hash'
+    </query>
 </test>
