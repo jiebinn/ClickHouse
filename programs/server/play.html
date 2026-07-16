@@ -2446,8 +2446,9 @@ class QueryResultElement extends HTMLElement
             type_hint.appendChild(document.createTextNode(elem.type));
             th.appendChild(type_hint);
 
-            this._column_is_number[elem.name] = !!elem.type.match(/^(Nullable\()?(U?Int|Decimal|Float|BFloat)/);
-            this._column_is_date[elem.name] = !!elem.type.match(/^(Nullable\()?Date/);
+            const unwrapped_type = elem.type.replace(/^(?:Nullable|LowCardinality)\(([\s\S]*)\)$/, '$1');
+            this._column_is_number[elem.name] = !!unwrapped_type.match(/^(Nullable\()?(U?Int|Decimal|Float|BFloat)/);
+            this._column_is_date[elem.name] = !!unwrapped_type.match(/^(Nullable\()?Date/);
             this._appendColorizeToggle(th, elem.name);
 
             this._appendHeaderResizer(th);
