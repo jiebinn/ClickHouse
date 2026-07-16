@@ -10,6 +10,10 @@
 -- which explicitly leaves partial_merge's bitwise behavior unchanged.
 
 SET join_algorithm = 'partial_merge';
+-- Pin max_block_size so the whole sorted left input is one block. CI randomizes
+-- max_block_size; a small value would split the 7,8,9 < 10 run across blocks and
+-- compareTrackAt would never return |track| > 1, silently voiding the coverage.
+SET max_block_size = 65505;
 
 DROP TABLE IF EXISTS t_04546_left;
 DROP TABLE IF EXISTS t_04546_right;
