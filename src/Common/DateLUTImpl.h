@@ -1413,7 +1413,13 @@ public:
     {
         if (quarters == 1)
             return toFirstDayNumOfQuarter(d);
-        return toStartOfMonthInterval(d, quarters * 3);
+        /// `quarters` is only validated to be positive, so `quarters * 3` can wrap in UInt64 and turn a huge
+        /// interval count into a small month count that rounds to the wrong boundary. Saturate the product so
+        /// toStartOfMonthInterval still sees an extreme (out-of-Int64-range) month count and rounds it down.
+        UInt64 months = 0;
+        if (unlikely(__builtin_mul_overflow(quarters, static_cast<UInt64>(3), &months)))
+            months = std::numeric_limits<UInt64>::max();
+        return toStartOfMonthInterval(d, months);
     }
 
     template <typename Date>
