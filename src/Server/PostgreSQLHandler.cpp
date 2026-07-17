@@ -1,4 +1,5 @@
 #include <memory>
+#include <optional>
 #include <Server/PostgreSQLHandler.h>
 #include <IO/ReadBufferFromPocoSocket.h>
 #include <IO/ReadBufferFromString.h>
@@ -65,6 +66,64 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int OPENSSL_ERROR;
     extern const int UNEXPECTED_PACKET_FROM_CLIENT;
+}
+
+namespace
+{
+
+/// Some PostgreSQL drivers issue session-management commands during connection
+/// setup or teardown that have no ClickHouse equivalent, for example `RESET ALL`
+/// and `UNLISTEN *` sent by the Skunk driver. Instead of failing such a command
+/// with a syntax error, ClickHouse accepts it as a no-op and replies with a
+/// `CommandComplete` carrying the matching PostgreSQL command tag. See issue
+/// https://github.com/ClickHouse/ClickHouse/issues/12476.
+///
+/// Returns the command tag to report if `query` is such a no-op command, or
+/// std::nullopt if the query must be executed normally. None of the recognized
+/// keywords (`LISTEN`, `UNLISTEN`, `NOTIFY`, `RESET`, `DISCARD`) is a valid
+/// ClickHouse statement start, so there are no false positives.
+std::optional<String> classifyNoOpDriverCommand(const String & query)
+{
+    /// Enough to cover the longest recognized command plus its argument, e.g. "DISCARD SEQUENCES".
+    static constexpr size_t max_prefix_len = 32;
+    const String prefix = PostgreSQLProtocol::Messaging::CommandComplete::extractNormalizedPrefix(query, max_prefix_len);
+
+    /// `extractNormalizedPrefix` already uppercased the text and collapsed runs of
+    /// whitespace to single spaces, so a keyword is a run of 'A'..'Z'. Take the next
+    /// such run, skipping a leading space; this also stops at a trailing `;` or `*`.
+    size_t pos = 0;
+    const auto take_word = [&]() -> String
+    {
+        while (pos < prefix.size() && prefix[pos] == ' ')
+            ++pos;
+        const size_t start = pos;
+        while (pos < prefix.size() && prefix[pos] >= 'A' && prefix[pos] <= 'Z')
+            ++pos;
+        return prefix.substr(start, pos - start);
+    };
+
+    const String command = take_word();
+
+    /// PostgreSQL reports the bare keyword for these, regardless of arguments
+    /// (`RESET ALL` and `RESET name` both report `RESET`).
+    if (command == "LISTEN" || command == "UNLISTEN" || command == "NOTIFY" || command == "RESET")
+        return command;
+
+    if (command == "DISCARD")
+    {
+        /// PostgreSQL reports `DISCARD ALL`, `DISCARD PLANS`, `DISCARD SEQUENCES`
+        /// or `DISCARD TEMP` (with `TEMPORARY` normalized to `TEMP`).
+        String arg = take_word();
+        if (arg.empty())
+            return command;
+        if (arg == "TEMPORARY")
+            arg = "TEMP";
+        return command + " " + arg;
+    }
+
+    return std::nullopt;
+}
+
 }
 
 PostgreSQLHandler::PostgreSQLHandler(
@@ -602,6 +661,14 @@ void PostgreSQLHandler::processQuery()
             message_transport->send(
                 PostgreSQLProtocol::Messaging::CommandComplete(
                     PostgreSQLProtocol::Messaging::CommandComplete::classifyQuery(query->query), 0));
+            return;
+        }
+
+        /// Accept driver-specific session-management commands (e.g. `RESET ALL`,
+        /// `UNLISTEN *`) as no-ops instead of failing them with a syntax error.
+        if (auto noop_command_tag = classifyNoOpDriverCommand(query->query))
+        {
+            message_transport->send(PostgreSQLProtocol::Messaging::CommandComplete(std::move(*noop_command_tag)), true);
             return;
         }
 
