@@ -106,9 +106,14 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
         }
     }
 
-    /// Enough to cover the longest recognized command plus its argument, e.g. "DISCARD SEQUENCES".
-    static constexpr size_t max_prefix_len = 32;
+    /// Enough to cover the longest recognized command plus its argument: a PostgreSQL identifier
+    /// is at most 63 bytes, and a qualified `RESET extension.setting` name consists of two of them.
+    /// If the normalized prefix fills this budget completely, the statement may continue beyond it,
+    /// so we could not verify that nothing trails the argument — treat it as not recognized.
+    static constexpr size_t max_prefix_len = 160;
     String prefix = PostgreSQLProtocol::Messaging::CommandComplete::extractNormalizedPrefix(query, max_prefix_len);
+    if (prefix.size() == max_prefix_len)
+        return std::nullopt;
 
     /// The multi-statement guard above rejected any statement after an interior `;`, so the only
     /// `;` that can remain is a single trailing one (with trailing whitespace already collapsed).
@@ -136,20 +141,57 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
         return pos < prefix.size();
     };
 
+    /// An argument in the normalized prefix: an identifier — a letter or `_` followed by letters,
+    /// digits, `_` or `$` (the text is already uppercased). With `allow_dots`, a qualified name
+    /// such as `EXTENSION.SETTING` (for `RESET`) is a single token as well.
+    const auto take_identifier = [&](bool allow_dots) -> String
+    {
+        while (pos < prefix.size() && prefix[pos] == ' ')
+            ++pos;
+        const size_t start = pos;
+        if (pos < prefix.size() && ((prefix[pos] >= 'A' && prefix[pos] <= 'Z') || prefix[pos] == '_'))
+        {
+            ++pos;
+            while (pos < prefix.size()
+                && ((prefix[pos] >= 'A' && prefix[pos] <= 'Z') || (prefix[pos] >= '0' && prefix[pos] <= '9')
+                    || prefix[pos] == '_' || prefix[pos] == '$' || (allow_dots && prefix[pos] == '.')))
+                ++pos;
+        }
+        return prefix.substr(start, pos - start);
+    };
+
     /// Not `const`: the early returns below move it out, and `performance-no-automatic-move`
     /// (clang-tidy) rejects returning a `const` local because constness prevents the move.
     String command = take_word();
 
-    /// PostgreSQL requires an argument for each of these and reports the bare keyword as the tag:
-    /// `RESET { name | ALL }`, `LISTEN channel`, `UNLISTEN { channel | * }`, `NOTIFY channel`
-    /// (`RESET ALL` and `RESET name` both report `RESET`). Require that an argument follows so a
-    /// malformed bare `RESET` / `LISTEN` / `UNLISTEN` / `NOTIFY` is not acknowledged as success but
-    /// falls through to the normal error path. The argument may be a name or `*` (`UNLISTEN *`).
+    /// The keyword must end at a word boundary: `RESET1FOO` must not be taken for `RESET`.
+    if (pos < prefix.size() && prefix[pos] != ' ')
+        return std::nullopt;
+
+    /// PostgreSQL accepts `RESET { name | ALL }`, `LISTEN channel`, `UNLISTEN { channel | * }` and
+    /// `NOTIFY channel [, payload]`, reporting the bare keyword as the tag in all cases. Accept
+    /// exactly one argument — an identifier (for `RESET` possibly a qualified `extension.setting`
+    /// name; `ALL` is itself covered as an identifier), or `*` for `UNLISTEN` — and require the
+    /// statement to end right after it, so that malformed variants such as a bare `RESET`,
+    /// `RESET foo bar`, `LISTEN chan trailing` or `UNLISTEN * garbage` are not acknowledged as
+    /// success but fall through to the normal error path. Valid forms that no driver is known to
+    /// emit — quoted identifiers, `NOTIFY` with a payload, and multi-word variants such as
+    /// `RESET SESSION AUTHORIZATION` — likewise fall through, as before this change.
     if (command == "LISTEN" || command == "UNLISTEN" || command == "NOTIFY" || command == "RESET")
     {
-        if (has_more())
-            return command;
-        return std::nullopt;
+        String arg;
+        if (command == "UNLISTEN" && has_more() && prefix[pos] == '*')
+        {
+            arg = "*";
+            ++pos;
+        }
+        else
+        {
+            arg = take_identifier(/* allow_dots = */ command == "RESET");
+        }
+        if (arg.empty() || has_more())
+            return std::nullopt;
+        return command;
     }
 
     if (command == "DISCARD")

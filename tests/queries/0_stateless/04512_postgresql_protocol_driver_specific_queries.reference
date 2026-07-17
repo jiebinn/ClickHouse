@@ -1,5 +1,6 @@
 RESET
 RESET
+RESET
 UNLISTEN
 UNLISTEN
 LISTEN
@@ -18,3 +19,9 @@ malformed 'DISCARD' not silently accepted
 malformed 'RESET' not silently accepted
 malformed 'LISTEN' not silently accepted
 malformed 'NOTIFY' not silently accepted
+malformed 'RESET foo bar' not silently accepted
+malformed 'LISTEN chan trailing' not silently accepted
+malformed 'UNLISTEN * garbage' not silently accepted
+malformed 'NOTIFY chan extra' not silently accepted
+malformed 'DISCARD ALL extra' not silently accepted
+malformed 'RESET1foo' not silently accepted

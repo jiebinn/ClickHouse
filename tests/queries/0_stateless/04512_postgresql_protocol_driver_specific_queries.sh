@@ -24,6 +24,7 @@ CREATE USER ${PG_USER} HOST IP '127.0.0.1' IDENTIFIED WITH no_password;
 psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user "${PG_USER}" --no-align 2>&1 <<'EOF'
 RESET ALL;
 RESET search_path;
+RESET some_extension.some_setting;
 UNLISTEN *;
 UNLISTEN some_channel;
 LISTEN some_channel;
@@ -49,7 +50,11 @@ fi
 
 # The no-op handling covers only the exact PostgreSQL command forms; a malformed variant must not be
 # claimed as a successful no-op. It must fall through to the normal path and surface an error instead.
-for malformed in "DISCARD FOO" "DISCARD" "RESET" "LISTEN" "NOTIFY"; do
+# This includes trailing garbage after a well-formed argument (e.g. `RESET foo bar`) and a keyword
+# that does not end at a word boundary (e.g. `RESET1foo`).
+for malformed in "DISCARD FOO" "DISCARD" "RESET" "LISTEN" "NOTIFY" \
+                 "RESET foo bar" "LISTEN chan trailing" "UNLISTEN * garbage" \
+                 "NOTIFY chan extra" "DISCARD ALL extra" "RESET1foo"; do
     if psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user "${PG_USER}" --no-align \
             -c "${malformed}" 2>&1 | grep -qi error; then
         echo "malformed '${malformed}' not silently accepted"
