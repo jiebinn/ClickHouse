@@ -22,6 +22,7 @@
 #include <Common/QueryScope.h>
 #include <IO/SnappyBasicReadBuffer.h>
 #include <IO/SnappyBasicWriteBuffer.h>
+#include <IO/ZstdInflatingReadBuffer.h>
 #include <IO/Protobuf/ProtobufZeroCopyInputStreamFromReadBuffer.h>
 #include <IO/Protobuf/ProtobufZeroCopyOutputStreamFromWriteBuffer.h>
 #include <Interpreters/Context.h>
@@ -301,7 +302,17 @@ public:
     {
 #if USE_PROMETHEUS_PROTOBUFS
         checkHTTPHeader(request, "Content-Type", "application/x-protobuf");
-        checkHTTPHeader(request, "Content-Encoding", "snappy");
+
+        /// The remote-write 1.0 spec mandates snappy, but some senders can also compress with zstd.
+        const String content_encoding = request.get("Content-Encoding", "");
+        std::unique_ptr<ReadBuffer> decompressing_buf;
+        if (content_encoding == "snappy")
+            decompressing_buf = std::make_unique<SnappyBasicReadBuffer>(wrapReadBufferPointer(request.getStream()));
+        else if (content_encoding == "zstd")
+            decompressing_buf = std::make_unique<ZstdInflatingReadBuffer>(wrapReadBufferPointer(request.getStream()));
+        else
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "HTTP header Content-Encoding has unexpected value '{}' (must be 'snappy' or 'zstd')", content_encoding);
 
         auto table = DatabaseCatalog::instance().getTable(getTimeSeriesTableID(), context);
         PrometheusRemoteWriteProtocol protocol{table, context};
@@ -309,8 +320,7 @@ public:
         prometheus::WriteRequest write_request;
 
         {
-            ProtobufZeroCopyInputStreamFromReadBuffer zero_copy_input_stream{
-                std::make_unique<SnappyBasicReadBuffer>(wrapReadBufferPointer(request.getStream()))};
+            ProtobufZeroCopyInputStreamFromReadBuffer zero_copy_input_stream{std::move(decompressing_buf)};
 
             if (!write_request.ParsePartialFromZeroCopyStream(&zero_copy_input_stream))
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot parse WriteRequest");
