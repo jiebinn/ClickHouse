@@ -4064,10 +4064,12 @@ function applySelectedDatabaseHighlight() {
 /// an absent/empty value means "the server's default database" and is represented as `null`, and an
 /// explicit name equal to the server's current database denotes that same target — both run the
 /// query against the same database — so it collapses to `null` too. A database value can carry the
-/// explicit spelling of the current database even though `commitSelectedDatabase` never stores one:
-/// the live selection is seeded verbatim from a shared/restored `?database=` URL (at load and in
-/// `window.onpopstate`), and a run snapshot (`tab.result.database`) keeps whatever the selection was
-/// at run time — so the `run=1` divergence checks (`writeHistoryEntry`, `tabReflectsRun`) must
+/// explicit spelling of the current database even though `commitSelectedDatabase` only ever assigns
+/// the canonical form: the live selection is seeded verbatim from a shared/restored `?database=` URL
+/// (at load and in `window.onpopstate`), `commitSelectedDatabase` preserves that raw spelling on a
+/// no-op re-click (it returns early without canonicalizing), and a run snapshot (`tab.result.database`)
+/// keeps whatever the selection was at run time — so the `run=1` divergence checks
+/// (`writeHistoryEntry`, `tabReflectsRun`) must
 /// compare BOTH sides through this canonical form, or a semantically no-op interaction (clicking the
 /// already-highlighted current row) would make `null` look different from the snapshot's explicit
 /// spelling and spuriously drop `run=1` from a still-reproducible entry.
@@ -4088,29 +4090,38 @@ function effectiveDatabase(database) {
 /// database, and so switching databases restamps the entry the same way a query or parameter edit
 /// does (`refreshCurrentHistoryEntry`) instead of leaving a stale `database=`/`run=1` in the URL.
 ///
-/// The selection is stored in canonical effective form (`effectiveDatabase`): selecting the
-/// server's already-current database is semantically identical to leaving the selection unset, so
-/// it collapses back to `null`, and an explicit click on the highlighted current row (with no prior
-/// selection) is not treated as a database change — so the current history entry is left untouched,
-/// because a rewrite would drop `run=1` and cancel a deferred startup auto-run for a click that
-/// changed nothing.
+/// A semantic no-op — clicking a database that resolves to the same effective target already
+/// selected, whether that target is held as `null` (nothing selected) or as an explicit
+/// `?database=<current>` spelling seeded verbatim from the URL — returns early WITHOUT touching
+/// `selected_database`: it must neither rewrite the current history entry nor canonicalize the live
+/// selection.
+///   - Not rewriting the entry: on a fresh `?run=1&database=<selected>#...` bootstrap load the tab
+///     still has no result, so the rewrite below would drop `run=1` and — via `writeHistoryEntry` —
+///     set `deferred_run_cancelled`, cancelling the deferred startup auto-run even though the target
+///     database is unchanged, so the shared query would never run.
+///   - Keeping the raw `selected_database`: collapsing an explicit `?database=<current>` spelling to
+///     `null` here would later, once a same-identity connection edit (a password change, or
+///     `http://h:8123` -> `http://h:8123/`) clears `server_current_database` in
+///     `resetConnectionScopedState`, make `effectiveDatabase(selected_database)` (now `null`) differ
+///     from the run snapshot's still-explicit `effectiveDatabase(tab.result.database)` — so
+///     `tabReflectsRun`/`writeHistoryEntry` would spuriously drop `run=1` and `database=` from a
+///     still-reproducible entry on the next history sync (e.g. a tab switch).
+///
+/// On a genuine change the selection is stored in canonical effective form (`effectiveDatabase`):
+/// selecting the server's already-current database while a different one was selected is identical
+/// to leaving the selection unset, so it collapses back to `null`.
 function commitSelectedDatabase(database) {
     const new_selection = effectiveDatabase(database);
     /// Whether the click actually changes the effective target database. Both sides are compared in
     /// canonical form (`effectiveDatabase`) so that re-selecting the already-current database —
     /// whether it is held as `null` (nothing selected) or as its explicit spelling seeded verbatim
-    /// from a `?database=` URL — is recognized as a no-op rather than a change.
+    /// from a `?database=` URL — is recognized as a no-op rather than a change. On a no-op nothing
+    /// below runs, so the live `selected_database` keeps its raw spelling (see the header comment).
     const selection_changed = new_selection !== effectiveDatabase(selected_database);
+    if (!selection_changed) return;
     selected_database = new_selection;
     stampSelectedDatabaseConnection();
     applySelectedDatabaseHighlight();
-    /// A semantic no-op (e.g. clicking the already-selected database just to expand its table list)
-    /// must not rewrite the current history entry: on a fresh `?run=1&database=<selected>#...`
-    /// bootstrap load the tab still has no result, so the rewrite below would drop `run=1` and — via
-    /// `writeHistoryEntry` — set `deferred_run_cancelled`, cancelling the deferred startup auto-run
-    /// even though the target database is unchanged, so the shared query would never run. Restamp
-    /// the entry only when the effective selection actually changed.
-    if (!selection_changed) return;
     captureActiveTab();
     /// The entry rewrite below drops `run=1` while the bootstrap tab has no result yet, which
     /// itself cancels a still-deferred startup auto-run (see `deferred_run_cancelled` and
