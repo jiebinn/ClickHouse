@@ -187,7 +187,13 @@ public:
             /// with the probability of b.total_values / (a.total_values + b.total_values)
             /// Do it more roughly than true random sampling to save performance.
 
-            total_values += b.total_values;
+            /// `total_values` can overflow when an aggregate state is multiplied by a huge
+            /// constant: `executeAggregateMultiply` self-merges the reservoir with
+            /// exponentiation by squaring, doubling `total_values` each step. On overflow the
+            /// wrapped sum would make `frequency` drop below 1, turning the loop below into a
+            /// near-infinite one. Saturate the sum so `frequency` stays >= 1.
+            if (__builtin_add_overflow(total_values, b.total_values, &total_values))
+                total_values = std::numeric_limits<size_t>::max();
 
             /// Will replace every frequency'th element in a to element from b.
             double frequency = static_cast<double>(total_values) / static_cast<double>(b.total_values);
