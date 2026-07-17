@@ -102,7 +102,9 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
         return prefix.substr(start, pos - start);
     };
 
-    const String command = take_word();
+    /// Not `const`: the early returns below move it out, and `performance-no-automatic-move`
+    /// (clang-tidy) rejects returning a `const` local because constness prevents the move.
+    String command = take_word();
 
     /// PostgreSQL reports the bare keyword for these, regardless of arguments
     /// (`RESET ALL` and `RESET name` both report `RESET`).
