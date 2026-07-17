@@ -64,7 +64,7 @@ A function resolves the named collection to use from, in order:
    - [`ai_function_text_default_credentials`](/operations/settings/settings#ai_function_text_default_credentials) for the text functions (`aiGenerate`, `aiClassify`, `aiExtract`, `aiTranslate`);
    - [`ai_function_embedding_default_credentials`](/operations/settings/settings#ai_function_embedding_default_credentials) for `aiEmbed`.
 
-If neither is set, the call fails. The text and embedding functions use separate default settings because a chat-completions endpoint and model differ from an embeddings one.
+If neither is set, the call fails. The text and embedding functions use separate default settings because a chat-completions endpoint differs from an embeddings one.
 
 ```sql
 SET ai_function_text_default_credentials = 'ai_text_credentials';
