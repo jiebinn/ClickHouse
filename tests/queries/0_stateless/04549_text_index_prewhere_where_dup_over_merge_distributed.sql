@@ -8,6 +8,12 @@
 
 SET enable_analyzer = 1;
 SET allow_experimental_full_text_index = 1;
+-- Pin prefer_localhost_replica: the double-registration bug only engages when the whole
+-- Merge -> Distributed -> MergeTree plan is built and optimized on the initiator (local replica).
+-- With prefer_localhost_replica = 0 the read is dispatched to the remote replica, so the
+-- MergeTree-level __text_index_..._has_<hash> column is not part of the initiator plan and the
+-- EXPLAIN visibility check below would spuriously report the optimization as disabled.
+SET prefer_localhost_replica = 1;
 
 DROP TABLE IF EXISTS logs;
 DROP TABLE IF EXISTS logs_dist;
