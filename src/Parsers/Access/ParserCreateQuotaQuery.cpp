@@ -221,7 +221,7 @@ namespace
 
             ASTPtr num_intervals_ast;
             if (!ParserNumber{}.parse(pos, num_intervals_ast, expected))
-                return false;   
+                return false;
 
             double num_intervals = applyVisitor(FieldVisitorConvertToNumber<double>(), num_intervals_ast->as<ASTLiteral &>().value);
 
