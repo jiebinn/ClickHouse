@@ -55,6 +55,20 @@ ${CLICKHOUSE_CLIENT} --query "
         max_memory_usage = 4000000000, log_comment = '04538_fill_break_rows'
     FORMAT Null"
 
+# Many sorting-prefix groups whose first fill key is above FROM, so WITH FILL emits an initial fill_from
+# row for each group. Once the break-mode timeout fires while generating a group's suffix, transformRange()
+# must not start the next group at all - not even its fill_from preamble row - and must not repoint
+# last_range_sort_prefix at a group whose original rows were never consumed. Otherwise the partial result
+# leaks rows from a group past the deadline. The stopping point is wall-clock dependent, so we assert the
+# same prompt-stop duration property here (the guarded preamble path must not slow the query down).
+${CLICKHOUSE_CLIENT} --query "
+    SELECT g, x
+    FROM (SELECT number AS g, 1000000::UInt64 AS x FROM numbers(100000))
+    ORDER BY g, x WITH FILL FROM 0 TO 1000000000000 STEP 1
+    SETTINGS max_execution_time = 1, timeout_overflow_mode = 'break', use_with_fill_by_sorting_prefix = 1,
+        max_memory_usage = 4000000000, log_comment = '04538_fill_break_prefix_above_from'
+    FORMAT Null"
+
 ${CLICKHOUSE_CLIENT} --query "SYSTEM FLUSH LOGS query_log"
 
 ${CLICKHOUSE_CLIENT} --query "
@@ -63,5 +77,5 @@ ${CLICKHOUSE_CLIENT} --query "
     WHERE current_database = currentDatabase()
         AND event_date >= yesterday()
         AND type = 'QueryFinish'
-        AND log_comment IN ('04538_fill_break_ranges', '04538_fill_break_rows')
+        AND log_comment IN ('04538_fill_break_ranges', '04538_fill_break_rows', '04538_fill_break_prefix_above_from')
     ORDER BY log_comment"

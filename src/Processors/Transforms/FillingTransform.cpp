@@ -703,6 +703,17 @@ void FillingTransform::transformRange(
     const size_t range_begin = range.first;
     const size_t range_end = range.second;
 
+    /// Hard stop before touching any state once the query is cancelled or the time limit is exceeded.
+    /// The per-row loop below already checks this, but only after the `new_sorting_prefix` preamble.
+    /// In `timeout_overflow_mode = 'break'` the outer loop in `transform` runs its own guard before
+    /// calling `generateSuffixIfNeeded` for the previous range, and the soft timeout can flip inside
+    /// that suffix generation. Without this early return, the preamble below could still emit the
+    /// initial `fill_from` row for this range, and the code at the end of the function would rewrite
+    /// `last_range_sort_prefix` to a range whose original rows were never consumed - leaking rows from
+    /// a group that should not appear in the partial result after the deadline.
+    if (isCancelledOrTimeLimitExceeded())
+        return;
+
     Block interpolate_block;
     if (new_sorting_prefix)
     {
