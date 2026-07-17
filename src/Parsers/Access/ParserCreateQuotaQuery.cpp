@@ -24,6 +24,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int SYNTAX_ERROR;
+    extern const int BAD_ARGUMENTS;
 }
 
 
@@ -220,7 +221,7 @@ namespace
 
             ASTPtr num_intervals_ast;
             if (!ParserNumber{}.parse(pos, num_intervals_ast, expected))
-                return false;
+                return false;   
 
             double num_intervals = applyVisitor(FieldVisitorConvertToNumber<double>(), num_intervals_ast->as<ASTLiteral &>().value);
 
@@ -228,7 +229,13 @@ namespace
             if (!parseIntervalKind(pos, expected, interval_kind))
                 return false;
 
-            limits.duration = std::chrono::seconds(static_cast<UInt64>(num_intervals * interval_kind.toAvgSeconds()));
+            /// Bound the seconds to the finite Int64 range before the cast: an out-of-range or non-finite
+            /// double (e.g. FOR INTERVAL 1e19 SECOND) makes static_cast<Int64> undefined behavior.
+            double total_seconds = num_intervals * interval_kind.toAvgSeconds();
+            static constexpr double int64_max_as_double = 9223372036854775808.0; /// 2^63, first double above Int64 max
+            if (!std::isfinite(total_seconds) || total_seconds >= int64_max_as_double || total_seconds < -int64_max_as_double)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Quota interval duration is out of range");
+            limits.duration = std::chrono::seconds(static_cast<Int64>(total_seconds));
             std::vector<std::pair<QuotaType, QuotaValue>> new_limits;
 
             if (ParserKeyword{Keyword::NO_LIMITS}.ignore(pos, expected))
