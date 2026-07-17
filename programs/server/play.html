@@ -4792,7 +4792,7 @@ document.getElementById('databases-icon').addEventListener('mousedown', () => {
 
 databases_toggle.addEventListener('click', e => {
     e.stopPropagation();
-    /// Let the browser handle modifier clicks as a link (open in new tab).
+    /// Let the browser handle modifier clicks as a link (open in a new tab or window).
     if (e.ctrlKey || e.metaKey || e.shiftKey) return;
     /// Normal click: toggle the databases panel instead of following the link.
     e.preventDefault();
@@ -9358,7 +9358,7 @@ document.getElementById('download-button').addEventListener('click', async funct
     terminalIcon.addEventListener('pointerdown', updateTerminalHref);
 
     terminalIcon.addEventListener('click', function(e) {
-        /// For a modifier-click, fall through to the anchor's native "open in new tab".
+        /// For a modifier-click, fall through to the anchor's native "open in a new tab or window".
         if (wantsNewTab(e)) return;
         /// A plain left click toggles the inline terminal panel instead of navigating.
         e.preventDefault();
