@@ -22,6 +22,22 @@ WHERE l.k < 10 GROUP BY l.k ORDER BY l.k
 SETTINGS join_algorithm = 'partial_merge', query_plan_join_swap_table = 'false',
          optimize_aggregation_in_order = 1, max_threads = 1;
 
+-- Plain LEFT join grouped by the left key, self-checking form: uniqExact(l.k) within each
+-- GROUP BY l.k must be exactly 1 (any row mis-grouped into a wrong group makes it > 1).
+DROP TABLE IF EXISTS l;
+DROP TABLE IF EXISTS r;
+CREATE TABLE l (k Int32, j Int32) ENGINE = MergeTree ORDER BY k;
+CREATE TABLE r (j Int32) ENGINE = MergeTree ORDER BY j;
+INSERT INTO l SELECT number % 50, number % 5 FROM numbers(4000);
+INSERT INTO r SELECT number % 4 FROM numbers(3000);
+SELECT max(u), min(u), count() FROM (
+    SELECT l.k, uniqExact(l.k) AS u FROM l LEFT JOIN r ON l.j = r.j GROUP BY l.k
+)
+SETTINGS join_algorithm = 'partial_merge', query_plan_join_swap_table = 'false',
+         optimize_aggregation_in_order = 1, max_threads = 1;
+DROP TABLE l;
+DROP TABLE r;
+
 -- #109216: distinct-in-order over a partial_merge JOIN. All 500 keys of t2 must survive.
 SELECT count() FROM (
     SELECT DISTINCT l.k FROM t2 AS l LEFT JOIN t1 AS r ON l.n = r.n
