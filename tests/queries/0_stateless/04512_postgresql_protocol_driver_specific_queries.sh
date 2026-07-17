@@ -32,4 +32,15 @@ DISCARD TEMPORARY;
 SELECT 1 AS connection_is_still_usable;
 EOF
 
+# A no-op driver command must not silently swallow a trailing statement when both arrive in a
+# single simple-query packet (e.g. `RESET ALL; SELECT 1`). Such a packet must fall through to the
+# normal multi-statement splitter instead of being acknowledged as a bare `RESET`; here that means
+# it surfaces an error rather than silently succeeding.
+if psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user postgresql_user_04512 --no-align \
+        -c "RESET ALL; SELECT 1 AS trailing_query" 2>&1 | grep -qi error; then
+    echo "multi-statement packet not silently accepted"
+else
+    echo "UNEXPECTED: multi-statement packet silently accepted"
+fi
+
 ${CLICKHOUSE_CLIENT} -q "DROP USER IF EXISTS postgresql_user_04512;"

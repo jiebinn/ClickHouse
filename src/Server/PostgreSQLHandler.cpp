@@ -84,6 +84,22 @@ namespace
 /// ClickHouse statement start, so there are no false positives.
 std::optional<String> classifyNoOpDriverCommand(const String & query)
 {
+    /// Only treat the packet as a no-op when it consists of a single statement. A simple-query
+    /// packet may contain several `;`-separated statements; if we shortcut on the leading keyword
+    /// we would acknowledge the whole packet and silently skip the rest (e.g. `RESET ALL; SELECT 1`
+    /// or, worse, `RESET ALL; DROP TABLE t`). An interior `;` — anything other than trailing
+    /// whitespace after it — means there is more than one statement, so bail out and let the normal
+    /// multi-statement splitter handle it.
+    if (const size_t semicolon = query.find(';'); semicolon != String::npos)
+    {
+        for (size_t i = semicolon + 1; i < query.size(); ++i)
+        {
+            const char c = query[i];
+            if (c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != '\f' && c != '\v')
+                return std::nullopt;
+        }
+    }
+
     /// Enough to cover the longest recognized command plus its argument, e.g. "DISCARD SEQUENCES".
     static constexpr size_t max_prefix_len = 32;
     const String prefix = PostgreSQLProtocol::Messaging::CommandComplete::extractNormalizedPrefix(query, max_prefix_len);
