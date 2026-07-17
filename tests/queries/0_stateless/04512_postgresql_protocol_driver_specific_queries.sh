@@ -12,12 +12,16 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
 
+# The user name must be unique per test run: the flaky check runs this test many times
+# concurrently, and a global name would collide with `ACCESS_ENTITY_ALREADY_EXISTS`.
+PG_USER="postgresql_user_04512_${CLICKHOUSE_DATABASE}"
+
 ${CLICKHOUSE_CLIENT} -q "
-DROP USER IF EXISTS postgresql_user_04512;
-CREATE USER postgresql_user_04512 HOST IP '127.0.0.1' IDENTIFIED WITH no_password;
+DROP USER IF EXISTS ${PG_USER};
+CREATE USER ${PG_USER} HOST IP '127.0.0.1' IDENTIFIED WITH no_password;
 "
 
-psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user postgresql_user_04512 --no-align 2>&1 <<'EOF'
+psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user "${PG_USER}" --no-align 2>&1 <<'EOF'
 RESET ALL;
 RESET search_path;
 UNLISTEN *;
@@ -36,11 +40,11 @@ EOF
 # single simple-query packet (e.g. `RESET ALL; SELECT 1`). Such a packet must fall through to the
 # normal multi-statement splitter instead of being acknowledged as a bare `RESET`; here that means
 # it surfaces an error rather than silently succeeding.
-if psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user postgresql_user_04512 --no-align \
+if psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user "${PG_USER}" --no-align \
         -c "RESET ALL; SELECT 1 AS trailing_query" 2>&1 | grep -qi error; then
     echo "multi-statement packet not silently accepted"
 else
     echo "UNEXPECTED: multi-statement packet silently accepted"
 fi
 
-${CLICKHOUSE_CLIENT} -q "DROP USER IF EXISTS postgresql_user_04512;"
+${CLICKHOUSE_CLIENT} -q "DROP USER IF EXISTS ${PG_USER};"
