@@ -953,6 +953,65 @@ async function main() {
             r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
     }
 
+    /// Guard (no-saved-tabs adopt, authoritative `param_*` preserved): the adopt branch deliberately
+    /// defers its `refreshCurrentHistoryEntry` re-own to the tail so it runs AFTER the URL's
+    /// placeholder parameters are reconciled into the recreated tab — the rebuilt entry/URL must
+    /// carry the adopted title, query AND the `param_*` values together. Open a fresh/shared link
+    /// `?tab=Report&param_x=42#<SELECT {x:Int32}>` on an empty workspace (no saved tabs, no history
+    /// state), so reconciliation takes the no-saved-tabs adopt branch: it recreates the bootstrap
+    /// tab, adopts the name, then folds `param_x=42` into the tab before the tail re-own rebuilds the
+    /// entry. If someone moved that re-own back before the URL-parameter reconciliation, or stopped
+    /// copying the reconciled parameters into `tab.params`, the rebuilt entry/URL would silently lose
+    /// `param_x` and the placeholder query would load/run with an empty binding. Assert both the
+    /// first load and a reload preserve `x = 42` in the URL, `history.state` and IndexedDB.
+    {
+        const param_query = 'SELECT {x:Int32}';
+        const param_hash = Buffer.from(param_query, 'utf8').toString('base64');
+        const r = await runScenario(js, {
+            href: base + '?tab=Report&param_x=42#' + param_hash,
+            historyState: null,
+            seedTabs: [],
+            seedMeta: null,
+        });
+        check('adopt-param-authoritative', 'the adopt branch recreates the tab with the shared name and placeholder query',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Report' && r.live.tabs[0].query === param_query,
+            r.live);
+        const live_tab = r.live.tabs[0];
+        const adopted_url = new URL(r.sandbox.location.href);
+        check('adopt-param-authoritative', 'the re-owned URL carries the placeholder value, the adopted name and the query hash',
+            adopted_url.searchParams.get('param_x') === '42'
+                && adopted_url.searchParams.get('tab') === 'Report'
+                && Buffer.from(adopted_url.hash.slice(1), 'base64').toString('utf8') === param_query,
+            r.sandbox.location.href);
+        check('adopt-param-authoritative', 'the re-owned history entry belongs to the recreated tab and carries the reconciled param',
+            r.sandbox.history.state && r.sandbox.history.state.tabId === live_tab.id
+                && r.sandbox.history.state.params && r.sandbox.history.state.params.x === '42',
+            r.sandbox.history.state);
+        check('adopt-param-authoritative', 'the reconciled param is persisted with the recreated tab',
+            r.persisted.length === 1 && r.persisted[0].params && r.persisted[0].params.x === '42',
+            r.persisted.map(p => ({ id: p.id, title: p.title, params: p.params })));
+
+        /// Reload the shared link exactly as the browser would: same URL and `history.state` the
+        /// first load left behind, seeded from what it persisted. The named tab now matches, so
+        /// reconciliation activates it and re-applies the URL parameters, which must still resolve to
+        /// the same `x = 42` rather than being dropped or reset to the empty default.
+        const r2 = await runScenario(js, {
+            href: r.sandbox.location.href,
+            historyState: r.sandbox.history.state,
+            seedTabs: r.persisted,
+            seedMeta: r.persistedMeta,
+        });
+        const reloaded_url = new URL(r2.sandbox.location.href);
+        check('adopt-param-authoritative', 'the reload keeps a single Report tab with the placeholder query',
+            r2.live.tabs.length === 1 && r2.live.tabs[0].title === 'Report' && r2.live.tabs[0].query === param_query,
+            r2.live);
+        check('adopt-param-authoritative', 'the reload preserves the param value in the URL, history state and IndexedDB',
+            reloaded_url.searchParams.get('param_x') === '42'
+                && r2.sandbox.history.state && r2.sandbox.history.state.params && r2.sandbox.history.state.params.x === '42'
+                && r2.persisted.length === 1 && r2.persisted[0].params && r2.persisted[0].params.x === '42',
+            { url: r2.sandbox.location.href, state: r2.sandbox.history.state, persisted: r2.persisted.map(p => p.params) });
+    }
+
     if (failures) {
         console.log(`${failures} check(s) FAILED`);
         process.exit(1);
