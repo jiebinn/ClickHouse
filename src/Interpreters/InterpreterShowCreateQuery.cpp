@@ -102,6 +102,7 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
                 {
                     /// Ok to swallow: treat any probe failure as "not a dictionary". The error is
                     /// not lost - it resurfaces when a user who may see the object really accesses it.
+                    is_dictionary_exist = false;
                 }
                 if (!is_dictionary_exist)
                 {
