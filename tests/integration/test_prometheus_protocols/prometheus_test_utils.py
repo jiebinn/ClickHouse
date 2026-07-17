@@ -2,12 +2,12 @@ import http
 import json
 import math
 import os
-import cramjam
 import requests
 import snappy
 import sys
 import urllib
 import zipfile
+import zstandard
 
 
 PRESETS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "presets")
@@ -95,7 +95,7 @@ def compress_remote_write_request(serialized_proto, content_encoding):
     if content_encoding == "snappy":
         return snappy.compress(data=serialized_proto)
     if content_encoding == "zstd":
-        return bytes(cramjam.zstd.compress(serialized_proto))
+        return zstandard.compress(serialized_proto)
     # Deliberately send uncompressed data with an unsupported Content-Encoding
     # so that tests can check how the server rejects it.
     return serialized_proto
