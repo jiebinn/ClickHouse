@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tags: no-parallel, no-fasttest, no-object-storage, no-random-settings
+# Tags: no-parallel, no-fasttest, no-random-settings
 # no-parallel: the failpoint below is server-global.
-# no-object-storage: the test builds its own cache-over-s3 disk.
+# no-fasttest: requires a cache disk.
 # no-random-settings: randomized buffer sizes change how much data spans file segments.
 
 # Regression for a LOGICAL_ERROR (server abort in debug/sanitizer builds) when the
@@ -15,29 +15,36 @@ CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
-CACHE_NAME="03908_cache_evict_${CLICKHOUSE_DATABASE}"
+CACHE_NAME="03908_cache_${CLICKHOUSE_DATABASE}"
 QID="03908_${CLICKHOUSE_DATABASE}"
 
 $CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t_03908"
 
-# A per-database unique cache name/path means the cache starts empty. Write-through
-# caching (cache_on_write_operations) makes each INSERT populate the cache directly, so
-# the second INSERT deterministically has to evict to fit under the small max_size --
-# without it, cache population would depend on non-deterministic background read-caching.
+# A per-database unique cache name/path means the cache starts empty. A small max_size
+# plus incompressible values (randomString) and tiny compress blocks make the data span
+# many small file segments, so the two write-through INSERTs together far exceed the
+# cache and the second one is forced to evict on the reserve path by a wide margin.
 $CLICKHOUSE_CLIENT -q "
-    CREATE TABLE t_03908 (c0 Int)
+    CREATE TABLE t_03908 (key UInt64, value String)
     ENGINE = MergeTree()
-    ORDER BY tuple()
+    ORDER BY key
     SETTINGS min_bytes_for_wide_part = 0,
+             min_compress_block_size = 4096,
+             max_compress_block_size = 4096,
              disk = disk(
                 type = cache,
                 name = '$CACHE_NAME',
-                max_size = '25Ki',
                 path = '$CACHE_NAME/',
-                cache_on_write_operations = 1,
-                disk = 's3_disk')"
+                disk = 'local_disk',
+                max_size = '1Mi',
+                max_file_segment_size = '100Ki',
+                boundary_alignment = '100Ki',
+                background_download_threads = 0,
+                cache_on_write_operations = 1)"
 
-$CLICKHOUSE_CLIENT --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number FROM numbers(1399)"
+$CLICKHOUSE_CLIENT -q "SYSTEM STOP MERGES t_03908"
+
+$CLICKHOUSE_CLIENT --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number, randomString(2000) FROM numbers(5000)"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM ENABLE FAILPOINT file_cache_dynamic_resize_fail_to_evict"
 # The failpoint is server-global, so disable it on every exit path (set -e). Otherwise a
@@ -47,7 +54,7 @@ trap '$CLICKHOUSE_CLIENT -q "SYSTEM DISABLE FAILPOINT file_cache_dynamic_resize_
 # This second insert forces cache eviction on the reserve path. Before the fix the
 # failpoint fired here and aborted the server with a LOGICAL_ERROR. Now the failpoint
 # is confined to dynamic resize, so eviction proceeds normally and the insert succeeds.
-$CLICKHOUSE_CLIENT --query_id "$QID" --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number FROM numbers(1770)"
+$CLICKHOUSE_CLIENT --query_id "$QID" --enable_filesystem_cache_on_write_operations=1 -q "INSERT INTO t_03908 SELECT number, randomString(2000) FROM numbers(5000, 5000)"
 
 $CLICKHOUSE_CLIENT -q "SYSTEM FLUSH LOGS query_log"
 
