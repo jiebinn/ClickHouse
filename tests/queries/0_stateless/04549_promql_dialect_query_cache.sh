@@ -43,5 +43,5 @@ $CLICKHOUSE_CLIENT -q "SYSTEM FLUSH LOGS query_log"
 $CLICKHOUSE_CLIENT -q "
 SELECT ProfileEvents['QueryCacheHits'], ProfileEvents['QueryCacheMisses']
 FROM system.query_log
-WHERE event_date >= yesterday() AND type = 'QueryFinish' AND query_id IN ('$QUERY_ID_1', '$QUERY_ID_2')
+WHERE event_date >= yesterday() AND type = 'QueryFinish' AND current_database = currentDatabase() AND query_id IN ('$QUERY_ID_1', '$QUERY_ID_2')
 ORDER BY query_id"
