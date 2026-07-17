@@ -47,6 +47,14 @@ SELECT reinterpret([[toInt32(1)]]::Array(Array(Int32)), 'String'); -- { serverEr
 
 SELECT 'LowCardinality nested element is stripped and works';
 SELECT reinterpret(reinterpret([toInt32(1), toInt32(2)]::Array(LowCardinality(Int32)), 'String'), 'Array(Int32)') SETTINGS allow_suspicious_low_cardinality_types = 1;
+-- Non-numeric fixed-size element types (FixedString, UUID) work too. The framework recursively strips
+-- the nested LowCardinality (recursiveRemoveLowCardinality) before return-type deduction, so the type
+-- gate already sees the plain Array(FixedString(2)) / Array(UUID) and the contiguous-memory check passes.
+-- The FixedString bytes are copied verbatim, so their hex is architecture-independent; the round-trips
+-- verify the element values on every architecture.
+SELECT hex(reinterpret(['ab', 'cd']::Array(LowCardinality(FixedString(2))), 'String')) SETTINGS allow_suspicious_low_cardinality_types = 1;
+SELECT reinterpret(reinterpret(['ab', 'cd']::Array(LowCardinality(FixedString(2))), 'String'), 'Array(FixedString(2))') SETTINGS allow_suspicious_low_cardinality_types = 1;
+SELECT reinterpret(reinterpret([toUUID('00000000-0000-0000-0000-000000000001'), toUUID('00000000-0000-0000-0000-000000000002')]::Array(LowCardinality(UUID)), 'String'), 'Array(UUID)') SETTINGS allow_suspicious_low_cardinality_types = 1;
 
 SELECT 'A few rows read from a table';
 DROP TABLE IF EXISTS tab_04503;
