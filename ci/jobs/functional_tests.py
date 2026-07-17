@@ -442,10 +442,15 @@ def main():
             # and the non-sanitizer distributed-plan parallel jobs (e.g. amd_debug)
             # run comfortably at the default concurrency.
             #
-            # 0.35 still left too little margin: a run at that value hit Code 241
-            # with RSS at 43.01 GiB against the 41.84 GiB cap, ~3% over. Cut further
-            # to keep aggregate RSS comfortably under the cap instead of right at it.
-            nproc = int(Utils.cpu_count() * 0.3)
+            # Tuned down in two steps against observed peak RSS on the 32-vCPU
+            # `c7i.8xlarge` runner (cap 41.84 GiB): 0.35 -> 11 workers hit Code 241
+            # at 43.01 GiB (~3% over); 0.3 -> 9 workers still landed right on the
+            # cap (41.90 GiB, ~0.14% over). Each dropped worker sheds ~0.55 GiB of
+            # peak, so 0.25 -> 8 workers leaves ~0.5 GiB (~1.2%) of headroom - the
+            # first value that clears the cap with margin instead of grazing it.
+            # The job's wall-clock was ~2h25m at 9 workers, so the ~11% throughput
+            # loss stays well inside the 3h `timeout` (see `job_configs.py`).
+            nproc = int(Utils.cpu_count() * 0.25)
         elif is_per_test_coverage:
             cidb_cluster = CIDBCluster()
             if not info.is_local_run:
