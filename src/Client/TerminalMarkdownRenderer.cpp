@@ -412,6 +412,10 @@ String badgeLabel(std::string_view name)
         return "ClickHouse Cloud only";
     if (name == "PrivatePreviewBadge")
         return "Private Preview";
+    if (name == "ScalePlanFeatureBadge")
+        return "Scale plan feature";
+    if (name == "EnterprisePlanFeatureBadge")
+        return "Enterprise plan feature";
 
     std::string_view stem = name;
     if (stem.ends_with("Badge"))
@@ -424,6 +428,31 @@ String badgeLabel(std::string_view name)
         result += stem[i];
     }
     return result;
+}
+
+/// The substantive message that a plan-gating badge renders from its attributes on the website
+/// (`docs/snippets/components/ScalePlanFeatureBadge`, `.../EnterprisePlanFeatureBadge`): which plan a
+/// feature requires and how to get it. Unlike a status badge, collapsing these to a label would lose
+/// that message, so it is rendered after the label. An attribute is truthy when present with a
+/// non-empty value, matching how the website's JSX treats the string attributes the documentation
+/// actually uses (`support="true"`, `linking_verb_are="True"`); kept in sync with the identical
+/// `badgePayload` in `programs/server/docs.html`.
+String badgePayload(std::string_view name, std::string_view attributes)
+{
+    if (name != "ScalePlanFeatureBadge" && name != "EnterprisePlanFeatureBadge")
+        return {};
+
+    std::string_view feature = mdxAttribute(attributes, "feature");
+    if (feature.empty())
+        feature = "This feature";
+    const std::string_view verb = mdxAttribute(attributes, "linking_verb_are").empty() ? "is" : "are";
+
+    const String message = String(feature) + ' ' + String(verb);
+    if (name == "ScalePlanFeatureBadge")
+        return message + " available in the Scale and Enterprise plans. To upgrade, visit the plans page in the cloud console.";
+    if (mdxAttribute(attributes, "support").empty())
+        return message + " available in the Enterprise plan. To upgrade, visit the plans page in the cloud console.";
+    return message + " available in the Enterprise plan. Contact support to enable this feature.";
 }
 
 /// Removes a trailing explicit anchor such as `{#projections}` from a header's text. Documentation
@@ -772,6 +801,14 @@ private:
                         if (name.size() > 5 && name[0] >= 'A' && name[0] <= 'Z' && name.ends_with("Badge"))
                         {
                             append("[" + badgeLabel(name) + "]", Style{.bold = true});
+                            /// A plan-gating badge also carries a substantive message built from its
+                            /// attributes; render it after the label (see `badgePayload`).
+                            if (const String payload = badgePayload(name, s.substr(p, close - 1 - p)); !payload.empty())
+                            {
+                                flush_word();
+                                push_space();
+                                scan(payload);
+                            }
                             i = close + 1;
                             continue;
                         }

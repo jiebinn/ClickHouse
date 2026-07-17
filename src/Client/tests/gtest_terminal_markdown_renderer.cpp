@@ -163,6 +163,31 @@ TEST(TerminalMarkdownRenderer, BadgeComponentRendered)
     EXPECT_EQ(plainRenderer().render("<CloudNotSupportedBadge/>"), "[Not supported in ClickHouse Cloud]\n");
 }
 
+TEST(TerminalMarkdownRenderer, PlanFeatureBadgeRendersItsMessage)
+{
+    /// A plan-gating badge builds a substantive message from its attributes on the website (which plan
+    /// a feature requires and how to get it, see `badgePayload`); both the label and that message must
+    /// survive on this help surface instead of the tag collapsing to the badge name.
+    EXPECT_EQ(
+        plainRenderer(200).render("<ScalePlanFeatureBadge feature=\"S3 Role-Based Access\" />"),
+        "[Scale plan feature] S3 Role-Based Access is available in the Scale and Enterprise plans. "
+        "To upgrade, visit the plans page in the cloud console.\n");
+    /// `support` routes the reader to support instead of the plans page, and `linking_verb_are` picks
+    /// the plural verb, as in the website components.
+    EXPECT_EQ(
+        plainRenderer(200).render("<EnterprisePlanFeatureBadge feature=\"HIPAA\" support=\"true\" />"),
+        "[Enterprise plan feature] HIPAA is available in the Enterprise plan. Contact support to enable this feature.\n");
+    EXPECT_EQ(
+        plainRenderer(200).render("<ScalePlanFeatureBadge feature=\"Configurable Backups\" linking_verb_are=\"True\" />"),
+        "[Scale plan feature] Configurable Backups are available in the Scale and Enterprise plans. "
+        "To upgrade, visit the plans page in the cloud console.\n");
+    /// Without attributes the message falls back to the components' defaults.
+    EXPECT_EQ(
+        plainRenderer(200).render("<EnterprisePlanFeatureBadge/>"),
+        "[Enterprise plan feature] This feature is available in the Enterprise plan. "
+        "To upgrade, visit the plans page in the cloud console.\n");
+}
+
 TEST(TerminalMarkdownRenderer, MintlifyAdmonitionComponent)
 {
     /// Embedded pages converted from the website's Mintlify sources carry `<Note>` / `<Warning>` / ...

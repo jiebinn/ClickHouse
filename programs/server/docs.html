@@ -671,7 +671,7 @@
     /// terminal `help` renderer's `badgeLabel` (`src/Client/TerminalMarkdownRenderer.cpp`) so both help
     /// surfaces convey the same status. Known badges get a descriptive label; any other `*Badge` (the
     /// website adds new ones over time) falls back to its name with the camel case split (e.g.
-    /// `ScalePlanFeatureBadge` -> `Scale Plan Feature`).
+    /// `CommunityMaintainedBadge` -> `Community Maintained`).
     function badgeLabel(name) {
         switch (name) {
             case 'ExperimentalBadge': return 'Experimental';
@@ -680,9 +680,33 @@
             case 'CloudAvailableBadge': return 'Available in ClickHouse Cloud';
             case 'CloudOnlyBadge': return 'ClickHouse Cloud only';
             case 'PrivatePreviewBadge': return 'Private Preview';
+            case 'ScalePlanFeatureBadge': return 'Scale plan feature';
+            case 'EnterprisePlanFeatureBadge': return 'Enterprise plan feature';
         }
         const stem = name.endsWith('Badge') ? name.slice(0, -5) : name;
         return stem.replace(/([^A-Z])([A-Z])/g, '$1 $2');
+    }
+
+    /// The substantive message that a plan-gating badge renders from its attributes on the website
+    /// (`docs/snippets/components/ScalePlanFeatureBadge`, `.../EnterprisePlanFeatureBadge`): which plan
+    /// a feature requires and how to get it. Unlike a status badge, collapsing these to a label would
+    /// lose that message, so `preprocessMarkdown` renders it after the label. An attribute is truthy
+    /// when present with a non-empty value, matching how the website's JSX treats the string attributes
+    /// the documentation actually uses (`support="true"`, `linking_verb_are="True"`); kept in sync with
+    /// the identical `badgePayload` in the terminal `help` renderer (`src/Client/TerminalMarkdownRenderer.cpp`).
+    function badgePayload(name, attributes) {
+        if (name !== 'ScalePlanFeatureBadge' && name !== 'EnterprisePlanFeatureBadge')
+            return '';
+        const attribute = (attr) => {
+            const m = new RegExp('(?:^|\\s)' + attr + '\\s*=\\s*"([^"]*)"').exec(attributes || '');
+            return m ? m[1] : '';
+        };
+        const feature = attribute('feature') || 'This feature';
+        const verb = attribute('linking_verb_are') ? 'are' : 'is';
+        if (name === 'ScalePlanFeatureBadge')
+            return feature + ' ' + verb + ' available in the Scale and Enterprise plans. To upgrade, visit the plans page in the cloud console.';
+        return feature + ' ' + verb + ' available in the Enterprise plan. '
+            + (attribute('support') ? 'Contact support to enable this feature.' : 'To upgrade, visit the plans page in the cloud console.');
     }
 
     /// Strip MDX-isms that occasionally leak into the documentation text: `import`/`export`
@@ -758,14 +782,20 @@
         /// terminal `help` renderer (see `badgeLabel`). A status badge such as `<ExperimentalBadge/>`,
         /// `<CloudNotSupportedBadge/>`, or `<ScalePlanFeatureBadge/>` carries real availability
         /// information (experimental, not supported in ClickHouse Cloud, plan-gated), so the browser help
-        /// surface shows it as a bold label rather than silently omitting it. Matching by the `*Badge`
-        /// name (not the local `import`) removes the dependency on the import being present, and a
-        /// self-closing badge no longer swallows the rest of the document into its subtree for the
-        /// sanitizer to drop. A `*Badge` is a PascalCase component name that does not occur in
-        /// documentation prose, so this is safe. A closing `</...Badge>` (badges are self-closing in
-        /// practice) is simply removed.
-        out = out.replace(/<(\/?)([A-Z][A-Za-z0-9]*Badge)(?:\s[^>]*)?\/?>/g,
-            (m, closing, name) => closing ? '' : '**[' + badgeLabel(name) + ']**');
+        /// surface shows it as a bold label rather than silently omitting it. A plan-gating badge also
+        /// carries a substantive message built from its attributes (see `badgePayload`), rendered after
+        /// the label. Matching by the `*Badge` name (not the local `import`) removes the dependency on
+        /// the import being present, and a self-closing badge no longer swallows the rest of the
+        /// document into its subtree for the sanitizer to drop. A `*Badge` is a PascalCase component
+        /// name that does not occur in documentation prose, so this is safe. A closing `</...Badge>`
+        /// (badges are self-closing in practice) is simply removed.
+        out = out.replace(/<(\/?)([A-Z][A-Za-z0-9]*Badge)((?:\s[^>]*)?)\/?>/g,
+            (m, closing, name, attributes) => {
+                if (closing)
+                    return '';
+                const payload = badgePayload(name, attributes);
+                return '**[' + badgeLabel(name) + ']**' + (payload ? ' ' + payload : '');
+            });
 
         /// Likewise strip any remaining *self-closing* PascalCase component that was neither imported
         /// nor named in the lists above, nor resolved as a known snippet import — the website adds new
