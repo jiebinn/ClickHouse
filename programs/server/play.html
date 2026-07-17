@@ -657,7 +657,7 @@
             margin-bottom: 0.25rem;
             /* Rendered as an <a> so middle-click, Shift+click, and the platform's new-tab
                modifier click (Cmd+click on macOS, Ctrl+click elsewhere) open the terminal in
-               a new browser tab natively. color: inherit keeps the currentColor strokes from
+               a new browser tab or window natively. color: inherit keeps the currentColor strokes from
                picking up the default link color, and display: block matches #databases-icon. */
             text-decoration: none;
             display: block;
@@ -1636,7 +1636,7 @@
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><line x1="3" y1="12" x2="15" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="9,6 3,12 9,18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="20" y1="4" x2="20" y2="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <div id="databases"></div>
-        <a id="terminal-icon" class="menu-icon" href="" title="Web Terminal (~) — middle-click, Shift+click, or the platform's new-tab modifier click (Cmd+click on macOS, Ctrl+click elsewhere) to open in a new tab">
+        <a id="terminal-icon" class="menu-icon" href="" title="Web Terminal (~) — middle-click, Shift+click, or the platform's new-tab modifier click (Cmd+click on macOS, Ctrl+click elsewhere) to open in a new tab or window">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="22" height="22" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="13" y1="16" x2="18" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </a>
         <a id="docs-icon" class="menu-icon" href="/docs" target="_blank" rel="noopener noreferrer" title="Documentation">
@@ -4784,7 +4784,7 @@ function toggleDatabases() {
 
 /// The logo is an <a> element so that middle-click, Shift+click, and the platform's
 /// new-tab modifier click (Cmd+click on macOS, Ctrl+click elsewhere) natively open the
-/// current page (with the query) in a new tab.
+/// current page (with the query) in a new tab or window.
 /// We update the href on mousedown so it always reflects the current URL.
 document.getElementById('databases-icon').addEventListener('mousedown', () => {
     document.getElementById('databases-icon').href = window.location.href;
@@ -9346,9 +9346,9 @@ document.getElementById('download-button').addEventListener('click', async funct
     }
 
     /// Middle-click, Shift+click, or the platform's new-tab modifier click (Cmd+click on
-    /// macOS, Ctrl+click elsewhere) opens the terminal in a new browser tab; let the anchor's
-    /// native behaviour handle it (middle-click does not fire a `click` event and is handled
-    /// natively too).
+    /// macOS, Ctrl+click elsewhere) opens the terminal in a new browser tab or window; let
+    /// the anchor's native behaviour handle it (middle-click does not fire a `click` event
+    /// and is handled natively too).
     function wantsNewTab(e) {
         return e.ctrlKey || e.metaKey || e.shiftKey;
     }
