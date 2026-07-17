@@ -28,6 +28,7 @@ namespace ErrorCodes
     extern const int UNEXPECTED_AST_STRUCTURE;
     extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
     extern const int BAD_ARGUMENTS;
+    extern const int OPENSSL_ERROR;
 }
 
 CompressionCodecPtr CompressionCodecFactory::getDefaultCodec() const
@@ -144,11 +145,14 @@ void CompressionCodecFactory::fillCodecDescriptions(MutableColumns & res_columns
             {
                 tmp = it.second({}, nullptr);
             }
-            catch (...) // Ok: some codecs cannot be instantiated in this build configuration (e.g. the encryption
-                        // codecs register a creator that throws when the server is built without SSL support). They
-                        // cannot expose a description, so skip them rather than failing the whole `system.codecs` query.
+            catch (const Exception & e)
             {
-                return;
+                /// Ok: the encryption codecs register a creator that throws `OPENSSL_ERROR` when the server is built
+                /// without SSL support. They cannot expose a description, so skip them rather than failing the whole
+                /// `system.codecs` query. Any other failure is unexpected and must propagate.
+                if (e.code() == ErrorCodes::OPENSSL_ERROR)
+                    return;
+                throw;
             }
 
             res_columns[0]->insert(name);
@@ -174,11 +178,14 @@ VectorWithMemoryTracking<std::pair<String, Documentation>> CompressionCodecFacto
         {
             codec = creator({}, nullptr);
         }
-        catch (...) // Ok: some codecs cannot be instantiated in this build configuration (e.g. the encryption codecs
-                    // register a creator that throws when the server is built without SSL support). They have no
-                    // documentation to expose, so skip them rather than failing the whole system.documentation query.
+        catch (const Exception & e)
         {
-            continue;
+            /// Ok: the encryption codecs register a creator that throws `OPENSSL_ERROR` when the server is built
+            /// without SSL support. They have no documentation to expose, so skip them rather than failing the whole
+            /// `system.documentation` query. Any other failure is unexpected and must propagate.
+            if (e.code() == ErrorCodes::OPENSSL_ERROR)
+                continue;
+            throw;
         }
 
         Documentation documentation;
