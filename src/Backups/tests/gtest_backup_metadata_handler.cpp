@@ -252,3 +252,24 @@ TEST(BackupMetadataHandler, NamespacePrefixedContentsIsNotTreatedAsContents)
     EXPECT_FALSE(result.header_seen);
     EXPECT_TRUE(result.files.empty());
 }
+
+TEST(BackupMetadataHandler, ChildElementInsideHeaderScalarIsRejected)
+{
+    /// Mixed content in a header scalar (<version>4294967298<x/>2</version>) must be rejected, not collapse to "2".
+    auto result = parse(
+        "<config><version>4294967298<x/>2</version><contents></contents></config>");
+    ASSERT_TRUE(result.saved_exception);
+    EXPECT_THROW(std::rethrow_exception(result.saved_exception), DB::Exception);
+}
+
+TEST(BackupMetadataHandler, ChildElementInsideFileScalarIsRejected)
+{
+    /// Mixed content in a file scalar (<encrypted_by_disk>true<x/>false</...>) must be rejected, not collapse to "false".
+    auto result = parse(
+        "<config><version>2</version><contents>"
+        "<file><name>a</name><size>1</size>"
+        "<encrypted_by_disk>true<x/>false</encrypted_by_disk></file>"
+        "</contents></config>");
+    ASSERT_TRUE(result.saved_exception);
+    EXPECT_THROW(std::rethrow_exception(result.saved_exception), DB::Exception);
+}

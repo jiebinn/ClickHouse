@@ -21,6 +21,14 @@ void BackupMetadataHandler::startElement(
         return;
     try
     {
+        /// A scalar leaf (header leaf under the root, file leaf under <contents>/<file>) must be text-only:
+        /// reject mixed content, which the SAX path would otherwise collapse to the last text run (turning a
+        /// damaged value into a valid one).
+        if ((path.size() == 2 && path[1] != "contents")
+            || (path.size() == 4 && path[1] == "contents" && path[2] == "file"))
+            throw Exception(
+                ErrorCodes::BACKUP_DAMAGED, "Backup metadata has a child element inside scalar field <{}>", path.back());
+
         current_text.clear();
         const String & name = qname.empty() ? local_name : qname;
         /// Gate callbacks by exact position so a misplaced <file>/<contents> is ignored. `path` holds the
