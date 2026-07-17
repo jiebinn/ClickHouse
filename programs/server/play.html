@@ -8331,26 +8331,6 @@ const url_query = query_area.value;          /// already decoded from the hash; 
 /// query that produced nothing.
 const defer_run_for_reconcile = run_immediately;
 
-/// Restamp the current browser-history entry's `tab=` URL param (and `history.state.tabName`,
-/// when the entry belongs to `tab`) to `tab`'s current title. `reconcileStartup` renames the
-/// LIVE active tab in two places — adopting `url_tab_name` for it, or de-conflicting it with
-/// `uniqueTitle` during a dirty-startup merge — after the current entry may already carry its
-/// PRE-rename title (a live edit before reconciliation seeds the entry via
-/// `refreshCurrentHistoryEntry`). Skipping this would leave the URL/history diverged from what
-/// gets persisted: reloading, or navigating to, that stale entry would recreate a second tab
-/// under the old title alongside the one actually saved under the new one.
-function restampCurrentEntryTitle(tab) {
-    if (!tab) return;
-    const restamp_url = new URL(location.href);
-    const cur_tab_param = restamp_url.searchParams.get('tab');
-    if (cur_tab_param === null || cur_tab_param === tab.title) return;
-    restamp_url.searchParams.set('tab', tab.title);
-    const cur_state = history.state;
-    const new_state = (cur_state && cur_state.tabId === tab.id)
-        ? { ...cur_state, tabName: tab.title } : cur_state;
-    history.replaceState(new_state, document.title, restamp_url.href);
-}
-
 /// Reconcile the freshly loaded URL (query + tab name) against tabs saved in IndexedDB.
 async function reconcileStartup() {
     const loaded = await loadFromDb();
@@ -8363,6 +8343,11 @@ async function reconcileStartup() {
     /// of an edited-but-not-resynced tab). In that case the URL is NOT authoritative, so we
     /// keep the saved query and skip the URL-driven parameter reconciliation below.
     let preserve_local_query = false;
+    /// Set by the no-saved-tabs adopt branch when it recreates the bootstrap tab for an
+    /// authoritative URL. The current entry is re-owned for that tab at the tail, AFTER the URL
+    /// parameters are reconciled into it, so the rebuilt entry/URL carry the adopted title, query
+    /// and `param_*` together (see the tail's `refreshCurrentHistoryEntry` call).
+    let reown_adopted_entry = false;
 
     /// Reconstruct the saved workspace from IndexedDB, ordered by the persisted order,
     /// and restore the id/title counters.
@@ -8518,8 +8503,8 @@ async function reconcileStartup() {
             /// full re-own fixes both. (1) On a plain reload the preserved `history.state`/hash still
             /// describe the previous session's active tab — which may be one of the blank tabs just
             /// pruned — and the live edit typed during the load window could not claim them
-            /// (`refreshCurrentHistoryEntry` bails on another tab's entry). Restamping only `?tab=`
-            /// (`restampCurrentEntryTitle`) would leave the dropped tab's stale hash and foreign
+            /// (`refreshCurrentHistoryEntry` bails on another tab's entry). Restamping only the `?tab=`
+            /// URL param would leave the dropped tab's stale hash and foreign
             /// `history.state` attached: on the NEXT reload startup treats that stale hash as an
             /// authoritative shared URL and overwrites the persisted live query with it. (2) When the
             /// entry does belong to the live tab (a fresh nav whose first trusted edit seeded it under
@@ -8646,20 +8631,39 @@ async function reconcileStartup() {
         const t = getActiveTab();
         if (t) {
             t.title = url_tab_name;
-            /// A live edit before this point (`bootstrap_dirty`) may already have seeded the current
-            /// entry/URL via `refreshCurrentHistoryEntry`, with the tab's PRE-rename default title
-            /// (e.g. `Query A`). Restamp it to the just-adopted `url_tab_name`, or the entry/URL keep
-            /// naming the old title while `t` (and what gets persisted) carries the new one — a
-            /// reload of that stale entry would then recreate a second tab under the old name
-            /// alongside the one actually saved.
-            restampCurrentEntryTitle(t);
+            /// Re-own the current browser-history entry for this recreated bootstrap tab. The entry
+            /// can be stale in two ways, and only a full re-own fixes both. (1) On a
+            /// `stale_blank_reload` whose non-blank hash is authoritative (a genuine unsaved edit
+            /// whose tab was pruned before it reached `IndexedDB`), the reloaded `history.state` still
+            /// carries the dropped blank tab's stable `tabId`, which differs from this bootstrap tab's.
+            /// Restamping only `?tab=` would leave that foreign state and hash attached, so the
+            /// recreated tab could never re-own the entry — a later trusted edit bails in
+            /// `refreshCurrentHistoryEntry` (`cur.tabId !== tab.id`) — and a quick edit-then-reload
+            /// before the debounced save would restore the stale hash/query and lose the edit. (2) When
+            /// the entry does belong to this tab (a live edit before reconciliation, `bootstrap_dirty`,
+            /// seeded it under the tab's PRE-rename default title `Query A`), the `?tab=`/
+            /// `history.state.tabName` still carry the old title, so a reload of that entry would
+            /// recreate a second tab under the old name alongside the one actually saved. Both are
+            /// fixed exactly as the dirty all-blank and dirty merge branches do: drop the foreign state
+            /// first (unless the ids coincide — a pruned legacy `t1` record vs. the `t1` bootstrap tab
+            /// — where the entry is already this tab's to replace), then seed the entry wholesale from
+            /// the tab via `refreshCurrentHistoryEntry`. The seed is deferred to the tail
+            /// (`reown_adopted_entry`) so it runs AFTER the URL parameters below are reconciled into
+            /// the tab, letting the rebuilt entry/URL carry the authoritative `param_*` too (seeding
+            /// here would rebuild the URL from the tab's not-yet-reconciled params and drop them).
+            /// `run_immediately` is untouched: a `run=1` URL takes the tail `postAll` path instead,
+            /// whose own history write then owns the entry.
+            if (history.state && history.state.tabId !== t.id) {
+                history.replaceState(null, document.title, location.href);
+            }
+            reown_adopted_entry = true;
             /// Seed lastSavedQuery (= the query the URL is authoritative for) so a later reload of
             /// this same shared link is recognized as a stale reload — the URL hash equals this
             /// tab's own last-synced query — rather than a fresh external query. Without it, editing
             /// this bootstrap tab and reloading the same URL would discard the edit: the named-tab
             /// branch above would see `undefined !== url_query` and overwrite the saved query. The
-            /// loaded-tab paths get this seeding for free via syncHistory()/postAll(); this branch
-            /// leaves `activated` false and runs neither, so seed it explicitly here.
+            /// tail re-own (`reown_adopted_entry`) also sets `lastSavedQuery` (to the same value, since
+            /// `t.query` equals `url_query` here), but do it eagerly so it holds even before that runs.
             if (has_url_query) t.lastSavedQuery = url_query;
         }
         renderTabBar();
@@ -8792,6 +8796,14 @@ async function reconcileStartup() {
         postAll();   /// saves history itself on completion
     } else if (activated) {
         syncHistory();   /// reflect the restored active tab in the URL (replaceState)
+    } else if (reown_adopted_entry) {
+        /// The no-saved-tabs adopt branch recreated the bootstrap tab for an authoritative URL. Re-own
+        /// the current entry for it now, after the URL parameters above have been reconciled into the
+        /// tab, so the rebuilt URL/`history.state`/hash reflect the adopted title, query AND params.
+        /// The foreign state (if any) was already dropped in that branch, so `refreshCurrentHistoryEntry`
+        /// seeds the entry in place rather than bailing on another tab's entry. A `run=1` URL took the
+        /// `postAll` path above instead, whose `saveHistory` owns the entry itself.
+        refreshCurrentHistoryEntry(getActiveTab());
     }
     scheduleSave();
 }

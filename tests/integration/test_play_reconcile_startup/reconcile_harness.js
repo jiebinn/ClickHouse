@@ -886,6 +886,73 @@ async function main() {
             r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
     }
 
+    /// Guard (no-saved-tabs adopt, entry re-owned + later edit survives): the analog of the merge/
+    /// all-blank re-own races, but for the branch where NO saved tab survives the pruning and the URL
+    /// carries an authoritative non-blank hash. Reload `?tab=Scratch#<SELECT 111>` from the stale
+    /// history entry of a now-pruned blank `Scratch` tab; the adopt branch recreates the bootstrap
+    /// tab from the hash and adopts the name. Unlike the dirty cases above there is no live edit
+    /// during load — the second edit lands AFTER reconciliation completes. If the branch only
+    /// restamped `?tab=`, the current entry would keep the dropped tab's foreign `history.state`
+    /// (`tabId === 't7'`), so that later trusted edit could not re-own it (`refreshCurrentHistoryEntry`
+    /// bails), and a reload before the debounced save would restore the stale `SELECT 111` and lose
+    /// the edit. Reconciliation must re-own the entry for the recreated tab, exactly as the dirty
+    /// branches do.
+    {
+        const stale_hash = Buffer.from('SELECT 111', 'utf8').toString('base64');
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch#' + stale_hash,
+            historyState: { tabId: 't7', tabName: 'Scratch' },
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7'], tabSeq: 7, tabTitleSeq: 1 },
+        });
+        check('adopt-stale-reload-entry-reowned', 'the recreated tab adopts the name and the authoritative hash query',
+            r.live.tabs.length === 1 && r.live.tabs[0].title === 'Scratch' && r.live.tabs[0].query === 'SELECT 111',
+            r.live);
+        const live_tab = r.live.tabs[0];
+        check('adopt-stale-reload-entry-reowned', 'the current entry is re-owned by the recreated tab, not the dropped blank one',
+            r.sandbox.history.state && r.sandbox.history.state.tabId === live_tab.id,
+            r.sandbox.history.state);
+        const adopted_url = new URL(r.sandbox.location.href);
+        check('adopt-stale-reload-entry-reowned', 'the URL hash carries the adopted query and names the recreated tab',
+            Buffer.from(adopted_url.hash.slice(1), 'base64').toString('utf8') === 'SELECT 111'
+                && adopted_url.searchParams.get('tab') === live_tab.title,
+            r.sandbox.location.href);
+
+        /// Snapshot what the DB holds BEFORE the second edit — the reload models "before the debounced
+        /// save flushes", so the DB must still carry the recreated `SELECT 111` tab, not `SELECT 999`.
+        const db_before_edit = JSON.parse(JSON.stringify(r.persisted));
+        /// A trusted keystroke AFTER reconciliation completes: with the entry re-owned this now folds
+        /// into it (`refreshCurrentHistoryEntry` no longer bails), updating the entry/URL to the edit.
+        vm.runInContext(
+            "query_area.value = 'SELECT 999';" +
+            "query_area.dispatchEvent({ type: 'input', isTrusted: true });",
+            r.sandbox);
+        const edited_url = new URL(r.sandbox.location.href);
+        check('adopt-stale-reload-entry-reowned', 'a later trusted edit re-owns the entry instead of bailing',
+            Buffer.from(edited_url.hash.slice(1), 'base64').toString('utf8') === 'SELECT 999'
+                && r.sandbox.history.state && r.sandbox.history.state.query === 'SELECT 999'
+                && r.sandbox.history.state.tabId === live_tab.id,
+            { hash: r.sandbox.location.href, state: r.sandbox.history.state });
+
+        /// Reload before the edit is persisted: the DB still holds `SELECT 111`, but the entry now
+        /// holds `SELECT 999`. Startup must keep the newer edit from the entry, not the stale DB/hash.
+        const r2 = await runScenario(js, {
+            href: r.sandbox.location.href,
+            historyState: r.sandbox.history.state,
+            seedTabs: db_before_edit,
+            seedMeta: r.persistedMeta,
+        });
+        check('adopt-stale-reload-entry-reowned', 'the reload keeps the newest edit, not the stale hash',
+            r2.live.tabs.some(t => t.query === 'SELECT 999') && !r2.live.tabs.some(t => t.query === 'SELECT 111'),
+            r2.live);
+        check('adopt-stale-reload-entry-reowned', 'the reload persists the newest edit, no stale or blank tab',
+            r2.persisted.some(p => p.query === 'SELECT 999') && !r2.persisted.some(p => p.query === 'SELECT 111')
+                && !r2.persisted.some(p => (p.query || '').trim() === ''),
+            r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
+    }
+
     if (failures) {
         console.log(`${failures} check(s) FAILED`);
         process.exit(1);
