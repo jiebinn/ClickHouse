@@ -1,6 +1,5 @@
 #include <DataTypes/DataTypeString.h>
 #include <Disks/DiskType.h>
-#include <Disks/DiskEncrypted.h>
 #include <Disks/DiskObjectStorage/DiskObjectStorage.h>
 #include <Interpreters/MergeTreeTransaction/VersionMetadata.h>
 #include <Storages/ColumnsDescription.h>
@@ -6622,8 +6621,8 @@ void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until, const Contex
         {
             for (auto disk : getDisks())
             {
-                if (auto encrypted_disk = std::dynamic_pointer_cast<const DiskEncrypted>(disk))
-                    disk = encrypted_disk->getDelegateDiskIfExists();
+                if (auto delegate_disk = disk->getDelegateDiskIfExists())
+                    disk = delegate_disk;
 
                 for (auto object_storage_disk = std::dynamic_pointer_cast<const DiskObjectStorage>(disk); object_storage_disk; object_storage_disk = object_storage_disk->getWrappedDisk())
                     dead_blobs_count += object_storage_disk->getDeadBlobsQueueEstimate();
