@@ -443,18 +443,19 @@ def main():
             # run comfortably at the default concurrency.
             #
             # Tuned down in steps against observed peak RSS on the 32-vCPU
-            # `c7i.8xlarge` runner (cap 41.84 GiB): 0.35 -> 11 workers hit Code 241
-            # at 43.01 GiB (~3% over); 0.3 -> 9 workers still landed right on the
-            # cap (41.90 GiB, ~0.14% over, 2 rejections); 0.25 -> 8 workers brought
-            # the *sustained* peak just under the cap (41.76 GiB) but one query was
-            # still rejected on a transient spike - a 512 MiB allocation while the
-            # shared server was already at 41.76 GiB, i.e. right on the cap. Since
-            # the victim query is whichever one happens to ask for memory at the
-            # peak (not a uniquely heavy test), the only robust cure is to lower the
-            # baseline further: 0.22 -> 7 workers drops it enough that a transient
-            # spike has room under the cap. The job's total wall-clock was ~2h36m at
-            # 8 workers, so the ~14% throughput loss from one fewer worker (~2h57m)
-            # still fits inside the 3.5h `timeout` (see `job_configs.py`).
+            # `c7i.8xlarge` runner (cap 41.84 GiB at ratio 0.7): 0.35 -> 11 workers
+            # hit Code 241 at 43.01 GiB (~3% over); 0.3 -> 9 workers still landed
+            # right on the cap (41.90 GiB); 0.25 -> 8 workers reached 41.76 GiB;
+            # 0.22 -> 7 workers reached 41.71 GiB - each run still grazing the cap
+            # with a single rejected query. That near-flat response shows the RSS
+            # baseline is dominated by ASan overhead that accumulates with the
+            # amount of work done, not with concurrency, so cutting workers
+            # further cannot open a gap under the cap; the residual headroom comes
+            # from this job's slightly higher memory ratio instead (0.75, see the
+            # install stage below). The concurrency cut stays: it is what shrank
+            # the aggregate client RSS enough to make the higher server cap safe
+            # for the host, and 7 workers finish in ~2h44m, inside the 3.5h
+            # `timeout` (see `job_configs.py`).
             nproc = int(Utils.cpu_count() * 0.22)
         elif is_per_test_coverage:
             cidb_cluster = CIDBCluster()
@@ -760,9 +761,30 @@ def main():
         # (always `*_asan_ubsan`), and its validation loop later swaps to the
         # other build types, re-deriving the cap on every swap (sanitizer ->
         # 0.7, debug -> server default; see the TEST stage below).
+        #
+        # The distributed-plan parallel job gets a slightly higher cap (0.75).
+        # The global memory check compares the server's *OS RSS* against the
+        # cap, and on an ASan server RSS carries tens of GiB the tracker can
+        # neither see nor free by killing queries: ASan shadow memory,
+        # quarantine and redzones, plus file-backed pages from mmap reads. On
+        # the 32-vCPU runner that overhead accumulates over the run towards
+        # ~41.7 GiB regardless of concurrency - cutting workers 11 -> 9 -> 8
+        # -> 7 moved the peak RSS only 43.01 -> 41.90 -> 41.76 -> 41.71 GiB
+        # against the 41.84 GiB cap that 0.7 yields, and every run still
+        # grazed the cap (one query rejected on a 512 MiB chunk while RSS sat
+        # just under it). Concurrency is exhausted as a lever, so the cap
+        # itself must give the untrackable overhead room: 0.75 (~44.8 GiB)
+        # leaves ~3 GiB of headroom above the observed RSS equilibrium. The
+        # host-OOM invariant this cap protects (server cap + aggregate client
+        # RSS < RAM) still holds with >10 GiB to spare, because this job's
+        # concurrency is already cut to 0.22 * CPU (see `nproc` above), which
+        # shrinks the ASan client footprint from ~17 GiB to ~3 GiB.
         memory_cap_source = build_types[0] if is_bugfix_validation else args.options
         if any(san in memory_cap_source for san in SANITIZERS):
-            commands.append(lambda: CH.set_memory_ratio(0.7))
+            memory_ratio = (
+                0.75 if is_distributed_plan and "parallel" in test_options else 0.7
+            )
+            commands.append(lambda: CH.set_memory_ratio(memory_ratio))
 
         if is_flaky_check:
             commands.append(CH.enable_thread_fuzzer_config)
