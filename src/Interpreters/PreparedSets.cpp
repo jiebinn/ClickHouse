@@ -771,7 +771,7 @@ std::variant<std::promise<SetPtr>, SharedSet> PreparedSetsCache::findOrPromiseTo
             if (it->second.future.get() != nullptr)
                 return it->second.future;
         }
-        catch (...) // NOLINT(bugprone-empty-catch)
+        catch (...) // Ok: a failed cached build is intentionally dropped and rebuilt below // NOLINT(bugprone-empty-catch)
         {
             /// The cached build failed; fall through to rebuild it.
         }
