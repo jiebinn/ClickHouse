@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Tags: no-fasttest
+# no-fasttest: the `Avro` format needs the `avrocpp` contrib, which is not built into the Fast test.
 # The `help` CLI command renders an entity's embedded documentation (`system.documentation`) in the
 # terminal. Some pages converted from the website import a shared snippet (a settings table, a
 # data-type mapping) and use it as a self-closing tag, e.g. `<PrettyFormatSettings/>`. On the website
