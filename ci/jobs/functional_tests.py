@@ -442,15 +442,20 @@ def main():
             # and the non-sanitizer distributed-plan parallel jobs (e.g. amd_debug)
             # run comfortably at the default concurrency.
             #
-            # Tuned down in two steps against observed peak RSS on the 32-vCPU
+            # Tuned down in steps against observed peak RSS on the 32-vCPU
             # `c7i.8xlarge` runner (cap 41.84 GiB): 0.35 -> 11 workers hit Code 241
             # at 43.01 GiB (~3% over); 0.3 -> 9 workers still landed right on the
-            # cap (41.90 GiB, ~0.14% over). Each dropped worker sheds ~0.55 GiB of
-            # peak, so 0.25 -> 8 workers leaves ~0.5 GiB (~1.2%) of headroom - the
-            # first value that clears the cap with margin instead of grazing it.
-            # The job's wall-clock was ~2h25m at 9 workers, so the ~11% throughput
-            # loss stays well inside the 3h `timeout` (see `job_configs.py`).
-            nproc = int(Utils.cpu_count() * 0.25)
+            # cap (41.90 GiB, ~0.14% over, 2 rejections); 0.25 -> 8 workers brought
+            # the *sustained* peak just under the cap (41.76 GiB) but one query was
+            # still rejected on a transient spike - a 512 MiB allocation while the
+            # shared server was already at 41.76 GiB, i.e. right on the cap. Since
+            # the victim query is whichever one happens to ask for memory at the
+            # peak (not a uniquely heavy test), the only robust cure is to lower the
+            # baseline further: 0.22 -> 7 workers drops it enough that a transient
+            # spike has room under the cap. The job's total wall-clock was ~2h36m at
+            # 8 workers, so the ~14% throughput loss from one fewer worker (~2h57m)
+            # still fits inside the 3.5h `timeout` (see `job_configs.py`).
+            nproc = int(Utils.cpu_count() * 0.22)
         elif is_per_test_coverage:
             cidb_cluster = CIDBCluster()
             if not info.is_local_run:
