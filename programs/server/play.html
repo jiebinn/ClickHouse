@@ -3246,11 +3246,17 @@ class QueryResultElement extends HTMLElement
         const table = this._dataTable;
         const headers = table.querySelectorAll('th');
 
-        table.style.setProperty('--table-width', `${table.offsetWidth}px`);
+        table.style.setProperty('--table-width', `${table.getBoundingClientRect().width}px`);
 
+        /// Use the exact fractional border-box width. `offsetWidth` rounds the real (fractional)
+        /// layout width to the nearest integer, so it under-reports by up to ~0.5px about half the
+        /// time. With `box-sizing: border-box`, writing that smaller value back shrinks the content
+        /// box by the lost fraction, and the `.name` div (overflow: hidden; text-overflow: ellipsis)
+        /// then clips the title even though it just fit before freezing. CSS `width` accepts
+        /// fractional `px`, so freezing the raw widths preserves the auto-layout geometry exactly.
         let columnWidths = [];
         headers.forEach(header => {
-            columnWidths.push(header.offsetWidth);
+            columnWidths.push(header.getBoundingClientRect().width);
         });
 
         /* Freeze row heights so that absolutely-positioned cell content
