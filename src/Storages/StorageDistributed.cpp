@@ -2660,6 +2660,8 @@ The address expression supports globbing patterns such as `{a,b,c}`, `{N..M}` an
 If `db` and `table` are omitted, `system.one` is used.
 
 The remaining arguments are `user` (default: `default`), `password` (default: empty) and a `sharding_key` expression.
+
+The target may also be a table function, e.g. `Remote('127.0.0.1', numbers(10))`. Such a table is read-only: there is no remote table to insert into, so `INSERT` is rejected with a `NOT_IMPLEMENTED` error.
 )DOCS_MD";
 
     factory.registerStorage("Remote", [create](const StorageFactory::Arguments & args)

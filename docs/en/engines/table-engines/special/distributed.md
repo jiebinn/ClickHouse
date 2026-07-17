@@ -62,6 +62,8 @@ SELECT * FROM remote_one;
 
 This is the persistent equivalent of `CREATE TABLE ... AS remote(...)`. Like the `remote` table function, these engines are convenient but do not let you set up shards and replicas declaratively the way [`Distributed`](#distributed-creating-a-table) over a configured cluster does, so for a permanent, frequently used set of servers prefer defining a cluster and using the `Distributed` engine.
 
+The target may also be a table function, for example `Remote('127.0.0.1', numbers(10))` or `Remote('127.0.0.1', merge(db, '^table_'))`. Unlike the `remote` and `remoteSecure` table functions, which support both `SELECT` and `INSERT`, a table with a table-function target is read-only: there is no remote table to insert into, so `INSERT` is rejected with a `NOT_IMPLEMENTED` exception.
+
 ### Distributed parameters {#distributed-parameters}
 
 | Parameter                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
