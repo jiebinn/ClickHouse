@@ -46,13 +46,13 @@ cleanup
 
 ${CLICKHOUSE_CLIENT} -q "
     CREATE TABLE cancel_race (a UInt32)
-    ENGINE = ReplicatedMergeTree('${ZK_PATH}', 'r1')
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/cancel_race', 'r1')
     PARTITION BY a ORDER BY a;
     CREATE TABLE cancel_race_dst1 (a UInt32)
-    ENGINE = ReplicatedMergeTree('${ZK_PATH}_dst1', 'r1')
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/cancel_race_dst1', 'r1')
     PARTITION BY a ORDER BY a;
     CREATE TABLE cancel_race_dst2 (a UInt32)
-    ENGINE = ReplicatedMergeTree('${ZK_PATH}_dst2', 'r1')
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/$CLICKHOUSE_TEST_ZOOKEEPER_PREFIX/cancel_race_dst2', 'r1')
     PARTITION BY a ORDER BY a;
 "
 
