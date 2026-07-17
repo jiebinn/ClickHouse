@@ -3606,9 +3606,14 @@ function markBootstrapDirty(e) {
 /// cancelling the URL's deferred `run=1` auto-run if it is still pending: the live URL no longer
 /// requests an auto-run, so executing the deferred `postAll` anyway would run the shared query
 /// against a database, server/user or edited query/params the link never specified. Centralizing
-/// the cancellation in `writeHistoryEntry` (rather than at each trusted action that can end up
-/// clearing `run=1` — a database-panel click, a connection-field edit, a query/param edit, a tab
-/// switch) means no future caller needs to remember to set it. `bootstrap_dirty` cannot carry this
+/// the cancellation in the history-write funnel (rather than at each trusted action that can end
+/// up clearing `run=1` — a database-panel click, a connection-field edit, a query/param edit, a
+/// tab switch) means no future caller needs to remember to set it. The funnel has two mouths:
+/// `writeHistoryEntry` for an entry that can be written, and `refreshCurrentHistoryEntry`'s bail
+/// for a current entry that CANNOT (during startup it can still belong to a tab of the previous
+/// page instance — `history.state` survives a reload — until `reconcileStartup` rebinds it); the
+/// bail applies the same `carries_run` rule, so the cancellation is not lost with the write.
+/// `bootstrap_dirty` cannot carry this
 /// signal: none of those actions is a workspace edit (the saved tabs must still be restored and
 /// reconciled as usual), and the pending window extends past `bootstrap_settled` (`reconcileStartup`
 /// keeps awaiting — tab activation, parameter reconciliation — after settling, and
@@ -3815,10 +3820,12 @@ let selected_database = current_url.searchParams.get('database');
 
 /// The (server, user) connection the page loaded with, captured after the startup block above
 /// seeded the connection fields from the URL and before any user edit. While no history entry
-/// exists yet (the bootstrap window, before the first history write), `resetConnectionScopedState`
-/// compares against it to decide whether a trusted connection edit must cancel a deferred startup
-/// auto-run (`defer_run_for_reconcile`), which is armed against this loaded connection. Once an
-/// entry exists, that entry's own `connectionServer`/`connectionUser` stamp is authoritative.
+/// with an authoritative connection stamp exists — the bootstrap window before the first history
+/// write, or a reload whose surviving `history.state` was written by a play.html predating the
+/// stamp — `resetConnectionScopedState` compares against it to decide whether a trusted connection
+/// edit must cancel a deferred startup auto-run (`defer_run_for_reconcile`), which is armed against
+/// this loaded connection. Once a stamped entry exists, that entry's own
+/// `connectionServer`/`connectionUser` stamp is authoritative.
 const initial_connection = {server: url_elem.value, user: user_elem.value};
 
 /// The (server, user) connection the current `selected_database` belongs to.
@@ -6157,6 +6164,38 @@ function effectiveConnectionUser(serverAddress, fieldUser) {
     }
 }
 
+/// Has the live target moved away from the connection/selection the query that produced this run
+/// snapshot (`tab.result`) actually ran against? Compared with the SAME semantic identity as the
+/// restore gate (`window.onpopstate`) and the connection-change invalidation
+/// (`resetConnectionScopedState`): `sameServerAddress` + `effectiveConnectionUser`, with the
+/// selected database a namespace on that pair. So a cosmetic-only URL difference (a root-path
+/// trailing slash, a default port) or a password-only change is not a divergence, matching those
+/// gates, and the databases are compared in canonical effective form (`effectiveDatabase`) so a
+/// snapshot carrying the explicit spelling of the server's current database (a shared/restored
+/// `?database=` URL) is not a divergence from the collapsed `null` live selection — both denote
+/// the same target. (When the snapshot ran against a DIFFERENT server whose database name happens
+/// to match the live server's current one, the collapse cannot mask it: the connection comparisons
+/// below still flag the divergence.) Used by `writeHistoryEntry` to decide whether a run entry may
+/// keep describing the producing snapshot (and carry `run=1`), and by `refreshCurrentHistoryEntry`
+/// to make the same call when the entry cannot be written at all.
+function liveDivergedFromRun(run_snapshot) {
+    /// A snapshot saved before the producing connection was recorded (a legacy tab restored from
+    /// persistence) carries no `url`/`user`, so the connection it ran against is UNKNOWN. It cannot
+    /// be proven reproducible on the live connection, so it always counts as diverged (fail
+    /// closed): `run=1` is dropped and the live connection is stamped, never claiming the legacy
+    /// result is reproducible on the current server — which would otherwise auto-run the old query
+    /// on the wrong one on reload/share. A fresh run always records `url`/`user` (empty strings for
+    /// the default same-origin connection), so only pre-upgrade snapshots take this branch.
+    const snapshot_connection_known = !!run_snapshot
+        && run_snapshot.url !== undefined && run_snapshot.user !== undefined;
+    return !!run_snapshot && (
+           !snapshot_connection_known
+        || effectiveDatabase(selected_database) !== effectiveDatabase(run_snapshot.database)
+        || !sameServerAddress(run_snapshot.url, url_elem.value)
+        || effectiveConnectionUser(run_snapshot.url, run_snapshot.user)
+            !== effectiveConnectionUser(url_elem.value, user_elem.value));
+}
+
 /// Write a browser-history entry + URL derived from the tab. The top-level query/params
 /// are the EDITOR state (also the URL hash and the de-dup key); `result` is the snapshot
 /// that produced the rendered result, carrying its OWN query/params so rendering/download
@@ -6192,33 +6231,9 @@ function writeHistoryEntry(tab, titleForDoc, forceReplace, fromRun) {
     ///     as diverged, so `run=1` is dropped and the live connection is stamped (fail closed) rather
     ///     than claiming the legacy result is reproducible on the live server (see below).
     const run_snapshot = fromRun ? tab.result : null;
-    /// A snapshot saved before the producing connection was recorded (a legacy tab restored from
-    /// persistence) carries no `url`/`user`, so the connection it ran against is UNKNOWN. It cannot
-    /// be proven reproducible on the live connection, so it is treated as diverged below (fail
-    /// closed): `run=1` is dropped and the live connection is stamped, never claiming the legacy
-    /// result is reproducible on the current server — which would otherwise auto-run the old query
-    /// on the wrong one on reload/share. A fresh run always records `url`/`user` (empty strings for
-    /// the default same-origin connection), so only pre-upgrade snapshots take this branch.
-    const snapshot_connection_known = !!run_snapshot
-        && run_snapshot.url !== undefined && run_snapshot.user !== undefined;
-    /// Has the live target moved away from the connection/selection the query actually ran against?
-    /// Compared with the SAME semantic identity as the restore gate (`window.onpopstate`) and the
-    /// connection-change invalidation (`resetConnectionScopedState`): `sameServerAddress` +
-    /// `effectiveConnectionUser`, with the selected database a namespace on that pair. So a
-    /// cosmetic-only URL difference (a root-path trailing slash, a default port) or a password-only
-    /// change is not a divergence, matching those gates, and the databases are compared in canonical
-    /// effective form (`effectiveDatabase`) so a snapshot carrying the explicit spelling of the
-    /// server's current database (a shared/restored `?database=` URL) is not a divergence from the
-    /// collapsed `null` live selection — both denote the same target. (When the snapshot ran against
-    /// a DIFFERENT server whose database name happens to match the live server's current one, the
-    /// collapse cannot mask it: the connection comparisons below still flag the divergence.) An
-    /// unknown producing connection (a legacy snapshot) always counts as diverged.
-    const live_diverged = !!run_snapshot && (
-           !snapshot_connection_known
-        || effectiveDatabase(selected_database) !== effectiveDatabase(run_snapshot.database)
-        || !sameServerAddress(run_snapshot.url, url_elem.value)
-        || effectiveConnectionUser(run_snapshot.url, run_snapshot.user)
-            !== effectiveConnectionUser(url_elem.value, user_elem.value));
+    /// See `liveDivergedFromRun` for the identity semantics (an unknown producing connection —
+    /// a legacy snapshot without `url`/`user` — always counts as diverged, fail closed).
+    const live_diverged = liveDivergedFromRun(run_snapshot);
     const use_snapshot = !!run_snapshot && !live_diverged;
     const entry_database = use_snapshot ? run_snapshot.database : selected_database;
     const entry_server = use_snapshot ? run_snapshot.url : url_elem.value;
@@ -6309,7 +6324,19 @@ function tabReflectsRun(tab) {
 /// stays reproducible from a shared `run=1` link.
 ///
 /// When an entry already exists it must belong to this tab — refreshing another tab's entry
-/// would clobber it, so bail in that case. When there is NO state yet we still seed one: a
+/// would clobber it, so bail in that case. The bail must still make the deferred-run decision,
+/// though: `history.state` survives a reload, so during startup the current entry can still
+/// belong to a tab of the PREVIOUS page instance while the active tab is only the fresh
+/// bootstrap tab (`reconcileStartup` rebinds them later). A trusted mutation in that window — a
+/// database-panel click, a connection edit, a tab operation — reaches this bail instead of
+/// `writeHistoryEntry`, yet it moved the live target away from what the deferred `run=1`
+/// auto-run was armed for, so it must cancel that run exactly as the entry write would have
+/// (see `deferred_run_cancelled` above `reconcileStartup`). The same `carries_run` rule as
+/// `writeHistoryEntry` is applied: cancel unless the tab still reflects a run whose producing
+/// connection matches the live one. Setting the flag on a post-startup bail is harmless — it is
+/// never consulted again after `reconcileStartup` has made its decision.
+///
+/// When there is NO state yet we still seed one: a
 /// fresh load leaves `history.state` null until the first `syncHistory`/`postAll`, and the very
 /// first trusted edit can land before `reconcileStartup` runs any of those (the no-saved-tabs
 /// bare-URL path and the dirty-startup merge never call them). That initial entry is the page's
@@ -6321,7 +6348,10 @@ function tabReflectsRun(tab) {
 function refreshCurrentHistoryEntry(tab) {
     if (!tab) return;
     const cur = history.state;
-    if (cur && cur.tabId !== tab.id) return;
+    if (cur && cur.tabId !== tab.id) {
+        if (!(tabReflectsRun(tab) && !liveDivergedFromRun(tab.result))) deferred_run_cancelled = true;
+        return;
+    }
     writeHistoryEntry(tab, undefined, /*forceReplace=*/ true, /*fromRun=*/ tabReflectsRun(tab));
 }
 
@@ -7994,10 +8024,9 @@ function resetConnectionScopedState() {
     /// Compared with the SAME (`sameServerAddress`, `effectiveConnectionUser`) identity as the restore
     /// gate (`window.onpopstate`) and `writeHistoryEntry`'s `live_diverged`, so a cosmetic URL edit (a
     /// root-path trailing slash, a default port) or a password-only change keeps the identity and does
-    /// NOT churn the entry. An entry without a `connectionServer` stamp (a legacy pre-feature entry) is
-    /// left alone: startup already dropped its `run=1` (`writeHistoryEntry` fails closed on an unknown
-    /// producing connection), so it carries no stale-run hazard to fix, and we have no stored
-    /// connection to compare it against. When it did diverge, restamp from the active tab exactly as
+    /// NOT churn the entry. An entry without a `connectionServer` stamp (one written by a play.html
+    /// predating the stamp) gives no producing connection to compare against here; it is covered by
+    /// the bootstrap term below instead. When it did diverge, restamp from the active tab exactly as
     /// `commitSelectedDatabase` does — `writeHistoryEntry` then drops `run=1` and rewrites `url=`/`user=`
     /// for the live target (or, for a still-matching run entry, keeps the producing snapshot verbatim).
     const current_entry = history.state;
@@ -8012,13 +8041,17 @@ function resetConnectionScopedState() {
     /// run just as it would once an entry existed — otherwise a fresh server-default `?run=1#...`
     /// link (no `database=`, so `cleared_selection` stays false; no `history.state`, so
     /// `connection_diverged` stays false) would auto-execute the shared query against the just-edited
-    /// server/user the link never named. Compared with the SAME (`sameServerAddress`,
-    /// `effectiveConnectionUser`) identity, so a cosmetic edit (a root-path trailing slash, a default
-    /// port) or a password-only change neither churns the entry nor suppresses the legitimate
-    /// auto-run. A legacy entry that exists but carries no stamp is still left alone (both terms are
-    /// false there: `connection_diverged` by its `connectionServer !== undefined` guard, this one by
-    /// `!current_entry`), matching the previous behavior for such entries.
-    const bootstrap_connection_diverged = !current_entry
+    /// server/user the link never named. An entry that EXISTS but carries no `connectionServer`
+    /// stamp — `history.state` survives a reload, so a `?run=1#...` reload from an entry written by
+    /// a play.html predating the stamp lands here — is the same case: there is no authoritative
+    /// connection stamp yet, only the connection the page loaded with, so fall back to
+    /// `initial_connection` for it too. Without that, neither term fires (`connection_diverged` by
+    /// its `connectionServer !== undefined` guard, this one by `!current_entry`) and the deferred
+    /// run would still execute against the edited connection. Compared with the SAME
+    /// (`sameServerAddress`, `effectiveConnectionUser`) identity, so a cosmetic edit (a root-path
+    /// trailing slash, a default port) or a password-only change neither churns the entry nor
+    /// suppresses the legitimate auto-run.
+    const bootstrap_connection_diverged = (!current_entry || current_entry.connectionServer === undefined)
         && (!sameServerAddress(initial_connection.server, url_elem.value)
             || effectiveConnectionUser(initial_connection.server, initial_connection.user)
                 !== effectiveConnectionUser(url_elem.value, user_elem.value));
