@@ -4091,11 +4091,26 @@ function effectiveDatabase(database) {
 /// The selection is stored in canonical effective form (`effectiveDatabase`): selecting the
 /// server's already-current database is semantically identical to leaving the selection unset, so
 /// it collapses back to `null`, and an explicit click on the highlighted current row (with no prior
-/// selection) is not treated as a database change.
+/// selection) is not treated as a database change — so the current history entry is left untouched,
+/// because a rewrite would drop `run=1` and cancel a deferred startup auto-run for a click that
+/// changed nothing.
 function commitSelectedDatabase(database) {
-    selected_database = effectiveDatabase(database);
+    const new_selection = effectiveDatabase(database);
+    /// Whether the click actually changes the effective target database. Both sides are compared in
+    /// canonical form (`effectiveDatabase`) so that re-selecting the already-current database —
+    /// whether it is held as `null` (nothing selected) or as its explicit spelling seeded verbatim
+    /// from a `?database=` URL — is recognized as a no-op rather than a change.
+    const selection_changed = new_selection !== effectiveDatabase(selected_database);
+    selected_database = new_selection;
     stampSelectedDatabaseConnection();
     applySelectedDatabaseHighlight();
+    /// A semantic no-op (e.g. clicking the already-selected database just to expand its table list)
+    /// must not rewrite the current history entry: on a fresh `?run=1&database=<selected>#...`
+    /// bootstrap load the tab still has no result, so the rewrite below would drop `run=1` and — via
+    /// `writeHistoryEntry` — set `deferred_run_cancelled`, cancelling the deferred startup auto-run
+    /// even though the target database is unchanged, so the shared query would never run. Restamp
+    /// the entry only when the effective selection actually changed.
+    if (!selection_changed) return;
     captureActiveTab();
     /// The entry rewrite below drops `run=1` while the bootstrap tab has no result yet, which
     /// itself cancels a still-deferred startup auto-run (see `deferred_run_cancelled` and
