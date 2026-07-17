@@ -84,7 +84,12 @@ public:
             return;
 
         sorted = false;
-        ++total_values;
+        /// Keep `total_values` saturated once it hits the max. A saturated state (e.g. from
+        /// multiplying an aggregate state by a huge constant) can be merged into another via
+        /// the insert() branch of merge(); a plain ++ would wrap SIZE_MAX to 0 and reach
+        /// genRandom(0), which is UB / a debug assert failure.
+        if (total_values != std::numeric_limits<size_t>::max())
+            ++total_values;
         if (samples.size() < sample_count)
         {
             samples.push_back(v);

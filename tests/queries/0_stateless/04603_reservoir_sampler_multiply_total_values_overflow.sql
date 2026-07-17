@@ -20,3 +20,10 @@ SELECT length(toString(finalizeAggregation(1000000000000000000 * (SELECT quantil
 -- Numerical correctness is unchanged for small multipliers: median of [0, 100000) is 50501.5.
 SELECT finalizeAggregation(10 * (SELECT medianState(number) FROM numbers(100000)));
 SELECT finalizeAggregation(1 * (SELECT medianState(number) FROM numbers(100000)));
+
+-- A saturated (total_values = SIZE_MAX) state merged with a small state routes through
+-- ReservoirSampler::insert (the two small-reservoir branches of merge). A plain ++total_values
+-- there would wrap SIZE_MAX to 0 and reach genRandom(0) = UB / debug assert. Cover both
+-- operand orders: saturated + small and small + saturated.
+SELECT length(toString(finalizeAggregation((18446744073709551615 * (SELECT medianState(number) FROM numbers(100000))) + (SELECT medianState(number) FROM numbers(1)))));
+SELECT length(toString(finalizeAggregation((SELECT medianState(number) FROM numbers(1)) + (18446744073709551615 * (SELECT medianState(number) FROM numbers(100000))))));
