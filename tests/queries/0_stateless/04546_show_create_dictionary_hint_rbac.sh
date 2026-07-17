@@ -33,6 +33,21 @@ ${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.secret_ta
 ${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.secret_targe" 2>&1 \
     | grep -oF -m1 "Maybe you meant ${DB}.secret_target?" | sed "s/${DB}/{db}/g"
 
+# It is not only the typo hint that must not leak the table: an *exact* probe must not either.
+# `SHOW CREATE DICTIONARY ${DB}.secret_target` names a real regular table, not a dictionary. For a
+# dictionary-only user this must be reported as a missing dictionary - identical to a name that does
+# not exist - never as "... is not a DICTIONARY", which would confirm the hidden table exists.
+# (grep -m1 -c: with --send_logs_level the server may also echo the exception as a log event, so the
+# message can appear more than once; cap the count at a single match to stay deterministic.)
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.secret_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.secret_target" 2>&1 \
+    | grep -m1 -c -F "There is no dictionary" || true
+
+# Sanity check: a user with full visibility keeps the precise "is not a DICTIONARY" diagnostic.
+${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.secret_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+
 # A closer *hidden table* must not mask a farther *visible dictionary* for a dictionary-only user.
 # `mask_target` (a table) is one edit away from the typo `mask_targe`; `mask_targets` (a dictionary)
 # is two. The visibility check must look past the closer table and still suggest the dictionary,
