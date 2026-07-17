@@ -33,4 +33,23 @@ ${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.secret_ta
 ${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.secret_targe" 2>&1 \
     | grep -oF -m1 "Maybe you meant ${DB}.secret_target?" | sed "s/${DB}/{db}/g"
 
+# A closer *hidden table* must not mask a farther *visible dictionary* for a dictionary-only user.
+# `mask_target` (a table) is one edit away from the typo `mask_targe`; `mask_targets` (a dictionary)
+# is two. The visibility check must look past the closer table and still suggest the dictionary,
+# rather than giving up and returning the bare error.
+${CLICKHOUSE_CLIENT} -q "CREATE TABLE ${DB}.mask_target (key UInt64, val UInt64) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} -q "CREATE DICTIONARY ${DB}.mask_targets (key UInt64 DEFAULT 0, val UInt64 DEFAULT 0) PRIMARY KEY key SOURCE(CLICKHOUSE(TABLE 'mask_target' DB '${DB}')) LIFETIME(MIN 0 MAX 0) LAYOUT(FLAT())"
+
+# The dictionary-only user is pointed at the visible dictionary, not left with no hint.
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_targe" 2>&1 \
+    | grep -oF -m1 "Maybe you meant ${DB}.mask_targets?" | sed "s/${DB}/{db}/g"
+
+# And the closer hidden table's name must never leak into the hint for that user.
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_targe" 2>&1 \
+    | grep -c -F "meant ${DB}.mask_target?" || true
+
+# Sanity check: a user with full visibility gets the closest match, which is the table.
+${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.mask_targe" 2>&1 \
+    | grep -oF -m1 "Maybe you meant ${DB}.mask_target?" | sed "s/${DB}/{db}/g"
+
 ${CLICKHOUSE_CLIENT} -q "DROP USER ${USER}"

@@ -39,6 +39,13 @@ private:
     /// a single typo cannot foreground-load every table in the database.
     bool isHintNameVisible(const String & name) const;
 
+    /// How many ranked candidates the hint search considers before applying the visibility check.
+    /// The user-facing message still shows a single suggestion; several candidates are examined only
+    /// so that a closer hidden table cannot mask a farther but visible dictionary for a
+    /// `SHOW_DICTIONARIES`-only user (see `getHintForTable`). Kept small so that, in the worst case,
+    /// only a handful of tables are loaded by `isHintNameVisible` while formatting one hint.
+    static constexpr size_t max_hint_candidates = 10;
+
     ContextPtr context;
     ConstDatabasePtr database;
 };

@@ -2340,17 +2340,33 @@ DDLGuard::~DDLGuard()
 
 std::pair<String, String> TableNameHints::getHintForTable(const String & table_name) const
 {
-    auto results = this->getHints(table_name, getAllRegisteredNames());
-    /// Skip exact match from the same database - suggesting the same name is not helpful.
+    /// Ask the prompter for several ranked candidates (closest first), not only the single closest
+    /// one. A `SHOW_DICTIONARIES`-only grant can make the closest raw name a hidden table that must
+    /// not be suggested; in that case we still want to offer a slightly farther dictionary the user
+    /// is allowed to see, instead of masking it and falling back to the bare error.
+    auto results = NamePrompter<max_hint_candidates>::getHints(table_name, getAllRegisteredNames());
+
+    /// Skip an exact match from the same database - suggesting the same name is not helpful.
     /// This can happen when a table name appears in `getAllRegisteredNames` but the table
     /// itself cannot be retrieved (e.g., during server startup when a table has not yet been loaded,
     /// or when the table is looked up by a stale UUID and a new table with the same name exists).
-    /// Also skip a match the user is not actually allowed to see - verified here, for the single
-    /// closest candidate only, so the check does not load every table in the database.
-    /// In each case fall through to extended search, which may find the table in another database.
-    if (results.empty() || results[0] == table_name || !isHintNameVisible(results[0]))
+    /// The closest candidate has distance zero when an exact match exists, so it is `results[0]`.
+    /// Fall through to extended search, which may find the table in another database.
+    if (results.empty() || results[0] == table_name)
         return getExtendedHintForTable(table_name);
-    return std::make_pair(database->getDatabaseName(), results[0]);
+
+    /// Return the closest candidate the user is actually allowed to see. Scanning past hidden names
+    /// (rather than checking only the closest) is what lets a `SHOW_DICTIONARIES`-only user still get
+    /// a dictionary hint when a closer hidden table would otherwise mask it. The visibility check is
+    /// cheap for `SHOW_TABLES`-covered names and loads at most one table per remaining candidate.
+    for (const auto & candidate : results)
+    {
+        if (isHintNameVisible(candidate))
+            return std::make_pair(database->getDatabaseName(), candidate);
+    }
+
+    /// Nothing visible in this database - the table may still exist in another one.
+    return getExtendedHintForTable(table_name);
 }
 
 std::pair<String, String> TableNameHints::getExtendedHintForTable(const String & table_name) const
@@ -2384,17 +2400,24 @@ std::pair<String, String> TableNameHints::getExtendedHintForTable(const String &
             continue;
 
         TableNameHints hints(db, context);
-        auto results = hints.getHints(table_name);
-        /// As in `getHintForTable`, verify the single closest candidate is one the user may see
-        /// (only loads that one table, and only when it is not covered by `SHOW_TABLES`).
-        if (results.empty() || !hints.isHintNameVisible(results[0]))
-            continue;
-
-        size_t distance = levenshteinDistanceCaseInsensitive(results[0], table_name);
-        if (distance < best_distance)
+        auto results = NamePrompter<max_hint_candidates>::getHints(table_name, hints.getAllRegisteredNames());
+        /// As in `getHintForTable`, pick the closest candidate the user may actually see. Scanning
+        /// past hidden names (rather than checking only the closest) means a `SHOW_DICTIONARIES`-only
+        /// user still gets a dictionary hint when a closer hidden table would otherwise mask it.
+        for (const auto & candidate : results)
         {
-            best_distance = distance;
-            best_match = std::make_pair(db_name, results[0]);
+            if (!hints.isHintNameVisible(candidate))
+                continue;
+
+            /// Candidates are ordered closest-first, so the first visible one is the closest visible
+            /// one for this database and no farther candidate here can beat it.
+            size_t distance = levenshteinDistanceCaseInsensitive(candidate, table_name);
+            if (distance < best_distance)
+            {
+                best_distance = distance;
+                best_match = std::make_pair(db_name, candidate);
+            }
+            break;
         }
     }
     return best_match;
@@ -2456,8 +2479,21 @@ bool TableNameHints::isHintNameVisible(const String & name) const
     /// never the whole database.
     if (access->isGranted(AccessType::SHOW_DICTIONARIES, database_name, name))
     {
-        auto table = database->tryGetTable(name, context);
-        return table && table->isDictionary();
+        /// Fail closed. `TableNameHints` is shared by generic unknown-table lookups
+        /// (`IDatabase::getTable`, `DatabaseCatalog::tryGetTable`, `IdentifierResolver`, ...), not
+        /// only by the guarded `SHOW CREATE` wrapper, and `tryGetTable` on ordinary/atomic databases
+        /// waits for the matched table to start up and rethrows any load error. Computing a hint must
+        /// never replace the original `UNKNOWN_TABLE` with an unrelated startup/load failure, so treat
+        /// any such error - like a name that turned out not to be a dictionary - as "not visible".
+        try
+        {
+            auto table = database->tryGetTable(name, context);
+            return table && table->isDictionary();
+        }
+        catch (...)
+        {
+            return false;
+        }
     }
 
     return false;
