@@ -16,6 +16,14 @@ trap '
     $CLICKHOUSE_CLIENT --query "SYSTEM DISABLE FAILPOINT merge_tree_background_task_marked_for_deletion" 2>/dev/null || true
 ' EXIT
 
+# Remember when the test started so the final assertion only inspects log entries this test produced.
+# When a zero-copy lock is released without a Keeper component under enforce_keeper_component_tracking,
+# the "Current component is empty ..." LOGICAL_ERROR is caught and logged instead of aborting the
+# server (~ZooKeeperLock swallows unlock exceptions, and the background moves executor swallows task
+# exceptions). Checking server liveness therefore cannot distinguish the fixed and broken code; the
+# text_log below can.
+start_time=$($CLICKHOUSE_CLIENT --query "SELECT now64(6)")
+
 $CLICKHOUSE_CLIENT --query "
     SET insert_keeper_fault_injection_probability = 0;
 
@@ -49,8 +57,8 @@ $CLICKHOUSE_CLIENT --query "SYSTEM ENABLE FAILPOINT merge_tree_background_task_m
 
 # Drop the table while the mutation task still holds the zero-copy lock. DROP TABLE ... SYNC drives
 # partialShutdown -> background_operations_assignee.finish -> removeTasksCorrespondingToStorage,
-# which flags the task and then hits the failpoint above. Run it in the background (its output is
-# irrelevant); it blocks until both failpoints are released.
+# which flags the task and then hits the failpoint above. Run it in the background (its stdout is
+# irrelevant, but its exit status is checked below); it blocks until both failpoints are released.
 $CLICKHOUSE_CLIENT --query "DROP TABLE rmt SYNC" > /dev/null 2>&1 &
 drop_pid=$!
 
@@ -68,17 +76,16 @@ $CLICKHOUSE_CLIENT --query "SYSTEM DISABLE FAILPOINT rmt_mutate_task_pause_after
 # Let removeTasksCorrespondingToStorage proceed to wait for the (now destroyed) task, so DROP finishes.
 $CLICKHOUSE_CLIENT --query "SYSTEM DISABLE FAILPOINT merge_tree_background_task_marked_for_deletion;"
 
-# Do not let the (irrelevant) exit status of the background DROP abort the script under `set -e`.
-wait "$drop_pid" || true
-
-# The server must still be alive.
-$CLICKHOUSE_CLIENT --query "SELECT 1;"
+# The background DROP must complete cleanly (its result is no longer discarded). If the mutation task
+# teardown wedged the drop, `wait` returns non-zero and `set -e` fails the test here.
+wait "$drop_pid"
 
 # Second scope: the zero-copy part-move path. MergeTreeData::moveParts acquires/uses/releases a
 # local ZeroCopyLock (tryCreateZeroCopyExclusiveLock does Keeper I/O), so it must run under a
-# Keeper component too. A synchronous ALTER ... MOVE PART runs moveParts directly on the query
-# thread, with no component set upstream, so with enforce_keeper_component_tracking enabled this
-# used to abort the server with "Current component is empty ...".
+# Keeper component too. A synchronous ALTER ... MOVE PART runs moveParts on the query thread under
+# StorageReplicatedMergeTree::alter's existing component scope, so it never exercises the bug.
+# alter_move_to_space_execute_async = 1 instead schedules the move on a background moves thread via
+# ExecutableLambdaAdapter, with no component set upstream - exactly the path the new guard fixes.
 $CLICKHOUSE_CLIENT --query "
     SET insert_keeper_fault_injection_probability = 0;
 
@@ -89,10 +96,31 @@ $CLICKHOUSE_CLIENT --query "
 
     INSERT INTO mv VALUES (1, 1) (2, 2) (3, 3);
 
+    SET alter_move_to_space_execute_async = 1;
     ALTER TABLE mv MOVE PART 'all_0_0_0' TO DISK 's3_disk';
-
-    DROP TABLE mv SYNC;
 "
 
-# The server must still be alive after the move.
-$CLICKHOUSE_CLIENT --query "SELECT 1;"
+# Wait until the background move has actually relocated the part to s3_disk. Without the
+# MergeTreeData::moveParts guard the background task throws "Current component is empty" under
+# enforce_keeper_component_tracking before the move can happen, so the part never lands on s3_disk
+# and this loop times out (leaving the count below at 0, which fails the test).
+for _ in {1..600}; do
+    moved=$($CLICKHOUSE_CLIENT --query "SELECT count() FROM system.parts WHERE database = currentDatabase() AND table = 'mv' AND active AND disk_name = 's3_disk'")
+    [ "$moved" = "1" ] && break
+    sleep 0.1
+done
+
+# Assert the part moved to s3_disk (proves the guarded background moveParts path completed).
+$CLICKHOUSE_CLIENT --query "SELECT count() FROM system.parts WHERE database = currentDatabase() AND table = 'mv' AND active AND disk_name = 's3_disk';"
+
+$CLICKHOUSE_CLIENT --query "DROP TABLE mv SYNC;"
+
+# The observable that discriminates the fix from the bug: with the guard removed, both scopes above
+# log "Current component is empty ..." (~ZooKeeperLock and the background moves executor catch the
+# LOGICAL_ERROR instead of aborting). Assert that no such message was produced by this test.
+$CLICKHOUSE_CLIENT --query "SYSTEM FLUSH LOGS text_log;"
+$CLICKHOUSE_CLIENT --query "
+    SELECT count() FROM system.text_log
+    WHERE event_time_microseconds >= toDateTime64('$start_time', 6)
+      AND message LIKE '%Current component is empty%';
+"
