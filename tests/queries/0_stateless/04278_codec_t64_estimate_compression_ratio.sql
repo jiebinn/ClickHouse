@@ -5,84 +5,84 @@
 
 SELECT 'T64 default';
 
-DROP TABLE IF EXISTS t_t64;
+DROP TABLE IF EXISTS t64_default;
 
-CREATE TABLE t_t64 (x UInt32 CODEC(T64))
+CREATE TABLE t64_default (x UInt32 CODEC(T64))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS min_bytes_for_wide_part = 0, min_compress_block_size = 0, max_compress_block_size = 65536;
 
-INSERT INTO t_t64 SELECT number FROM numbers(100000);
+INSERT INTO t64_default SELECT number FROM numbers(100000);
 
 SELECT
     column_data_compressed_bytes AS on_disk_bytes,
     toUInt64(round(column_data_uncompressed_bytes /
-                   (SELECT estimateCompressionRatio('T64', 65536)(x) FROM t_t64))) AS aggregate_predicted_bytes,
+                   (SELECT estimateCompressionRatio('T64', 65536)(x) FROM t64_default))) AS aggregate_predicted_bytes,
     on_disk_bytes = aggregate_predicted_bytes AS matches
 FROM system.parts_columns
-WHERE database = currentDatabase() AND table = 't_t64' AND active AND column = 'x';
+WHERE database = currentDatabase() AND table = 't64_default' AND active AND column = 'x';
 
-DROP TABLE t_t64;
+DROP TABLE t64_default;
 
 
 SELECT 'T64 byte';
 
-DROP TABLE IF EXISTS t_t64;
+DROP TABLE IF EXISTS t64_byte;
 
-CREATE TABLE t_t64 (x UInt32 CODEC(T64('byte')))
+CREATE TABLE t64_byte (x UInt32 CODEC(T64('byte')))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS min_bytes_for_wide_part = 0, min_compress_block_size = 0, max_compress_block_size = 65536;
 
-INSERT INTO t_t64 SELECT number FROM numbers(100000);
+INSERT INTO t64_byte SELECT number FROM numbers(100000);
 
 SELECT
     column_data_compressed_bytes AS on_disk_bytes,
     toUInt64(round(column_data_uncompressed_bytes /
-                   (SELECT estimateCompressionRatio('T64(\'byte\')', 65536)(x) FROM t_t64))) AS aggregate_predicted_bytes,
+                   (SELECT estimateCompressionRatio('T64(\'byte\')', 65536)(x) FROM t64_byte))) AS aggregate_predicted_bytes,
     on_disk_bytes = aggregate_predicted_bytes AS matches
 FROM system.parts_columns
-WHERE database = currentDatabase() AND table = 't_t64' AND active AND column = 'x';
+WHERE database = currentDatabase() AND table = 't64_byte' AND active AND column = 'x';
 
-DROP TABLE t_t64;
+DROP TABLE t64_byte;
 
 
 SELECT 'T64 bit';
 
-DROP TABLE IF EXISTS t_t64;
+DROP TABLE IF EXISTS t64_bit;
 
-CREATE TABLE t_t64 (x UInt32 CODEC(T64('bit')))
+CREATE TABLE t64_bit (x UInt32 CODEC(T64('bit')))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS min_bytes_for_wide_part = 0, min_compress_block_size = 0, max_compress_block_size = 65536;
 
-INSERT INTO t_t64 SELECT number FROM numbers(100000);
+INSERT INTO t64_bit SELECT number FROM numbers(100000);
 
 SELECT
     column_data_compressed_bytes AS on_disk_bytes,
     toUInt64(round(column_data_uncompressed_bytes /
-                   (SELECT estimateCompressionRatio('T64(\'bit\')', 65536)(x) FROM t_t64))) AS aggregate_predicted_bytes,
+                   (SELECT estimateCompressionRatio('T64(\'bit\')', 65536)(x) FROM t64_bit))) AS aggregate_predicted_bytes,
     on_disk_bytes = aggregate_predicted_bytes AS matches
 FROM system.parts_columns
-WHERE database = currentDatabase() AND table = 't_t64' AND active AND column = 'x';
+WHERE database = currentDatabase() AND table = 't64_bit' AND active AND column = 'x';
 
-DROP TABLE t_t64;
+DROP TABLE t64_bit;
 
 
 SELECT 'T64 Int64 cross-zero';
 
-DROP TABLE IF EXISTS t_t64;
+DROP TABLE IF EXISTS t64_int64_cross_zero;
 
-CREATE TABLE t_t64 (x Int64 CODEC(T64))
+CREATE TABLE t64_int64_cross_zero (x Int64 CODEC(T64))
 ENGINE = MergeTree ORDER BY tuple()
 SETTINGS min_bytes_for_wide_part = 0, min_compress_block_size = 0, max_compress_block_size = 65536;
 
 -- Values span both sides of zero, exercising the signed cross-zero branch of `getValuableBitsNumber`.
-INSERT INTO t_t64 SELECT toInt64(number) - 50000 FROM numbers(100000);
+INSERT INTO t64_int64_cross_zero SELECT toInt64(number) - 50000 FROM numbers(100000);
 
 SELECT
     column_data_compressed_bytes AS on_disk_bytes,
     toUInt64(round(column_data_uncompressed_bytes /
-                   (SELECT estimateCompressionRatio('T64', 65536)(x) FROM t_t64))) AS aggregate_predicted_bytes,
+                   (SELECT estimateCompressionRatio('T64', 65536)(x) FROM t64_int64_cross_zero))) AS aggregate_predicted_bytes,
     on_disk_bytes = aggregate_predicted_bytes AS matches
 FROM system.parts_columns
-WHERE database = currentDatabase() AND table = 't_t64' AND active AND column = 'x';
+WHERE database = currentDatabase() AND table = 't64_int64_cross_zero' AND active AND column = 'x';
 
-DROP TABLE t_t64;
+DROP TABLE t64_int64_cross_zero;
