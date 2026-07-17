@@ -1206,10 +1206,11 @@ SELECT
 
     FunctionDocumentation::Description description_reinterpret = R"(
 Uses the same source in-memory bytes sequence for the provided value `x` and reinterprets it to the destination type.
+When the destination type is `String`, a source `Array` is supported only if its element type is fixed size and contiguous in memory (for example, `Array(UInt8)` or `Array(FixedString(2))`); its element bytes are copied verbatim in their native in-memory order, so the result can be reinterpreted back to the original `Array` type on any architecture. Arrays whose elements are variable-length (for example, `Array(String)`) or nullable (for example, `Array(Nullable(Int32))`) are not supported.
     )";
     FunctionDocumentation::Syntax syntax_reinterpret = "reinterpret(x, type)";
     FunctionDocumentation::Arguments arguments_reinterpret = {
-        {"x", "Any type.", {"Any"}},
+        {"x", "Value to reinterpret. When reinterpreting to `String`, a source `Array` must have fixed-size, contiguous elements.", {"Any"}},
         {"type", "Destination type. If it is an array, then the array element type must be a fixed length type.", {"String"}}
     };
     FunctionDocumentation::ReturnedValue returned_value_reinterpret = {"Destination type value.", {"Any"}};
