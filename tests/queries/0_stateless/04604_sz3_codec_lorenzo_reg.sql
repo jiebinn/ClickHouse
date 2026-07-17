@@ -35,6 +35,9 @@ SELECT count() = 100000, max(abs(orig - val)) <= 0.011 FROM tab_sz3_lorenzo_reg;
 
 SELECT 'The same holds after a merge recompresses the data';
 OPTIMIZE TABLE tab_sz3_lorenzo_reg FINAL;
-SELECT count() = 100000, max(abs(orig - val)) <= 0.011 FROM tab_sz3_lorenzo_reg;
+-- A merge decompresses and recompresses the column through the lossy codec, so every pass adds up to
+-- the ABS bound (0.01) on top of the previous one. The initial write, a possible concurrent background
+-- merge of the two parts, and the OPTIMIZE FINAL rewrite give at most three lossy passes.
+SELECT count() = 100000, max(abs(orig - val)) <= 0.031 FROM tab_sz3_lorenzo_reg;
 
 DROP TABLE tab_sz3_lorenzo_reg;
