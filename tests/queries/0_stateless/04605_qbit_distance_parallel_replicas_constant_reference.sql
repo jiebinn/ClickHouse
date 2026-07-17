@@ -46,3 +46,39 @@ SETTINGS enable_parallel_replicas = 1, automatic_parallel_replicas_mode = 0, max
          parallel_replicas_min_number_of_rows_per_replica = 0;
 
 DROP TABLE qbit_pr_const;
+
+-- A constant reference vector whose serialized name exceeds `optimize_const_name_size` (256, the default).
+-- Such an over-threshold constant is rewritten by `buildQueryTreeForShard`'s `ReplaceLongConstWithScalarVisitor`
+-- into `__getScalar('<hash>')` before the query is shipped to a replica, so the reference must still be named
+-- identically on the initiator and the replica -- otherwise the initiator cannot find the column in blocks
+-- received from remote replicas (the same NOT_FOUND_COLUMN_IN_BLOCK class as above, raised in review of #110729).
+-- A 128-element reference vector has a name longer than 256 characters.
+DROP TABLE IF EXISTS qbit_pr_const_large;
+
+CREATE TABLE qbit_pr_const_large
+(
+    id UInt32,
+    v  Array(Float32),
+    qb QBit(BFloat16, 128, 16) DEFAULT CAST(v, 'Array(BFloat16)')
+)
+ENGINE = MergeTree ORDER BY id;
+
+INSERT INTO qbit_pr_const_large (id, v) SELECT number, arrayMap(i -> toFloat32(i + number), range(128)) FROM numbers(1000);
+
+-- Without parallel replicas.
+WITH arrayMap(i -> toFloat32(i), range(128)) AS ref
+SELECT id FROM qbit_pr_const_large
+ORDER BY cosineDistanceTransposed(qb, ref, 16) ASC, id ASC
+LIMIT 3;
+
+-- With parallel replicas, reading from remote replicas only.
+WITH arrayMap(i -> toFloat32(i), range(128)) AS ref
+SELECT id FROM qbit_pr_const_large
+ORDER BY cosineDistanceTransposed(qb, ref, 16) ASC, id ASC
+LIMIT 3
+SETTINGS enable_parallel_replicas = 1, automatic_parallel_replicas_mode = 0, max_parallel_replicas = 3,
+         cluster_for_parallel_replicas = 'test_cluster_one_shard_three_replicas_localhost',
+         parallel_replicas_for_non_replicated_merge_tree = 1, parallel_replicas_local_plan = 0,
+         parallel_replicas_min_number_of_rows_per_replica = 0;
+
+DROP TABLE qbit_pr_const_large;
