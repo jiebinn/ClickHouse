@@ -87,17 +87,34 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
             const bool can_see_as_table
                 = access->isGranted(AccessType::SHOW_TABLES, table_id.database_name, table_id.table_name)
                 || access->isGranted(AccessType::SHOW_COLUMNS, table_id.database_name, table_id.table_name);
-            if (!can_see_as_table && !DatabaseCatalog::instance().isDictionaryExist(table_id))
+            if (!can_see_as_table)
             {
-                auto database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
-                TableNameHints hints(database, getContext());
-                auto hint = hints.getHintForTable(table_id.table_name);
-                if (hint.first.empty())
-                    throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}",
-                        backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name));
-                throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}. Maybe you meant {}.{}?",
-                    backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name),
-                    backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+                /// The probe itself must fail closed: `isDictionaryExist` loads the object
+                /// (`tryGetTable` waits for it to start up and rethrows load failures), so a hidden
+                /// table that is still starting up or failed to load would otherwise escape with a
+                /// load error here - distinguishable from a missing name, reopening the oracle.
+                bool is_dictionary_exist = false;
+                try
+                {
+                    is_dictionary_exist = DatabaseCatalog::instance().isDictionaryExist(table_id);
+                }
+                catch (...)
+                {
+                    /// Ok to swallow: treat any probe failure as "not a dictionary". The error is
+                    /// not lost - it resurfaces when a user who may see the object really accesses it.
+                }
+                if (!is_dictionary_exist)
+                {
+                    auto database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+                    TableNameHints hints(database, getContext());
+                    auto hint = hints.getHintForTable(table_id.table_name);
+                    if (hint.first.empty())
+                        throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}",
+                            backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name));
+                    throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}. Maybe you meant {}.{}?",
+                        backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name),
+                        backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+                }
             }
         }
         else
