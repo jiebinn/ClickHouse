@@ -32,6 +32,13 @@ public:
     VectorWithMemoryTracking<String> getAllRegisteredNames() const override;
 
 private:
+    /// Whether `name` (a candidate produced by `getAllRegisteredNames`) may be suggested to the
+    /// current user. Cheap for users with `SHOW_TABLES`; for a name visible only through a
+    /// `SHOW_DICTIONARIES` grant it verifies, with a single table load, that the object really is a
+    /// dictionary - so a dictionary-only grant cannot leak the names of similarly-named tables, and
+    /// a single typo cannot foreground-load every table in the database.
+    bool isHintNameVisible(const String & name) const;
+
     ContextPtr context;
     ConstDatabasePtr database;
 };

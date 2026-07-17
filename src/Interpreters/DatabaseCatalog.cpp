@@ -2345,8 +2345,10 @@ std::pair<String, String> TableNameHints::getHintForTable(const String & table_n
     /// This can happen when a table name appears in `getAllRegisteredNames` but the table
     /// itself cannot be retrieved (e.g., during server startup when a table has not yet been loaded,
     /// or when the table is looked up by a stale UUID and a new table with the same name exists).
-    /// Fall through to extended search which may find the table in another database.
-    if (results.empty() || results[0] == table_name)
+    /// Also skip a match the user is not actually allowed to see - verified here, for the single
+    /// closest candidate only, so the check does not load every table in the database.
+    /// In each case fall through to extended search, which may find the table in another database.
+    if (results.empty() || results[0] == table_name || !isHintNameVisible(results[0]))
         return getExtendedHintForTable(table_name);
     return std::make_pair(database->getDatabaseName(), results[0]);
 }
@@ -2383,7 +2385,9 @@ std::pair<String, String> TableNameHints::getExtendedHintForTable(const String &
 
         TableNameHints hints(db, context);
         auto results = hints.getHints(table_name);
-        if (results.empty())
+        /// As in `getHintForTable`, verify the single closest candidate is one the user may see
+        /// (only loads that one table, and only when it is not covered by `SHOW_TABLES`).
+        if (results.empty() || !hints.isHintNameVisible(results[0]))
             continue;
 
         size_t distance = levenshteinDistanceCaseInsensitive(results[0], table_name);
@@ -2407,8 +2411,15 @@ VectorWithMemoryTracking<String> TableNameHints::getAllRegisteredNames() const
         return {};
     auto names = database->getAllTableNames(context);
 
-    /// Filter out tables the user cannot `SHOW`, otherwise the hint can leak the existence of
+    /// Filter out names the user cannot `SHOW`, otherwise the hint can leak the existence of
     /// tables (e.g. for the cross-database hint search in `getExtendedHintForTable`).
+    ///
+    /// This is a cheap, name-only filter - it never loads a table. `SHOW CREATE DICTIONARY` is
+    /// authorized with `SHOW_DICTIONARIES`, which does not imply `SHOW_TABLES`, so a name visible
+    /// only through that grant is kept here as a candidate. Whether such a candidate is really a
+    /// dictionary (and not a table whose existence must stay hidden) is verified later by
+    /// `isHintNameVisible`, which runs only for the few names that actually match the query - not
+    /// for every table, which would otherwise foreground-load the whole database on a single typo.
     if (context)
     {
         const auto access = context->getAccess();
@@ -2418,23 +2429,38 @@ VectorWithMemoryTracking<String> TableNameHints::getAllRegisteredNames() const
         {
             std::erase_if(names, [&](const String & name)
             {
-                if (access->isGranted(AccessType::SHOW_TABLES, database_name, name))
-                    return false;
-                /// `SHOW CREATE DICTIONARY` is authorized with `SHOW_DICTIONARIES`, which does not imply
-                /// `SHOW_TABLES`, so a dictionary must be visible to the hints with that grant alone.
-                /// The grant by itself does not tell tables and dictionaries apart, so also make sure the
-                /// object is really a dictionary - otherwise a dictionary-only grant would leak the names
-                /// of similarly-named tables.
-                if (access->isGranted(AccessType::SHOW_DICTIONARIES, database_name, name))
-                {
-                    auto table = database->tryGetTable(name, context);
-                    return !(table && table->isDictionary());
-                }
-                return true;
+                return !access->isGranted(AccessType::SHOW_TABLES, database_name, name)
+                    && !access->isGranted(AccessType::SHOW_DICTIONARIES, database_name, name);
             });
         }
     }
     return names;
+}
+
+bool TableNameHints::isHintNameVisible(const String & name) const
+{
+    if (!database || !context)
+        return true;
+
+    const auto access = context->getAccess();
+    const String & database_name = database->getDatabaseName();
+
+    /// Fast path: a name the user may `SHOW TABLES` is always safe to suggest, without any load.
+    if (access->isGranted(AccessType::SHOW_TABLES, database_name, name))
+        return true;
+
+    /// Otherwise the name survived `getAllRegisteredNames` only because of a `SHOW_DICTIONARIES`
+    /// grant. That grant does not tell tables and dictionaries apart, so verify the object really
+    /// is a dictionary before suggesting it - suggesting a table here would leak the existence of a
+    /// table the user is not allowed to see. This loads a single table (the matched candidate),
+    /// never the whole database.
+    if (access->isGranted(AccessType::SHOW_DICTIONARIES, database_name, name))
+    {
+        auto table = database->tryGetTable(name, context);
+        return table && table->isDictionary();
+    }
+
+    return false;
 }
 
 }
