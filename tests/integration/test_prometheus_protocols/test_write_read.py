@@ -194,5 +194,16 @@ def test_remote_write_unsupported_content_encoding():
     response = get_response_to_remote_write(
         node.ip_address, 9093, "/write", protobuf, content_encoding="gzip"
     )
-    assert response.status_code == requests.codes.bad_request
+    assert response.status_code == requests.codes.unsupported_media_type
     assert "Content-Encoding" in response.text
+
+
+def test_remote_write_unsupported_content_type():
+    time_series = [({"__name__": "text_data"}, {1724117000: 1.0})]
+    protobuf = convert_time_series_to_protobuf(time_series)
+
+    response = get_response_to_remote_write(
+        node.ip_address, 9093, "/write", protobuf, content_type="text/plain"
+    )
+    assert response.status_code == requests.codes.unsupported_media_type
+    assert "Content-Type" in response.text

@@ -102,10 +102,17 @@ def compress_remote_write_request(serialized_proto, content_encoding):
 
 
 def get_response_to_remote_write(
-    host, port, path, write_request_proto, content_encoding="snappy"
+    host,
+    port,
+    path,
+    write_request_proto,
+    content_encoding="snappy",
+    content_type="application/x-protobuf",
 ):
     url = f"http://{host}:{port}/{path.strip('/')}"
-    print(f"Posting {url} with Content-Encoding: {content_encoding}")
+    print(
+        f"Posting {url} with Content-Encoding: {content_encoding}, Content-Type: {content_type}"
+    )
     response = requests.post(
         url,
         data=compress_remote_write_request(
@@ -113,7 +120,7 @@ def get_response_to_remote_write(
         ),
         headers={
             "Content-Encoding": content_encoding,
-            "Content-Type": "application/x-protobuf",
+            "Content-Type": content_type,
             "User-Agent": requests.utils.default_user_agent(),
             "X-Prometheus-Remote-Write-Version": "0.1.0",
         },
