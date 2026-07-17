@@ -17,19 +17,23 @@ mkdir -p "${OUT}"
 # An incompressible one-row image, wide enough that its compressed data spans more than one bounded
 # `IDAT` chunk. Render over HTTP so the image is produced by the server-side encoder.
 N=200000
-QUERY="SELECT toUInt8(sipHash64(number) % 256) AS v FROM numbers(${N}) FORMAT PNG"
+VALUE="toUInt8(sipHash64(number) % 256)"
 curl -sS "${CLICKHOUSE_URL}&output_format_image_width=${N}&output_format_image_height=1" \
-    --data-binary "${QUERY}" > "${OUT}/big.png"
+    --data-binary "SELECT ${VALUE} AS v FROM numbers(${N}) FORMAT PNG" > "${OUT}/big.png"
 
-# The server's own pixel checksum, used to confirm the decoded image round-trips byte for byte.
-EXPECTED_SUM=$(${CLICKHOUSE_CLIENT} --query "SELECT sum(toUInt8(sipHash64(number) % 256)) FROM numbers(${N})")
+# The exact pixel bytes in scanline order, used to confirm the decoded image round-trips byte for byte
+# (fetched from the server so the check does not depend on reproducing the hash outside ClickHouse). A byte
+# sum would let corruptions that preserve the total (reordered, duplicated, dropped, or substituted bytes)
+# slip through, so compare the whole decoded pixel buffer against this exact reference instead.
+${CLICKHOUSE_CLIENT} --query "SELECT ${VALUE} AS v FROM numbers(${N}) FORMAT RowBinary" > "${OUT}/pixels.bin"
 
 DECODER="${OUT}/decode.py"
 cat > "${DECODER}" <<'PYEOF'
 import sys, zlib, struct
 
-path, expected_sum = sys.argv[1], int(sys.argv[2])
+path, truth_path = sys.argv[1], sys.argv[2]
 data = open(path, "rb").read()
+truth = open(truth_path, "rb").read()
 
 print("signature ok" if data[:8] == b"\x89PNG\r\n\x1a\n" else "bad signature")
 
@@ -81,10 +85,10 @@ for _ in range(height):
     pixels += line
     prev = line
 print("filters valid ok" if filters_ok else "invalid filter")
-print("pixels round-trip ok" if sum(pixels) == expected_sum else "pixels mismatch")
+print("pixels round-trip ok" if bytes(pixels) == truth else "pixels mismatch")
 PYEOF
 
-python3 "${DECODER}" "${OUT}/big.png" "${EXPECTED_SUM}"
+python3 "${DECODER}" "${OUT}/big.png" "${OUT}/pixels.bin"
 
 # The chunk-count check above proves the final file is split into several `IDAT` chunks, but on its own it
 # would still pass an implementation that first buffered the whole compressed image in memory and only sliced
