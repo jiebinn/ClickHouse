@@ -12,6 +12,12 @@ Those copies must not silently drift from the real snippet source under `docs/sn
 check regenerates the expected copy from the `.mdx` and fails if either embedded table disagrees,
 so editing a shared snippet forces the embedded copies to be updated in the same change.
 
+The check also scans the embedded documentation sources under `src/` for snippet imports
+(`import Foo from '/snippets/foo.mdx'`): a snippet an embedded page actually uses must have an
+entry in both `DOC_SNIPPETS` tables in the first place, otherwise the website would render it
+while `help` and `/docs` silently drop it — so converting a page that introduces a new snippet
+forces the tables to be extended in the same change.
+
 Run standalone (`python3 check_embedded_doc_snippets.py`) or via the `Style check` job; prints one
 line per mismatch and exits non-zero if anything is out of sync.
 """
@@ -19,6 +25,7 @@ line per mismatch and exits non-zero if anything is out of sync.
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
@@ -26,6 +33,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..",
 CPP_PATH = os.path.join(ROOT, "src", "Client", "TerminalMarkdownRenderer.cpp")
 HTML_PATH = os.path.join(ROOT, "programs", "server", "docs.html")
 SNIPPETS_DIR = os.path.join(ROOT, "docs", "snippets")
+SRC_DIR = os.path.join(ROOT, "src")
+
+# An `import Foo from '/snippets/foo.mdx';` line inside an embedded documentation body. Anchored to
+# the start of a physical line: that is how the help-surface renderers recognize an import, and it
+# keeps mentions inside code comments (which are prefixed by `///`) out of the scan.
+IMPORT_RE = re.compile(
+    r"^[ \t]*import\s+[A-Za-z_$][A-Za-z0-9_$]*\s+from\s+['\"]([^'\"]+\.mdx)['\"]", re.MULTILINE
+)
 
 # A leading MDX block comment (`{/* ... */}`) is website-authoring machinery, not content, and is
 # not carried into the embedded copies; drop it (and any surrounding blank lines) before comparing.
@@ -62,6 +77,33 @@ def extract_html_snippets(text):
     return result
 
 
+def find_snippet_imports():
+    """Every snippet import inside the embedded documentation under `src/`, as a list of
+    (path relative to the repository root, line number, imported path) tuples. Test sources are
+    excluded: gtests exercise the snippet resolution with inline fixtures, not real documentation.
+    A native `grep` narrows the walk to candidate files first — the sources are many and reading
+    them all from Python is much slower."""
+    result = subprocess.run(
+        [
+            "grep", "-rlF", ".mdx", "--include=*.cpp", "--include=*.h",
+            "--exclude-dir=tests", "--exclude-dir=examples", "--exclude-dir=fuzzers",
+            SRC_DIR,
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if result.returncode > 1:  # 1 only means "no matches"
+        raise RuntimeError(f"grep over {SRC_DIR} failed with exit code {result.returncode}")
+    used = []
+    for path in sorted(result.stdout.splitlines()):
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        for m in IMPORT_RE.finditer(text):
+            used.append((os.path.relpath(path, ROOT), text.count("\n", 0, m.start()) + 1, m.group(1)))
+    return used
+
+
 def main():
     with open(CPP_PATH, encoding="utf-8") as f:
         cpp = extract_cpp_snippets(f.read())
@@ -80,6 +122,20 @@ def main():
                 "DOC_SNIPPETS keys differ between TerminalMarkdownRenderer.cpp and docs.html: "
                 f"only in .cpp={sorted(set(cpp) - set(html))}, only in docs.html={sorted(set(html) - set(cpp))}"
             )
+
+        # A snippet the embedded docs actually use must be resolvable on both help surfaces: the
+        # website expands the import at build time, but `help` and `/docs` can only substitute
+        # entries present in their `DOC_SNIPPETS` tables (matched by path suffix) — a missing entry
+        # means the snippet's content silently disappears from the built-in help.
+        resolvable = set(cpp) & set(html)
+        for source, line, path in find_snippet_imports():
+            if not any(path.endswith(suffix) for suffix in resolvable):
+                errors.append(
+                    f"{source}:{line}: the embedded documentation imports '{path}', which has no entry "
+                    "in the DOC_SNIPPETS tables; add the snippet body to both "
+                    "src/Client/TerminalMarkdownRenderer.cpp and programs/server/docs.html so the "
+                    "built-in help surfaces render it instead of dropping it"
+                )
 
         for suffix in sorted(set(cpp) & set(html)):
             mdx_path = os.path.join(SNIPPETS_DIR, suffix)
