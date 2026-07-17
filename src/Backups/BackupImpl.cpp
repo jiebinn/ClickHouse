@@ -176,6 +176,7 @@ BackupImpl::BackupImpl(
     , data_file_name_prefix_length(params.data_file_name_prefix_length)
     , coordination(params.backup_coordination)
     , uuid(params.backup_uuid)
+    , backup_id(params.backup_id)
     , version(CURRENT_BACKUP_VERSION)
     , base_backup_info(params.base_backup_info)
     , log(getLogger("BackupImpl"))
@@ -435,24 +436,27 @@ void BackupImpl::writeBackupMetadata()
     *out << "<deduplicate_files>" << params.deduplicate_files << "</deduplicate_files>";
     *out << "<timestamp>" << toString(LocalDateTime{timestamp}) << "</timestamp>";
     *out << "<uuid>" << toString(*uuid) << "</uuid>";
+    if (!backup_id.empty())
+        *out << "<backup_id>" << xml << backup_id << "</backup_id>";
     if (data_file_name_generator != BackupDataFileNameGeneratorType::FirstFileName)
         *out << "<data_file_name_generator>" << SettingFieldBackupDataFileNameGeneratorTypeTraits::toString(data_file_name_generator)
              << "</data_file_name_generator>";
 
-    auto all_file_infos = coordination->getFileInfosForAllHosts();
+    /// Iterate in place instead of copying all file infos (a backup can contain millions).
+    size_t num_all_file_infos = 0;
+    bool base_backup_in_use = false;
+    coordination->forEachFileInfoForAllHosts([&](const BackupFileInfo & info)
+    {
+        ++num_all_file_infos;
+        if (info.base_size)
+            base_backup_in_use = true;
+    });
 
-    if (all_file_infos.empty())
+    if (num_all_file_infos == 0)
         throw Exception(ErrorCodes::BACKUP_IS_EMPTY, "Backup must not be empty");
 
     if (base_backup_info)
     {
-        bool base_backup_in_use = false;
-        for (const auto & info : all_file_infos)
-        {
-            if (info.base_size)
-                base_backup_in_use = true;
-        }
-
         if (base_backup_in_use)
         {
             /// Persist base backup locators without inline `S3` credentials.
@@ -485,13 +489,13 @@ void BackupImpl::writeBackupMetadata()
         *out << "<original_namespace>" << original_namespace << "</original_namespace>";
     }
 
-    num_files = all_file_infos.size();
+    num_files = num_all_file_infos;
     total_size = 0;
     num_entries = 0;
     size_of_entries = 0;
 
     *out << "<contents>";
-    for (const auto & info : all_file_infos)
+    coordination->forEachFileInfoForAllHosts([&](const BackupFileInfo & info)
     {
         *out << "<file>";
 
@@ -535,7 +539,7 @@ void BackupImpl::writeBackupMetadata()
         }
 
         *out << "</file>";
-    }
+    });
     *out << "</contents>";
 
     *out << "</config>";
@@ -624,6 +628,9 @@ void BackupImpl::readBackupMetadata()
 
         timestamp = parse<::LocalDateTime>(req("timestamp")).to_time_t();
         uuid = parse<UUID>(req("uuid"));
+
+        if (h.contains("backup_id"))
+            backup_id = req("backup_id");
 
         if (h.contains("base_backup") && !base_backup_info)
         {
@@ -1365,8 +1372,10 @@ bool BackupImpl::tryRemoveAllFiles() noexcept
         else
         {
             files_to_remove.push_back(".backup");
-            for (const auto & file_info : coordination->getFileInfosForAllHosts())
+            coordination->forEachFileInfoForAllHosts([&](const BackupFileInfo & file_info)
+            {
                 files_to_remove.push_back(file_info.data_file_name);
+            });
         }
 
         if (!checkLockFile(false))
