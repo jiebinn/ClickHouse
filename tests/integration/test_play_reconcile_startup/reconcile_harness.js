@@ -820,6 +820,72 @@ async function main() {
             r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
     }
 
+    /// Guard (dirty-startup merge, entry re-owned): the same dirty-startup race, but with a saved
+    /// tab that SURVIVES the pruning. Reload `?tab=Scratch#<SELECT 111>` — `history.state` still
+    /// names the blank, now-pruned `Scratch` tab from the previous session — and type `SELECT 999`
+    /// into the bootstrap editor before `IndexedDB` resolves. Reconciliation takes the saved-tabs
+    /// merge branch (`savedTabs.length` truthy AND `bootstrap_dirty`): it keeps the live edit and
+    /// brings the surviving `Report` alongside it. The current entry still belonged to the dropped
+    /// `Scratch` tab — the live edit could not claim it (`refreshCurrentHistoryEntry` bails on
+    /// another tab's entry) — so it carries `Scratch`'s stale `#SELECT 111` hash and foreign
+    /// `history.state`. Merely restamping `?tab=` would leave that stale hash in place: on the next
+    /// reload startup treats it as an authoritative shared URL and overwrites the persisted
+    /// `SELECT 999` back to `SELECT 111`. The merge branch must re-own the entry for the live tab,
+    /// exactly as the all-blank branch does.
+    {
+        const stale_hash = Buffer.from('SELECT 111', 'utf8').toString('base64');
+        const r = await runScenario(js, {
+            href: base + '?tab=Scratch#' + stale_hash,
+            historyState: { tabId: 't7', tabName: 'Scratch' },
+            openDelayMs: 30,
+            duringLoad: (sandbox) => {
+                vm.runInContext(
+                    "query_area.value = 'SELECT 999';" +
+                    "query_area.dispatchEvent({ type: 'input', isTrusted: true });",
+                    sandbox);
+            },
+            seedTabs: [
+                { id: 't7', title: 'Scratch', query: '', params: {}, result: null, lastSavedQuery: '' },
+                { id: 't8', title: 'Report', query: 'SELECT 1', params: {}, result: { ran: true, query: 'SELECT 1', params: {} }, lastSavedQuery: 'SELECT 1' },
+            ],
+            seedMeta: { key: 'state', activeTabId: 't7', tabOrder: ['t7', 't8'], tabSeq: 8, tabTitleSeq: 2 },
+        });
+        check('dirty-startup-merge-entry-reowned', 'the live typed tab and the restored Report both survive the merge',
+            r.live.tabs.length === 2 && r.live.tabs.some(t => t.query === 'SELECT 999') && r.live.tabs.some(t => t.title === 'Report'),
+            r.live);
+        check('dirty-startup-merge-entry-reowned', 'the live edit is what gets persisted, alongside the surviving Report',
+            r.persisted.some(p => p.query === 'SELECT 999') && r.persisted.some(p => p.query === 'SELECT 1')
+                && !r.persisted.some(p => (p.query || '').trim() === ''),
+            r.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
+
+        const live_tab = r.live.tabs.find(t => t.query === 'SELECT 999');
+        check('dirty-startup-merge-entry-reowned', 'the current entry is re-owned by the live tab',
+            r.sandbox.history.state && r.sandbox.history.state.tabId === live_tab.id,
+            r.sandbox.history.state);
+        const reowned_url = new URL(r.sandbox.location.href);
+        check('dirty-startup-merge-entry-reowned', 'the URL hash carries the live query, not the dropped blank tab stale hash',
+            Buffer.from(reowned_url.hash.slice(1), 'base64').toString('utf8') === 'SELECT 999'
+                && reowned_url.searchParams.get('tab') === live_tab.title,
+            r.sandbox.location.href);
+
+        /// Reload the workspace exactly as the browser would: same URL and `history.state` the first
+        /// load left behind, seeded from what it persisted. With the stale hash cleared, the URL is
+        /// now the live tab's own `SELECT 999`, so nothing overwrites the persisted query.
+        const r2 = await runScenario(js, {
+            href: r.sandbox.location.href,
+            historyState: r.sandbox.history.state,
+            seedTabs: r.persisted,
+            seedMeta: r.persistedMeta,
+        });
+        check('dirty-startup-merge-entry-reowned', 'the second reload keeps the persisted live query, not the stale hash',
+            r2.live.tabs.some(t => t.query === 'SELECT 999') && !r2.live.tabs.some(t => t.query === 'SELECT 111'),
+            r2.live);
+        check('dirty-startup-merge-entry-reowned', 'the second reload persists the live query and Report, no stale or blank tab',
+            r2.persisted.some(p => p.query === 'SELECT 999') && r2.persisted.some(p => p.query === 'SELECT 1')
+                && !r2.persisted.some(p => p.query === 'SELECT 111') && !r2.persisted.some(p => (p.query || '').trim() === ''),
+            r2.persisted.map(p => ({ id: p.id, title: p.title, query: p.query })));
+    }
+
     if (failures) {
         console.log(`${failures} check(s) FAILED`);
         process.exit(1);

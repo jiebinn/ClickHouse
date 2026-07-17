@@ -8513,14 +8513,31 @@ async function reconcileStartup() {
             /// titles against the saved ones (saved tabs keep theirs). `tabs` is already the merged
             /// list, so `uniqueTitle` sees every title and excludes the tab itself by id.
             for (const t of liveTabs) t.title = uniqueTitle(t.title, t.id);
-            /// Renaming a live tab above changes its title, but the current URL's `tab=` key (and
-            /// the browser-history entry written during the load window via `syncHistory`) still
-            /// carries the pre-rename title. A reload of that URL would then make startup
-            /// reconciliation match the persisted saved tab by the old title and overwrite it.
-            /// Restamp the current entry/URL to the active live tab's new title. (Older load-window
-            /// entries keep the stable live `tabId` and are restamped lazily by `onpopstate` on
-            /// Back/Forward.)
-            restampCurrentEntryTitle(getActiveTab());
+            /// Re-own the current browser-history entry for the winning live active tab. Renaming a
+            /// live tab above changes its title, but the entry can be stale in two ways, and only a
+            /// full re-own fixes both. (1) On a plain reload the preserved `history.state`/hash still
+            /// describe the previous session's active tab — which may be one of the blank tabs just
+            /// pruned — and the live edit typed during the load window could not claim them
+            /// (`refreshCurrentHistoryEntry` bails on another tab's entry). Restamping only `?tab=`
+            /// (`restampCurrentEntryTitle`) would leave the dropped tab's stale hash and foreign
+            /// `history.state` attached: on the NEXT reload startup treats that stale hash as an
+            /// authoritative shared URL and overwrites the persisted live query with it. (2) When the
+            /// entry does belong to the live tab (a fresh nav whose first trusted edit seeded it under
+            /// the tab's pre-rename default title), the `?tab=`/`history.state.tabName` still carry the
+            /// old title. Both are fixed exactly as the all-blank dirty branch below does: drop the
+            /// foreign state first (unless the ids coincide, where the entry is already the live tab's
+            /// to replace in place), then seed the entry wholesale from the live tab via
+            /// `refreshCurrentHistoryEntry` — rebuilding the URL, `history.state`, hash and
+            /// `lastSavedQuery`, and dropping the stale `?tab=`/hash. (`run_immediately` was cleared
+            /// above, so the rebuilt URL cannot re-stamp `run=1`.) Older load-window entries keep the
+            /// stable live `tabId` and are restamped lazily by `onpopstate` on Back/Forward.
+            const active_live = getActiveTab();
+            if (active_live) {
+                if (history.state && history.state.tabId !== active_live.id) {
+                    history.replaceState(null, document.title, location.href);
+                }
+                refreshCurrentHistoryEntry(active_live);
+            }
             renderTabBar();
             scheduleSave();
             return;   /// skip URL param reconciliation and auto-run: the user is already editing
