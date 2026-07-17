@@ -228,7 +228,12 @@ FunctionBaseAI::AIParams FunctionBaseAI::resolveAIParams(
     {
         bool known = std::any_of(spec.begin(), spec.end(), [&](const AIParamSpec & p) { return p.name == key; });
         if (!known)
+        {
+            if (key == "model")
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "This function does not accept 'model' in the parameter map; pass 'model' to the function directly");
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown AI function parameter '{}'", key);
+        }
     }
 
     /// Resolve credentials first: they name the collection everything else is read from.

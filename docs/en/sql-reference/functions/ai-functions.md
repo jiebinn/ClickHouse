@@ -47,7 +47,7 @@ CREATE NAMED COLLECTION ai_embedding_credentials AS
 |-----------|------|---------|-------------|
 | `provider` | String | — | Model provider. Supported: `'openai'`, `'anthropic'`. See note below. |
 | `endpoint` | String | — | API endpoint URL. |
-| `model` | String | — | Model name (e.g. `'gpt-4o-mini'`). Used by the text functions; `aiEmbed` ignores it and takes `model` as a required positional argument. |
+| `model` | String | — | Model name (e.g. `'gpt-4o-mini'`). Used by the text functions; `aiEmbed` requires `model` as a positional argument and errors if `model` is specified in the named collection. |
 | `api_key` | String | — | Authentication key for the provider. Optional: when omitted, the auth header is not sent, which allows targeting OpenAI-compatible servers that do not require authentication. |
 | `max_tokens` | UInt64 | `1024` | Maximum number of output tokens per API call. |
 | `api_version` | String | — | API version string. Used by Anthropic (`'2023-06-01'`). |
@@ -79,7 +79,7 @@ SELECT aiGenerate('Bonjour', map('credentials', 'other_credentials'));
 
 ### Parameter map {#parameter-map}
 
-Each function accepts an optional trailing `Map(String, String)` of parameters. All values are strings (quote numbers, e.g. `'0.2'`). Unknown keys are rejected. A key that is present overrides the corresponding named-collection value; a key that is absent falls back to the named collection (for `model`/`max_tokens`) or the built-in default. The exception is `aiEmbed`, which takes `model` as a required positional argument (`aiEmbed(text, model[, params])`) and never reads it from the parameter map or the named collection.
+Each function accepts an optional trailing `Map(String, String)` of parameters. All values are strings (quote numbers, e.g. `'0.2'`). Unknown keys are rejected. A key that is present overrides the corresponding named-collection value; a key that is absent falls back to the named collection (for `model`/`max_tokens`) or the built-in default. The exception is `aiEmbed`, which takes `model` as a required positional argument (`aiEmbed(text, model[, params])`) and errors if it is instead set in the parameter map or named collection.
 
 The following parameters are common to all the AI functions:
 
