@@ -36,6 +36,10 @@ FROM
 );
 
 SELECT 'NaN and infinities survive the round trip, finite values stay within the error bound';
+-- The last two columns are a positive signal that the ABS columns really stayed on the lossy SZ3 path:
+-- a lossless fallback would reproduce every finite value bit-exactly. (The default-configured columns are
+-- expected to be stored losslessly here: the default REL error bound is relative to the value range, which
+-- is infinite for this data, so SZ3 keeps them bit-exact by design.)
 SELECT
     countIf(isNaN(f64_default)) = 1,
     countIf(f64_default = inf) = 1,
@@ -47,7 +51,9 @@ SELECT
     countIf(f64_abs = inf) = 1,
     countIf(f64_abs = -inf) = 1,
     maxIf(abs(orig64 - f64_abs), isFinite(orig64)) <= 0.011,
-    maxIf(abs(orig32 - f32_abs), isFinite(orig32)) <= 0.011
+    maxIf(abs(orig32 - f32_abs), isFinite(orig32)) <= 0.011,
+    countIf(f64_abs != orig64 AND isFinite(orig64)) > 0,
+    countIf(f32_abs != orig32 AND isFinite(orig32)) > 0
 FROM tab_sz3_non_finite;
 
 SELECT 'The same holds after the data is recompressed by a merge';
@@ -63,7 +69,9 @@ SELECT
     countIf(f64_abs = inf) = 1,
     countIf(f64_abs = -inf) = 1,
     maxIf(abs(orig64 - f64_abs), isFinite(orig64)) <= 0.011,
-    maxIf(abs(orig32 - f32_abs), isFinite(orig32)) <= 0.011
+    maxIf(abs(orig32 - f32_abs), isFinite(orig32)) <= 0.011,
+    countIf(f64_abs != orig64 AND isFinite(orig64)) > 0,
+    countIf(f32_abs != orig32 AND isFinite(orig32)) > 0
 FROM tab_sz3_non_finite;
 
 DROP TABLE tab_sz3_non_finite;

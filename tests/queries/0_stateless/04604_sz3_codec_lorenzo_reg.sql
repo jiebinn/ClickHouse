@@ -31,7 +31,11 @@ SELECT number, number * 0.5 + sin(number * 0.1), number * 0.5 + sin(number * 0.1
 FROM numbers(50000, 50000);
 
 SELECT 'ALGO_LORENZO_REG data round-trips within the error bound (the read failed with CORRUPTED_DATA before the fix)';
-SELECT count() = 100000, max(abs(orig - val)) <= 0.011 FROM tab_sz3_lorenzo_reg;
+-- The last column is a positive signal that the data really stayed on the lossy SZ3 path: the bit-exact
+-- ALGO_LOSSLESS fallback (used when the lossy result does not win) would reproduce the input exactly and
+-- would not exercise the fixed decompression path. The gtest SZ3Test.LorenzoRegSerializesAndDecodesRegressionCoefficients
+-- additionally verifies that this data shape serializes a non-empty regression-coefficient stream.
+SELECT count() = 100000, max(abs(orig - val)) <= 0.011, countIf(val != orig) > 0 FROM tab_sz3_lorenzo_reg;
 
 SELECT 'The same holds after a merge recompresses the data';
 OPTIMIZE TABLE tab_sz3_lorenzo_reg FINAL;
