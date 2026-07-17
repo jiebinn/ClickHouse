@@ -26,7 +26,9 @@
 #      and erases the seeded part from parts_queue; with the fix it blocks on the new mutex until
 #      the first cancel finishes.
 #   4. Resume the first MOVE. Without the fix it re-locks, finds the part gone, and throws the
-#      logical error (server abort in debug). With the fix the first MOVE succeeds.
+#      logical error (server abort in debug). With the fix the server stays alive; either MOVE may
+#      still lose the race and return a benign CANNOT_ASSIGN_ALTER, which is fine -- the invariant
+#      under test is only that the server does not abort with the parts_queue logical error.
 
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
@@ -67,7 +69,15 @@ ${CLICKHOUSE_CLIENT} -q "CHECK TABLE cancel_race SETTINGS check_query_single_val
 # --- Step 2: pause the first MOVE inside cancelRemovedPartsCheck's lock gap ---
 ${CLICKHOUSE_CLIENT} -q "SYSTEM ENABLE FAILPOINT rmt_cancel_removed_parts_check_pause_in_gap"
 
-${CLICKHOUSE_CLIENT} -q "ALTER TABLE cancel_race MOVE PARTITION 0 TO TABLE cancel_race_dst1" &
+# Either MOVE may lose the race and return a benign CANNOT_ASSIGN_ALTER (an expected concurrent-ALTER
+# outcome, not the bug). We capture each query's own output to a file instead of letting it reach the
+# test's stderr: the benign error must not trip the "having stderror" check, but the parts_queue
+# logical error must still be detected -- in debug/sanitizer builds it aborts the server, in release
+# builds it surfaces as a query exception, so we inspect the captured output for it below.
+MOVE1_OUT="${CLICKHOUSE_TMP}/cancel_race_move1.out"
+MOVE2_OUT="${CLICKHOUSE_TMP}/cancel_race_move2.out"
+
+${CLICKHOUSE_CLIENT} -q "ALTER TABLE cancel_race MOVE PARTITION 0 TO TABLE cancel_race_dst1" >"$MOVE1_OUT" 2>&1 &
 MOVE1_PID=$!
 
 # Wait until the first MOVE has snapshotted parts_to_remove and paused in the gap.
@@ -76,20 +86,26 @@ ${CLICKHOUSE_CLIENT} -q "SYSTEM WAIT FAILPOINT rmt_cancel_removed_parts_check_pa
 # --- Step 3: start a second overlapping MOVE in the background. Without the fix it runs the full
 #     cancel and erases the seeded part from parts_queue; with the fix it blocks on the new mutex
 #     (held by the paused first MOVE), so it must run in the background or the test would deadlock. ---
-${CLICKHOUSE_CLIENT} -q "ALTER TABLE cancel_race MOVE PARTITION 0 TO TABLE cancel_race_dst2" 2>/dev/null &
+${CLICKHOUSE_CLIENT} -q "ALTER TABLE cancel_race MOVE PARTITION 0 TO TABLE cancel_race_dst2" >"$MOVE2_OUT" 2>&1 &
 MOVE2_PID=$!
 sleep 2
 
-# --- Step 4: resume the first MOVE. Without the fix it re-locks, finds the part gone, and throws
-#     the logical error (server abort in debug). With the fix the first MOVE succeeds. ---
+# --- Step 4: resume the first MOVE. Without the fix it re-locks, finds the part gone, and hits the
+#     parts_queue logical error (server abort in debug/sanitizer, query exception in release). With
+#     the fix neither MOVE hits it. ---
 ${CLICKHOUSE_CLIENT} -q "SYSTEM NOTIFY FAILPOINT rmt_cancel_removed_parts_check_pause_in_gap"
 
-# The second MOVE either moved the partition first or fails with a benign concurrent-ALTER error;
-# either outcome is fine. The invariant under test is that the first MOVE does not hit the race.
+wait $MOVE1_PID 2>/dev/null ||:
 wait $MOVE2_PID 2>/dev/null ||:
 
-if wait $MOVE1_PID; then
+# Fail if either query reported the parts_queue logical error (catches the release-build exception),
+# or if the server aborted on it (debug/sanitizer) -- in that case the liveness probe below fails.
+if grep -qF "Unexpected number of parts to remove from parts_queue" "$MOVE1_OUT" "$MOVE2_OUT" 2>/dev/null; then
+    echo "FAIL: parts_queue logical error (cancelRemovedPartsCheck race)"
+elif ${CLICKHOUSE_CLIENT} -q "SELECT 1" >/dev/null 2>&1; then
     echo "OK"
 else
-    echo "FAIL: first MOVE PARTITION failed (cancelRemovedPartsCheck race)"
+    echo "FAIL: server died (cancelRemovedPartsCheck race)"
 fi
+
+rm -f "$MOVE1_OUT" "$MOVE2_OUT"
