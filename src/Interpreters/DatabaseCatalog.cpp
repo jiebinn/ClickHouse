@@ -2492,6 +2492,8 @@ bool TableNameHints::isHintNameVisible(const String & name) const
         }
         catch (...)
         {
+            /// Ok to swallow: this runs only while formatting a hint. Any load error is not the
+            /// reason the lookup failed, and it will resurface when the user really touches the table.
             return false;
         }
     }
