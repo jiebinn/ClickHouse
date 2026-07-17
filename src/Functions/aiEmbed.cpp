@@ -62,13 +62,6 @@ namespace ErrorCodes
 namespace
 {
 
-/// Type validator for the `model` argument: a plain (non-nullable) `String`. Constness is enforced
-/// separately by the column validator.
-bool isPlainString(const IDataType & type)
-{
-    return isString(type);
-}
-
 class FunctionAiEmbed final : public IFunction
 {
 public:
@@ -106,7 +99,8 @@ public:
     {
         FunctionArgumentDescriptors mandatory_args{
             {"text", static_cast<FunctionArgumentDescriptor::TypeValidator>(&FunctionBaseAI::isStringOrNullableString), nullptr, "String or Nullable(String)"},
-            {"model", static_cast<FunctionArgumentDescriptor::TypeValidator>(&isPlainString), &isColumnConst, "const String"},
+            /// `model` must be a plain (non-nullable) `String`; constness is enforced by the column validator.
+            {"model", static_cast<FunctionArgumentDescriptor::TypeValidator>(&isString), &isColumnConst, "const String"},
         };
         FunctionArgumentDescriptors optional_args{
             {"params", static_cast<FunctionArgumentDescriptor::TypeValidator>(&FunctionBaseAI::isStringToStringMap), &isColumnConst, "const Map(String, String)"},
@@ -134,7 +128,6 @@ public:
             getContext(), arguments, embeddingParams(), settings[Setting::ai_function_embedding_default_credentials]);
 
         UInt64 dimensions = params.getUInt("dimensions");
-        /// `model` is a required positional argument (validated as a const String by getReturnTypeImpl).
         String model(arguments[model_arg_index].column->getDataAt(0));
 
         auto provider = createAIProvider(
@@ -323,7 +316,8 @@ separate default-credentials setting from the text functions, since an embedding
 from a chat one.
 
 The `model` is a required positional argument (a constant `String`). Unlike the text functions,
-`aiEmbed` does not read `model` from the named collection or the parameter map.
+`aiEmbed` does not read `model` from the named collection or the parameter map. A named collection
+that defines `model` is rejected rather than silently ignored.
 
 The optional `dimensions` parameter, when supported by the model (e.g. OpenAI's `text-embedding-3-*`),
 requests a vector of the given size; otherwise the model's native size is returned.

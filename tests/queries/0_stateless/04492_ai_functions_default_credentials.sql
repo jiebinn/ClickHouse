@@ -6,7 +6,7 @@
 -- Default-credentials resolution for AI functions.
 -- The text functions (aiGenerate/aiClassify/aiExtract/aiTranslate) and aiEmbed
 -- use separate default-credentials settings, because a chat-completions endpoint
--- and model differ from an embeddings one. A per-call `credentials` map key
+-- differs from an embeddings one. A per-call `credentials` map key
 -- overrides the default. All tests run without a real AI provider.
 -- =============================================================================
 
@@ -22,10 +22,10 @@ CREATE NAMED COLLECTION ai_text_nc AS
     endpoint = 'http://localhost:1/v1/chat/completions',
     model = 'chat-model',
     api_key = 'fake-key';
+-- aiEmbed takes `model` as a positional argument, so its collection must not define `model`.
 CREATE NAMED COLLECTION ai_embed_nc AS
     provider = 'openai',
     endpoint = 'http://localhost:1/v1/embeddings',
-    model = 'embed-model',
     api_key = 'fake-key';
 
 -- Start with no defaults set: bare calls must fail with a clear error.
@@ -61,10 +61,11 @@ SELECT aiGenerate('hi'); -- { serverError BAD_ARGUMENTS }
 SELECT '-- Map credentials override with no text default';
 SELECT count() FROM (SELECT aiGenerate(x, map('credentials', 'ai_text_nc')) AS r FROM tab);
 
--- Map credentials override wins over a set default.
+-- Map credentials override wins over a set default. `ai_embed_nc` has no `model`, so aiGenerate
+-- passes it in the map.
 SET ai_function_text_default_credentials = 'ai_text_nc';
 SELECT '-- Map credentials override wins over default';
-SELECT count() FROM (SELECT aiGenerate(x, map('credentials', 'ai_embed_nc')) AS r FROM tab);
+SELECT count() FROM (SELECT aiGenerate(x, map('credentials', 'ai_embed_nc', 'model', 'embed-model')) AS r FROM tab);
 
 -- =============================================================================
 -- Cleanup

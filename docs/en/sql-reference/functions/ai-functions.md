@@ -34,6 +34,7 @@ CREATE NAMED COLLECTION ai_text_credentials AS
     api_key = 'sk-...';
 
 -- `aiEmbed` does not read `model` from the named collection; pass it as a positional argument instead.
+-- Defining `model` in an `aiEmbed` collection is an error, not silently ignored.
 CREATE NAMED COLLECTION ai_embedding_credentials AS
     provider = 'openai',
     endpoint = 'https://api.openai.com/v1/embeddings',

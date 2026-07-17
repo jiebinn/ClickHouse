@@ -137,8 +137,15 @@ CREATE NAMED COLLECTION ai_credentials AS
     model = 'test-model',
     api_key = 'fake-key';
 
+-- aiEmbed takes `model` as a positional argument, so its named collection must not define `model`.
+DROP NAMED COLLECTION IF EXISTS ai_embed_credentials;
+CREATE NAMED COLLECTION ai_embed_credentials AS
+    provider = 'openai',
+    endpoint = 'http://localhost:1/v1/embeddings',
+    api_key = 'fake-key';
+
 SET ai_function_text_default_credentials = 'ai_credentials';
-SET ai_function_embedding_default_credentials = 'ai_credentials';
+SET ai_function_embedding_default_credentials = 'ai_embed_credentials';
 
 -- =============================================================================
 -- 7. Return type verification
@@ -191,9 +198,18 @@ SELECT aiGenerate('hi', map('credentials', 'ai_bad_provider')); -- { serverError
 
 SELECT '-- Unknown provider name on empty input';
 SELECT aiGenerate(x, map('credentials', 'ai_bad_provider')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
-SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_bad_provider')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
+
+-- aiEmbed needs a `model`-free collection so the unknown-provider error (not the collection-model
+-- check) is what rejects the call.
+DROP NAMED COLLECTION IF EXISTS ai_bad_provider_embed;
+CREATE NAMED COLLECTION ai_bad_provider_embed AS
+    provider = 'unknown_provider',
+    endpoint = 'http://localhost:1/v1/embeddings',
+    api_key = 'fake-key';
+SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_bad_provider_embed')) FROM (SELECT '' AS x WHERE 0); -- { serverError BAD_ARGUMENTS }
 
 DROP NAMED COLLECTION ai_bad_provider;
+DROP NAMED COLLECTION ai_bad_provider_embed;
 
 -- =============================================================================
 -- 11. Provider name: anthropic
@@ -209,11 +225,19 @@ CREATE NAMED COLLECTION ai_anthropic AS
 SELECT '-- Anthropic provider resolves';
 SELECT count() FROM (SELECT aiGenerate(x, map('credentials', 'ai_anthropic')) AS result FROM tab);
 
+-- aiEmbed needs a `model`-free collection (it takes `model` as a positional argument).
+DROP NAMED COLLECTION IF EXISTS ai_anthropic_embed;
+CREATE NAMED COLLECTION ai_anthropic_embed AS
+    provider = 'anthropic',
+    endpoint = 'http://localhost:1/v1/messages',
+    api_key = 'fake-key';
+
 SELECT '-- aiEmbed rejects anthropic provider';
-SELECT aiEmbed('hi', 'claude-test', map('credentials', 'ai_anthropic')); -- { serverError NOT_IMPLEMENTED }
-SELECT aiEmbed(x, 'claude-test', map('credentials', 'ai_anthropic')) FROM (SELECT '' AS x WHERE 0); -- { serverError NOT_IMPLEMENTED }
+SELECT aiEmbed('hi', 'claude-test', map('credentials', 'ai_anthropic_embed')); -- { serverError NOT_IMPLEMENTED }
+SELECT aiEmbed(x, 'claude-test', map('credentials', 'ai_anthropic_embed')) FROM (SELECT '' AS x WHERE 0); -- { serverError NOT_IMPLEMENTED }
 
 DROP NAMED COLLECTION ai_anthropic;
+DROP NAMED COLLECTION ai_anthropic_embed;
 
 -- =============================================================================
 -- 12. Parameter map: keys and validation
@@ -438,10 +462,15 @@ SELECT aiEmbed('hi'); -- { serverError NUMBER_OF_ARGUMENTS_DOESNT_MATCH }
 
 -- `model` in the parameter map is rejected: it is not a known map key for aiEmbed.
 SELECT '-- aiEmbed: model in the parameter map is rejected';
-SELECT aiEmbed('hi', 'test-model', map('credentials', 'ai_credentials', 'model', 'other-model')); -- { serverError BAD_ARGUMENTS }
+SELECT aiEmbed('hi', 'test-model', map('credentials', 'ai_embed_credentials', 'model', 'other-model')); -- { serverError BAD_ARGUMENTS }
+
+-- `model` defined in the named collection is rejected rather than silently ignored: aiEmbed never
+-- reads `model` from the collection (ai_credentials defines `model`).
+SELECT '-- aiEmbed: model in the named collection is rejected';
+SELECT aiEmbed('hi', 'test-model', map('credentials', 'ai_credentials')); -- { serverError BAD_ARGUMENTS }
 
 SELECT '-- aiEmbed: model supplied as a positional argument resolves';
-SELECT count() FROM (SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_credentials')) AS result FROM tab);
+SELECT count() FROM (SELECT aiEmbed(x, 'test-model', map('credentials', 'ai_embed_credentials')) AS result FROM tab);
 
 SELECT '-- aiEmbed: return type';
 DROP TABLE IF EXISTS _03300_ret_embed;
@@ -585,3 +614,4 @@ SET ai_function_text_default_credentials = '';
 SET ai_function_embedding_default_credentials = '';
 DROP TABLE IF EXISTS tab;
 DROP NAMED COLLECTION ai_credentials;
+DROP NAMED COLLECTION ai_embed_credentials;

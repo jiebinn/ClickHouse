@@ -121,28 +121,24 @@ def started_cluster() -> typing.Generator[ClickHouseCluster, None, None]:
             f"CREATE NAMED COLLECTION ai_embed AS "
             f"provider = 'openai', "
             f"endpoint = 'http://localhost:{MOCK_PORT}/v1/embeddings', "
-            f"model = 'test-embed-model', "
             f"api_key = 'test-key'"
         )
         instance.query(
             f"CREATE NAMED COLLECTION ai_embed_error AS "
             f"provider = 'openai', "
             f"endpoint = 'http://localhost:{MOCK_PORT}/v1/embeddings_error', "
-            f"model = 'test-embed-model', "
             f"api_key = 'test-key'"
         )
         instance.query(
             f"CREATE NAMED COLLECTION ai_embed_dup_index AS "
             f"provider = 'openai', "
             f"endpoint = 'http://localhost:{MOCK_PORT}/v1/embeddings_dup_index', "
-            f"model = 'test-embed-model', "
             f"api_key = 'test-key'"
         )
         instance.query(
             f"CREATE NAMED COLLECTION ai_embed_wrong_count AS "
             f"provider = 'openai', "
             f"endpoint = 'http://localhost:{MOCK_PORT}/v1/embeddings_wrong_count', "
-            f"model = 'test-embed-model', "
             f"api_key = 'test-key'"
         )
         # Endpoints that drop the connection for the first N requests (armed via /set-flaky),
@@ -158,7 +154,6 @@ def started_cluster() -> typing.Generator[ClickHouseCluster, None, None]:
             f"CREATE NAMED COLLECTION ai_embed_flaky AS "
             f"provider = 'openai', "
             f"endpoint = 'http://localhost:{MOCK_PORT}/v1/embeddings_flaky', "
-            f"model = 'test-embed-model', "
             f"api_key = 'test-key'"
         )
 
@@ -568,6 +563,18 @@ def test_embed_basic(started_cluster):
     vec = parse_embedding(result)
     assert len(vec) == 4  # DEFAULT_EMBED_DIM in mock server
     assert any(v != 0.0 for v in vec)
+
+
+def test_embed_rejects_model_in_named_collection(started_cluster):
+    """aiEmbed takes `model` as a positional argument and never reads it from the named collection.
+    A collection that defines `model` (e.g. the text collection `ai_mock`) is rejected rather than
+    silently ignored."""
+    error = instance.query_and_get_error(
+        "SELECT aiEmbed('hello', 'test-embed-model', map('credentials', 'ai_mock'))",
+        settings=AI_SETTINGS,
+    )
+    assert "BAD_ARGUMENTS" in error
+    assert "defines 'model'" in error
 
 
 def test_embed_uses_embedding_default_credentials(started_cluster):

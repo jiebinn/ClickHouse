@@ -104,6 +104,7 @@ aiEmbed
 -- aiEmbed: non-constant model argument
 -- aiEmbed: model is a required positional argument
 -- aiEmbed: model in the parameter map is rejected
+-- aiEmbed: model in the named collection is rejected
 -- aiEmbed: model supplied as a positional argument resolves
 0
 -- aiEmbed: return type

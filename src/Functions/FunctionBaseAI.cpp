@@ -259,6 +259,14 @@ FunctionBaseAI::AIParams FunctionBaseAI::resolveAIParams(
 
     context->getRemoteHostFilter().checkURL(Poco::URI(params.collection.endpoint));
 
+    /// A function that does not declare `model` (i.e. `aiEmbed`, which takes it as an argument) must
+    /// not silently ignore a `model` defined in the named collection: reject it instead.
+    const bool declares_model = std::any_of(spec.begin(), spec.end(), [](const AIParamSpec & p) { return p.name == "model"; });
+    if (!declares_model && collection->has("model"))
+        throw Exception(ErrorCodes::BAD_ARGUMENTS,
+            "AI named collection '{}' defines 'model', which this function does not read from the named collection; "
+            "remove it from the collection and pass 'model' to the function directly", credentials);
+
     /// Resolve every declared parameter: map override -> named collection (if inherited) -> default.
     for (const auto & p : spec)
     {
