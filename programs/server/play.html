@@ -3813,6 +3813,14 @@ let opened_databases = new Set();
 /// rather than imported into the live connection.
 let selected_database = current_url.searchParams.get('database');
 
+/// The (server, user) connection the page loaded with, captured after the startup block above
+/// seeded the connection fields from the URL and before any user edit. While no history entry
+/// exists yet (the bootstrap window, before the first history write), `resetConnectionScopedState`
+/// compares against it to decide whether a trusted connection edit must cancel a deferred startup
+/// auto-run (`defer_run_for_reconcile`), which is armed against this loaded connection. Once an
+/// entry exists, that entry's own `connectionServer`/`connectionUser` stamp is authoritative.
+const initial_connection = {server: url_elem.value, user: user_elem.value};
+
 /// The (server, user) connection the current `selected_database` belongs to.
 /// `resetConnectionScopedState` compares the live connection against this — via the same
 /// `sameServerAddress` / `effectiveConnectionUser` identity the `window.onpopstate` restore gate
@@ -7972,12 +7980,29 @@ function resetConnectionScopedState() {
         && (!sameServerAddress(current_entry.connectionServer, url_elem.value)
             || effectiveConnectionUser(current_entry.connectionServer, current_entry.connectionUser)
                 !== effectiveConnectionUser(url_elem.value, user_elem.value));
-    if (cleared_selection || connection_diverged) {
+    /// Before the first history write there is no entry to compare against, yet a deferred startup
+    /// auto-run may already be armed (`defer_run_for_reconcile`) against the connection the page
+    /// loaded with (`initial_connection`). A trusted connection edit in that window must cancel the
+    /// run just as it would once an entry existed — otherwise a fresh server-default `?run=1#...`
+    /// link (no `database=`, so `cleared_selection` stays false; no `history.state`, so
+    /// `connection_diverged` stays false) would auto-execute the shared query against the just-edited
+    /// server/user the link never named. Compared with the SAME (`sameServerAddress`,
+    /// `effectiveConnectionUser`) identity, so a cosmetic edit (a root-path trailing slash, a default
+    /// port) or a password-only change neither churns the entry nor suppresses the legitimate
+    /// auto-run. A legacy entry that exists but carries no stamp is still left alone (both terms are
+    /// false there: `connection_diverged` by its `connectionServer !== undefined` guard, this one by
+    /// `!current_entry`), matching the previous behavior for such entries.
+    const bootstrap_connection_diverged = !current_entry
+        && (!sameServerAddress(initial_connection.server, url_elem.value)
+            || effectiveConnectionUser(initial_connection.server, initial_connection.user)
+                !== effectiveConnectionUser(url_elem.value, user_elem.value));
+    if (cleared_selection || connection_diverged || bootstrap_connection_diverged) {
         captureActiveTab();
-        /// The restamp drops `run=1` from the current entry while the bootstrap tab has no result
-        /// yet, which itself cancels a still-deferred startup auto-run (see `deferred_run_cancelled`
-        /// and `writeHistoryEntry`) — left uncancelled, it would still execute the shared query
-        /// against the just-edited server/user rather than the one the link specified.
+        /// The restamp seeds/refreshes the current entry through `refreshCurrentHistoryEntry` →
+        /// `writeHistoryEntry`, which drops `run=1` while the bootstrap tab has no result yet and
+        /// thereby cancels a still-deferred startup auto-run (see `deferred_run_cancelled` and
+        /// `writeHistoryEntry`) — left uncancelled, it would still execute the shared query against
+        /// the just-edited server/user rather than the one the link specified.
         refreshCurrentHistoryEntry(getActiveTab());
     }
 }
