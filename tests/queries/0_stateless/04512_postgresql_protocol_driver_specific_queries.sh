@@ -47,4 +47,15 @@ else
     echo "UNEXPECTED: multi-statement packet silently accepted"
 fi
 
+# The no-op handling covers only the exact PostgreSQL command forms; a malformed variant must not be
+# claimed as a successful no-op. It must fall through to the normal path and surface an error instead.
+for malformed in "DISCARD FOO" "DISCARD" "RESET" "LISTEN" "NOTIFY"; do
+    if psql --host localhost --port "${CLICKHOUSE_PORT_POSTGRESQL}" "${CLICKHOUSE_DATABASE}" --user "${PG_USER}" --no-align \
+            -c "${malformed}" 2>&1 | grep -qi error; then
+        echo "malformed '${malformed}' not silently accepted"
+    else
+        echo "UNEXPECTED: malformed '${malformed}' silently accepted"
+    fi
+done
+
 ${CLICKHOUSE_CLIENT} -q "DROP USER IF EXISTS ${PG_USER};"

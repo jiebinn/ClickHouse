@@ -82,6 +82,12 @@ namespace
 /// std::nullopt if the query must be executed normally. None of the recognized
 /// keywords (`LISTEN`, `UNLISTEN`, `NOTIFY`, `RESET`, `DISCARD`) is a valid
 /// ClickHouse statement start, so there are no false positives.
+///
+/// This is applied only in the simple-query (`Q`) protocol path, consistent with the other
+/// driver-compatibility no-ops (`BEGIN` / `COMMIT` / `SET application_name`): drivers emit these
+/// session-management commands as plain, unparameterized statements, so there is no reason to run
+/// them through the extended `Parse` / `Bind` / `Execute` flow, and the extended path deliberately
+/// performs no such driver-specific rewriting.
 std::optional<String> classifyNoOpDriverCommand(const String & query)
 {
     /// Only treat the packet as a no-op when it consists of a single statement. A simple-query
@@ -102,11 +108,17 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
 
     /// Enough to cover the longest recognized command plus its argument, e.g. "DISCARD SEQUENCES".
     static constexpr size_t max_prefix_len = 32;
-    const String prefix = PostgreSQLProtocol::Messaging::CommandComplete::extractNormalizedPrefix(query, max_prefix_len);
+    String prefix = PostgreSQLProtocol::Messaging::CommandComplete::extractNormalizedPrefix(query, max_prefix_len);
+
+    /// The multi-statement guard above rejected any statement after an interior `;`, so the only
+    /// `;` that can remain is a single trailing one (with trailing whitespace already collapsed).
+    /// Drop it so it is not mistaken for a command argument below.
+    while (!prefix.empty() && (prefix.back() == ';' || prefix.back() == ' '))
+        prefix.pop_back();
 
     /// `extractNormalizedPrefix` already uppercased the text and collapsed runs of
     /// whitespace to single spaces, so a keyword is a run of 'A'..'Z'. Take the next
-    /// such run, skipping a leading space; this also stops at a trailing `;` or `*`.
+    /// such run, skipping a leading space; this also stops at a `;` or `*`.
     size_t pos = 0;
     const auto take_word = [&]() -> String
     {
@@ -117,26 +129,41 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
             ++pos;
         return prefix.substr(start, pos - start);
     };
+    const auto has_more = [&]() -> bool
+    {
+        while (pos < prefix.size() && prefix[pos] == ' ')
+            ++pos;
+        return pos < prefix.size();
+    };
 
     /// Not `const`: the early returns below move it out, and `performance-no-automatic-move`
     /// (clang-tidy) rejects returning a `const` local because constness prevents the move.
     String command = take_word();
 
-    /// PostgreSQL reports the bare keyword for these, regardless of arguments
-    /// (`RESET ALL` and `RESET name` both report `RESET`).
+    /// PostgreSQL requires an argument for each of these and reports the bare keyword as the tag:
+    /// `RESET { name | ALL }`, `LISTEN channel`, `UNLISTEN { channel | * }`, `NOTIFY channel`
+    /// (`RESET ALL` and `RESET name` both report `RESET`). Require that an argument follows so a
+    /// malformed bare `RESET` / `LISTEN` / `UNLISTEN` / `NOTIFY` is not acknowledged as success but
+    /// falls through to the normal error path. The argument may be a name or `*` (`UNLISTEN *`).
     if (command == "LISTEN" || command == "UNLISTEN" || command == "NOTIFY" || command == "RESET")
-        return command;
+    {
+        if (has_more())
+            return command;
+        return std::nullopt;
+    }
 
     if (command == "DISCARD")
     {
-        /// PostgreSQL reports `DISCARD ALL`, `DISCARD PLANS`, `DISCARD SEQUENCES`
-        /// or `DISCARD TEMP` (with `TEMPORARY` normalized to `TEMP`).
+        /// PostgreSQL accepts only `DISCARD { ALL | PLANS | SEQUENCES | TEMP | TEMPORARY }`
+        /// (with `TEMPORARY` normalized to `TEMP`). Reject a bare `DISCARD` or an unknown
+        /// subcommand such as `DISCARD FOO` instead of claiming success for a command we were
+        /// never asked to emulate.
         String arg = take_word();
-        if (arg.empty())
-            return command;
         if (arg == "TEMPORARY")
             arg = "TEMP";
-        return command + " " + arg;
+        if ((arg == "ALL" || arg == "PLANS" || arg == "SEQUENCES" || arg == "TEMP") && !has_more())
+            return command + " " + arg;
+        return std::nullopt;
     }
 
     return std::nullopt;
