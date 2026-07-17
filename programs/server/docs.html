@@ -649,11 +649,13 @@
     };
 
     /// Known MDX components from the documentation toolchain (status badges and a few layout
-    /// wrappers). These are build machinery, not content, and are stripped whether or not the
-    /// Markdown that uses them also `import`s them: some embedded entries use them without a local
-    /// import (e.g. `transactionID` opens with a bare `<ExperimentalBadge/>` / `<CloudNotSupportedBadge/>`).
-    /// Only these known names, plus any `*Badge` component (see `preprocessMarkdown`), are stripped, so
-    /// literal `<...>` placeholders in the prose (e.g. `<SearchPhrase>` in an XML example) are preserved.
+    /// wrappers). The layout wrappers are build machinery, not content, and are stripped whether or not
+    /// the Markdown that uses them also `import`s them; a status `*Badge`, in contrast, carries real
+    /// availability information and is rendered as a readable label by `preprocessMarkdown` (some
+    /// embedded entries use badges without a local import, e.g. `transactionID` opens with a bare
+    /// `<ExperimentalBadge/>` / `<CloudNotSupportedBadge/>`). Only these known names, plus any `*Badge`
+    /// component (see `preprocessMarkdown`), are recognized, so literal `<...>` placeholders in the prose
+    /// (e.g. `<SearchPhrase>` in an XML example) are preserved.
     const MDX_COMPONENTS = [
         'ExperimentalBadge', 'BetaBadge', 'DeprecatedBadge',
         'CloudNotSupportedBadge', 'CloudAvailableBadge', 'PrivatePreviewBadge',
@@ -665,15 +667,33 @@
         'Note', 'Warning', 'Tip', 'Info', 'Check', 'Danger', 'Caution',
     ];
 
+    /// Human-readable text for an MDX `*Badge` component such as `<ExperimentalBadge/>`, mirroring the
+    /// terminal `help` renderer's `badgeLabel` (`src/Client/TerminalMarkdownRenderer.cpp`) so both help
+    /// surfaces convey the same status. Known badges get a descriptive label; any other `*Badge` (the
+    /// website adds new ones over time) falls back to its name with the camel case split (e.g.
+    /// `ScalePlanFeatureBadge` -> `Scale Plan Feature`).
+    function badgeLabel(name) {
+        switch (name) {
+            case 'ExperimentalBadge': return 'Experimental';
+            case 'BetaBadge': return 'Beta';
+            case 'CloudNotSupportedBadge': return 'Not supported in ClickHouse Cloud';
+            case 'CloudAvailableBadge': return 'Available in ClickHouse Cloud';
+            case 'CloudOnlyBadge': return 'ClickHouse Cloud only';
+            case 'PrivatePreviewBadge': return 'Private Preview';
+        }
+        const stem = name.endsWith('Badge') ? name.slice(0, -5) : name;
+        return stem.replace(/([^A-Z])([A-Z])/g, '$1 $2');
+    }
+
     /// Strip MDX-isms that occasionally leak into the documentation text: `import`/`export`
     /// statements and `<import ... >` directives are machinery for the website build, not content.
-    /// The components brought in by those `import`s (e.g. the `<ExperimentalBadge/>` of an
-    /// experimental feature, or a `<Tabs>` wrapper), as well as the known `MDX_COMPONENTS` above
-    /// even when they are not imported, are stripped as well: a self-closing custom tag like
-    /// `<ExperimentalBadge/>` is otherwise parsed by the HTML parser as an unclosed element — the
-    /// self-closing slash is ignored for non-void elements — that swallows the rest of the document
-    /// as its children, so the sanitizer then drops the whole body (the visible symptom: an
-    /// experimental entity rendered as an empty page).
+    /// The layout components brought in by those `import`s (e.g. a `<Tabs>` wrapper), as well as the
+    /// known `MDX_COMPONENTS` above even when they are not imported, are stripped as well; a status
+    /// `<ExperimentalBadge/>` is instead rendered as a readable label (see `badgeLabel`). Either way the
+    /// tag must not survive verbatim: a self-closing custom tag like `<Tabs/>` is otherwise parsed by
+    /// the HTML parser as an unclosed element — the self-closing slash is ignored for non-void
+    /// elements — that swallows the rest of the document as its children, so the sanitizer then drops
+    /// the whole body (the visible symptom: an entity rendered as an empty page).
     function preprocessMarkdown(md) {
         /// Seed with the known component names, then add the local names of imported MDX components:
         /// default imports (`import ExperimentalBadge from '...'`) and named/aliased imports
@@ -728,18 +748,24 @@
         });
 
         /// Remove the opening, closing, and self-closing tags of those components, keeping any
-        /// content nested between an open/close pair.
+        /// content nested between an open/close pair. A `*Badge` is handled separately below — it is
+        /// rendered as a readable label rather than dropped — so it is skipped here even when imported.
         for (const name of components)
-            out = out.replace(new RegExp('</?' + name + '(?:\\s[^>]*)?/?>', 'g'), '');
+            if (!name.endsWith('Badge'))
+                out = out.replace(new RegExp('</?' + name + '(?:\\s[^>]*)?/?>', 'g'), '');
 
-        /// Also strip any `*Badge` MDX component even when it was neither imported nor in the known list
-        /// above. The website adds new status badges over time (e.g. `<ScalePlanFeatureBadge .../>` in the
-        /// `S3Queue` engine docs), and an importless self-closing badge swallows the rest of the document
-        /// into its subtree, which the sanitizer then drops. Stripping `*Badge` by name removes the
-        /// dependency on the local `import` being present. A `*Badge` is a PascalCase component name that
-        /// does not occur in documentation prose, so this is safe; the terminal Markdown renderer strips
-        /// `*Badge` components the same way.
-        out = out.replace(/<\/?[A-Z][A-Za-z0-9]*Badge(?:\s[^>]*)?\/?>/g, '');
+        /// Render any `*Badge` MDX component as a readable label instead of dropping it, mirroring the
+        /// terminal `help` renderer (see `badgeLabel`). A status badge such as `<ExperimentalBadge/>`,
+        /// `<CloudNotSupportedBadge/>`, or `<ScalePlanFeatureBadge/>` carries real availability
+        /// information (experimental, not supported in ClickHouse Cloud, plan-gated), so the browser help
+        /// surface shows it as a bold label rather than silently omitting it. Matching by the `*Badge`
+        /// name (not the local `import`) removes the dependency on the import being present, and a
+        /// self-closing badge no longer swallows the rest of the document into its subtree for the
+        /// sanitizer to drop. A `*Badge` is a PascalCase component name that does not occur in
+        /// documentation prose, so this is safe. A closing `</...Badge>` (badges are self-closing in
+        /// practice) is simply removed.
+        out = out.replace(/<(\/?)([A-Z][A-Za-z0-9]*Badge)(?:\s[^>]*)?\/?>/g,
+            (m, closing, name) => closing ? '' : '**[' + badgeLabel(name) + ']**');
 
         /// Likewise strip any remaining *self-closing* PascalCase component that was neither imported
         /// nor named in the lists above, nor resolved as a known snippet import — the website adds new
