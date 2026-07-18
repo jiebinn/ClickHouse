@@ -30,12 +30,19 @@ INSERT INTO t_sum_map_nullable_bool_v0 SELECT sumMapState([1], [false::Nullable(
 SELECT sumMapMerge(s) FROM t_sum_map_nullable_bool_v0;
 DROP TABLE t_sum_map_nullable_bool_v0;
 
--- Bool as the map KEY across version-0 states must dedup (previously two 'true' keys stayed separate).
+-- Bool as the map KEY for a version-0 state. The key deserialize runs outside the version switch,
+-- so merge a STORED (deserialized) version-0 state with a FRESH add() state: without the flag the
+-- deserialized key stays bool-tagged while add() produces an int-tagged key, so they wrongly stay
+-- separate. Two stored states would share the deserialized carrier and dedup even on buggy code,
+-- so the mixed form is what pins the fix.
 DROP TABLE IF EXISTS t_sum_map_bool_key_v0;
 CREATE TABLE t_sum_map_bool_key_v0 (s AggregateFunction(0, sumMap, Array(Bool), Array(UInt32))) ENGINE = TinyLog;
 INSERT INTO t_sum_map_bool_key_v0 SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'));
-INSERT INTO t_sum_map_bool_key_v0 SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'));
-SELECT sumMapMerge(s) FROM t_sum_map_bool_key_v0;
+SELECT sumMapMerge(s) FROM (
+    SELECT s FROM t_sum_map_bool_key_v0
+    UNION ALL
+    SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'))
+);
 DROP TABLE t_sum_map_bool_key_v0;
 
 -- The flag is set before the version switch, so the Bool KEY deserialize also applies to the
