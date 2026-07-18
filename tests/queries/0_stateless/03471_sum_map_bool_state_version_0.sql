@@ -51,3 +51,13 @@ SELECT sumMapMerge(s) FROM (
     SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'))
 );
 DROP TABLE t_sum_map_bool_key_default;
+
+-- The serialization version comes from the AggregateFunction data type parameter, which is
+-- user/data-controlled and not validated at type creation. Serializing a state whose type
+-- carries an unknown version must throw a catchable exception, not a LOGICAL_ERROR that aborts
+-- debug/sanitizer builds (found by the AST fuzzer mutating the version into AggregateFunction(256, ...)).
+SELECT hex(CAST(sumMapState([1], [10::UInt32]), 'AggregateFunction(256, sumMap, Array(UInt8), Array(UInt32))')); -- { serverError BAD_ARGUMENTS }
+SELECT hex(CAST(sumMapWithOverflowState([1], [10::UInt32]), 'AggregateFunction(256, sumMapWithOverflow, Array(UInt8), Array(UInt32))')); -- { serverError BAD_ARGUMENTS }
+SELECT hex(CAST(minMapState([1], [10::UInt32]), 'AggregateFunction(256, minMap, Array(UInt8), Array(UInt32))')); -- { serverError BAD_ARGUMENTS }
+SELECT hex(CAST(maxMapState([1], [10::UInt32]), 'AggregateFunction(256, maxMap, Array(UInt8), Array(UInt32))')); -- { serverError BAD_ARGUMENTS }
+SELECT hex(CAST(sumMapFilteredState([1])([1], [10::UInt32]), 'AggregateFunction(256, sumMapFiltered([1]), Array(UInt8), Array(UInt32))')); -- { serverError BAD_ARGUMENTS }

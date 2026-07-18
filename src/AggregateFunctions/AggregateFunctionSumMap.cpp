@@ -320,7 +320,11 @@ public:
                 break;
             }
             default:
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown version {}, of -Map aggregate function serialization state", *version);
+                /// The version comes from the AggregateFunction data type parameter, which is
+                /// user/data-controlled and not validated at type creation. Throw a catchable
+                /// exception instead of LOGICAL_ERROR (which aborts debug/sanitizer builds).
+                /// Symmetric with deserialize() below.
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unexpected version {} of -Map aggregate function serialization state", *version);
         }
 
         for (const auto & elem : merged_maps)
