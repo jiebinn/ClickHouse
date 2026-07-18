@@ -34,11 +34,15 @@ CREATE TABLE logs_merge AS logs ENGINE = Merge(currentDatabase(), '^logs_dist$')
 
 -- The trigger: identical text-index predicate in PREWHERE and WHERE over the Merge table.
 -- force_data_skipping_indices guarantees the text-index direct-read path engages.
--- Left unpinned on query_plan_direct_read_from_text_index so both randomized values exercise the fix.
+-- query_plan_direct_read_from_text_index is pinned to 1: the double-registration only happens when
+-- direct read is actually enabled and the whole Merge -> Distributed -> MergeTree pipeline is built
+-- (the abort is thrown during pipeline build, not plan optimization). The runner randomizes this
+-- setting to 0 on ~5% of runs, which disables the optimization and would silently skip the crash
+-- path, so this repro query must pin it to exercise the fix deterministically on every run.
 SELECT count() FROM logs_merge
 PREWHERE has(mapValues(attributes), toNullable('192.168.1.1'))
 WHERE has(mapValues(attributes), toNullable('192.168.1.1'))
-SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
+SETTINGS force_data_skipping_indices = 'attributes_vals_idx', query_plan_direct_read_from_text_index = 1;
 
 -- Direct read from the text index must remain engaged (optimization preserved, not disabled).
 -- query_plan_direct_read_from_text_index is pinned to 1 here: it is randomized by the test runner and
