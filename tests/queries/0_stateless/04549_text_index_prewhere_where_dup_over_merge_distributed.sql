@@ -8,11 +8,8 @@
 
 SET enable_analyzer = 1;
 SET allow_experimental_full_text_index = 1;
--- Pin prefer_localhost_replica: the double-registration bug only engages when the whole
--- Merge -> Distributed -> MergeTree plan is built and optimized on the initiator (local replica).
--- With prefer_localhost_replica = 0 the read is dispatched to the remote replica, so the
--- MergeTree-level __text_index_..._has_<hash> column is not part of the initiator plan and the
--- EXPLAIN visibility check below would spuriously report the optimization as disabled.
+-- The double-registration is reached only when the whole Merge -> Distributed -> MergeTree plan is
+-- built and optimized on the initiator (local replica).
 SET prefer_localhost_replica = 1;
 
 DROP TABLE IF EXISTS logs;
@@ -35,18 +32,23 @@ CREATE TABLE logs_merge AS logs ENGINE = Merge(currentDatabase(), '^logs_dist$')
 
 -- The trigger: identical text-index predicate in PREWHERE and WHERE over the Merge table.
 -- force_data_skipping_indices guarantees the text-index direct-read path engages.
+-- Left unpinned on query_plan_direct_read_from_text_index so both randomized values exercise the fix.
 SELECT count() FROM logs_merge
 PREWHERE has(mapValues(attributes), toNullable('192.168.1.1'))
 WHERE has(mapValues(attributes), toNullable('192.168.1.1'))
 SETTINGS force_data_skipping_indices = 'attributes_vals_idx';
 
 -- Direct read from the text index must remain engaged (optimization preserved, not disabled).
+-- query_plan_direct_read_from_text_index is pinned to 1 here: it is randomized by the test runner and
+-- when off it disables the whole optimization, so the __text_index_..._has_<hash> column would be
+-- absent and this visibility check would spuriously report the optimization as disabled.
 SELECT count() > 0 FROM
 (
     EXPLAIN actions = 1
     SELECT count() FROM logs_merge
     PREWHERE has(mapValues(attributes), toNullable('192.168.1.1'))
     WHERE has(mapValues(attributes), toNullable('192.168.1.1'))
+    SETTINGS query_plan_direct_read_from_text_index = 1
 )
 WHERE explain ILIKE '%__text_index_attributes_vals_idx_has%';
 
