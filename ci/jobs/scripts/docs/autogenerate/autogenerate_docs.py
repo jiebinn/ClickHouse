@@ -14,7 +14,10 @@ Legacy-link bridge: the SQL emits Docusaurus-style paths (destination files and
 in-content links, e.g. `/operations/settings/settings#x`). While `--remap-legacy`
 is on (the default, for the migration period), both are translated to their
 Mintlify equivalents via `_migration/slug-map.csv`. Once the generation source
-is updated to emit Mintlify-native paths, run with `--no-remap-legacy`.
+is updated to emit Mintlify-native paths, run with `--no-remap-legacy`. Until
+then that mode cannot produce any page (every generator's destination and links
+are still Docusaurus-style), so it is rejected up front rather than failing
+mid-run -- see the guard in `main`.
 
 Modes: `--write` updates the docs tree in place; `--check` regenerates to a
 scratch copy and diffs against the committed docs, failing on drift (so CI can
@@ -565,22 +568,33 @@ def main(argv=None):
     if args.remap:
         all_generators += legacy_generators
     else:
-        # --no-remap-legacy cannot emit the component-reference pages: they are
-        # discovered through the slug map and need its link/path remapping. If the
-        # current selection would include any of them -- a full run, or an --only
-        # substring that matches one under the same semantics as the final filter --
-        # fail fast instead of quietly generating nothing (which would report
-        # success while skipping whole categories).
-        blocked = selected(legacy_generators)
+        # --no-remap-legacy is a forward-looking mode for after the generation
+        # source is updated to emit Mintlify-native paths (see the module
+        # docstring). Today no family can be produced in it:
+        #   * the component-reference families (table/database engines, data
+        #     types, formats, table/window functions) are discovered through the
+        #     slug map and need its link/path remapping to even be enumerated;
+        #   * settings, functions and aggregate carry hard-coded Docusaurus
+        #     `dest` paths (e.g. docs/operations/settings/settings.md,
+        #     docs/sql-reference/aggregate-functions/reference/<fn>.md) whose
+        #     Mintlify page lives elsewhere, so the naive `re.sub(r"^docs/", "")`
+        #     in generate() resolves them to files that do not exist in the
+        #     Mintlify tree -- open(dest) would fail with FileNotFoundError once
+        #     the SQL has run.
+        # So fail fast for the whole selection (a full run, or an --only that
+        # matches any generator) instead of dying mid-run, or -- for an --only
+        # that matches nothing -- silently generating nothing.
+        blocked = selected(all_generators) + selected(legacy_generators)
         if blocked:
             families = sorted({g["name"].split(":", 1)[0] for g in blocked})
             raise SystemExit(
                 "error: --no-remap-legacy cannot generate the "
-                f"{', '.join(families)} pages -- they are discovered through the "
-                "slug map (_migration/slug-map.csv) and need its link/path "
-                "remapping, which is only done with --remap-legacy (the default). "
-                "Re-run with --remap-legacy, or restrict --only to families that "
-                "do not need it (settings, functions, aggregate).")
+                f"{', '.join(families)} pages -- the generation source still "
+                "emits Docusaurus-style paths and links, which only "
+                "--remap-legacy (the default) translates to their Mintlify "
+                "equivalents via the slug map (_migration/slug-map.csv). Re-run "
+                "with --remap-legacy until the generation source is updated to "
+                "emit Mintlify-native paths.")
 
     generators = selected(all_generators)
     # A selector that matches nothing is a mistake (a typo, or a family unavailable
