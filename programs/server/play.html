@@ -4818,7 +4818,8 @@ document.getElementById('databases-icon').addEventListener('mousedown', () => {
 
 databases_toggle.addEventListener('click', e => {
     e.stopPropagation();
-    /// Let the browser handle modifier clicks as a link (open in a new tab or window).
+    /// Defer any modified click to the browser's native link handling instead of toggling:
+    /// a new tab or window for the new-tab gestures, or the context menu for macOS Ctrl+click.
     if (e.ctrlKey || e.metaKey || e.shiftKey) return;
     /// Normal click: toggle the databases panel instead of following the link.
     e.preventDefault();
@@ -9737,10 +9738,11 @@ document.getElementById('download-button').addEventListener('click', async funct
         else activateTerminal();
     }
 
-    /// Middle-click, Shift+click, or the platform's new-tab modifier click (Cmd+click on
-    /// macOS, Ctrl+click elsewhere) opens the terminal in a new browser tab or window; let
-    /// the anchor's native behaviour handle it (middle-click does not fire a `click` event
-    /// and is handled natively too).
+    /// True for a modified click that should defer to the anchor's native handling rather
+    /// than toggling the inline terminal: Shift+click or the platform's new-tab modifier
+    /// click (Cmd+click on macOS, Ctrl+click elsewhere) opens a new tab or window, while
+    /// macOS Ctrl+click is the secondary/context-menu click. (Middle-click does not fire a
+    /// `click` event and is handled natively too.)
     function wantsNewTab(e) {
         return e.ctrlKey || e.metaKey || e.shiftKey;
     }
@@ -9750,7 +9752,8 @@ document.getElementById('download-button').addEventListener('click', async funct
     terminalIcon.addEventListener('pointerdown', updateTerminalHref);
 
     terminalIcon.addEventListener('click', function(e) {
-        /// For a modifier-click, fall through to the anchor's native "open in a new tab or window".
+        /// For a modified click, fall through to the anchor's native handling (a new tab or
+        /// window, or the macOS Ctrl+click context menu) instead of toggling the terminal.
         if (wantsNewTab(e)) return;
         /// A plain left click toggles the inline terminal panel instead of navigating.
         e.preventDefault();
