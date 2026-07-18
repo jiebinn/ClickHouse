@@ -67,4 +67,21 @@ ${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_targ
 ${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.mask_targe" 2>&1 \
     | grep -oF -m1 "Maybe you meant ${DB}.mask_target?" | sed "s/${DB}/{db}/g"
 
+# TOCTOU end-state: if a dictionary is replaced by a regular table under the same name, a
+# dictionary-only user querying that name must still see it as a missing dictionary, never as
+# "... is not a DICTIONARY". The fix fetches and validates the create query in a single lookup, so
+# the object's kind at fetch time - a regular table here - is reported consistently, whatever it was
+# before. This is the settled state a concurrent drop-of-dictionary/create-of-table would leave, and
+# it must be indistinguishable from an exact-name table probe or a missing name for that user.
+${CLICKHOUSE_CLIENT} -q "DROP DICTIONARY ${DB}.dict_target"
+${CLICKHOUSE_CLIENT} -q "CREATE TABLE ${DB}.dict_target (key UInt64, val UInt64) ENGINE = Memory"
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.dict_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.dict_target" 2>&1 \
+    | grep -m1 -c -F "There is no dictionary" || true
+
+# Sanity check: a user with full visibility still gets the precise "is not a DICTIONARY" diagnostic.
+${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.dict_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+
 ${CLICKHOUSE_CLIENT} -q "DROP USER ${USER}"

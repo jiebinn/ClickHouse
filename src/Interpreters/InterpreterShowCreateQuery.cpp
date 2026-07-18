@@ -70,58 +70,65 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         bool is_dictionary = static_cast<bool>(query_ptr->as<ASTShowCreateDictionaryQuery>());
 
         if (is_dictionary)
-        {
             getContext()->checkAccess(AccessType::SHOW_DICTIONARIES, table_id);
+        else
+            getContext()->checkAccess(AccessType::SHOW_COLUMNS, table_id);
 
-            /// `SHOW CREATE DICTIONARY` is authorized with `SHOW DICTIONARIES`, which does not imply
-            /// `SHOW TABLES`/`SHOW COLUMNS`. A user with only `SHOW DICTIONARIES` must not be able to tell
-            /// a hidden regular table apart from a name that does not exist - otherwise `SHOW CREATE
-            /// DICTIONARY` becomes an existence oracle for tables they may not see (the "is not a
-            /// DICTIONARY" error below would confirm the table exists). So, when such a user names an
-            /// object that is not a dictionary - whether a hidden table or a missing name - report both
-            /// identically as a missing dictionary, carrying the same "Maybe you meant ...?" hint (which
-            /// only ever suggests dictionaries to this user). Users who can also observe the object as a
-            /// table keep the precise diagnostics. This mirrors `InterpreterExistsQuery`, where `EXISTS
-            /// DICTIONARY` on a regular table reports non-existence for such a user.
+        /// `SHOW CREATE DICTIONARY` is authorized with `SHOW DICTIONARIES`, which does not imply
+        /// `SHOW TABLES`/`SHOW COLUMNS`. A user with only `SHOW DICTIONARIES` must not be able to tell
+        /// a hidden regular table apart from a name that does not exist - otherwise `SHOW CREATE
+        /// DICTIONARY` becomes an existence oracle for tables they may not see (the "is not a
+        /// DICTIONARY" error below would confirm the table exists). So, for such a user, fetch and
+        /// validate the *same* create query once: with no separate existence probe there is no TOCTOU
+        /// window in which the object could be dropped and recreated as a different kind between the
+        /// probe and the fetch. If the object is not a dictionary - a hidden table, a name that
+        /// vanished, or one that fails to load - report it identically to a missing dictionary,
+        /// carrying the same "Maybe you meant ...?" hint (which only ever suggests dictionaries to this
+        /// user). Users who can also observe the object as a table keep the precise diagnostics below.
+        /// This mirrors `InterpreterExistsQuery`, which likewise answers a dictionary-only user from a
+        /// single observation instead of a second visibility-changing lookup.
+        bool remask_as_missing_dictionary = false;
+        if (is_dictionary)
+        {
             const auto & access = getContext()->getAccess();
             const bool can_see_as_table
                 = access->isGranted(AccessType::SHOW_TABLES, table_id.database_name, table_id.table_name)
                 || access->isGranted(AccessType::SHOW_COLUMNS, table_id.database_name, table_id.table_name);
             if (!can_see_as_table)
             {
-                /// The probe itself must fail closed: `isDictionaryExist` loads the object
-                /// (`tryGetTable` waits for it to start up and rethrows load failures), so a hidden
-                /// table that is still starting up or failed to load would otherwise escape with a
-                /// load error here - distinguishable from a missing name, reopening the oracle.
-                bool is_dictionary_exist = false;
                 try
                 {
-                    is_dictionary_exist = DatabaseCatalog::instance().isDictionaryExist(table_id);
+                    create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
                 }
                 catch (...)
                 {
-                    /// Ok to swallow: treat any probe failure as "not a dictionary". The error is
-                    /// not lost - it resurfaces when a user who may see the object really accesses it.
-                    is_dictionary_exist = false;
+                    /// Ok to swallow: a missing name, or a hidden table still starting up or failing
+                    /// to load, is treated as "not a dictionary". The error is not lost - it resurfaces
+                    /// when a user who may see the object really accesses it.
+                    create_query = nullptr;
                 }
-                if (!is_dictionary_exist)
-                {
-                    auto database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
-                    TableNameHints hints(database, getContext());
-                    auto hint = hints.getHintForTable(table_id.table_name);
-                    if (hint.first.empty())
-                        throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}",
-                            backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name));
-                    throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}. Maybe you meant {}.{}?",
-                        backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name),
-                        backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
-                }
+                if (!create_query || !create_query->as<ASTCreateQuery &>().is_dictionary)
+                    remask_as_missing_dictionary = true;
             }
         }
-        else
-            getContext()->checkAccess(AccessType::SHOW_COLUMNS, table_id);
 
-        create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
+        if (remask_as_missing_dictionary)
+        {
+            /// Discard any create query fetched for a hidden table so its definition cannot leak.
+            create_query = nullptr;
+            auto database = DatabaseCatalog::instance().getDatabase(table_id.database_name);
+            TableNameHints hints(database, getContext());
+            auto hint = hints.getHintForTable(table_id.table_name);
+            if (hint.first.empty())
+                throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}",
+                    backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name));
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "There is no dictionary {}.{}. Maybe you meant {}.{}?",
+                backQuoteIfNeed(table_id.database_name), backQuoteIfNeed(table_id.table_name),
+                backQuoteIfNeed(hint.first), backQuoteIfNeed(hint.second));
+        }
+
+        if (!create_query)
+            create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
 
         auto & ast_create_query = create_query->as<ASTCreateQuery &>();
         if (query_ptr->as<ASTShowCreateViewQuery>())
