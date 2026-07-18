@@ -11,7 +11,7 @@ doc_type: 'reference'
 
 Table function `remote` allows to access remote servers on-the-fly, i.e. without creating a [Distributed](../../engines/table-engines/special/distributed.md) table. Table function `remoteSecure` is same as `remote` but over a secure connection.
 
-Both functions can be used in `SELECT` and `INSERT` queries.
+Both functions can be used in `SELECT` and `INSERT` queries when the target is an ordinary `db`/`table`. When the target is itself a table function (for example `remote('127.0.0.1', numbers(10))`), the table is read-only: there is no remote table to insert into, so `INSERT` is rejected with a `NOT_IMPLEMENTED` exception.
 
 ## Syntax {#syntax}
 
