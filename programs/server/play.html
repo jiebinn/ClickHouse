@@ -6077,9 +6077,11 @@ function addTab() {
 }
 
 /// Duplicate a tab: copy its query and parameters into a new tab inserted right after the
-/// source, then switch to the copy. Triggered by a middle-click or Ctrl/Shift/Cmd+click on
-/// the title — the browser gesture for "open in a new tab". `guard_paste` is set for a genuine
-/// middle click, so the activation swallows the X11 PRIMARY paste that follows focusing the editor.
+/// source, then switch to the copy. Triggered by a middle-click, Shift+click, or the platform's
+/// new-tab modifier click (Cmd+click on macOS, Ctrl+click elsewhere) on the title — the browser
+/// gesture for "open in a new tab" (macOS Ctrl+click is the secondary/context-menu click and is
+/// left to the browser, not a duplicate gesture). `guard_paste` is set for a genuine middle click,
+/// so the activation swallows the X11 PRIMARY paste that follows focusing the editor.
 function duplicateTab(id, guard_paste = false) {
     const src = tabs.find(t => t.id === id);
     if (!src) return;
