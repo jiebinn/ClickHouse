@@ -20,6 +20,11 @@ CREATE TABLE tab_sz3_lorenzo_reg (
     val  Float64 CODEC(SZ3('ALGO_LORENZO_REG', 'ABS', 0.01))
 ) ENGINE = MergeTree ORDER BY key;
 
+-- Stop background merges so the pre-merge assertion below sees the data after exactly one lossy pass.
+-- Otherwise a background merge could fire between the second INSERT and that SELECT, recompress the
+-- column through the lossy codec, and inflate the error past the one-pass bound, making the test flaky.
+SYSTEM STOP MERGES tab_sz3_lorenzo_reg;
+
 -- A smooth signal with a linear trend, so the regression predictor is actually selected for the blocks
 -- (as opposed to the lossless fallback that SZ3 uses for tiny or incompressible inputs).
 -- Two parts, so the OPTIMIZE FINAL below actually merges and re-reads the SZ3 column during the merge.
@@ -38,10 +43,11 @@ SELECT 'ALGO_LORENZO_REG data round-trips within the error bound (the read faile
 SELECT count() = 100000, max(abs(orig - val)) <= 0.011, countIf(val != orig) > 0 FROM tab_sz3_lorenzo_reg;
 
 SELECT 'The same holds after a merge recompresses the data';
+SYSTEM START MERGES tab_sz3_lorenzo_reg;
 OPTIMIZE TABLE tab_sz3_lorenzo_reg FINAL;
--- A merge decompresses and recompresses the column through the lossy codec, so every pass adds up to
--- the ABS bound (0.01) on top of the previous one. The initial write, a possible concurrent background
--- merge of the two parts, and the OPTIMIZE FINAL rewrite give at most three lossy passes.
+-- The OPTIMIZE FINAL merge decompresses and recompresses the column through the lossy codec, so the data
+-- has now gone through two lossy passes: the initial write and this merge. Each pass can add up to the
+-- ABS bound (0.01), and we keep a small extra margin on top for codec rounding.
 SELECT count() = 100000, max(abs(orig - val)) <= 0.031 FROM tab_sz3_lorenzo_reg;
 
 DROP TABLE tab_sz3_lorenzo_reg;
