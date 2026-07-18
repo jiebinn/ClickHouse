@@ -285,8 +285,14 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             for (const auto & nested_arguments : nested_arguments_list)
                 nested_functions.push_back(get(nested_name, action, nested_arguments, nested_parameters, out_properties, state_variant));
 
+            /// Use the resolved nested function's name (which reflects NullsAction and the state variant,
+            /// e.g. `any` + RESPECT NULLS -> `any_respect_nulls`) rather than the pre-action `nested_name`.
+            /// Otherwise the combined function is named after a different state layout than it actually has,
+            /// so its serialized `-State` type name re-resolves to the wrong implementation on a round-trip.
+            /// Read the name into a local before moving the vector: argument evaluation order is unspecified.
+            String resolved_nested_name = nested_functions.front()->getName();
             combined_function = combinator->transformAggregateFunctionFromMultipleNestedFunctions(
-                getAliasToOrName(nested_name), std::move(nested_functions), out_properties, argument_types, parameters);
+                resolved_nested_name, std::move(nested_functions), out_properties, argument_types, parameters);
         }
         else
         {
