@@ -67,6 +67,29 @@ ${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_targ
 ${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.mask_targe" 2>&1 \
     | grep -oF -m1 "Maybe you meant ${DB}.mask_target?" | sed "s/${DB}/{db}/g"
 
+# The same masking must be avoided for an *exact* hidden-table probe, not only for a typo. A
+# dictionary-only user naming the hidden table `mask_target` exactly is remasked to a missing
+# dictionary; the hint search must skip that exact (hidden) name and keep scanning the same database,
+# so it still offers the visible dictionary `mask_targets` (one edit away) instead of giving up and
+# returning the bare error.
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_target" 2>&1 \
+    | grep -oF -m1 "Maybe you meant ${DB}.mask_targets?" | sed "s/${DB}/{db}/g"
+
+# The exact hidden table's own name must never leak into that hint.
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_target" 2>&1 \
+    | grep -c -F "meant ${DB}.mask_target?" || true
+
+# And the exact probe must stay indistinguishable from a missing dictionary - reported as
+# "There is no dictionary", never "... is not a DICTIONARY", which would confirm the table exists.
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+${CLICKHOUSE_CLIENT} --user "${USER}" -q "SHOW CREATE DICTIONARY ${DB}.mask_target" 2>&1 \
+    | grep -m1 -c -F "There is no dictionary" || true
+
+# Sanity check: a user with full visibility keeps the precise "is not a DICTIONARY" diagnostic.
+${CLICKHOUSE_CLIENT} -q "SHOW CREATE DICTIONARY ${DB}.mask_target" 2>&1 \
+    | grep -m1 -c -F "is not a DICTIONARY" || true
+
 # TOCTOU end-state: if a dictionary is replaced by a regular table under the same name, a
 # dictionary-only user querying that name must still see it as a missing dictionary, never as
 # "... is not a DICTIONARY". The fix fetches and validates the create query in a single lookup, so

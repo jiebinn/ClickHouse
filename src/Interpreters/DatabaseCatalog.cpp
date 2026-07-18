@@ -2346,26 +2346,27 @@ std::pair<String, String> TableNameHints::getHintForTable(const String & table_n
     /// is allowed to see, instead of masking it and falling back to the bare error.
     auto results = NamePrompter<max_hint_candidates>::getHints(table_name, getAllRegisteredNames());
 
-    /// Skip an exact match from the same database - suggesting the same name is not helpful.
-    /// This can happen when a table name appears in `getAllRegisteredNames` but the table
-    /// itself cannot be retrieved (e.g., during server startup when a table has not yet been loaded,
-    /// or when the table is looked up by a stale UUID and a new table with the same name exists).
-    /// The closest candidate has distance zero when an exact match exists, so it is `results[0]`.
-    /// Fall through to extended search, which may find the table in another database.
-    if (results.empty() || results[0] == table_name)
-        return getExtendedHintForTable(table_name);
-
     /// Return the closest candidate the user is actually allowed to see. Scanning past hidden names
     /// (rather than checking only the closest) is what lets a `SHOW_DICTIONARIES`-only user still get
     /// a dictionary hint when a closer hidden table would otherwise mask it. The visibility check is
     /// cheap for `SHOW_TABLES`-covered names and loads at most one table per remaining candidate.
     for (const auto & candidate : results)
     {
+        /// Skip an exact match from the same database - suggesting the same name is not helpful. This
+        /// can happen when a table name appears in `getAllRegisteredNames` but the table itself cannot
+        /// be retrieved (e.g., during server startup when a table has not yet been loaded, or when the
+        /// table is looked up by a stale UUID and a new table with the same name exists), and also on
+        /// the remasked `SHOW CREATE DICTIONARY` path where the exact name is a hidden table. Skip only
+        /// this one candidate and keep scanning - a slightly farther but visible name in this database
+        /// (e.g. a dictionary such a user may see) is still a useful hint and must not be masked by it.
+        if (candidate == table_name)
+            continue;
+
         if (isHintNameVisible(candidate))
             return std::make_pair(database->getDatabaseName(), candidate);
     }
 
-    /// Nothing visible in this database - the table may still exist in another one.
+    /// Nothing else visible in this database - the table may still exist in another one.
     return getExtendedHintForTable(table_name);
 }
 
