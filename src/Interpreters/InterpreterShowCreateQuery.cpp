@@ -69,6 +69,19 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
 
         bool is_dictionary = static_cast<bool>(query_ptr->as<ASTShowCreateDictionaryQuery>());
 
+        /// Access is checked on the *requested* identifier, before any lookup or hinting. This is what
+        /// bounds the "Maybe you meant ...?" hint: it appears only when the user's grant covers the
+        /// requested name - a broad `db.*` / `*.*` grant, or the exact name itself. With an
+        /// object-level `SHOW` grant scoped to one specific name, a misspelled name is not covered, so
+        /// this check denies it first and no hint is produced (covered by
+        /// `04611_show_create_hint_object_level_grant`).
+        ///
+        /// This narrower contract is deliberate. `SELECT` resolves the name during analysis, before its
+        /// access check, so it does surface a hint (and, for an existing but hidden object, distinguishes
+        /// it from a missing name) even under an object-level grant. `SHOW CREATE` must not behave as
+        /// such an existence oracle: checking access on the requested name first means an existing but
+        /// hidden object and a missing name are both reported as `ACCESS_DENIED` and stay
+        /// indistinguishable to a user who is not granted on that name.
         if (is_dictionary)
             getContext()->checkAccess(AccessType::SHOW_DICTIONARIES, table_id);
         else
