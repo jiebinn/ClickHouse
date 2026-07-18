@@ -30,8 +30,6 @@ namespace ErrorCodes
     extern const int THERE_IS_NO_QUERY;
     extern const int BAD_ARGUMENTS;
     extern const int UNKNOWN_TABLE;
-    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
-    extern const int CANNOT_GET_CREATE_DICTIONARY_QUERY;
 }
 
 BlockIO InterpreterShowCreateQuery::execute()
@@ -93,17 +91,21 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         /// `SHOW TABLES`/`SHOW COLUMNS`. A user with only `SHOW DICTIONARIES` must not be able to tell
         /// a hidden regular table apart from a name that does not exist - otherwise `SHOW CREATE
         /// DICTIONARY` becomes an existence oracle for tables they may not see (the "is not a
-        /// DICTIONARY" error below would confirm the table exists). So, for such a user, fetch and
-        /// validate the *same* create query once: with no separate existence probe there is no TOCTOU
-        /// window in which the object could be dropped and recreated as a different kind between the
-        /// probe and the fetch. A hidden regular table and a name that does not exist are both reported
-        /// identically as a missing dictionary, carrying the same "Maybe you meant ...?" hint (which
-        /// only ever suggests dictionaries to this user). A genuine failure to produce the create query
-        /// - e.g. an object that exists but fails to load or start up - is preserved and surfaced (see
-        /// the catch below), matching `EXISTS DICTIONARY`, rather than being masked as a missing
-        /// dictionary. Users who can also observe the object as a table keep the precise diagnostics
-        /// below. This mirrors `InterpreterExistsQuery`, which likewise answers a dictionary-only user
-        /// from a single observation instead of a second visibility-changing lookup.
+        /// DICTIONARY" error below would confirm the table exists). So, for such a user, this path is
+        /// fail-closed: the create query is fetched and validated in a *single* lookup (no separate
+        /// existence probe, hence no TOCTOU window in which the object could be dropped and recreated as
+        /// a different kind between a probe and the fetch), and the object is shown only if that one
+        /// fetch proves it to be a dictionary. Every other outcome is reported identically as a missing
+        /// dictionary, carrying the same "Maybe you meant ...?" hint (which only ever suggests
+        /// dictionaries to this user): a hidden regular table, a name that does not exist, and - crucially
+        /// - any failure of `getCreateTableQuery` itself. The decision must not key on the failure's
+        /// error code: `getCreateTableQuery` goes through `tryGetTable`, so a hidden regular table that
+        /// is still starting up, has corrupted metadata, or otherwise throws would surface a distinguishing
+        /// error and reopen the oracle. Unless the fetch positively proves the object is a dictionary, it
+        /// is masked. The swallowed error is not lost: it resurfaces when a user who is allowed to see the
+        /// object really accesses it. Users who can also observe the object as a table keep the precise
+        /// diagnostics below. This mirrors `InterpreterExistsQuery`, which likewise answers a
+        /// dictionary-only user from a single observation instead of a second visibility-changing lookup.
         bool remask_as_missing_dictionary = false;
         if (is_dictionary)
         {
@@ -117,22 +119,20 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
                 {
                     create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
                 }
-                catch (const Exception & e)
+                catch (...)
                 {
-                    /// Only a *missing* name is remasked as a missing dictionary, so that a hidden
-                    /// regular table and a name that does not exist stay indistinguishable to a user
-                    /// with only `SHOW DICTIONARIES` (the existence-oracle protection). Any other
-                    /// failure - most notably an object that exists but fails to load or start up - is
-                    /// preserved and surfaced, matching `EXISTS DICTIONARY`: the user is authorized to
-                    /// observe dictionaries, so the real error is more useful than a fabricated "no such
-                    /// dictionary", and it must not be hidden for an object that really is a dictionary.
-                    const bool name_is_missing = e.code() == ErrorCodes::UNKNOWN_TABLE
-                        || e.code() == ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY
-                        || e.code() == ErrorCodes::CANNOT_GET_CREATE_DICTIONARY_QUERY;
-                    if (!name_is_missing)
-                        throw;
+                    /// Ok to swallow: fail closed for a dictionary-only user. Any failure to produce the
+                    /// create query - a name that does not exist, a hidden regular table that fails to
+                    /// load or start up, or metadata that cannot be read - is treated as "not a
+                    /// dictionary", so all of these stay indistinguishable and the hidden table's
+                    /// existence cannot be inferred from the error. The decision cannot key on the error
+                    /// code: `getCreateTableQuery` calls `tryGetTable` first, which rethrows a hidden
+                    /// table's own load/startup failure. The swallowed error is not lost - it resurfaces
+                    /// when a user who is allowed to see the object really accesses it.
                     create_query = nullptr;
                 }
+                /// Show the object only if the single fetch positively proves it to be a dictionary;
+                /// otherwise (a hidden table, a missing name, or any failure above) remask it.
                 if (!create_query || !create_query->as<ASTCreateQuery &>().is_dictionary)
                     remask_as_missing_dictionary = true;
             }
