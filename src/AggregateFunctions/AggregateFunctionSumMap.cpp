@@ -341,6 +341,10 @@ public:
         readVarUInt(size, buf);
 
         FormatSettings format_settings;
+        /// Bool keys/values must be read as 0/1 int Fields, matching what add() stores from the
+        /// UInt8 column. Otherwise a bool-tagged Field reaches FieldVisitorSum on merge and throws
+        /// "Cannot sum Bools" (and breaks key dedup / zero-compaction). Same as MergeTreePartition::load.
+        format_settings.binary.read_bool_field_as_int = true;
         std::function<void(size_t, Array &)> deserialize;
         switch (*version)
         {
