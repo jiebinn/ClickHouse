@@ -37,3 +37,17 @@ INSERT INTO t_sum_map_bool_key_v0 SELECT sumMapState(CAST([true], 'Array(Bool)')
 INSERT INTO t_sum_map_bool_key_v0 SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'));
 SELECT sumMapMerge(s) FROM t_sum_map_bool_key_v0;
 DROP TABLE t_sum_map_bool_key_v0;
+
+-- The flag is set before the version switch, so the Bool KEY deserialize also applies to the
+-- current default state format (no explicit version). Pin the mixed path: a STORED (deserialized)
+-- state merged with a FRESH add() state must dedup the Bool key. Without the flag the deserialized
+-- key stays bool-tagged while add() produces an int-tagged key, so they wrongly stay separate.
+DROP TABLE IF EXISTS t_sum_map_bool_key_default;
+CREATE TABLE t_sum_map_bool_key_default (s AggregateFunction(sumMap, Array(Bool), Array(UInt32))) ENGINE = TinyLog;
+INSERT INTO t_sum_map_bool_key_default SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'));
+SELECT sumMapMerge(s) FROM (
+    SELECT s FROM t_sum_map_bool_key_default
+    UNION ALL
+    SELECT sumMapState(CAST([true], 'Array(Bool)'), CAST([10], 'Array(UInt32)'))
+);
+DROP TABLE t_sum_map_bool_key_default;
