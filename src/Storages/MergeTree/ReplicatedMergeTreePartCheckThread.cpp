@@ -73,6 +73,10 @@ void ReplicatedMergeTreePartCheckThread::stop()
 
 void ReplicatedMergeTreePartCheckThread::enqueuePart(const String & name, time_t delay_to_check_seconds)
 {
+    /// Serialize against cancelRemovedPartsCheck so no in-range part can be enqueued during its
+    /// parts_mutex gap (otherwise its recheck throws "Inconsistent parts_queue"). Lock order matches
+    /// cancelRemovedPartsCheck: cancel_removed_parts_mutex before parts_mutex.
+    std::lock_guard cancel_lock(cancel_removed_parts_mutex);
     std::lock_guard lock(parts_mutex);
 
     if (parts_set.contains(name))
@@ -96,11 +100,14 @@ BackgroundSchedulePoolPausableTask::PauseHolderPtr ReplicatedMergeTreePartCheckT
 
 void ReplicatedMergeTreePartCheckThread::cancelRemovedPartsCheck(const MergeTreePartInfo & drop_range_info)
 {
-    /// Two concurrent calls with overlapping drop ranges would race: the first snapshots the
-    /// parts to remove, drops parts_mutex to remove them from ZooKeeper, and meanwhile the second
-    /// erases the same parts from parts_queue. When the first re-locks it finds fewer parts than it
-    /// snapshotted and throws the "Unexpected number of parts to remove from parts_queue" logical
-    /// error. Serialize the whole function so the two parts_mutex sections are atomic w.r.t. it.
+    /// This function drops parts_mutex to remove parts from ZooKeeper, then re-locks and rechecks the
+    /// invariant. Two hazards during that gap, both closed by serializing on cancel_removed_parts_mutex:
+    ///  - another overlapping cancel erases the snapshotted parts -> fewer than snapshotted on re-lock
+    ///    ("Unexpected number of parts to remove from parts_queue");
+    ///  - a concurrent enqueuePart adds an in-range part (the foreground MOVE/REPLACE path holds only a
+    ///    drop-replace intent here, not yet a DROP_RANGE, so enqueuePartForCheck does not filter it) ->
+    ///    an unexpected in-range entry on re-lock ("Inconsistent parts_queue").
+    /// enqueuePart takes the same mutex (same lock order: cancel_removed_parts_mutex before parts_mutex).
     std::lock_guard cancel_lock(cancel_removed_parts_mutex);
 
     Strings parts_to_remove;
