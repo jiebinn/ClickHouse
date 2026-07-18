@@ -30,6 +30,8 @@ namespace ErrorCodes
     extern const int THERE_IS_NO_QUERY;
     extern const int BAD_ARGUMENTS;
     extern const int UNKNOWN_TABLE;
+    extern const int CANNOT_GET_CREATE_TABLE_QUERY;
+    extern const int CANNOT_GET_CREATE_DICTIONARY_QUERY;
 }
 
 BlockIO InterpreterShowCreateQuery::execute()
@@ -94,12 +96,14 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
         /// DICTIONARY" error below would confirm the table exists). So, for such a user, fetch and
         /// validate the *same* create query once: with no separate existence probe there is no TOCTOU
         /// window in which the object could be dropped and recreated as a different kind between the
-        /// probe and the fetch. If the object is not a dictionary - a hidden table, a name that
-        /// vanished, or one that fails to load - report it identically to a missing dictionary,
-        /// carrying the same "Maybe you meant ...?" hint (which only ever suggests dictionaries to this
-        /// user). Users who can also observe the object as a table keep the precise diagnostics below.
-        /// This mirrors `InterpreterExistsQuery`, which likewise answers a dictionary-only user from a
-        /// single observation instead of a second visibility-changing lookup.
+        /// probe and the fetch. A hidden regular table and a name that does not exist are both reported
+        /// identically as a missing dictionary, carrying the same "Maybe you meant ...?" hint (which
+        /// only ever suggests dictionaries to this user). A genuine failure to produce the create query
+        /// - e.g. an object that exists but fails to load or start up - is preserved and surfaced (see
+        /// the catch below), matching `EXISTS DICTIONARY`, rather than being masked as a missing
+        /// dictionary. Users who can also observe the object as a table keep the precise diagnostics
+        /// below. This mirrors `InterpreterExistsQuery`, which likewise answers a dictionary-only user
+        /// from a single observation instead of a second visibility-changing lookup.
         bool remask_as_missing_dictionary = false;
         if (is_dictionary)
         {
@@ -113,11 +117,20 @@ QueryPipeline InterpreterShowCreateQuery::executeImpl()
                 {
                     create_query = DatabaseCatalog::instance().getDatabase(table_id.database_name)->getCreateTableQuery(table_id.table_name, getContext());
                 }
-                catch (...)
+                catch (const Exception & e)
                 {
-                    /// Ok to swallow: a missing name, or a hidden table still starting up or failing
-                    /// to load, is treated as "not a dictionary". The error is not lost - it resurfaces
-                    /// when a user who may see the object really accesses it.
+                    /// Only a *missing* name is remasked as a missing dictionary, so that a hidden
+                    /// regular table and a name that does not exist stay indistinguishable to a user
+                    /// with only `SHOW DICTIONARIES` (the existence-oracle protection). Any other
+                    /// failure - most notably an object that exists but fails to load or start up - is
+                    /// preserved and surfaced, matching `EXISTS DICTIONARY`: the user is authorized to
+                    /// observe dictionaries, so the real error is more useful than a fabricated "no such
+                    /// dictionary", and it must not be hidden for an object that really is a dictionary.
+                    const bool name_is_missing = e.code() == ErrorCodes::UNKNOWN_TABLE
+                        || e.code() == ErrorCodes::CANNOT_GET_CREATE_TABLE_QUERY
+                        || e.code() == ErrorCodes::CANNOT_GET_CREATE_DICTIONARY_QUERY;
+                    if (!name_is_missing)
+                        throw;
                     create_query = nullptr;
                 }
                 if (!create_query || !create_query->as<ASTCreateQuery &>().is_dictionary)
