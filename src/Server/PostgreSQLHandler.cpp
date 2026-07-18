@@ -80,8 +80,8 @@ namespace
 ///
 /// Returns the command tag to report if `query` is such a no-op command, or
 /// std::nullopt if the query must be executed normally. None of the recognized
-/// keywords (`LISTEN`, `UNLISTEN`, `NOTIFY`, `RESET`, `DISCARD`) is a valid
-/// ClickHouse statement start, so there are no false positives.
+/// keywords (`UNLISTEN`, `RESET`, `DISCARD`) is a valid ClickHouse statement
+/// start, so there are no false positives.
 ///
 /// This is applied only in the simple-query (`Q`) protocol path, consistent with the other
 /// driver-compatibility no-ops (`BEGIN` / `COMMIT` / `SET application_name`): drivers emit these
@@ -168,16 +168,21 @@ std::optional<String> classifyNoOpDriverCommand(const String & query)
     if (pos < prefix.size() && prefix[pos] != ' ')
         return std::nullopt;
 
-    /// PostgreSQL accepts `RESET { name | ALL }`, `LISTEN channel`, `UNLISTEN { channel | * }` and
-    /// `NOTIFY channel [, payload]`, reporting the bare keyword as the tag in all cases. Accept
-    /// exactly one argument — an identifier (for `RESET` possibly a qualified `extension.setting`
-    /// name; `ALL` is itself covered as an identifier), or `*` for `UNLISTEN` — and require the
-    /// statement to end right after it, so that malformed variants such as a bare `RESET`,
-    /// `RESET foo bar`, `LISTEN chan trailing` or `UNLISTEN * garbage` are not acknowledged as
-    /// success but fall through to the normal error path. Valid forms that no driver is known to
-    /// emit — quoted identifiers, `NOTIFY` with a payload, and multi-word variants such as
-    /// `RESET SESSION AUTHORIZATION` — likewise fall through, as before this change.
-    if (command == "LISTEN" || command == "UNLISTEN" || command == "NOTIFY" || command == "RESET")
+    /// Accept the connection-cleanup commands the Skunk driver actually sends: `RESET { name | ALL }`
+    /// and `UNLISTEN { channel | * }`, reporting the bare keyword as the tag. `LISTEN` and `NOTIFY`
+    /// are deliberately NOT accepted here: unlike `UNLISTEN` (idempotent unsubscribe-all cleanup),
+    /// they are application-visible PostgreSQL pub/sub operations, and this handler never delivers a
+    /// `NotificationResponse`, so acknowledging them would turn an unsupported feature into a silent
+    /// false success instead of a plain error. Issue #12476 only asks for `UNLISTEN *` / `RESET ALL`.
+    ///
+    /// Accept exactly one argument — an identifier (for `RESET` possibly a qualified
+    /// `extension.setting` name; `ALL` is itself covered as an identifier), or `*` for `UNLISTEN` —
+    /// and require the statement to end right after it, so that malformed variants such as a bare
+    /// `RESET`, `RESET foo bar` or `UNLISTEN * garbage` are not acknowledged as success but fall
+    /// through to the normal error path. Valid forms that no driver is known to emit — quoted
+    /// identifiers and multi-word variants such as `RESET SESSION AUTHORIZATION` — likewise fall
+    /// through, as before this change.
+    if (command == "UNLISTEN" || command == "RESET")
     {
         String arg;
         if (command == "UNLISTEN" && has_more() && prefix[pos] == '*')
