@@ -38,13 +38,20 @@ $CLICKHOUSE_CLIENT -q "EXPLAIN PIPELINE SELECT number FROM numbers_mt(100000000)
     SETTINGS max_threads = 32, max_threads_min_free_memory_per_thread = 0, max_streams_per_hierarchical_merge = 16, max_rows_to_read = 0" | has_hierarchy
 
 echo '-- read in order (FinishSorting) --'
-$CLICKHOUSE_CLIENT -q "DROP TABLE IF EXISTS t_rio"
-$CLICKHOUSE_CLIENT -q "CREATE TABLE t_rio (a UInt64) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192"
-# Stop merges so the number of parts (and therefore read streams) is stable.
-$CLICKHOUSE_CLIENT -q "SYSTEM STOP MERGES t_rio"
-for _ in $(seq 1 20); do
-    $CLICKHOUSE_CLIENT -q "INSERT INTO t_rio SELECT number FROM numbers(200000)"
-done
+# Everything runs in as few client invocations as possible: the flaky check runs
+# the test many times and per-invocation client startup dominates under
+# sanitizers (the test used to time out in the TSan flaky check).
+$CLICKHOUSE_CLIENT -q "
+    DROP TABLE IF EXISTS t_rio;
+    CREATE TABLE t_rio (a UInt64) ENGINE = MergeTree ORDER BY a SETTINGS index_granularity = 8192;
+    -- Stop merges so the number of parts (and therefore read streams) is stable.
+    SYSTEM STOP MERGES t_rio;
+"
+# 20 small parts: more parts than the default threshold of 16, and small enough
+# that the correctness check below stays fast under sanitizers.
+INSERTS=""
+for _ in $(seq 1 20); do INSERTS="$INSERTS INSERT INTO t_rio SELECT number FROM numbers(10000);"; done
+$CLICKHOUSE_CLIENT -q "$INSERTS"
 
 RIO_SETTINGS="enable_analyzer = 0, optimize_read_in_order = 1, query_plan_read_in_order = 0,
     read_in_order_two_level_merge_threshold = 1, max_threads = 32, max_threads_min_free_memory_per_thread = 0"
