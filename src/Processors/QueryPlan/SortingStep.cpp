@@ -477,7 +477,7 @@ void SortingStep::addHierarchicalMergingSorted(
     }
 }
 
-void SortingStep::mergingSorted(QueryPipelineBuilder & pipeline, const SortDescription & result_sort_desc, const UInt64 limit_)
+void SortingStep::mergingSorted(QueryPipelineBuilder & pipeline, const SortDescription & result_sort_desc, const UInt64 limit_, bool has_global_limit)
 {
     /// If there are several streams, then we merge them into one
     if (pipeline.getNumStreams() > 1)
@@ -498,10 +498,18 @@ void SortingStep::mergingSorted(QueryPipelineBuilder & pipeline, const SortDescr
         /// it stops as soon as it has produced `limit_` rows, and with virtual rows
         /// (`read_in_order_use_virtual_row`) it can also skip reading parts whose smallest
         /// key is beyond the `LIMIT` frontier. A hierarchical merge tree would defeat this,
-        /// because every intermediate merger applies `limit_` to its own group and would
-        /// eagerly read up to `limit_` rows from each group, including groups that never
-        /// contribute to the global result. So keep a single merge node when there is a limit.
-        const size_t max_streams_per_layer = limit_ ? 0 : sort_settings.max_streams_per_hierarchical_merge;
+        /// because every intermediate merger applies its own frontier to its own group and
+        /// would eagerly read up to that many rows from each group, including groups that
+        /// never contribute to the global result. So keep a single merge node whenever the
+        /// step as a whole has a limit.
+        ///
+        /// Note this must be based on `has_global_limit`, not on whether `limit_` itself is
+        /// non-zero: for `Type::FinishSorting` with `need_finish_sorting` (the sort key has a
+        /// suffix beyond `prefix_description`), this prefix merge is deliberately called with
+        /// `limit_ = 0` because the final row order - and hence which rows are the global
+        /// top-`limit` - is only known after `finishSorting` re-sorts by the suffix. The step
+        /// still has a global limit, so it still needs the over-read protection above.
+        const size_t max_streams_per_layer = has_global_limit ? 0 : sort_settings.max_streams_per_hierarchical_merge;
 
         addHierarchicalMergingSorted(
             pipeline,
@@ -645,7 +653,7 @@ void SortingStep::transformPipeline(QueryPipelineBuilder & pipeline, const Build
     {
         addPerStreamLimitByIfNeeded(pipeline, result_description);
 
-        mergingSorted(pipeline, result_description, limit);
+        mergingSorted(pipeline, result_description, limit, /*has_global_limit=*/limit != 0);
         if (dataflow_cache_updater)
             pipeline.addSimpleTransform([&](const SharedHeader & header)
                                         { return std::make_shared<RuntimeDataflowStatisticsCollector>(header, dataflow_cache_updater); });
@@ -663,7 +671,13 @@ void SortingStep::transformPipeline(QueryPipelineBuilder & pipeline, const Build
         if (!need_finish_sorting)
             addPerStreamLimitByIfNeeded(pipeline, result_description);
 
-        mergingSorted(pipeline, prefix_description, (need_finish_sorting ? 0 : limit));
+        /// The prefix merge itself must not truncate to `limit` when `need_finish_sorting`
+        /// is set: the final row order (and hence the global top-`limit` rows) is only known
+        /// after `finishSorting` re-sorts by the suffix key. But the step as a whole still has
+        /// `limit` as its global limit, so `mergingSorted` must still know that - otherwise it
+        /// would wrongly build a hierarchical merge tree and lose the read-in-order LIMIT
+        /// over-read protection (see the comment in `mergingSorted`).
+        mergingSorted(pipeline, prefix_description, (need_finish_sorting ? 0 : limit), /*has_global_limit=*/limit != 0);
 
         merge_streams = collector.detachProcessors(static_cast<size_t>(SortingStage::MergeStreams));
 
