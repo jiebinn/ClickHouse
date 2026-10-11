@@ -449,7 +449,8 @@ void SortingStep::addHierarchicalMergingSorted(
     size_t max_streams_per_layer,
     size_t max_block_size,
     UInt64 limit,
-    bool always_read_till_end)
+    bool always_read_till_end,
+    TopKThresholdTrackerPtr threshold_tracker)
 {
     size_t num_streams = pipeline.getNumStreams();
 
@@ -476,10 +477,19 @@ void SortingStep::addHierarchicalMergingSorted(
             /*apply_virtual_row_conversions=*/true);
     };
 
+    /// Only the final merger produces the global top rows, so only it publishes the threshold.
+    auto make_final_merger = [&](size_t input_streams)
+    {
+        auto merger = make_merger(input_streams);
+        if (threshold_tracker && limit)
+            merger->setTopKThresholdTracker(threshold_tracker, sort_desc.front().column_name, limit);
+        return merger;
+    };
+
     /// Disabled or stream count is within the threshold: use single-node merging.
     if (max_streams_per_layer == 0 || num_streams <= max_streams_per_layer)
     {
-        pipeline.addTransform(make_merger(num_streams));
+        pipeline.addTransform(make_final_merger(num_streams));
         return;
     }
 
@@ -497,7 +507,7 @@ void SortingStep::addHierarchicalMergingSorted(
         /// Last layer: a single group merges all remaining streams.
         if (groups == 1)
         {
-            pipeline.addTransform(make_merger(streams_in_layer));
+            pipeline.addTransform(make_final_merger(streams_in_layer));
             break;
         }
 
@@ -684,7 +694,8 @@ void SortingStep::fullSort(QueryPipelineBuilder & pipeline, const SortDescriptio
             sort_settings.max_streams_per_hierarchical_merge,
             sort_settings.max_block_size,
             limit_,
-            always_read_till_end);
+            always_read_till_end,
+            threshold_tracker);
         merge_streams = collector.detachProcessors(static_cast<size_t>(SortingStage::MergeStreams));
 
     }

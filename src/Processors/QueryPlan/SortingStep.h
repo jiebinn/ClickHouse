@@ -175,6 +175,8 @@ public:
 
     QueryPlanStepPtr clone() const override;
 
+    bool hasCorrelatedExpressions() const override { return false; }
+
     bool supportsDataflowStatisticsCollection() const override { return true; }
     void setTopKThresholdTracker(TopKThresholdTrackerPtr threshold_tracker_) { threshold_tracker = threshold_tracker_; }
 
@@ -206,7 +208,8 @@ private:
         size_t max_streams_per_layer,
         size_t max_block_size,
         UInt64 limit,
-        bool always_read_till_end);
+        bool always_read_till_end,
+        TopKThresholdTrackerPtr threshold_tracker);
 
     void mergingSorted(
         QueryPipelineBuilder & pipeline,
