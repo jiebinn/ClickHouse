@@ -2198,8 +2198,14 @@ Counters::Snapshot & Counters::Snapshot::operator=(const Snapshot & other)
 Counters::Snapshot Counters::getPartiallyAtomicSnapshot() const
 {
     Snapshot res;
-    for (Event i = Event(0); i < num_counters; ++i)
-        res.counters_holder[i] = load(i);
+    const uint32_t rows = cpus.load(std::memory_order_relaxed);
+    /// Read each CPU row consecutively rather than striding across all rows for each event.
+    /// The snapshot is only partially atomic, as with individual counter reads.
+    for (uint32_t row = 0, end = rows ? rows : 1; row < end; ++row)
+    {
+        for (Event event = Event(0); event < num_counters; ++event)
+            res.counters_holder[event] += cell(counters, row, event).load(std::memory_order_relaxed);
+    }
     return res;
 }
 
