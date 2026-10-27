@@ -1,0 +1,6 @@
+<test>
+    <query>SELECT user, memory_usage FROM system.user_processes</query>
+    <query>SELECT peak_memory_usage FROM system.user_processes</query>
+    <query>SELECT count() FROM system.user_processes</query>
+    <query>SELECT ProfileEvents FROM system.user_processes</query>
+</test>
