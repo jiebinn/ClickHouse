@@ -1,0 +1,5 @@
+<test>
+    <query>SELECT value FROM system.events WHERE event = 'SelectedRows' SETTINGS system_events_show_zero_values = 1</query>
+    <query>SELECT event, value FROM system.events WHERE event IN ('Query', 'SelectQuery', 'SelectedRows', 'SelectedBytes') SETTINGS system_events_show_zero_values = 1</query>
+    <query>SELECT * FROM system.events SETTINGS system_events_show_zero_values = 1</query>
+</test>
