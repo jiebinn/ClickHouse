@@ -10,6 +10,7 @@
 #include <Processors/QueryPlan/numbersLikeUtils.h>
 
 #include <Core/ColumnWithTypeAndName.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Processors/LimitTransform.h>
@@ -212,12 +213,14 @@ public:
         const RangesWithStep & ranges_,
         RangesStatePtr & ranges_state_,
         UInt64 base_block_size_,
+        UInt64 reservation_size_,
         UInt64 step_,
         const std::string & column_name)
         : ISource(NumbersSource::createHeader(column_name))
         , ranges(ranges_)
         , ranges_state(ranges_state_)
         , base_block_size(base_block_size_)
+        , reservation_size(reservation_size_)
         , step(step_)
     {
     }
@@ -232,7 +235,7 @@ private:
         std::lock_guard lock(ranges_state->mutex);
 
 
-        UInt64 maximum_can_take = base_block_size;
+        UInt64 maximum_can_take = reservation_size;
 
         /// `start` is the current global position.
         RangesPos start = ranges_state->pos;
@@ -273,7 +276,7 @@ private:
         /// Publish new global position.
         ranges_state->pos = end;
 
-        UInt64 block_size = base_block_size - maximum_can_take;
+        UInt64 block_size = reservation_size - maximum_can_take;
 
         return {start, block_size};
     }
@@ -284,9 +287,11 @@ protected:
         if (ranges.empty() || isCancelled())
             return {};
 
-        /// Find the data range.
-        /// If data left is small, shrink block size.
-        auto [start, block_size] = findRanges();
+        /// Reserve several small blocks under one lock, then consume the reservation locally.
+        if (remaining_in_reservation == 0)
+            std::tie(reservation_cursor, remaining_in_reservation) = findRanges();
+
+        UInt64 block_size = std::min(base_block_size, remaining_in_reservation);
 
         chassert(block_size <= base_block_size);
 
@@ -294,7 +299,7 @@ protected:
         if (!block_size)
             return {};
 
-        chassert(start.offset_in_ranges < ranges.size());
+        chassert(reservation_cursor.offset_in_ranges < ranges.size());
 
         auto column = ColumnUInt64::create(block_size);
         ColumnUInt64::Container & vec = column->getData();
@@ -302,7 +307,7 @@ protected:
         UInt64 * pos = vec.data();
 
         UInt64 provided = 0;
-        RangesPos cursor = start;
+        RangesPos & cursor = reservation_cursor;
 
         while (provided < block_size && !isCancelled())
         {
@@ -342,6 +347,8 @@ protected:
         else
             chassert(provided == block_size);
 
+        remaining_in_reservation -= provided;
+
         progress(column->size(), column->byteSize());
         return {Columns{std::move(column)}, provided};
     }
@@ -355,6 +362,10 @@ private:
 
     /// Base block size, will shrink when data left is not enough.
     UInt64 base_block_size;
+
+    UInt64 reservation_size;
+    RangesPos reservation_cursor{};
+    UInt64 remaining_in_reservation = 0;
 
     UInt64 step;
 };
@@ -797,12 +808,22 @@ Pipe ReadFromSystemNumbersStep::makePipe()
     if (num_streams == 0)
         num_streams = 1;
 
+    /// Amortize the shared cursor lock for small blocks while retaining enough reservations per stream
+    /// to balance downstream work. Keep the emitted block size and the single-stream behavior unchanged.
+    UInt64 blocks_per_reservation = 1;
+    if (num_streams > 1)
+    {
+        blocks_per_reservation = static_cast<UInt64>(std::max<UInt128>(1, std::min<UInt128>(
+            {16, DEFAULT_BLOCK_SIZE / max_block_size, total_size / max_block_size / num_streams / 16})));
+    }
+    const UInt64 reservation_size = max_block_size * blocks_per_reservation;
+
     /// All streams share a single cursor into `intersected_ranges` to split work without overlaps.
     auto ranges_state = std::make_shared<NumbersRangedSource::RangesState>();
     for (size_t i = 0; i < num_streams; ++i)
     {
         auto source = std::make_shared<NumbersRangedSource>(
-            intersected_ranges, ranges_state, max_block_size, numbers_storage.step, numbers_storage.column_name);
+            intersected_ranges, ranges_state, max_block_size, reservation_size, numbers_storage.step, numbers_storage.column_name);
 
         if (i == 0)
             source->addTotalRowsApprox(static_cast<size_t>(total_size));

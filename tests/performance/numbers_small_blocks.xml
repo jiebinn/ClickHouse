@@ -1,0 +1,17 @@
+<test>
+    <substitutions>
+        <substitution>
+            <name>threads</name>
+            <values>
+                <value>1</value>
+                <value>16</value>
+                <value>64</value>
+            </values>
+        </substitution>
+    </substitutions>
+
+    <!-- Exercise shared range allocation independently of the emitted block size. -->
+    <query>SELECT avg(number) FROM numbers_mt(2000000) SETTINGS max_block_size = 64, max_threads = {threads}</query>
+    <query>SELECT avg(number) FROM numbers_mt(2000000) SETTINGS max_block_size = 4096, max_threads = {threads}</query>
+    <query>SELECT avg(number) FROM numbers_mt(2000000) SETTINGS max_threads = {threads}</query>
+</test>
