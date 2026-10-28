@@ -414,10 +414,24 @@ AsynchronousMetrics::~AsynchronousMetrics()
 }
 
 
-AsynchronousMetricValues AsynchronousMetrics::getValues() const
+AsynchronousMetricValues AsynchronousMetrics::getValues(bool include_key_values) const
 {
     SharedLockGuard lock(values_mutex);
-    return values;
+    if (include_key_values)
+        return values;
+
+    AsynchronousMetricValues result;
+    result.reserve(values.size());
+    for (const auto & [name, metric] : values)
+    {
+        AsynchronousMetricValue projected;
+        projected.value = metric.value;
+        projected.key_label = metric.key_label;
+        projected.documentation = metric.documentation;
+        projected.source = metric.source;
+        result.emplace(name, std::move(projected));
+    }
+    return result;
 }
 
 namespace

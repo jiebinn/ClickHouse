@@ -1,0 +1,6 @@
+<test>
+    <query>SELECT metric, value FROM system.asynchronous_metrics FORMAT Null</query>
+    <query>SELECT metric, description FROM system.asynchronous_metrics FORMAT Null</query>
+    <query>SELECT metric, key_values FROM system.asynchronous_metrics FORMAT Null</query>
+    <query>SELECT * FROM system.asynchronous_metrics FORMAT Null</query>
+</test>

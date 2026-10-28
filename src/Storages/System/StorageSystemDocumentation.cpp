@@ -1317,7 +1317,7 @@ void StorageSystemDocumentation::fillData(MutableColumns & res_columns, ContextP
     /// They are available only on the server (the instance may be absent, e.g. in clickhouse-local).
     if (const auto * asynchronous_metrics = context->getAsynchronousMetrics())
     {
-        for (const auto & [name, value] : asynchronous_metrics->getValues())
+        for (const auto & [name, value] : asynchronous_metrics->getValues(false))
             addRow(res_columns, EntityType::AsynchronousMetric, name,
                 value.documentation ? boost::algorithm::trim_copy(String(value.documentation)) : String{},
                 makeRepoRelative(value.source));

@@ -33,6 +33,11 @@ private:
     const AsynchronousMetrics & async_metrics;
 
 protected:
+    bool supportsColumnsMask() const override
+    {
+        return true;
+    }
+
     void fillData(MutableColumns & res_columns, ContextPtr, const ActionsDAG::Node *, std::vector<UInt8>) const override;
 };
 
