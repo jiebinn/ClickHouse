@@ -35,17 +35,21 @@ ColumnsDescription StorageSystemUserProcesses::getColumnsDescription()
     return description;
 }
 
-void StorageSystemUserProcesses::fillData(MutableColumns & res_columns, ContextPtr context, const ActionsDAG::Node *, std::vector<UInt8>) const
+void StorageSystemUserProcesses::fillData(MutableColumns & res_columns, ContextPtr context, const ActionsDAG::Node *, std::vector<UInt8> columns_mask) const
 {
-    const auto user_info = context->getProcessList().getUserInfo(true);
+    const auto user_info = context->getProcessList().getUserInfo(columns_mask[3]);
 
     for (const auto & [user, info] : user_info)
     {
         size_t i = 0;
 
-        res_columns[i++]->insert(user);
-        res_columns[i++]->insert(info.memory_usage);
-        res_columns[i++]->insert(info.peak_memory_usage);
+        if (columns_mask[0])
+            res_columns[i++]->insert(user);
+        if (columns_mask[1])
+            res_columns[i++]->insert(info.memory_usage);
+        if (columns_mask[2])
+            res_columns[i++]->insert(info.peak_memory_usage);
+        if (columns_mask[3])
         {
             IColumn * column = res_columns[i++].get();
 
