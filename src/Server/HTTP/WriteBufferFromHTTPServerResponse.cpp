@@ -169,7 +169,10 @@ void WriteBufferFromHTTPServerResponse::onProgress(const Progress & progress, Co
     {
         QueryStatusPtr process_list_elem = context->getProcessListElement();
         if (process_list_elem)
-            accumulated_progress.memory_usage = process_list_elem->getInfo().memory_usage;
+        {
+            const auto * memory_tracker = process_list_elem->getMemoryTracker();
+            accumulated_progress.memory_usage = memory_tracker ? memory_tracker->get() : 0;
+        }
     }
 
     accumulated_progress.incrementPiecewiseAtomically(progress);
