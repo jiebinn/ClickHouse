@@ -100,7 +100,8 @@ void ReadFromSystemOneBlock::applyFilters(ActionDAGNodes added_filter_nodes)
 {
     SourceStepWithFilter::applyFilters(std::move(added_filter_nodes));
 
-    if (!filter_actions_dag)
+    /// Stateful functions must see the full source block.
+    if (!filter_actions_dag || filter_actions_dag->hasStatefulFunctions())
         return;
 
     Block sample = storage->getFilterSampleBlock();
