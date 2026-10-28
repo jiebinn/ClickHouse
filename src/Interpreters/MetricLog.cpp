@@ -98,9 +98,10 @@ void collectMetricLogElement(
     elem.event_time_microseconds = timeInMicroseconds(current_time);
 
     elem.profile_events.resize(ProfileEvents::end());
+    const auto profile_events = ProfileEvents::global_counters.getPartiallyAtomicSnapshot();
     for (ProfileEvents::Event i = ProfileEvents::Event(0), end = ProfileEvents::end(); i < end; ++i)
     {
-        const ProfileEvents::Count new_value = ProfileEvents::global_counters[i];
+        const ProfileEvents::Count new_value = profile_events[i];
         auto & old_value = previous_profile_events[i];
 
         /// Profile event counters are supposed to be monotonic. However, at least the `NetworkReceiveBytes` can be inaccurate.

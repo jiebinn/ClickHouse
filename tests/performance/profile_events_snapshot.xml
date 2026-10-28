@@ -1,0 +1,6 @@
+<test>
+    <!-- Aggregate all CPU shards when reading server and user counters. -->
+    <query>SELECT * FROM system.events SETTINGS system_events_show_zero_values = 1</query>
+    <query>SELECT sum(value) FROM system.events SETTINGS system_events_show_zero_values = 1</query>
+    <query>SELECT ProfileEvents FROM system.user_processes</query>
+</test>

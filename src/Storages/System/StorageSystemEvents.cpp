@@ -32,9 +32,10 @@ ColumnsDescription StorageSystemEvents::getColumnsDescription()
 
 void StorageSystemEvents::fillData(MutableColumns & res_columns, ContextPtr context, const ActionsDAG::Node *, std::vector<UInt8>) const
 {
+    const auto profile_events = ProfileEvents::global_counters.getPartiallyAtomicSnapshot();
     for (ProfileEvents::Event i = ProfileEvents::Event(0), end = ProfileEvents::end(); i < end; ++i)
     {
-        UInt64 value = ProfileEvents::global_counters[i];
+        UInt64 value = profile_events[i];
 
         if (0 != value || context->getSettingsRef()[Setting::system_events_show_zero_values])
         {
