@@ -1,0 +1,6 @@
+<test>
+    <query>SELECT query_id, user, memory_usage FROM system.processes</query>
+    <query>SELECT query_id, ProfileEvents FROM system.processes</query>
+    <query>SELECT query_id, Settings FROM system.processes</query>
+    <query>SELECT * FROM system.processes</query>
+</test>

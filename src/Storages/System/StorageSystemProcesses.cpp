@@ -93,61 +93,100 @@ ColumnsDescription StorageSystemProcesses::getColumnsDescription()
     return description;
 }
 
-void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr context, const ActionsDAG::Node *, std::vector<UInt8>) const
+void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr context, const ActionsDAG::Node *, std::vector<UInt8> columns_mask) const
 {
-    ProcessList::Info info = context->getProcessList().getInfo(true, true, true);
-    const bool show_secrets = canDisplaySecrets(context);
+    ProcessList::Info info = context->getProcessList().getInfo(columns_mask[38] || columns_mask[39], columns_mask[40], columns_mask[41] || columns_mask[42]);
+    const bool show_secrets = columns_mask[41] && canDisplaySecrets(context);
 
     for (const auto & process : info)
     {
         size_t i = 0;
 
-        res_columns[i++]->insert(process.client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY);
+        if (columns_mask[0])
+            res_columns[i++]->insert(process.client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY);
 
-        res_columns[i++]->insert(process.client_info.current_user);
-        res_columns[i++]->insert(process.client_info.current_query_id);
-        res_columns[i++]->insertData(IPv6ToBinary(process.client_info.current_address->host()).data(), 16);
-        res_columns[i++]->insert(process.client_info.current_address->port());
+        if (columns_mask[1])
+            res_columns[i++]->insert(process.client_info.current_user);
+        if (columns_mask[2])
+            res_columns[i++]->insert(process.client_info.current_query_id);
+        if (columns_mask[3])
+            res_columns[i++]->insertData(IPv6ToBinary(process.client_info.current_address->host()).data(), 16);
+        if (columns_mask[4])
+            res_columns[i++]->insert(process.client_info.current_address->port());
 
-        res_columns[i++]->insert(process.client_info.initial_user);
-        res_columns[i++]->insert(process.client_info.initial_query_id);
-        res_columns[i++]->insertData(IPv6ToBinary(process.client_info.initial_address->host()).data(), 16);
-        res_columns[i++]->insert(process.client_info.initial_address->port());
+        if (columns_mask[5])
+            res_columns[i++]->insert(process.client_info.initial_user);
+        if (columns_mask[6])
+            res_columns[i++]->insert(process.client_info.initial_query_id);
+        if (columns_mask[7])
+            res_columns[i++]->insertData(IPv6ToBinary(process.client_info.initial_address->host()).data(), 16);
+        if (columns_mask[8])
+            res_columns[i++]->insert(process.client_info.initial_address->port());
 
-        res_columns[i++]->insert(reportedClientInterfaceEnumValue(process.client_info.interface));
+        if (columns_mask[9])
+            res_columns[i++]->insert(reportedClientInterfaceEnumValue(process.client_info.interface));
 
-        res_columns[i++]->insert(process.client_info.os_user);
-        res_columns[i++]->insert(process.client_info.getClientHostName());
-        res_columns[i++]->insert(process.client_info.client_name);
-        res_columns[i++]->insert(process.client_info.client_agent);
-        res_columns[i++]->insert(process.client_info.client_tcp_protocol_version);
-        res_columns[i++]->insert(process.client_info.client_version_major);
-        res_columns[i++]->insert(process.client_info.client_version_minor);
-        res_columns[i++]->insert(process.client_info.client_version_patch);
+        if (columns_mask[10])
+            res_columns[i++]->insert(process.client_info.os_user);
+        if (columns_mask[11])
+            res_columns[i++]->insert(process.client_info.getClientHostName());
+        if (columns_mask[12])
+            res_columns[i++]->insert(process.client_info.client_name);
+        if (columns_mask[13])
+            res_columns[i++]->insert(process.client_info.client_agent);
+        if (columns_mask[14])
+            res_columns[i++]->insert(process.client_info.client_tcp_protocol_version);
+        if (columns_mask[15])
+            res_columns[i++]->insert(process.client_info.client_version_major);
+        if (columns_mask[16])
+            res_columns[i++]->insert(process.client_info.client_version_minor);
+        if (columns_mask[17])
+            res_columns[i++]->insert(process.client_info.client_version_patch);
 
-        res_columns[i++]->insert(reportedClientHTTPMethodEnumValue(process.client_info.http_method));
-        res_columns[i++]->insert(process.client_info.http_user_agent);
-        res_columns[i++]->insert(process.client_info.http_referer);
-        res_columns[i++]->insert(process.client_info.forwarded_for);
+        if (columns_mask[18])
+            res_columns[i++]->insert(reportedClientHTTPMethodEnumValue(process.client_info.http_method));
+        if (columns_mask[19])
+            res_columns[i++]->insert(process.client_info.http_user_agent);
+        if (columns_mask[20])
+            res_columns[i++]->insert(process.client_info.http_referer);
+        if (columns_mask[21])
+            res_columns[i++]->insert(process.client_info.forwarded_for);
 
-        res_columns[i++]->insert(process.client_info.quota_key);
-        res_columns[i++]->insert(process.client_info.distributed_depth);
+        if (columns_mask[22])
+            res_columns[i++]->insert(process.client_info.quota_key);
+        if (columns_mask[23])
+            res_columns[i++]->insert(process.client_info.distributed_depth);
 
-        res_columns[i++]->insert(static_cast<double>(process.elapsed_microseconds) / 1'000'000.0);
-        res_columns[i++]->insert(process.is_cancelled);
-        res_columns[i++]->insert(process.is_all_data_sent);
-        res_columns[i++]->insert(process.read_rows);
-        res_columns[i++]->insert(process.read_bytes);
-        res_columns[i++]->insert(process.total_rows);
-        res_columns[i++]->insert(process.written_rows);
-        res_columns[i++]->insert(process.written_bytes);
-        res_columns[i++]->insert(process.memory_usage);
-        res_columns[i++]->insert(process.peak_memory_usage);
-        res_columns[i++]->insert(process.spillable_memory_bytes);
-        res_columns[i++]->insert(process.query);
-        res_columns[i++]->insert(process.normalized_query_hash);
-        res_columns[i++]->insert(magic_enum::enum_name(process.query_kind));
+        if (columns_mask[24])
+            res_columns[i++]->insert(static_cast<double>(process.elapsed_microseconds) / 1'000'000.0);
+        if (columns_mask[25])
+            res_columns[i++]->insert(process.is_cancelled);
+        if (columns_mask[26])
+            res_columns[i++]->insert(process.is_all_data_sent);
+        if (columns_mask[27])
+            res_columns[i++]->insert(process.read_rows);
+        if (columns_mask[28])
+            res_columns[i++]->insert(process.read_bytes);
+        if (columns_mask[29])
+            res_columns[i++]->insert(process.total_rows);
+        if (columns_mask[30])
+            res_columns[i++]->insert(process.written_rows);
+        if (columns_mask[31])
+            res_columns[i++]->insert(process.written_bytes);
+        if (columns_mask[32])
+            res_columns[i++]->insert(process.memory_usage);
+        if (columns_mask[33])
+            res_columns[i++]->insert(process.peak_memory_usage);
+        if (columns_mask[34])
+            res_columns[i++]->insert(process.spillable_memory_bytes);
+        if (columns_mask[35])
+            res_columns[i++]->insert(process.query);
+        if (columns_mask[36])
+            res_columns[i++]->insert(process.normalized_query_hash);
+        if (columns_mask[37])
+            res_columns[i++]->insert(magic_enum::enum_name(process.query_kind));
 
+        if (columns_mask[38])
         {
             Array threads_array;
             threads_array.reserve(process.thread_ids.size());
@@ -156,8 +195,10 @@ void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr c
             res_columns[i++]->insert(threads_array);
         }
 
-        res_columns[i++]->insert(process.peak_threads_usage);
+        if (columns_mask[39])
+            res_columns[i++]->insert(process.peak_threads_usage);
 
+        if (columns_mask[40])
         {
             IColumn * column = res_columns[i++].get();
 
@@ -169,6 +210,7 @@ void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr c
             }
         }
 
+        if (columns_mask[41])
         {
             IColumn * column = res_columns[i++].get();
 
@@ -180,8 +222,10 @@ void StorageSystemProcesses::fillData(MutableColumns & res_columns, ContextPtr c
             }
         }
 
-        res_columns[i++]->insert(process.current_database);
-        res_columns[i++]->insert(process.is_internal);
+        if (columns_mask[42])
+            res_columns[i++]->insert(process.current_database);
+        if (columns_mask[43])
+            res_columns[i++]->insert(process.is_internal);
     }
 }
 
