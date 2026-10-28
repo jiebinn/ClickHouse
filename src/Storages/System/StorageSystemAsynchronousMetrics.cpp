@@ -83,21 +83,28 @@ StorageSystemAsynchronousMetrics::StorageSystemAsynchronousMetrics(const Storage
 {
 }
 
-void StorageSystemAsynchronousMetrics::fillData(MutableColumns & res_columns, ContextPtr, const ActionsDAG::Node *, std::vector<UInt8>) const
+void StorageSystemAsynchronousMetrics::fillData(MutableColumns & res_columns, ContextPtr, const ActionsDAG::Node *, std::vector<UInt8> columns_mask) const
 {
-    auto async_metrics_values = async_metrics.getValues();
+    auto async_metrics_values = async_metrics.getValues(columns_mask[2]);
     for (const auto & name_value : async_metrics_values)
     {
-        res_columns[0]->insert(name_value.first);
-        res_columns[1]->insert(name_value.second.value);
+        size_t column = 0;
+        if (columns_mask[0])
+            res_columns[column++]->insert(name_value.first);
+        if (columns_mask[1])
+            res_columns[column++]->insert(name_value.second.value);
 
-        Map key_values;
-        key_values.reserve(name_value.second.key_values.size());
-        for (const auto & [key, value] : name_value.second.key_values)
-            key_values.push_back(Tuple{key, value});
-        res_columns[2]->insert(key_values);
+        if (columns_mask[2])
+        {
+            Map key_values;
+            key_values.reserve(name_value.second.key_values.size());
+            for (const auto & [key, value] : name_value.second.key_values)
+                key_values.push_back(Tuple{key, value});
+            res_columns[column++]->insert(key_values);
+        }
 
-        res_columns[3]->insert(name_value.second.documentation);
+        if (columns_mask[3])
+            res_columns[column++]->insert(name_value.second.documentation);
     }
 }
 

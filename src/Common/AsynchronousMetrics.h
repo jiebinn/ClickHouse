@@ -126,8 +126,8 @@ public:
 
     void update(TimePoint update_time, bool force_update = false);
 
-    /// Returns copy of all values.
-    AsynchronousMetricValues getValues() const;
+    /// Returns a snapshot, optionally omitting the per-entity maps.
+    AsynchronousMetricValues getValues(bool include_key_values = true) const;
 
 protected:
     const Duration update_period;

@@ -1,0 +1,12 @@
+SELECT count() > 0 FROM system.asynchronous_metrics;
+SELECT uniqExact(metric) = count() FROM system.asynchronous_metrics;
+SELECT countIf(name = metric) = count() FROM system.asynchronous_metrics;
+SELECT value > 0 FROM system.asynchronous_metrics WHERE metric = 'MemoryResident';
+SELECT notEmpty(description) FROM system.asynchronous_metrics WHERE metric = 'MemoryResident';
+SELECT empty(key_values) FROM system.asynchronous_metrics WHERE metric = 'MemoryResident';
+SELECT toTypeName(key_values) FROM system.asynchronous_metrics WHERE metric = 'MemoryResident';
+SELECT countIf(isNaN(value)) = count() FROM system.asynchronous_metrics WHERE notEmpty(key_values);
+SELECT countIf(metric = 'MemoryResident' AND value > 0 AND empty(key_values) AND notEmpty(description)) > 0 FROM system.asynchronous_metrics;
+SELECT countIf(_table = 'asynchronous_metrics') = count() FROM system.asynchronous_metrics;
+SELECT countIf(length(key_values.keys) != length(key_values.values)) = 0 FROM system.asynchronous_metrics SETTINGS optimize_functions_to_subcolumns = 1;
+SELECT countIf(notEmpty(description) AND source = 'src/Common/AsynchronousMetrics.cpp') = 1 FROM system.documentation WHERE type = 'Asynchronous Metric' AND name = 'MemoryResident';
