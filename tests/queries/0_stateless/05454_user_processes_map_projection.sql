@@ -6,6 +6,6 @@ SELECT user = currentUser()
 FROM system.user_processes
 WHERE user = currentUser() AND ProfileEvents['SelectedRows'] >= 1000
     AND (SELECT sum(number) FROM numbers_mt(1000)) > 0;
-SELECT count() FROM system.user_processes WHERE _database = 'system' AND _table = 'user_processes';
+SELECT count() FROM system.user_processes WHERE _database = 'system' AND _table = 'user_processes' AND user = currentUser();
 SELECT count() FROM system.user_processes WHERE user = currentUser() AND 0;
 SELECT count() FROM (SELECT * EXCEPT ProfileEvents FROM system.user_processes WHERE user = currentUser());
